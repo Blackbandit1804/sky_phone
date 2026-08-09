@@ -6,11 +6,9 @@ import {
   Calculator,
   Camera,
   Flashlight,
-  LockKeyhole,
   Moon,
   Plane,
   Play,
-  RotateCw,
   Signal,
   SkipBack,
   SkipForward,
@@ -40,7 +38,6 @@ type ConnectivityPreference =
   | 'bluetoothEnabled'
   | 'cellularEnabled'
   | 'focusMode'
-  | 'rotationLocked'
   | 'wifiEnabled'
 
 const phone = usePhoneStore()
@@ -62,14 +59,6 @@ const inactiveGlassColors = {
   bgIos: 'bg-[rgba(72,72,74,0.58)]',
   shadowIos: 'shadow-ios-dark-glass',
 }
-const rotationColors = computed(() =>
-  phone.preferences.settings.rotationLocked
-    ? {
-        bgIos: 'bg-white',
-        shadowIos: 'shadow-ios-light-glass',
-      }
-    : inactiveGlassColors,
-)
 const focusColors = computed(() =>
   phone.preferences.settings.focusMode
     ? {
@@ -355,29 +344,9 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="control-center__middle-grid">
-          <div class="control-center__round-control">
-            <k-glass
-              component="button"
-              type="button"
-              class="control-center__round-button"
-              :class="{
-                'control-center__round-button--light':
-                  phone.preferences.settings.rotationLocked,
-              }"
-              :colors="rotationColors"
-              :aria-label="phone.t('ControlCenter.rotationLock')"
-              :aria-pressed="phone.preferences.settings.rotationLocked"
-              @click="togglePreference('rotationLocked')"
-            >
-              <RotateCw aria-hidden="true" />
-              <LockKeyhole
-                class="control-center__rotation-lock"
-                aria-hidden="true"
-              />
-            </k-glass>
-          </div>
-
-          <div class="control-center__round-control">
+          <div
+            class="control-center__round-control control-center__round-control--wide"
+          >
             <k-glass
               component="button"
               type="button"
@@ -401,7 +370,7 @@ onBeforeUnmount(() => {
           </div>
 
           <k-glass
-            class="control-center__slider"
+            class="control-center__slider control-center__slider--brightness"
             :colors="inactiveGlassColors"
             :highlight="false"
             :style="brightnessStyle"
@@ -431,7 +400,7 @@ onBeforeUnmount(() => {
           </k-glass>
 
           <k-glass
-            class="control-center__slider"
+            class="control-center__slider control-center__slider--volume"
             :colors="inactiveGlassColors"
             :highlight="false"
             :style="volumeStyle"
@@ -727,6 +696,10 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
+.control-center__round-control--wide {
+  grid-column: 1 / span 2;
+}
+
 .control-center__round-control > span,
 .control-center__quick-action > span {
   width: 100%;
@@ -791,13 +764,6 @@ onBeforeUnmount(() => {
   stroke-width: 2;
 }
 
-.control-center__round-button .control-center__rotation-lock {
-  position: absolute;
-  width: 13px;
-  height: 13px;
-  stroke-width: 2.5;
-}
-
 .control-center__slider {
   position: relative;
   grid-row: 1 / span 2;
@@ -806,6 +772,14 @@ onBeforeUnmount(() => {
   border-radius: 38px;
   cursor: pointer;
   touch-action: none;
+}
+
+.control-center__slider--brightness {
+  grid-column: 3;
+}
+
+.control-center__slider--volume {
+  grid-column: 4;
 }
 
 .control-center__slider-level {
@@ -862,7 +836,7 @@ onBeforeUnmount(() => {
   color: #bf5af2 !important;
 }
 
-.control-center__slider:nth-child(3) .control-center__slider-icon {
+.control-center__slider--brightness .control-center__slider-icon {
   color: #ffd60a;
 }
 

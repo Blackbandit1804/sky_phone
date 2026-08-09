@@ -54,7 +54,6 @@ export type PhonePreferencesV1 = {
     phoneScale: number
     ringtone: RingtoneId
     ringtoneVolume: number
-    rotationLocked: boolean
     screenBrightness: number
     streamerMode: boolean
     wallpaper: WallpaperId
@@ -114,7 +113,6 @@ export const DEFAULT_PHONE_PREFERENCES: PhonePreferencesV1 = {
     phoneScale: 100,
     ringtone: 'skyline',
     ringtoneVolume: 80,
-    rotationLocked: false,
     screenBrightness: 100,
     streamerMode: false,
     wallpaper: 'midnight',
@@ -243,10 +241,6 @@ export function parsePhonePreferences(raw: string | null): PhonePreferencesV1 {
           defaults.ringtoneVolume,
           0,
           100,
-        ),
-        rotationLocked: readBoolean(
-          settings.rotationLocked,
-          defaults.rotationLocked,
         ),
         screenBrightness: readNumber(
           settings.screenBrightness,

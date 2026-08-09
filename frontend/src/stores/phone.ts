@@ -1926,7 +1926,7 @@ const defaultLocales: LocaleTree = {
       bluetooth: 'Bluetooth',
       cellular: 'Cellular',
       connectivityDescription:
-        'Airplane Mode temporarily disables wireless connections. Wi-Fi, Bluetooth, and cellular settings are saved on this phone.',
+        'Wi-Fi, Bluetooth, and cellular settings are saved on this phone.',
       focus: 'Focus',
       focusMode: 'Focus',
       focusDescription:
@@ -1953,7 +1953,6 @@ const defaultLocales: LocaleTree = {
       phoneScale: 'Phone Scale',
       phoneFrame: 'Phone Frame',
       screenBrightness: 'Screen Brightness',
-      rotationLock: 'Rotation Lock',
       about: 'About',
       deviceName: 'Device Name',
       deviceNameValue: 'Sky Phone',
@@ -2024,7 +2023,6 @@ const defaultLocales: LocaleTree = {
         wifiEnabled: 'Toggle Wi-Fi',
         bluetoothEnabled: 'Toggle Bluetooth',
         cellularEnabled: 'Toggle Cellular Data',
-        rotationLocked: 'Toggle Rotation Lock',
         notifications: 'Toggle notifications for {app}',
         notificationSounds: 'Toggle notification sounds for {app}',
       },
@@ -2081,7 +2079,6 @@ const defaultLocales: LocaleTree = {
     play: 'Play',
     previous: 'Previous track',
     quickActions: 'Quick actions',
-    rotationLock: 'Rotation Lock',
     timer: 'Timer',
     unmuteRingtone: 'Unmute ringtone and notifications',
     volume: 'Volume',

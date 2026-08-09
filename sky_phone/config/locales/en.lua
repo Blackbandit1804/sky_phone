@@ -40,7 +40,7 @@ Locales["en"] = {
             camera = "Camera", cellular = "Cellular Data", close = "Close Control Center", flashlight = "Flashlight",
             focus = "Focus", label = "Control Center", media = "Media", muteRingtone = "Mute ringtone and notifications", next = "Next track", notPlaying = "Not Playing",
             open = "Open Control Center", play = "Play", previous = "Previous track", quickActions = "Quick actions",
-            rotationLock = "Rotation Lock", timer = "Timer", unmuteRingtone = "Unmute ringtone and notifications", volume = "Volume", wifi = "Wi-Fi",
+            timer = "Timer", unmuteRingtone = "Unmute ringtone and notifications", volume = "Volume", wifi = "Wi-Fi",
         },
         Notifications = { now = "now" },
         LockScreen = {
@@ -737,7 +737,7 @@ Locales["en"] = {
                 accountPurchasesValue = "Available", notifications = "Notifications", sounds = "Sounds & Haptics",
                 general = "General Settings", security = "Passcode & Security", appearance = "Appearance", allowNotifications = "Allow Notifications",
                 connectivity = "Connectivity", connections = "Connections", wifi = "Wi-Fi", bluetooth = "Bluetooth", cellular = "Cellular",
-                connectivityDescription = "Airplane Mode temporarily disables wireless connections. Wi-Fi, Bluetooth, and cellular settings are saved on this phone.",
+                connectivityDescription = "Wi-Fi, Bluetooth, and cellular settings are saved on this phone.",
                 focus = "Focus", focusMode = "Focus", focusDescription = "Focus silences non-critical notifications while keeping alarms and important alerts available.",
                 notificationSounds = "Sounds", notificationDuration = "Notification Duration", seconds = "{seconds} seconds",
                 ringtoneVolume = "Ringtone Volume", notificationVolume = "Notification Volume",
@@ -746,7 +746,7 @@ Locales["en"] = {
                 ultimateMode = "Ultimate Mode", ultimateModeDescription = "Full blur and glass effects for compatible FiveM clients",
                 appearanceMode = "Appearance Mode",
                 automatic = "Automatic", light = "Light", dark = "Dark", phoneScale = "Phone Scale", phoneFrame = "Phone Frame",
-                screenBrightness = "Screen Brightness", rotationLock = "Rotation Lock",
+                screenBrightness = "Screen Brightness",
                 about = "About", deviceName = "Device Name", deviceNameValue = "Sky Phone", softwareVersion = "Software Version",
                 language = "Language", languageValue = "English", localStorage = "Local Storage", localStorageValue = "On Device",
                 back = "Settings", wallpaperPicker = "Built-in Wallpapers", deviceInformation = "Device Information",
@@ -774,7 +774,6 @@ Locales["en"] = {
                 toggle = {
                     airplaneMode = "Toggle Airplane Mode", streamerMode = "Toggle Streamer Mode", focusMode = "Toggle Focus",
                     wifiEnabled = "Toggle Wi-Fi", bluetoothEnabled = "Toggle Bluetooth", cellularEnabled = "Toggle Cellular Data",
-                    rotationLocked = "Toggle Rotation Lock",
                     notifications = "Toggle notifications for {app}", notificationSounds = "Toggle notification sounds for {app}",
                 },
                 frames = {

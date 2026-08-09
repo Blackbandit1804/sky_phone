@@ -32,7 +32,6 @@ import {
   Moon,
   Plane,
   RotateCcw,
-  RotateCw,
   Settings,
   Signal,
   Smartphone,
@@ -1210,23 +1209,6 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else-if="activeView === 'connectivity'">
-        <k-list strong inset>
-          <k-list-item :title="phone.t('Apps.settings.airplaneMode')">
-            <template #media>
-              <span class="settings-row-icon bg-[#ff9500]">
-                <Plane :size="17" :stroke-width="2.25" />
-              </span>
-            </template>
-            <template #after>
-              <k-toggle
-                :checked="phone.preferences.settings.airplaneMode"
-                :aria-label="phone.t('Apps.settings.toggle.airplaneMode')"
-                @change="toggleRootSetting('airplaneMode')"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
-
         <k-block-title>{{
           phone.t('Apps.settings.connections')
         }}</k-block-title>
@@ -1435,25 +1417,6 @@ onBeforeUnmount(() => {
                 />
                 <Sun :size="23" class="shrink-0" />
               </div>
-            </template>
-          </k-list-item>
-          <k-list-item :title="phone.t('Apps.settings.rotationLock')">
-            <template #media>
-              <span class="settings-row-icon bg-[#ff9500]">
-                <RotateCw :size="17" :stroke-width="2.25" />
-              </span>
-            </template>
-            <template #after>
-              <k-toggle
-                :checked="phone.preferences.settings.rotationLocked"
-                :aria-label="phone.t('Apps.settings.toggle.rotationLocked')"
-                @change="
-                  phone.setPreference(
-                    'rotationLocked',
-                    !phone.preferences.settings.rotationLocked,
-                  )
-                "
-              />
             </template>
           </k-list-item>
         </k-list>

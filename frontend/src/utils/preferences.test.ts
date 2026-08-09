@@ -25,7 +25,6 @@ describe('preferences', () => {
             clock: { enabled: false, sounds: false },
           },
           phoneScale: 110,
-          rotationLocked: true,
           screenBrightness: 64,
           wallpaper: 'ember',
           wifiEnabled: false,
@@ -53,7 +52,6 @@ describe('preferences', () => {
       sounds: true,
     })
     expect(value.settings.phoneScale).toBe(110)
-    expect(value.settings.rotationLocked).toBe(true)
     expect(value.settings.screenBrightness).toBe(64)
     expect(value.settings.wallpaper).toBe('ember')
     expect(value.settings.wifiEnabled).toBe(false)
@@ -97,7 +95,6 @@ describe('preferences', () => {
       cellularEnabled: true,
       focusMode: false,
       graphicsMode: 'performance',
-      rotationLocked: false,
       screenBrightness: 100,
       wifiEnabled: true,
     })
