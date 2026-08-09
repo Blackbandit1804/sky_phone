@@ -14,8 +14,8 @@ Config.Bridge = {
 Config.Command = "phone"
 
 Config.Phone = {
-    Item = "phone",
-    DevelopmentCommand = false,
+    Item = "sky_phone",
+    DevelopmentCommand = true,
     DeviceName = "iFruit Phone",
 }
 
