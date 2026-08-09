@@ -1854,9 +1854,13 @@ const defaultLocales: LocaleTree = {
       addMusic: 'Add music',
       addYouTube: 'Add from YouTube',
       youtubeBody:
-        'Paste a public YouTube link. The title and artist are added automatically.',
+        'Paste a public YouTube link. Leave the optional fields empty to use the video title and channel automatically.',
       youtubeUrl: 'YouTube URL',
       youtubePlaceholder: 'https://youtube.com/watch?v=...',
+      youtubeTitle: 'Song title (optional)',
+      youtubeTitlePlaceholder: 'Use the YouTube video title',
+      youtubeArtist: 'Artist (optional)',
+      youtubeArtistPlaceholder: 'Use the YouTube channel',
       addToLibrary: 'Add to Library',
       songAdded: 'Song added to your library.',
       songRemoved: 'Song removed from your library.',
@@ -1897,6 +1901,7 @@ const defaultLocales: LocaleTree = {
       noResultsBody: 'Try another song title or artist.',
       errors: {
         invalid_youtube_url: 'Paste a valid public YouTube video link.',
+        invalid_song_metadata: 'Use a shorter song title or artist name.',
         song_exists: 'That YouTube song is already in your library.',
         song_limit: 'Your personal song limit has been reached.',
         song_not_found: 'That song is no longer in your library.',

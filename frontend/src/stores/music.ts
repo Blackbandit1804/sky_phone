@@ -50,6 +50,7 @@ declare global {
 
 const audio = new Audio()
 audio.preload = 'metadata'
+const YOUTUBE_API_TIMEOUT_MS = 12000
 let audioBound = false
 let youtubeApiPromise: Promise<YouTubeApi> | null = null
 let youtubePlayer: YouTubePlayer | null = null
@@ -118,25 +119,73 @@ function loadYouTubeApi(): Promise<YouTubeApi> {
   if (window.YT?.Player) return Promise.resolve(window.YT)
   if (youtubeApiPromise) return youtubeApiPromise
   youtubeApiPromise = new Promise<YouTubeApi>((resolve, reject) => {
+    let settled = false
     const previousReady = window.onYouTubeIframeAPIReady
-    window.onYouTubeIframeAPIReady = () => {
-      previousReady?.()
-      if (window.YT?.Player) resolve(window.YT)
-      else reject(new Error('YouTube player API did not initialize.'))
-    }
-    const existing = document.querySelector<HTMLScriptElement>(
+    let script = document.querySelector<HTMLScriptElement>(
       'script[data-sky-phone-youtube-api]',
     )
-    if (existing) return
-    const script = document.createElement('script')
-    script.dataset.skyPhoneYoutubeApi = 'true'
-    script.src = 'https://www.youtube.com/iframe_api'
-    script.async = true
-    script.onerror = () =>
-      reject(new Error('YouTube player API failed to load.'))
-    document.head.append(script)
+    let timeout = 0
+
+    const cleanup = (): void => {
+      window.clearTimeout(timeout)
+      script?.removeEventListener('error', handleError)
+    }
+    const fail = (error: Error): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      if (!window.YT?.Player) script?.remove()
+      if (window.onYouTubeIframeAPIReady === handleReady)
+        window.onYouTubeIframeAPIReady = previousReady
+      youtubeApiPromise = null
+      reject(error)
+    }
+    const handleReady = (): void => {
+      try {
+        previousReady?.()
+      } catch (error) {
+        console.error('[Music] A previous YouTube callback failed:', error)
+      }
+      if (!window.YT?.Player) {
+        fail(new Error('YouTube player API did not initialize.'))
+        return
+      }
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(window.YT)
+    }
+    function handleError(): void {
+      fail(new Error('YouTube player API failed to load.'))
+    }
+
+    window.onYouTubeIframeAPIReady = handleReady
+    if (!script) {
+      script = document.createElement('script')
+      script.dataset.skyPhoneYoutubeApi = 'true'
+      script.src = 'https://www.youtube.com/iframe_api'
+      script.async = true
+      document.head.append(script)
+    }
+    script.addEventListener('error', handleError, { once: true })
+    timeout = window.setTimeout(
+      () => fail(new Error('YouTube player API timed out.')),
+      YOUTUBE_API_TIMEOUT_MS,
+    )
   })
   return youtubeApiPromise
+}
+
+function resetYoutubePlayer(): void {
+  stopYoutubeProgress()
+  const player = youtubePlayer
+  youtubePlayer = null
+  try {
+    player?.destroy()
+  } catch (error) {
+    console.error('[Music] YouTube player cleanup failed:', error)
+  }
+  document.getElementById('sky-phone-youtube-player')?.remove()
 }
 
 async function loadYouTubeTrack(videoId: string): Promise<void> {
@@ -170,15 +219,18 @@ async function loadYouTubeTrack(videoId: string): Promise<void> {
         controls: 0,
         disablekb: 1,
         fs: 0,
+        origin: window.location.origin,
         playsinline: 1,
         rel: 0,
       },
       events: {
         onError: () => {
           const activeStore = useMusicStore()
-          if (activeStore.currentTrack?.source !== 'youtube') return
-          activeStore.isPlaying = false
-          activeStore.playbackError = 'playback_failed'
+          if (activeStore.currentTrack?.source === 'youtube') {
+            activeStore.isPlaying = false
+            activeStore.playbackError = 'playback_failed'
+          }
+          resetYoutubePlayer()
           reject(new Error('YouTube player rejected the track.'))
         },
         onReady: (event) => {
@@ -274,10 +326,13 @@ export const useMusicStore = defineStore('music', {
       return response.success
     },
     async load(): Promise<boolean> {
+      void loadYouTubeApi().catch((error) => {
+        console.warn('[Music] YouTube API preload failed:', error)
+      })
       return this.request('music:bootstrap', {})
     },
-    async addYouTube(url: string): Promise<boolean> {
-      return this.request('music:add-youtube', { url })
+    async addYouTube(url: string, title = '', artist = ''): Promise<boolean> {
+      return this.request('music:add-youtube', { artist, title, url })
     },
     async removeYouTube(id: string): Promise<boolean> {
       return this.request('music:remove-youtube', { id })

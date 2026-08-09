@@ -19,6 +19,11 @@ local function truncate_text(value, maximum)
     return boundary and value:sub(1, boundary - 1) or value
 end
 
+local function optional_text(value)
+    local normalized = trim(value)
+    return normalized ~= "" and normalized or nil
+end
+
 local function affected_rows(result)
     if type(result) == "number" then
         return result
@@ -299,9 +304,19 @@ Bridge.Callbacks.Register("sky_phone:music:add-youtube", function(source, data)
     if not imei then
         return error_response
     end
-    local video_id = parse_youtube_id(type(data) == "table" and data.url or nil)
+    local payload = type(data) == "table" and data or {}
+    local video_id = parse_youtube_id(payload.url)
     if not video_id then
         return { success = false, error = "invalid_youtube_url" }
+    end
+    local custom_title = optional_text(payload.title)
+    local custom_artist = optional_text(payload.artist)
+    local custom_title_length = text_length(custom_title)
+    local custom_artist_length = text_length(custom_artist)
+    if (custom_title and (not custom_title_length or custom_title_length > 160))
+        or (custom_artist and (not custom_artist_length or custom_artist_length > 120))
+    then
+        return { success = false, error = "invalid_song_metadata" }
     end
 
     local condition, owner_params = owner_condition(account_id, imei)
@@ -321,23 +336,24 @@ Bridge.Callbacks.Register("sky_phone:music:add-youtube", function(source, data)
         return { success = false, error = "song_limit" }
     end
 
-    local metadata = fetch_youtube_metadata(video_id) or {
-        title = "YouTube " .. video_id,
-        artist = "YouTube",
-    }
+    local metadata = (not custom_title or not custom_artist)
+        and fetch_youtube_metadata(video_id)
+        or nil
+    local title = custom_title or metadata and metadata.title or "YouTube " .. video_id
+    local artist = custom_artist or metadata and metadata.artist or "YouTube"
     local id = uuid()
     if account_id then
         Bridge.Database.Query([[
             INSERT INTO `sky_phone_music_youtube_songs`
                 (`id`, `account_id`, `device_imei`, `video_id`, `title`, `artist`)
             VALUES (?, ?, NULL, ?, ?, ?)
-        ]], { id, account_id, video_id, metadata.title, metadata.artist })
+        ]], { id, account_id, video_id, title, artist })
     else
         Bridge.Database.Query([[
             INSERT INTO `sky_phone_music_youtube_songs`
                 (`id`, `account_id`, `device_imei`, `video_id`, `title`, `artist`)
             VALUES (?, NULL, ?, ?, ?, ?)
-        ]], { id, imei, video_id, metadata.title, metadata.artist })
+        ]], { id, imei, video_id, title, artist })
     end
     return { success = true, data = bootstrap(account_id, imei) }
 end)

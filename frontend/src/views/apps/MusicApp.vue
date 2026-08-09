@@ -15,7 +15,6 @@ import {
   kNavbar,
   kNavbarBackLink,
   kPage,
-  kPopover,
   kPreloader,
   kRange,
   kSearchbar,
@@ -43,7 +42,8 @@ import {
   Volume2,
   X,
 } from 'lucide-vue-next'
-import { computed, onMounted, ref, watch } from 'vue'
+import type { CSSProperties } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import { useMusicStore } from '@/stores/music'
 import { usePhoneStore } from '@/stores/phone'
@@ -52,23 +52,33 @@ import type { MusicPlaylist, MusicTrack } from '@/types/music'
 type MusicTab = 'library' | 'playlists' | 'search'
 type MusicSheet = 'playlist' | 'playlist-picker' | 'rename' | 'youtube'
 
+const MUSIC_POPOVER_WIDTH = 240
+const MUSIC_POPOVER_ITEM_HEIGHT = 52
+const MUSIC_POPOVER_INSET = 8
+const MUSIC_POPOVER_GAP = 7
+
 const music = useMusicStore()
 const phone = usePhoneStore()
 const activeTab = ref<MusicTab>('library')
 const activePlaylist = ref<MusicPlaylist | null>(null)
 const addMenuOpened = ref(false)
-const addMenuTarget = ref<HTMLElement | null>(null)
 const actionMenuOpened = ref(false)
-const actionMenuTarget = ref<HTMLElement | null>(null)
 const actionTrack = ref<MusicTrack | null>(null)
+const popoverStyle = ref<CSSProperties>({
+  top: `${MUSIC_POPOVER_INSET}px`,
+  left: `${MUSIC_POPOVER_INSET}px`,
+})
 const activeSheet = ref<MusicSheet | null>(null)
 const playerOpened = ref(false)
 const youtubeUrl = ref('')
+const youtubeTitle = ref('')
+const youtubeArtist = ref('')
 const playlistName = ref('')
 const searchQuery = ref('')
 const toastText = ref('')
 const confirmRemoveTrack = ref(false)
 const confirmDeletePlaylist = ref(false)
+const scrollEl = ref<HTMLElement | null>(null)
 
 const allTracks = computed(() => music.allTracks)
 const normalizedSearch = computed(() => searchQuery.value.trim().toLowerCase())
@@ -113,17 +123,65 @@ function errorText(): string {
   return phone.t(`Apps.music.errors.${music.error || 'default'}`)
 }
 
+function closeMenus(): void {
+  addMenuOpened.value = false
+  actionMenuOpened.value = false
+}
+
+function positionPopover(target: HTMLElement, itemCount: number): boolean {
+  const app = target.closest<HTMLElement>('.music-app')
+  if (!app) return false
+
+  const appRect = app.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const scale = app.offsetWidth ? appRect.width / app.offsetWidth : 1
+  const targetLeft = (targetRect.left - appRect.left) / scale
+  const targetTop = (targetRect.top - appRect.top) / scale
+  const targetWidth = targetRect.width / scale
+  const targetHeight = targetRect.height / scale
+  const popoverHeight = itemCount * MUSIC_POPOVER_ITEM_HEIGHT + 2
+  const desiredLeft = targetLeft + targetWidth - MUSIC_POPOVER_WIDTH
+  const belowTop = targetTop + targetHeight + MUSIC_POPOVER_GAP
+  const desiredTop =
+    belowTop + popoverHeight <= app.offsetHeight - MUSIC_POPOVER_INSET
+      ? belowTop
+      : targetTop - popoverHeight - MUSIC_POPOVER_GAP
+
+  popoverStyle.value = {
+    left: `${Math.max(
+      MUSIC_POPOVER_INSET,
+      Math.min(
+        desiredLeft,
+        app.offsetWidth - MUSIC_POPOVER_WIDTH - MUSIC_POPOVER_INSET,
+      ),
+    )}px`,
+    top: `${Math.max(
+      MUSIC_POPOVER_INSET,
+      Math.min(
+        desiredTop,
+        app.offsetHeight - popoverHeight - MUSIC_POPOVER_INSET,
+      ),
+    )}px`,
+  }
+  return true
+}
+
 function openAddMenu(event: MouseEvent): void {
-  addMenuTarget.value = event.currentTarget as HTMLElement
+  const target = event.currentTarget as HTMLElement
+  if (!positionPopover(target, 2)) return
+  actionMenuOpened.value = false
   addMenuOpened.value = true
 }
 
 function openSheet(sheet: MusicSheet): void {
-  addMenuOpened.value = false
-  actionMenuOpened.value = false
+  closeMenus()
   activeSheet.value = sheet
   music.error = ''
-  if (sheet === 'youtube') youtubeUrl.value = ''
+  if (sheet === 'youtube') {
+    youtubeUrl.value = ''
+    youtubeTitle.value = ''
+    youtubeArtist.value = ''
+  }
   if (sheet === 'playlist') playlistName.value = ''
   if (sheet === 'rename') playlistName.value = activePlaylist.value?.name ?? ''
 }
@@ -135,29 +193,46 @@ function closeSheet(): void {
 }
 
 function requestDeletePlaylist(): void {
-  addMenuOpened.value = false
+  closeMenus()
   confirmDeletePlaylist.value = true
 }
 
 function requestRemoveTrack(): void {
-  actionMenuOpened.value = false
+  closeMenus()
   confirmRemoveTrack.value = true
 }
 
 function openTrackMenu(event: MouseEvent, track: MusicTrack): void {
   event.stopPropagation()
   actionTrack.value = track
-  actionMenuTarget.value = event.currentTarget as HTMLElement
+  const itemCount =
+    1 + (activePlaylist.value ? 1 : 0) + (track.source === 'youtube' ? 1 : 0)
+  if (!positionPopover(event.currentTarget as HTMLElement, itemCount)) return
+  addMenuOpened.value = false
   actionMenuOpened.value = true
 }
 
 function openPlaylist(playlist: MusicPlaylist): void {
   activePlaylist.value = playlist
   activeTab.value = 'playlists'
+  scrollToTop()
 }
 
 function closePlaylist(): void {
   activePlaylist.value = null
+  scrollToTop()
+}
+
+function scrollToTop(): void {
+  void nextTick(() => {
+    if (scrollEl.value) scrollEl.value.scrollTop = 0
+  })
+}
+
+function selectTab(tab: MusicTab): void {
+  activeTab.value = tab
+  activePlaylist.value = null
+  scrollToTop()
 }
 
 async function playTrack(
@@ -174,7 +249,13 @@ async function playFeatured(): Promise<void> {
 
 async function submitYouTube(): Promise<void> {
   if (!youtubeUrl.value.trim()) return
-  if (await music.addYouTube(youtubeUrl.value.trim())) {
+  if (
+    await music.addYouTube(
+      youtubeUrl.value.trim(),
+      youtubeTitle.value.trim(),
+      youtubeArtist.value.trim(),
+    )
+  ) {
     activeSheet.value = null
     showToast('Apps.music.songAdded')
   }
@@ -289,8 +370,18 @@ onMounted(() => {
 </script>
 
 <template>
-  <k-page component="main" class="music-app">
+  <k-page
+    component="main"
+    class="music-app"
+    :class="{
+      'music-app--playlist': activePlaylist,
+      'music-app--playing': music.currentTrack,
+    }"
+  >
     <k-navbar
+      component="nav"
+      class="music-navbar"
+      title-class="music-navbar-title"
       :title="activePlaylist ? activePlaylist.name : phone.t('Apps.music.name')"
     >
       <template v-if="activePlaylist" #left>
@@ -321,10 +412,7 @@ onMounted(() => {
       </template>
     </k-navbar>
 
-    <div
-      class="music-scroll"
-      :class="{ 'music-scroll--playing': music.currentTrack }"
-    >
+    <div ref="scrollEl" class="music-scroll">
       <div
         v-if="music.isLoading && !allTracks.length && !music.playlists.length"
         class="music-loading"
@@ -446,7 +534,7 @@ onMounted(() => {
         </k-glass>
 
         <template v-if="recentTracks.length">
-          <k-block-title>{{
+          <k-block-title class="music-section-title">{{
             phone.t('Apps.music.recentlyAdded')
           }}</k-block-title>
           <section class="music-album-grid">
@@ -470,7 +558,9 @@ onMounted(() => {
             </button>
           </section>
 
-          <k-block-title>{{ phone.t('Apps.music.songs') }}</k-block-title>
+          <k-block-title class="music-section-title">{{
+            phone.t('Apps.music.songs')
+          }}</k-block-title>
           <k-list nested class="music-track-list">
             <k-list-item
               v-for="track in allTracks"
@@ -658,6 +748,9 @@ onMounted(() => {
 
     <k-tabbar
       v-if="!activePlaylist"
+      component="nav"
+      icons
+      labels
       class="music-tabbar"
       :aria-label="phone.t('Apps.music.navigation')"
     >
@@ -666,7 +759,7 @@ onMounted(() => {
           component="button"
           :active="activeTab === 'library'"
           :link-props="{ type: 'button' }"
-          @click="activeTab = 'library'"
+          @click="selectTab('library')"
         >
           <template #icon
             ><k-icon><Library class="w-7 h-7" /></k-icon
@@ -677,7 +770,7 @@ onMounted(() => {
           component="button"
           :active="activeTab === 'playlists'"
           :link-props="{ type: 'button' }"
-          @click="activeTab = 'playlists'"
+          @click="selectTab('playlists')"
         >
           <template #icon
             ><k-icon><ListMusic class="w-7 h-7" /></k-icon
@@ -688,7 +781,7 @@ onMounted(() => {
           component="button"
           :active="activeTab === 'search'"
           :link-props="{ type: 'button' }"
-          @click="activeTab = 'search'"
+          @click="selectTab('search')"
         >
           <template #icon
             ><k-icon><Search class="w-7 h-7" /></k-icon
@@ -698,86 +791,86 @@ onMounted(() => {
       </k-toolbar-pane>
     </k-tabbar>
 
-    <Teleport to="body">
-      <k-popover
-        :opened="addMenuOpened"
-        :target="addMenuTarget ?? undefined"
-        angle
-        :class="{
-          dark: phone.isDarkMode,
-          'phone-app--light': !phone.isDarkMode,
-          [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
-        }"
-        @backdropclick="addMenuOpened = false"
-      >
-        <k-list nested>
-          <template v-if="activePlaylist">
-            <k-list-button link-component="button" @click="openSheet('rename')">
-              <ListMusic :size="18" />
-              {{ phone.t('Apps.music.renamePlaylist') }}
-            </k-list-button>
-            <k-list-button
-              link-component="button"
-              class="music-destructive"
-              @click="requestDeletePlaylist"
-            >
-              <Trash2 :size="18" /> {{ phone.t('Apps.music.deletePlaylist') }}
-            </k-list-button>
-          </template>
-          <template v-else>
-            <k-list-button
-              link-component="button"
-              @click="openSheet('youtube')"
-            >
-              <ExternalLink :size="18" /> {{ phone.t('Apps.music.addYouTube') }}
-            </k-list-button>
-            <k-list-button
-              link-component="button"
-              @click="openSheet('playlist')"
-            >
-              <ListMusic :size="18" /> {{ phone.t('Apps.music.newPlaylist') }}
-            </k-list-button>
-          </template>
-        </k-list>
-      </k-popover>
+    <button
+      v-if="addMenuOpened || actionMenuOpened"
+      type="button"
+      class="music-popover-dismiss"
+      aria-hidden="true"
+      tabindex="-1"
+      @click="closeMenus"
+    />
+    <section
+      v-if="addMenuOpened"
+      class="music-popover"
+      :style="popoverStyle"
+      :class="{
+        'phone-app--light': !phone.isDarkMode,
+        [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
+      }"
+      role="group"
+      :aria-label="phone.t('Apps.music.addMusic')"
+    >
+      <k-list nested>
+        <template v-if="activePlaylist">
+          <k-list-button link-component="button" @click="openSheet('rename')">
+            <ListMusic :size="18" />
+            {{ phone.t('Apps.music.renamePlaylist') }}
+          </k-list-button>
+          <k-list-button
+            link-component="button"
+            class="music-destructive"
+            @click="requestDeletePlaylist"
+          >
+            <Trash2 :size="18" /> {{ phone.t('Apps.music.deletePlaylist') }}
+          </k-list-button>
+        </template>
+        <template v-else>
+          <k-list-button link-component="button" @click="openSheet('youtube')">
+            <ExternalLink :size="18" /> {{ phone.t('Apps.music.addYouTube') }}
+          </k-list-button>
+          <k-list-button link-component="button" @click="openSheet('playlist')">
+            <ListMusic :size="18" /> {{ phone.t('Apps.music.newPlaylist') }}
+          </k-list-button>
+        </template>
+      </k-list>
+    </section>
 
-      <k-popover
-        :opened="actionMenuOpened"
-        :target="actionMenuTarget ?? undefined"
-        angle
-        :class="{
-          dark: phone.isDarkMode,
-          'phone-app--light': !phone.isDarkMode,
-          [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
-        }"
-        @backdropclick="actionMenuOpened = false"
-      >
-        <k-list nested>
-          <k-list-button
-            link-component="button"
-            @click="openSheet('playlist-picker')"
-          >
-            <CirclePlus :size="18" /> {{ phone.t('Apps.music.addToPlaylist') }}
-          </k-list-button>
-          <k-list-button
-            v-if="activePlaylist"
-            link-component="button"
-            class="music-destructive"
-            @click="removeFromActivePlaylist"
-          >
-            <X :size="18" /> {{ phone.t('Apps.music.removeFromPlaylist') }}
-          </k-list-button>
-          <k-list-button
-            v-if="actionTrack?.source === 'youtube'"
-            link-component="button"
-            class="music-destructive"
-            @click="requestRemoveTrack"
-          >
-            <Trash2 :size="18" /> {{ phone.t('Apps.music.removeFromLibrary') }}
-          </k-list-button>
-        </k-list>
-      </k-popover>
-    </Teleport>
+    <section
+      v-if="actionMenuOpened"
+      class="music-popover"
+      :style="popoverStyle"
+      :class="{
+        'phone-app--light': !phone.isDarkMode,
+        [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
+      }"
+      role="group"
+      :aria-label="phone.t('Apps.music.songActions')"
+    >
+      <k-list nested>
+        <k-list-button
+          link-component="button"
+          @click="openSheet('playlist-picker')"
+        >
+          <CirclePlus :size="18" /> {{ phone.t('Apps.music.addToPlaylist') }}
+        </k-list-button>
+        <k-list-button
+          v-if="activePlaylist"
+          link-component="button"
+          class="music-destructive"
+          @click="removeFromActivePlaylist"
+        >
+          <X :size="18" /> {{ phone.t('Apps.music.removeFromPlaylist') }}
+        </k-list-button>
+        <k-list-button
+          v-if="actionTrack?.source === 'youtube'"
+          link-component="button"
+          class="music-destructive"
+          @click="requestRemoveTrack"
+        >
+          <Trash2 :size="18" /> {{ phone.t('Apps.music.removeFromLibrary') }}
+        </k-list-button>
+      </k-list>
+    </section>
 
     <k-sheet
       :opened="Boolean(activeSheet)"
@@ -805,6 +898,24 @@ onMounted(() => {
               type="url"
               :value="youtubeUrl"
               @input="youtubeUrl = eventValue($event)"
+              @keydown.enter="submitYouTube"
+            />
+            <k-list-input
+              :label="phone.t('Apps.music.youtubeTitle')"
+              input-id="music-youtube-title"
+              maxlength="160"
+              :placeholder="phone.t('Apps.music.youtubeTitlePlaceholder')"
+              :value="youtubeTitle"
+              @input="youtubeTitle = eventValue($event)"
+              @keydown.enter="submitYouTube"
+            />
+            <k-list-input
+              :label="phone.t('Apps.music.youtubeArtist')"
+              input-id="music-youtube-artist"
+              maxlength="120"
+              :placeholder="phone.t('Apps.music.youtubeArtistPlaceholder')"
+              :value="youtubeArtist"
+              @input="youtubeArtist = eventValue($event)"
               @keydown.enter="submitYouTube"
             />
           </k-list>
@@ -1027,9 +1138,14 @@ onMounted(() => {
   --music-label: #111114;
   --music-muted: #74747c;
   --music-line: rgb(18 18 23 / 9%);
+  --k-safe-area-top: 46px;
+  --k-safe-area-bottom: 25px;
   position: relative;
+  display: flex !important;
+  flex-direction: column;
   height: 100%;
   overflow: hidden;
+  isolation: isolate;
   background: var(--music-bg);
   color: var(--music-label);
 }
@@ -1042,17 +1158,38 @@ onMounted(() => {
   --music-line: rgb(255 255 255 / 10%);
 }
 
+.music-navbar {
+  z-index: 30;
+  flex: 0 0 auto;
+}
+
+.music-navbar :deep(.music-navbar-title) {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .music-scroll {
-  position: absolute;
-  inset: 47px 0 75px;
-  padding: 8px 0 50px;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px 0 24px;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-width: none;
 }
 
-.music-scroll--playing {
-  bottom: 136px;
+.music-app--playing .music-scroll {
+  padding-bottom: 82px;
+}
+
+.music-app--playlist .music-scroll {
+  padding-bottom: 42px;
+}
+
+.music-app--playlist.music-app--playing .music-scroll {
+  padding-bottom: 100px;
 }
 
 .music-scroll::-webkit-scrollbar {
@@ -1116,6 +1253,13 @@ onMounted(() => {
   font-size: 13px;
 }
 
+.music-section-title {
+  min-height: 24px;
+  margin: 28px 14px 12px !important;
+  padding: 0 !important;
+  line-height: 24px;
+}
+
 .music-featured {
   margin: 0 14px 6px;
   border-radius: 24px;
@@ -1149,10 +1293,12 @@ onMounted(() => {
 
 .music-featured-copy h2 {
   margin: 7px 0 2px;
+  display: -webkit-box;
   overflow: hidden;
   font-size: 24px;
   line-height: 1.05;
-  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .music-featured-copy p {
@@ -1313,7 +1459,7 @@ onMounted(() => {
 }
 
 .music-playlist-hero {
-  padding: 18px 26px 22px;
+  padding: 14px 26px 22px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1321,15 +1467,20 @@ onMounted(() => {
 }
 
 .music-playlist-art {
-  width: 214px;
-  height: 214px;
+  width: min(214px, 72%);
+  aspect-ratio: 1;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   border-radius: 22px;
 }
 
 .music-playlist-hero h1 {
+  max-width: 100%;
   margin: 19px 0 2px;
+  overflow: hidden;
   font-size: 26px;
   letter-spacing: -0.7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .music-playlist-hero p {
@@ -1344,9 +1495,9 @@ onMounted(() => {
 
 .music-mini-player {
   position: absolute;
-  z-index: 14;
+  z-index: 32;
   right: 8px;
-  bottom: 76px;
+  bottom: 111px;
   left: 8px;
   height: 58px;
   padding: 6px 10px 6px 7px;
@@ -1356,6 +1507,10 @@ onMounted(() => {
   align-items: center;
   gap: 7px;
   overflow: hidden;
+}
+
+.music-app--playlist .music-mini-player {
+  bottom: 29px;
 }
 
 .music-mini-art {
@@ -1396,7 +1551,17 @@ onMounted(() => {
 }
 
 .music-tabbar {
-  z-index: 12;
+  z-index: 31;
+  flex: 0 0 auto;
+}
+
+.music-tabbar :deep(.k-toolbar-pane) {
+  width: 100% !important;
+}
+
+.music-tabbar :deep(.k-toolbar-pane > .k-link) {
+  min-width: 0 !important;
+  flex: 1 1 33.333%;
 }
 
 .music-form-sheet,
@@ -1459,6 +1624,41 @@ onMounted(() => {
 
 .music-picker-list {
   margin-top: 12px;
+}
+
+.music-popover-dismiss {
+  position: absolute;
+  z-index: 199;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.music-popover {
+  position: absolute !important;
+  z-index: 200 !important;
+  width: 240px !important;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 28px;
+  background: #303034 !important;
+  box-shadow: none !important;
+  translate: none !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+.music-popover :deep(.k-list) {
+  z-index: auto;
+  background: transparent;
+}
+
+.music-popover.phone-app--light {
+  border-color: rgb(0 0 0 / 10%);
+  background: #f8f8fa !important;
 }
 
 .music-destructive {

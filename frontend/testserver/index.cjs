@@ -102,6 +102,31 @@ function musicBootstrap() {
     playlists: musicPlaylists,
   }
 }
+
+async function fetchYoutubeMetadata(videoId) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 4500)
+  try {
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`
+    const response = await fetch(
+      `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(watchUrl)}`,
+      {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      },
+    )
+    if (!response.ok) return null
+    const data = await response.json()
+    const title = typeof data.title === 'string' ? data.title.trim() : ''
+    const artist =
+      typeof data.author_name === 'string' ? data.author_name.trim() : ''
+    return title && artist ? { artist, title } : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 let mockBankBalance = 24787
 let mockCashBalance = 2350
 let nextBankTransactionId = 7
@@ -1556,7 +1581,7 @@ function flareBootstrap() {
   }
 }
 
-app.post('/api/:endpoint', (request, response) => {
+app.post('/api/:endpoint', async (request, response) => {
   console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
   if (endpoint === 'music:bootstrap') {
@@ -1565,6 +1590,8 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'music:add-youtube') {
     const value = String(request.body.url ?? '')
+    const customTitle = String(request.body.title ?? '').trim()
+    const customArtist = String(request.body.artist ?? '').trim()
     const videoId =
       value.match(/[?&]v=([\w-]{11})/)?.[1] ??
       value.match(/youtu\.be\/([\w-]{11})/)?.[1]
@@ -1572,16 +1599,22 @@ app.post('/api/:endpoint', (request, response) => {
       response.json({ success: false, error: 'invalid_youtube_url' })
       return
     }
+    if (customTitle.length > 160 || customArtist.length > 120) {
+      response.json({ success: false, error: 'invalid_song_metadata' })
+      return
+    }
     if (musicYoutubeTracks.some((track) => track.videoId === videoId)) {
       response.json({ success: false, error: 'song_exists' })
       return
     }
+    const metadata =
+      !customTitle || !customArtist ? await fetchYoutubeMetadata(videoId) : null
     musicYoutubeTracks.unshift({
       id: `music-youtube-${musicSequence++}`,
       source: 'youtube',
       videoId,
-      title: `YouTube ${videoId}`,
-      artist: 'YouTube',
+      title: customTitle || metadata?.title || `YouTube ${videoId}`,
+      artist: customArtist || metadata?.artist || 'YouTube',
       artwork: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
       createdAt: Date.now(),
     })
