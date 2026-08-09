@@ -82,6 +82,7 @@ const DEFAULT_APP_NOTIFICATIONS: Record<
   'neon-drop': { enabled: true, sounds: true },
   citymarkt: { enabled: true, sounds: true },
   'local-pages': { enabled: true, sounds: true },
+  picstagram: { enabled: true, sounds: true },
   fliptok: { enabled: true, sounds: true },
   camera: { enabled: true, sounds: true },
   clock: { enabled: true, sounds: true },

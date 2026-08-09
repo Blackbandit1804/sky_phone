@@ -59,6 +59,7 @@ server_scripts {
     'source/server/marketplace.lua',
     'source/server/pages.lua',
     'source/server/fliptok.lua',
+    'source/server/picstagram.lua',
     'source/server/map.lua',
     'source/server/calendar.lua',
     'source/server/radio.lua',

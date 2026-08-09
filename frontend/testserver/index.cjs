@@ -176,6 +176,183 @@ let flipTokReports = [
     creator_display_name: 'Nova',
   },
 ]
+let picstagramAuthenticated = true
+const picstagramProfiles = [
+  {
+    avatar_media_id: null,
+    avatar_url:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&q=80',
+    bio: 'Street light, rain, and the quiet side of Los Santos.',
+    display_name: 'Skyline',
+    follow_status: null,
+    followers: 1842,
+    following: 128,
+    handle: 'skyline',
+    id: 'pic-profile-1',
+    is_following: false,
+    is_owner: true,
+    is_requested: false,
+    locked: false,
+    post_count: 1,
+    private: false,
+    status: 'active',
+    verified: true,
+  },
+  {
+    avatar_media_id: null,
+    avatar_url:
+      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80',
+    bio: 'Golden-hour wanderer.',
+    display_name: 'Nova',
+    follow_status: 'accepted',
+    followers: 9214,
+    following: 91,
+    handle: 'nova.ls',
+    id: 'pic-profile-2',
+    is_following: true,
+    is_owner: false,
+    is_requested: false,
+    locked: false,
+    post_count: 2,
+    private: false,
+    status: 'active',
+    verified: true,
+  },
+  {
+    avatar_media_id: null,
+    avatar_url: null,
+    bio: 'Private film diary.',
+    display_name: 'Milo Reed',
+    follow_status: null,
+    followers: 318,
+    following: 44,
+    handle: 'milo.reed',
+    id: 'pic-profile-3',
+    is_following: false,
+    is_owner: false,
+    is_requested: false,
+    locked: true,
+    post_count: 0,
+    private: true,
+    status: 'active',
+    verified: false,
+  },
+]
+let picstagramPosts = [
+  {
+    avatar_url: picstagramProfiles[1].avatar_url,
+    caption: 'The city holds its breath right before sunrise. #LosSantos',
+    comment_count: 2,
+    comments_enabled: true,
+    created_at: Date.now() - 32 * 60 * 1000,
+    display_name: picstagramProfiles[1].display_name,
+    handle: picstagramProfiles[1].handle,
+    id: 'pic-post-1',
+    is_liked: false,
+    is_owner: false,
+    is_saved: true,
+    like_count: 842,
+    location: 'Vinewood Hills',
+    media: [
+      {
+        id: 8101,
+        position: 0,
+        url: 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=900&q=85',
+      },
+      {
+        id: 8102,
+        position: 1,
+        url: 'https://images.unsplash.com/photo-1444723121867-7a241cacace9?auto=format&fit=crop&w=900&q=85',
+      },
+    ],
+    private: false,
+    profile_id: picstagramProfiles[1].id,
+    verified: true,
+  },
+  {
+    avatar_url: picstagramProfiles[0].avatar_url,
+    caption: 'Neon after rain.',
+    comment_count: 1,
+    comments_enabled: true,
+    created_at: Date.now() - 3 * 60 * 60 * 1000,
+    display_name: picstagramProfiles[0].display_name,
+    handle: picstagramProfiles[0].handle,
+    id: 'pic-post-2',
+    is_liked: true,
+    is_owner: true,
+    is_saved: false,
+    like_count: 216,
+    location: 'Downtown Los Santos',
+    media: [
+      {
+        id: 8103,
+        position: 0,
+        url: 'https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=900&q=85',
+      },
+    ],
+    private: false,
+    profile_id: picstagramProfiles[0].id,
+    verified: true,
+  },
+]
+let picstagramComments = [
+  {
+    avatar_url: picstagramProfiles[1].avatar_url,
+    body: 'That reflection is unreal.',
+    created_at: Date.now() - 18 * 60 * 1000,
+    display_name: picstagramProfiles[1].display_name,
+    handle: picstagramProfiles[1].handle,
+    id: 'pic-comment-1',
+    is_owner: false,
+    parent_id: null,
+    profile_id: picstagramProfiles[1].id,
+    verified: true,
+  },
+]
+let picstagramStories = [
+  {
+    avatar_url: picstagramProfiles[1].avatar_url,
+    body: 'First light over Vinewood.',
+    created_at: Date.now() - 12 * 60 * 1000,
+    display_name: picstagramProfiles[1].display_name,
+    expires_at: Date.now() + 22 * 60 * 60 * 1000,
+    handle: picstagramProfiles[1].handle,
+    id: 'pic-story-1',
+    is_owner: false,
+    profile_id: picstagramProfiles[1].id,
+    seen: false,
+    url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=85',
+    verified: true,
+    view_count: 42,
+  },
+]
+let picstagramActivities = [
+  {
+    avatar_url: picstagramProfiles[1].avatar_url,
+    created_at: Date.now() - 9 * 60 * 1000,
+    display_name: picstagramProfiles[1].display_name,
+    handle: picstagramProfiles[1].handle,
+    id: 'pic-activity-1',
+    kind: 'like',
+    post_id: 'pic-post-2',
+    post_url: picstagramPosts[1].media[0].url,
+    profile_id: picstagramProfiles[1].id,
+    read_at: null,
+    verified: true,
+  },
+]
+let picstagramReports = [
+  {
+    created_at: Date.now() - 45 * 60 * 1000,
+    details: 'Please review the caption and location.',
+    id: 'pic-report-1',
+    reason: 'spam',
+    reporter_display_name: 'Skyline',
+    reporter_handle: 'skyline',
+    target_id: 'pic-post-1',
+    target_type: 'post',
+  },
+]
 const mockBankTransactions = [
   {
     id: 1,
@@ -1546,6 +1723,360 @@ app.post('/api/:endpoint', (request, response) => {
     match.lastMessageAt = message.createdAt
     match.lastMessageType = messageType
     response.json({ success: true, data: message })
+    return
+  }
+  if (endpoint === 'picstagram:bootstrap') {
+    response.json({
+      success: true,
+      data: picstagramAuthenticated
+        ? {
+            authenticated: true,
+            feed: {
+              hasMore: false,
+              items: picstagramPosts,
+              nextCursor: null,
+            },
+            isAdmin: true,
+            profile: picstagramProfiles[0],
+          }
+        : { authenticated: false, isAdmin: true },
+    })
+    return
+  }
+  if (endpoint === 'picstagram:login' || endpoint === 'picstagram:register') {
+    picstagramAuthenticated = true
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'picstagram:logout') {
+    picstagramAuthenticated = false
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'picstagram:feed') {
+    response.json({
+      success: true,
+      data: { hasMore: false, items: picstagramPosts, nextCursor: null },
+    })
+    return
+  }
+  if (endpoint === 'picstagram:explore') {
+    response.json({
+      success: true,
+      data: {
+        hasMore: false,
+        items: picstagramPosts.filter((post) => !post.is_owner),
+        nextCursor: null,
+      },
+    })
+    return
+  }
+  if (endpoint === 'picstagram:saved') {
+    response.json({
+      success: true,
+      data: {
+        hasMore: false,
+        items: picstagramPosts.filter((post) => post.is_saved),
+        nextCursor: null,
+      },
+    })
+    return
+  }
+  if (endpoint === 'picstagram:search') {
+    const search = String(request.body.search ?? '').toLowerCase()
+    response.json({
+      success: true,
+      data: {
+        posts: picstagramPosts.filter((post) =>
+          `${post.handle} ${post.display_name} ${post.caption} ${post.location}`
+            .toLowerCase()
+            .includes(search),
+        ),
+        profiles: picstagramProfiles.filter((profile) =>
+          `${profile.handle} ${profile.display_name}`
+            .toLowerCase()
+            .includes(search),
+        ),
+      },
+    })
+    return
+  }
+  if (endpoint === 'picstagram:profile') {
+    const profile = picstagramProfiles.find(
+      (item) =>
+        item.id === request.body.profileId ||
+        item.handle === String(request.body.handle ?? '').toLowerCase(),
+    )
+    if (!profile) {
+      response.json({ success: false, error: 'profile_not_found' })
+      return
+    }
+    response.json({
+      success: true,
+      data: {
+        posts: {
+          hasMore: false,
+          items: picstagramPosts.filter(
+            (post) => post.profile_id === profile.id,
+          ),
+          nextCursor: null,
+        },
+        profile,
+      },
+    })
+    return
+  }
+  if (endpoint === 'picstagram:update-profile') {
+    Object.assign(picstagramProfiles[0], {
+      bio: request.body.bio,
+      display_name: request.body.displayName,
+      handle: request.body.handle,
+      private: request.body.private,
+    })
+    response.json({ success: true, data: picstagramProfiles[0] })
+    return
+  }
+  if (endpoint === 'picstagram:publish-post') {
+    const media = request.body.mediaIds
+      .map((id) => mockMedia.find((item) => item.id === id))
+      .filter((item) => item?.mediaType === 'photo')
+    if (!media.length) {
+      response.json({ success: false, error: 'invalid_media' })
+      return
+    }
+    const post = {
+      avatar_url: picstagramProfiles[0].avatar_url,
+      caption: request.body.caption,
+      comment_count: 0,
+      comments_enabled: request.body.commentsEnabled,
+      created_at: Date.now(),
+      display_name: picstagramProfiles[0].display_name,
+      handle: picstagramProfiles[0].handle,
+      id: `pic-post-${Date.now()}`,
+      is_liked: false,
+      is_owner: true,
+      is_saved: false,
+      like_count: 0,
+      location: request.body.location,
+      media: media.map((item, position) => ({
+        id: item.id,
+        position,
+        url: item.url,
+      })),
+      private: picstagramProfiles[0].private,
+      profile_id: picstagramProfiles[0].id,
+      verified: picstagramProfiles[0].verified,
+    }
+    picstagramPosts.unshift(post)
+    response.json({ success: true, data: { id: post.id } })
+    return
+  }
+  if (endpoint === 'picstagram:update-post') {
+    const post = picstagramPosts.find((item) => item.id === request.body.id)
+    if (post)
+      Object.assign(post, {
+        caption: request.body.caption,
+        comments_enabled: request.body.commentsEnabled,
+        location: request.body.location,
+      })
+    response.json({
+      success: Boolean(post),
+      error: post ? undefined : 'post_not_found',
+    })
+    return
+  }
+  if (endpoint === 'picstagram:set-post-status') {
+    if (request.body.status !== 'published')
+      picstagramPosts = picstagramPosts.filter(
+        (post) => post.id !== request.body.id,
+      )
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'picstagram:react') {
+    const post = picstagramPosts.find((item) => item.id === request.body.id)
+    if (post) {
+      const key = request.body.kind === 'like' ? 'is_liked' : 'is_saved'
+      const changed = post[key] !== request.body.active
+      post[key] = request.body.active
+      if (changed && request.body.kind === 'like')
+        post.like_count += request.body.active ? 1 : -1
+    }
+    response.json({
+      success: Boolean(post),
+      error: post ? undefined : 'post_not_found',
+    })
+    return
+  }
+  if (endpoint === 'picstagram:follow') {
+    const profile = picstagramProfiles.find(
+      (item) => item.id === request.body.profileId,
+    )
+    if (!profile) {
+      response.json({ success: false, error: 'profile_not_found' })
+      return
+    }
+    profile.follow_status = request.body.active
+      ? profile.private
+        ? 'pending'
+        : 'accepted'
+      : null
+    profile.is_following = profile.follow_status === 'accepted'
+    profile.is_requested = profile.follow_status === 'pending'
+    profile.locked = profile.private && !profile.is_following
+    response.json({ success: true, data: { status: profile.follow_status } })
+    return
+  }
+  if (endpoint === 'picstagram:respond-follow') {
+    picstagramActivities = picstagramActivities.filter(
+      (activity) =>
+        activity.kind !== 'follow_request' ||
+        activity.profile_id !== request.body.profileId,
+    )
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'picstagram:comments') {
+    response.json({ success: true, data: picstagramComments })
+    return
+  }
+  if (endpoint === 'picstagram:comment') {
+    const comment = {
+      avatar_url: picstagramProfiles[0].avatar_url,
+      body: request.body.body,
+      created_at: Date.now(),
+      display_name: picstagramProfiles[0].display_name,
+      handle: picstagramProfiles[0].handle,
+      id: `pic-comment-${Date.now()}`,
+      is_owner: true,
+      parent_id: request.body.parentId ?? null,
+      profile_id: picstagramProfiles[0].id,
+      verified: picstagramProfiles[0].verified,
+    }
+    picstagramComments.push(comment)
+    response.json({ success: true, data: { id: comment.id } })
+    return
+  }
+  if (endpoint === 'picstagram:remove-comment') {
+    picstagramComments = picstagramComments.filter(
+      (comment) => comment.id !== request.body.id,
+    )
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'picstagram:stories') {
+    response.json({ success: true, data: picstagramStories })
+    return
+  }
+  if (endpoint === 'picstagram:publish-story') {
+    const media = mockMedia.find((item) => item.id === request.body.mediaId)
+    if (!media || media.mediaType !== 'photo') {
+      response.json({ success: false, error: 'invalid_media' })
+      return
+    }
+    const story = {
+      avatar_url: picstagramProfiles[0].avatar_url,
+      body: request.body.body,
+      created_at: Date.now(),
+      display_name: picstagramProfiles[0].display_name,
+      expires_at: Date.now() + 24 * 60 * 60 * 1000,
+      handle: picstagramProfiles[0].handle,
+      id: `pic-story-${Date.now()}`,
+      is_owner: true,
+      profile_id: picstagramProfiles[0].id,
+      seen: true,
+      url: media.url,
+      verified: picstagramProfiles[0].verified,
+      view_count: 0,
+    }
+    picstagramStories.unshift(story)
+    response.json({ success: true, data: { id: story.id } })
+    return
+  }
+  if (endpoint === 'picstagram:view-story') {
+    const story = picstagramStories.find((item) => item.id === request.body.id)
+    if (story) story.seen = true
+    response.json({ success: Boolean(story) })
+    return
+  }
+  if (endpoint === 'picstagram:story-viewers') {
+    response.json({
+      success: true,
+      data: [
+        {
+          avatar_url: picstagramProfiles[1].avatar_url,
+          created_at: Date.now() - 60000,
+          display_name: picstagramProfiles[1].display_name,
+          handle: picstagramProfiles[1].handle,
+          id: picstagramProfiles[1].id,
+          verified: true,
+        },
+      ],
+    })
+    return
+  }
+  if (endpoint === 'picstagram:remove-story') {
+    picstagramStories = picstagramStories.filter(
+      (story) => story.id !== request.body.id,
+    )
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'picstagram:activities') {
+    response.json({ success: true, data: picstagramActivities })
+    return
+  }
+  if (endpoint === 'picstagram:mark-activities') {
+    picstagramActivities.forEach((activity) => {
+      activity.read_at = new Date().toISOString()
+    })
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'picstagram:block') {
+    const profileId = request.body.profileId
+    picstagramPosts = picstagramPosts.filter(
+      (post) => post.profile_id !== profileId,
+    )
+    picstagramComments = picstagramComments.filter(
+      (comment) => comment.profile_id !== profileId,
+    )
+    picstagramStories = picstagramStories.filter(
+      (story) => story.profile_id !== profileId,
+    )
+    picstagramActivities = picstagramActivities.filter(
+      (activity) => activity.profile_id !== profileId,
+    )
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'picstagram:report') {
+    picstagramReports.unshift({
+      created_at: Date.now(),
+      details: request.body.details ?? '',
+      id: `pic-report-${Date.now()}`,
+      reason: request.body.reason,
+      reporter_display_name: picstagramProfiles[0].display_name,
+      reporter_handle: picstagramProfiles[0].handle,
+      target_id: request.body.targetId,
+      target_type: request.body.targetType,
+    })
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'picstagram:admin-reports') {
+    response.json({ success: true, data: picstagramReports })
+    return
+  }
+  if (endpoint === 'picstagram:admin-resolve-report') {
+    picstagramReports = picstagramReports.filter(
+      (report) => report.id !== request.body.id,
+    )
+    response.json({ success: true })
+    return
+  }
+  if (endpoint.startsWith('picstagram:')) {
+    response.json({ success: true })
     return
   }
   if (endpoint === 'fliptok:bootstrap') {

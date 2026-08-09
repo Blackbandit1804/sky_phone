@@ -57,6 +57,7 @@ import citymarktIcon from '@/assets/img/app-icons/citymarkt.webp'
 import localPagesIcon from '@/assets/img/app-icons/local-pages.webp'
 import flareIcon from '@/assets/img/app-icons/flare.svg'
 import flipTokIcon from '@/assets/img/app-icons/fliptok.webp'
+import picstagramIcon from '@/assets/img/app-icons/picstagram.webp'
 import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
@@ -64,6 +65,20 @@ import type {
 } from '@/types/apps'
 
 export const PHONE_APPS: PhoneAppDefinition[] = [
+  {
+    category: 'social',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/PicstagramApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 23,
+    icon: markRaw(Camera),
+    iconClass: 'app-icon--picstagram',
+    iconImage: picstagramIcon,
+    id: 'picstagram',
+    labelKey: 'Apps.picstagram.name',
+    route: '/apps/picstagram',
+  },
   {
     category: 'social',
     component: markRaw(

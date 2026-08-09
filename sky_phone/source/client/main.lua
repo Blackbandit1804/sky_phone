@@ -82,6 +82,36 @@ local server_callbacks = {
     "fliptok:admin-resolve-report",
     "fliptok:block",
     "fliptok:delete",
+    "picstagram:register",
+    "picstagram:login",
+    "picstagram:logout",
+    "picstagram:bootstrap",
+    "picstagram:feed",
+    "picstagram:explore",
+    "picstagram:search",
+    "picstagram:saved",
+    "picstagram:profile",
+    "picstagram:update-profile",
+    "picstagram:publish-post",
+    "picstagram:update-post",
+    "picstagram:set-post-status",
+    "picstagram:react",
+    "picstagram:follow",
+    "picstagram:respond-follow",
+    "picstagram:comments",
+    "picstagram:comment",
+    "picstagram:remove-comment",
+    "picstagram:publish-story",
+    "picstagram:stories",
+    "picstagram:view-story",
+    "picstagram:story-viewers",
+    "picstagram:remove-story",
+    "picstagram:activities",
+    "picstagram:mark-activities",
+    "picstagram:block",
+    "picstagram:report",
+    "picstagram:admin-reports",
+    "picstagram:admin-resolve-report",
     "calendar:list",
     "calendar:create",
     "calendar:update",
@@ -448,6 +478,22 @@ RegisterNetEvent("sky_phone:fliptok:new", function(data)
     data.title = fliptok_locale.name
     data.text = notification_text:gsub("{actor}", tostring(data.actor or ""))
     SendNUIMessage({ type = "fliptok:new", data = data })
+end)
+
+RegisterNetEvent("sky_phone:picstagram:command-feedback", function(data)
+    Bridge.Framework.Notify("Picstagram", data.message, data.notificationType, 5000)
+end)
+
+RegisterNetEvent("sky_phone:picstagram:verification-changed", function(data)
+    SendNUIMessage({ type = "picstagram:verification-changed", data = data })
+end)
+
+RegisterNetEvent("sky_phone:picstagram:new", function(data)
+    local picstagram_locale = get_locale().Nui.Apps.picstagram
+    local notification_text = picstagram_locale.notifications[data.kind] or picstagram_locale.notifications.default
+    data.title = picstagram_locale.name
+    data.text = notification_text:gsub("{actor}", tostring(data.actor or ""))
+    SendNUIMessage({ type = "picstagram:new", data = data })
 end)
 
 RegisterNetEvent("sky_phone:marketplace:new-message", function(data)

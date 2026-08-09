@@ -29,6 +29,7 @@ export type PhoneAppId =
   | 'local-pages'
   | 'flare'
   | 'fliptok'
+  | 'picstagram'
 
 export type LaunchablePhoneAppId = PhoneAppId
 

@@ -283,6 +283,28 @@ Config.FlipTok = {
     ReportAdminGroups = { "admin" },
 }
 
+Config.Picstagram = {
+    PageSize = 12,
+    CommentPageSize = 100,
+    MaxPostMedia = 5,
+    CaptionMaxLength = 800,
+    CommentMaxLength = 300,
+    BioMaxLength = 160,
+    LocationMaxLength = 80,
+    StoryTextMaxLength = 160,
+    StoryLifetimeSeconds = 24 * 60 * 60,
+    PasswordMinLength = 8,
+    PasswordMaxLength = 72,
+    PasswordPepperConvar = "sky_phone_picstagram_password_pepper",
+    PostsPerMinute = 6,
+    StoriesPerMinute = 6,
+    CommentsPerMinute = 20,
+    ReportDetailsMaxLength = 500,
+    ReportReasons = { "spam", "harassment", "dangerous", "illegal", "other" },
+    VerifyCommand = "picstagramverify",
+    AdminGroups = { "admin" },
+}
+
 Config.MapMarkers = {
     MaximumMarkers = 50,
     LabelMaxLength = 40,

@@ -423,3 +423,194 @@ CREATE TABLE IF NOT EXISTS `sky_phone_flare_messages` (
     FOREIGN KEY (`match_id`) REFERENCES `sky_phone_flare_matches` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`sender_account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_profiles` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `account_id` BIGINT UNSIGNED NOT NULL,
+    `handle` VARCHAR(24) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    `display_name` VARCHAR(40) NOT NULL,
+    `bio` VARCHAR(160) NOT NULL DEFAULT '',
+    `avatar_media_id` BIGINT UNSIGNED NULL,
+    `private` TINYINT(1) NOT NULL DEFAULT 0,
+    `verified` TINYINT(1) NOT NULL DEFAULT 0,
+    `status` ENUM('active','hidden','removed') NOT NULL DEFAULT 'active',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_picstagram_account` (`account_id`),
+    UNIQUE KEY `uniq_sky_phone_picstagram_handle` (`handle`),
+    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`avatar_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_credentials` (
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `password_hash` BINARY(32) NOT NULL,
+    `password_salt` CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`profile_id`),
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_sessions` (
+    `device_imei` CHAR(15) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`device_imei`),
+    KEY `idx_sky_phone_picstagram_sessions_profile` (`profile_id`,`updated_at`),
+    FOREIGN KEY (`device_imei`) REFERENCES `sky_phone_devices` (`imei`) ON DELETE CASCADE,
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_posts` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `caption` VARCHAR(800) NOT NULL DEFAULT '',
+    `location` VARCHAR(80) NOT NULL DEFAULT '',
+    `comments_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+    `status` ENUM('published','archived','hidden','removed') NOT NULL DEFAULT 'published',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_picstagram_feed` (`status`,`created_at`,`id`),
+    KEY `idx_sky_phone_picstagram_profile_posts` (`profile_id`,`status`,`created_at`),
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_post_media` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `post_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `media_id` BIGINT UNSIGNED NOT NULL,
+    `position` TINYINT UNSIGNED NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_picstagram_post_position` (`post_id`,`position`),
+    UNIQUE KEY `uniq_sky_phone_picstagram_post_media` (`post_id`,`media_id`),
+    FOREIGN KEY (`post_id`) REFERENCES `sky_phone_picstagram_posts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_reactions` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `post_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `kind` ENUM('like','save') NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_picstagram_reaction` (`post_id`,`profile_id`,`kind`),
+    KEY `idx_sky_phone_picstagram_saved` (`profile_id`,`kind`,`created_at`),
+    FOREIGN KEY (`post_id`) REFERENCES `sky_phone_picstagram_posts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_follows` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `follower_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `following_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `status` ENUM('pending','accepted') NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_picstagram_follow` (`follower_id`,`following_id`),
+    KEY `idx_sky_phone_picstagram_following` (`following_id`,`status`,`created_at`),
+    FOREIGN KEY (`follower_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`following_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_comments` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `post_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `parent_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `body` VARCHAR(300) NOT NULL,
+    `status` ENUM('visible','removed') NOT NULL DEFAULT 'visible',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_picstagram_comments` (`post_id`,`status`,`created_at`),
+    FOREIGN KEY (`post_id`) REFERENCES `sky_phone_picstagram_posts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`parent_id`) REFERENCES `sky_phone_picstagram_comments` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_stories` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `media_id` BIGINT UNSIGNED NOT NULL,
+    `body` VARCHAR(160) NOT NULL DEFAULT '',
+    `status` ENUM('active','removed') NOT NULL DEFAULT 'active',
+    `expires_at` DATETIME NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_picstagram_stories` (`profile_id`,`status`,`expires_at`),
+    KEY `idx_sky_phone_picstagram_story_expiry` (`status`,`expires_at`),
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_story_views` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `story_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_picstagram_story_view` (`story_id`,`profile_id`),
+    FOREIGN KEY (`story_id`) REFERENCES `sky_phone_picstagram_stories` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_activities` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `recipient_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `actor_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `post_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `kind` ENUM('follow_request','follow','request_accepted','like','comment','verified') NOT NULL,
+    `read_at` DATETIME NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_picstagram_activity` (`recipient_id`,`read_at`,`created_at`),
+    FOREIGN KEY (`recipient_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`actor_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`post_id`) REFERENCES `sky_phone_picstagram_posts` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_reports` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `reporter_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `target_type` ENUM('profile','post','story','comment') NOT NULL,
+    `target_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `reason` ENUM('spam','harassment','dangerous','illegal','other') NOT NULL,
+    `details` VARCHAR(500) NOT NULL DEFAULT '',
+    `status` ENUM('open','reviewed','dismissed') NOT NULL DEFAULT 'open',
+    `resolved_action` VARCHAR(16) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+    `resolved_at` DATETIME NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_picstagram_report` (`reporter_id`,`target_type`,`target_id`),
+    KEY `idx_sky_phone_picstagram_reports` (`status`,`created_at`),
+    FOREIGN KEY (`reporter_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_blocks` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `blocker_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `blocked_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_picstagram_block` (`blocker_id`,`blocked_id`),
+    FOREIGN KEY (`blocker_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`blocked_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_moderation_audit` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `report_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `moderator_identifier` VARCHAR(80) NOT NULL,
+    `action` VARCHAR(16) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    `target_type` VARCHAR(16) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    `target_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_picstagram_audit_target` (`target_type`,`target_id`,`created_at`),
+    FOREIGN KEY (`report_id`) REFERENCES `sky_phone_picstagram_reports` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

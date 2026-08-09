@@ -33,6 +33,7 @@ import { useMessagesStore } from '@/stores/messages'
 import { useDarkChatStore } from '@/stores/darkchat'
 import { useFlareStore } from '@/stores/flare'
 import { useFlipTokStore } from '@/stores/fliptok'
+import { usePicstagramStore } from '@/stores/picstagram'
 import { useMediaStore } from '@/stores/media'
 import { useMarketplaceStore } from '@/stores/marketplace'
 import { useAppStoreStore } from '@/stores/app-store'
@@ -65,6 +66,8 @@ type AppMessage = {
     | FlareEventData
     | FlipTokVerificationData
     | FlipTokNotificationData
+    | PicstagramVerificationData
+    | PicstagramNotificationData
     | PhoneCall
     | PhoneNotificationInput
     | PhoneOpenPayload
@@ -143,6 +146,20 @@ type FlipTokNotificationData = {
   title?: string
   videoId?: string
 }
+
+type PicstagramVerificationData = {
+  profileId: string
+  verified: boolean
+}
+
+type PicstagramNotificationData = {
+  actor?: string
+  device?: PhoneNotificationDevicePayload
+  kind?: 'like' | 'comment' | 'follow' | 'follow_request' | 'verified'
+  postId?: string
+  text?: string
+  title?: string
+}
 const REFERENCE_VIEWPORT_WIDTH = 1920
 const REFERENCE_VIEWPORT_HEIGHT = 1080
 const PHONE_BASE_SCALE = 0.69
@@ -160,6 +177,7 @@ const messages = useMessagesStore()
 const darkchat = useDarkChatStore()
 const flare = useFlareStore()
 const fliptok = useFlipTokStore()
+const picstagram = usePicstagramStore()
 const media = useMediaStore()
 const marketplace = useMarketplaceStore()
 const appStore = useAppStoreStore()
@@ -333,6 +351,32 @@ function onMessage(event: MessageEvent<AppMessage>): void {
     }
     notifications.show(notification)
     if (phone.isOpen) void fliptok.loadActivities()
+  } else if (
+    event.data?.type === 'picstagram:verification-changed' &&
+    event.data.data
+  ) {
+    const data = event.data.data as PicstagramVerificationData
+    picstagram.applyVerification(String(data.profileId), data.verified === true)
+  } else if (event.data?.type === 'picstagram:new' && event.data.data) {
+    const data = event.data.data as PicstagramNotificationData
+    const notification: PhoneNotificationInput = {
+      appId: 'picstagram',
+      subtitle: data.actor,
+      text: data.text ?? phone.t('Apps.picstagram.notifications.default'),
+      title: data.title ?? phone.t('Apps.picstagram.name'),
+    }
+    if (
+      data.device &&
+      (!phone.isOpen || data.device.imei !== phone.device?.imei)
+    ) {
+      notification.device = {
+        imei: data.device.imei,
+        name: data.device.name,
+        preferences: parsePhonePreferences(data.device.settings ?? null),
+      }
+    }
+    notifications.show(notification)
+    if (phone.isOpen) void picstagram.loadActivities()
   } else if (
     event.data?.type === 'marketplace:new-message' &&
     event.data.data

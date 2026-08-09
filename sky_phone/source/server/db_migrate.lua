@@ -909,6 +909,299 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_picstagram_profiles",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "account_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "handle", type = "VARCHAR(24) NOT NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "display_name", type = "VARCHAR(40) NOT NULL" },
+            { name = "bio", type = "VARCHAR(160) NOT NULL DEFAULT ''" },
+            { name = "avatar_media_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "private", type = "TINYINT(1) NOT NULL DEFAULT 0" },
+            { name = "verified", type = "TINYINT(1) NOT NULL DEFAULT 0" },
+            { name = "status", type = "ENUM('active', 'hidden', 'removed') NOT NULL DEFAULT 'active'" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_picstagram_account", columns = "(`account_id`)" },
+            { name = "uniq_sky_phone_picstagram_handle", columns = "(`handle`)" },
+        },
+        foreignKeys = {
+            { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+            { column = "avatar_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_credentials",
+        columns = {
+            { name = "profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "password_hash", type = "BINARY(32) NOT NULL" },
+            { name = "password_salt", type = "CHAR(32) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "profile_id",
+        foreignKeys = {
+            { column = "profile_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_sessions",
+        columns = {
+            { name = "device_imei", type = "CHAR(15) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "device_imei",
+        indexes = {
+            { name = "idx_sky_phone_picstagram_sessions_profile", columns = "(`profile_id`, `updated_at`)" },
+        },
+        foreignKeys = {
+            { column = "device_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
+            { column = "profile_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_posts",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "caption", type = "VARCHAR(800) NOT NULL DEFAULT ''" },
+            { name = "location", type = "VARCHAR(80) NOT NULL DEFAULT ''" },
+            { name = "comments_enabled", type = "TINYINT(1) NOT NULL DEFAULT 1" },
+            { name = "status", type = "ENUM('published', 'archived', 'hidden', 'removed') NOT NULL DEFAULT 'published'" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_picstagram_feed", columns = "(`status`, `created_at`, `id`)" },
+            { name = "idx_sky_phone_picstagram_profile_posts", columns = "(`profile_id`, `status`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "profile_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_post_media",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "post_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "media_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "position", type = "TINYINT UNSIGNED NOT NULL" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_picstagram_post_position", columns = "(`post_id`, `position`)" },
+            { name = "uniq_sky_phone_picstagram_post_media", columns = "(`post_id`, `media_id`)" },
+        },
+        foreignKeys = {
+            { column = "post_id", references = "`sky_phone_picstagram_posts` (`id`) ON DELETE CASCADE" },
+            { column = "media_id", references = "`sky_phone_media` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_reactions",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "post_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "kind", type = "ENUM('like', 'save') NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_picstagram_reaction", columns = "(`post_id`, `profile_id`, `kind`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_picstagram_saved", columns = "(`profile_id`, `kind`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "post_id", references = "`sky_phone_picstagram_posts` (`id`) ON DELETE CASCADE" },
+            { column = "profile_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_follows",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "follower_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "following_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "status", type = "ENUM('pending', 'accepted') NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_picstagram_follow", columns = "(`follower_id`, `following_id`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_picstagram_following", columns = "(`following_id`, `status`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "follower_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "following_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_comments",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "post_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "parent_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "body", type = "VARCHAR(300) NOT NULL" },
+            { name = "status", type = "ENUM('visible', 'removed') NOT NULL DEFAULT 'visible'" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_picstagram_comments", columns = "(`post_id`, `status`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "post_id", references = "`sky_phone_picstagram_posts` (`id`) ON DELETE CASCADE" },
+            { column = "profile_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "parent_id", references = "`sky_phone_picstagram_comments` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_stories",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "media_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "body", type = "VARCHAR(160) NOT NULL DEFAULT ''" },
+            { name = "status", type = "ENUM('active', 'removed') NOT NULL DEFAULT 'active'" },
+            { name = "expires_at", type = "DATETIME NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_picstagram_stories", columns = "(`profile_id`, `status`, `expires_at`)" },
+            { name = "idx_sky_phone_picstagram_story_expiry", columns = "(`status`, `expires_at`)" },
+        },
+        foreignKeys = {
+            { column = "profile_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "media_id", references = "`sky_phone_media` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_story_views",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "story_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_picstagram_story_view", columns = "(`story_id`, `profile_id`)" },
+        },
+        foreignKeys = {
+            { column = "story_id", references = "`sky_phone_picstagram_stories` (`id`) ON DELETE CASCADE" },
+            { column = "profile_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_activities",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "recipient_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "actor_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "post_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "kind", type = "ENUM('follow_request', 'follow', 'request_accepted', 'like', 'comment', 'verified') NOT NULL" },
+            { name = "read_at", type = "DATETIME NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_picstagram_activity", columns = "(`recipient_id`, `read_at`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "recipient_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "actor_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "post_id", references = "`sky_phone_picstagram_posts` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_reports",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "reporter_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "target_type", type = "ENUM('profile', 'post', 'story', 'comment') NOT NULL" },
+            { name = "target_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "reason", type = "ENUM('spam', 'harassment', 'dangerous', 'illegal', 'other') NOT NULL" },
+            { name = "details", type = "VARCHAR(500) NOT NULL DEFAULT ''" },
+            { name = "status", type = "ENUM('open', 'reviewed', 'dismissed') NOT NULL DEFAULT 'open'" },
+            { name = "resolved_action", type = "VARCHAR(16) NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "resolved_at", type = "DATETIME NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_picstagram_report", columns = "(`reporter_id`, `target_type`, `target_id`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_picstagram_reports", columns = "(`status`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "reporter_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_blocks",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "blocker_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "blocked_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_picstagram_block", columns = "(`blocker_id`, `blocked_id`)" },
+        },
+        foreignKeys = {
+            { column = "blocker_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "blocked_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_picstagram_moderation_audit",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "report_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "moderator_identifier", type = "VARCHAR(80) NOT NULL" },
+            { name = "action", type = "VARCHAR(16) NOT NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "target_type", type = "VARCHAR(16) NOT NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "target_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_picstagram_audit_target", columns = "(`target_type`, `target_id`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "report_id", references = "`sky_phone_picstagram_reports` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_fliptok_profiles",
         columns = {
             { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
