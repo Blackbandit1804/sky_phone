@@ -201,6 +201,7 @@ const passcodeVisible = ref(false)
 const pendingUnlockRoute = ref<string | null>(null)
 const unlockedServicesLoaded = ref(false)
 const controlCenterOpened = ref(false)
+const activitySuspended = ref(false)
 const simPicker = ref<SimPickerPayload | null>(null)
 const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)')
 const viewportScale = ref(getViewportScale())
@@ -215,6 +216,10 @@ const phoneResolutionStyle = computed<CSSProperties>(() => ({
   '--phone-zoom':
     phoneBaseZoom.value * (phone.preferences.settings.phoneScale / 100),
 }))
+const phoneStageStyle = computed<CSSProperties>(() => ({
+  ...phoneResolutionStyle.value,
+  visibility: activitySuspended.value ? 'hidden' : 'visible',
+}))
 const phoneDisplayStyle = computed<CSSProperties>(() => ({
   '--phone-display-dim': String(
     ((100 - phone.preferences.settings.screenBrightness) / 100) * 0.8,
@@ -226,6 +231,7 @@ const phoneFrameImage = computed(
 let clockTicker: ReturnType<typeof setInterval> | undefined
 let unlockTimer: number | undefined
 let passcodeLockTimer: number | undefined
+let unlockedServicesFrame: number | undefined
 
 function getViewportScale(): number {
   const heightScale = window.innerHeight / REFERENCE_VIEWPORT_HEIGHT
@@ -248,12 +254,23 @@ function hydratePhone(payload: PhoneOpenPayload): void {
 function loadUnlockedPhoneData(): void {
   if (unlockedServicesLoaded.value) return
   unlockedServicesLoaded.value = true
-  void mail.bootstrap(account.email)
-  if (account.email) void marketplace.loadCounts()
-  else marketplace.setCounts({ active: 0, unread: 0 })
-  void calls.bootstrap()
-  void messages.loadConversations()
-  if (account.email) void darkchat.bootstrap()
+
+  // Let the lock screen/home screen paint before background app requests compete
+  // with the first visible NUI frame.
+  unlockedServicesFrame = window.requestAnimationFrame(() => {
+    unlockedServicesFrame = undefined
+    if (!phone.isOpen || isLocked.value) {
+      unlockedServicesLoaded.value = false
+      return
+    }
+
+    void mail.bootstrap(account.email)
+    if (account.email) void marketplace.loadCounts()
+    else marketplace.setCounts({ active: 0, unread: 0 })
+    void calls.bootstrap()
+    void messages.loadConversations()
+    if (account.email) void darkchat.bootstrap()
+  })
 }
 
 async function hydrateDevelopmentPhone(): Promise<void> {
@@ -288,7 +305,12 @@ function onMessage(event: MessageEvent<AppMessage>): void {
   } else if (event.data?.type === 'device:updated') {
     hydratePhone(event.data.data as PhoneOpenPayload)
   } else if (event.data?.type === 'app:close') {
+    activitySuspended.value = false
     phone.close()
+  } else if (event.data?.type === 'app:suspend') {
+    activitySuspended.value = true
+  } else if (event.data?.type === 'app:resume') {
+    activitySuspended.value = false
   } else if (event.data?.type === 'notification:show' && event.data.data) {
     notifications.show(event.data.data as PhoneNotificationInput)
   } else if (event.data?.type === 'mail:changed' && event.data.data) {
@@ -560,7 +582,7 @@ function onMessage(event: MessageEvent<AppMessage>): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !phone.isOpen) return
+  if (event.key !== 'Escape' || !phone.isOpen || activitySuspended.value) return
   if (controlCenterOpened.value) {
     controlCenterOpened.value = false
     return
@@ -746,6 +768,11 @@ watch(
   (isOpen) => {
     if (unlockTimer !== undefined) window.clearTimeout(unlockTimer)
     if (!isOpen) {
+      if (unlockedServicesFrame !== undefined) {
+        window.cancelAnimationFrame(unlockedServicesFrame)
+        unlockedServicesFrame = undefined
+      }
+      activitySuspended.value = false
       weather.stop()
       controlCenterOpened.value = false
       isLocked.value = false
@@ -790,6 +817,9 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  if (unlockedServicesFrame !== undefined) {
+    window.cancelAnimationFrame(unlockedServicesFrame)
+  }
   weather.stop()
   if (clockTicker) clearInterval(clockTicker)
   if (unlockTimer !== undefined) window.clearTimeout(unlockTimer)
@@ -824,7 +854,7 @@ onBeforeUnmount(() => {
         'phone-stage--landscape': phone.cameraLandscape,
         'phone-stage--peek': notifications.isPeeking,
       }"
-      :style="phoneResolutionStyle"
+      :style="phoneStageStyle"
     >
       <div class="phone-device-row">
         <NotificationPhonePreview

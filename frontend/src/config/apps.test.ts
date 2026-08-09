@@ -47,6 +47,11 @@ describe('app registry', () => {
       labelKey: 'Apps.skyride.name',
       route: '/apps/skyride',
     })
+    expect(PHONE_APPS.find((app) => app.id === 'house')).toMatchObject({
+      category: 'utilities',
+      labelKey: 'Apps.house.name',
+      route: '/apps/house',
+    })
     expect(PHONE_APPS.find((app) => app.id === 'calendar')).toMatchObject({
       gridOrder: 21,
       labelKey: 'Apps.calendar.name',

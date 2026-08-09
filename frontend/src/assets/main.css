@@ -2847,6 +2847,8 @@ button {
 }
 
 .banking-balance {
+  position: relative;
+  overflow: hidden;
   padding: 22px 20px 20px;
   border-radius: 27px;
 }
@@ -2895,11 +2897,13 @@ button {
 }
 
 .banking-action {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   min-height: 64px;
+  overflow: hidden;
   padding: 11px 12px;
   border-radius: 19px;
   color: rgb(237 243 255 / 82%);
@@ -3047,8 +3051,9 @@ button {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  color: rgb(218 229 251 / 50%);
-  font-size: 8px;
+  color: rgb(218 229 251 / 72%);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .banking-chart-legend span {
@@ -3151,8 +3156,8 @@ button {
 .banking-sheet__content > p {
   margin: 0 0 15px;
   color: rgb(213 225 248 / 52%);
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .banking-form-list {
@@ -3167,7 +3172,9 @@ button {
   display: block;
   margin: 0 4px 6px;
   color: rgb(213 225 248 / 52%);
-  font-size: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .banking-contact-picker > div {
@@ -3179,13 +3186,15 @@ button {
 .banking-contact-picker > p {
   margin: 0 4px;
   color: rgb(213 225 248 / 42%);
-  font-size: 9px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .banking-sheet__content .banking-form-error {
   margin: 10px 3px 0;
   color: #ff8b98;
-  font-size: 9px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .banking-sheet__content > button:last-child {
@@ -3325,21 +3334,18 @@ button {
   text-transform: uppercase;
 }
 .weather-hourly {
-  display: flex;
-  gap: 5px;
-  overflow-x: auto;
-  padding: 11px 9px 13px;
-  scrollbar-width: none;
-  scroll-snap-type: x proximity;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 2px;
+  padding: 11px 6px 13px;
 }
 .weather-hour {
   display: flex;
   align-items: center;
-  flex: 0 0 52px;
   flex-direction: column;
+  min-width: 0;
   min-height: 104px;
-  padding: 3px 2px;
-  scroll-snap-align: start;
+  padding: 3px 1px;
 }
 .weather-hour span {
   height: 21px;

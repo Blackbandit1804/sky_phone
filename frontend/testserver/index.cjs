@@ -617,6 +617,48 @@ function skyRideUpdate(fields) {
   )
 }
 
+const mockHousingOverview = {
+  available: true,
+  provider: 'esx_property',
+  properties: [
+    {
+      id: 'esx_property:1',
+      providerId: '1',
+      name: 'Alta Street Apartment',
+      access: 'owner',
+      locked: true,
+      entrance: { x: -268.9, y: -962.3, z: 31.2 },
+      capabilities: {
+        lock: true,
+        keys: true,
+        waypoint: true,
+        cctv: true,
+        garageStatus: true,
+      },
+      cctv: { enabled: true },
+      garage: { enabled: true, storedVehicles: 2 },
+      keys: [{ identifier: 'char2:mock', name: 'Jamie Rivera', online: true }],
+    },
+    {
+      id: 'esx_property:2',
+      providerId: '2',
+      name: 'Vespucci Beach House',
+      access: 'keyholder',
+      locked: false,
+      entrance: { x: -1150.1, y: -1520.8, z: 10.6 },
+      capabilities: {
+        lock: true,
+        keys: false,
+        waypoint: true,
+        cctv: false,
+        garageStatus: false,
+      },
+      cctv: { enabled: false },
+      garage: null,
+    },
+  ],
+}
+
 let contactSequence = 2
 const contacts = [
   {
@@ -2857,6 +2899,31 @@ app.post('/api/:endpoint', (request, response) => {
         vehicles: mockGarageVehicles,
       },
     })
+    return
+  }
+  if (endpoint === 'housing:overview') {
+    response.json({ success: true, data: mockHousingOverview })
+    return
+  }
+  if (endpoint === 'housing:key-candidates') {
+    response.json({
+      success: true,
+      data: { candidates: [{ id: 27, name: 'Alex Morgan' }] },
+    })
+    return
+  }
+  if (endpoint === 'housing:command') {
+    const property = mockHousingOverview.properties.find(
+      (item) => item.id === request.body.propertyId,
+    )
+    if (!property) {
+      response.json({ success: false, error: 'property_not_found' })
+      return
+    }
+    if (request.body.action === 'toggle_lock') {
+      property.locked = !property.locked
+    }
+    response.json({ success: true, data: { accepted: true } })
     return
   }
   if (endpoint === 'garage:valet-state') {

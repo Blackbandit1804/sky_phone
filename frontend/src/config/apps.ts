@@ -27,6 +27,7 @@ import {
   Tag,
   MapPinHouse,
   Flame,
+  House,
 } from 'lucide-vue-next'
 import { defineAsyncComponent, markRaw } from 'vue'
 
@@ -54,6 +55,7 @@ import neonDropIcon from '@/assets/img/app-icons/neon-drop.webp'
 import weatherIcon from '@/assets/img/app-icons/weather.webp'
 import bankingIcon from '@/assets/img/app-icons/banking.webp'
 import garageIcon from '@/assets/img/app-icons/garage.webp'
+import houseIcon from '@/assets/img/app-icons/house.svg'
 import citymarktIcon from '@/assets/img/app-icons/citymarkt.webp'
 import localPagesIcon from '@/assets/img/app-icons/local-pages.webp'
 import flareIcon from '@/assets/img/app-icons/flare.svg'
@@ -206,6 +208,20 @@ export const PHONE_APPS: PhoneAppDefinition[] = [
     id: 'garage',
     labelKey: 'Apps.garage.name',
     route: '/apps/garage',
+  },
+  {
+    category: 'utilities',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/HouseApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 25,
+    icon: markRaw(House),
+    iconClass: 'app-icon--house',
+    iconImage: houseIcon,
+    id: 'house',
+    labelKey: 'Apps.house.name',
+    route: '/apps/house',
   },
   {
     category: 'utilities',

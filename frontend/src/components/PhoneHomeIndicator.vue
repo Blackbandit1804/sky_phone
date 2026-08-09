@@ -14,8 +14,12 @@ const canGoHome = computed(
 function goHome(): void {
   if (!canGoHome.value) return
 
+  if (route.name !== 'home') {
+    void router.push('/')
+    return
+  }
+
   phone.setCurrentPage(HOME_PAGE)
-  if (route.name !== 'home') void router.push('/')
 }
 </script>
 
@@ -25,7 +29,6 @@ function goHome(): void {
     :class="{ 'phone-home-indicator--interactive': canGoHome }"
     type="button"
     :aria-label="phone.t('Common.home')"
-    @pointerdown.stop="goHome"
     @click.stop="goHome"
   >
     <span aria-hidden="true"></span>
