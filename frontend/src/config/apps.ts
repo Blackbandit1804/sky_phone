@@ -4,6 +4,7 @@ import {
   Blocks,
   Camera,
   CarFront,
+  CarTaxiFront,
   CalendarDays,
   Clock3,
   Gamepad2,
@@ -58,6 +59,7 @@ import localPagesIcon from '@/assets/img/app-icons/local-pages.webp'
 import flareIcon from '@/assets/img/app-icons/flare.svg'
 import flipTokIcon from '@/assets/img/app-icons/fliptok.webp'
 import picstagramIcon from '@/assets/img/app-icons/picstagram.webp'
+import skyRideIcon from '@/assets/img/app-icons/skyride.svg'
 import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
@@ -218,6 +220,20 @@ export const PHONE_APPS: PhoneAppDefinition[] = [
     id: 'map',
     labelKey: 'Apps.map.name',
     route: '/apps/map',
+  },
+  {
+    category: 'utilities',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/SkyRideApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 25,
+    icon: markRaw(CarTaxiFront),
+    iconClass: 'app-icon--skyride',
+    iconImage: skyRideIcon,
+    id: 'skyride',
+    labelKey: 'Apps.skyride.name',
+    route: '/apps/skyride',
   },
   {
     category: 'social',

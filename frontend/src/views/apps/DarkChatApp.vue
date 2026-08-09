@@ -89,7 +89,7 @@ const darkMessagebarColors = {
   toolbarIconIos: 'fill-[#0a84ff]',
 }
 const darkSearchbarColors = {
-  inputBgIos: 'bg-[#1c1c1e]',
+  inputBgIos: 'bg-transparent',
   placeholderIos: 'placeholder-[#8e8e93]',
 }
 const darkSheetColors = {

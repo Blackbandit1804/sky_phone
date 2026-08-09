@@ -30,6 +30,7 @@ export type PhoneAppId =
   | 'flare'
   | 'fliptok'
   | 'picstagram'
+  | 'skyride'
 
 export type LaunchablePhoneAppId = PhoneAppId
 

@@ -115,12 +115,12 @@ Config.Animations = {
     },
     Transforms = {
         Portrait = {
-            position = { x = 0.0, y = 0.0, z = 0.0 },
-            rotation = { x = 0.0, y = 0.0, z = 0.0 },
+            position = vector3(0.0, 0.0, 0.0),
+            rotation = vector3(0.0, 0.0, 0.0),
         },
         Landscape = {
-            position = { x = 0.0, y = 0.0, z = 0.0 },
-            rotation = { x = 0.0, y = 0.0, z = 90.0 },
+            position = vector3(0.0, 0.0, 0.0),
+            rotation = vector3(0.0, 0.0, 90.0),
         },
     },
 }
@@ -319,4 +319,101 @@ Config.Calendar = {
     PastEditSeconds = 365 * 24 * 60 * 60,
     FutureSeconds = 5 * 365 * 24 * 60 * 60,
     ReminderPollSeconds = 15,
+}
+
+Config.SkyRide = {
+    PaymentAccount = "bank",
+    Currency = "$",
+    DistanceUnit = "kilometer", -- kilometer or mile
+    QuoteLifetimeSeconds = 120,
+    HistoryLimit = 50,
+    ReadsPerMinute = 120,
+    ActionsPerMinute = 30,
+    QuotesPerMinute = 20,
+    RecoveryIntervalSeconds = 15,
+    PaymentPendingRecoverySeconds = 30,
+    PickupSelectionRadius = 150.0,
+    ArrivalRadius = 40.0,
+    CompletionRadius = 80.0,
+    MinimumDistanceMeters = 250,
+    MaximumDistanceMeters = 40000,
+    RouteDistanceMultiplier = 1.25,
+    AverageSpeedMetersPerSecond = 12.0,
+    DriverPayoutPercent = 85,
+    RatingCommentMaxLength = 300,
+    MaximumTip = 10000,
+    CustomFare = {
+        Enabled = true,
+        MinimumPrice = 5,
+        MaximumPrice = 100000,
+        MinimumCalculatedMultiplier = 0.5,
+        MaximumCalculatedMultiplier = 3.0,
+    },
+    DriverJobs = {
+        taxi = 0,
+    },
+    Services = {
+        {
+            Id = "taxi",
+            Seats = 4,
+            EtaMinutes = 3,
+            BaseFare = 12,
+            PricePerKilometer = 18,
+            PricePerMile = 29,
+            PricePerMinute = 1,
+            MinimumFare = 15,
+        },
+        {
+            Id = "comfort",
+            Seats = 4,
+            EtaMinutes = 5,
+            BaseFare = 16,
+            PricePerKilometer = 24,
+            PricePerMile = 39,
+            PricePerMinute = 2,
+            MinimumFare = 22,
+        },
+        {
+            Id = "xl",
+            Seats = 6,
+            EtaMinutes = 7,
+            BaseFare = 20,
+            PricePerKilometer = 30,
+            PricePerMile = 48,
+            PricePerMinute = 2,
+            MinimumFare = 28,
+        },
+        {
+            Id = "premium",
+            Seats = 4,
+            EtaMinutes = 8,
+            BaseFare = 28,
+            PricePerKilometer = 40,
+            PricePerMile = 64,
+            PricePerMinute = 3,
+            MinimumFare = 38,
+        },
+    },
+    QuickLocations = {
+        {
+            Id = "legion-square",
+            Label = "Legion Square",
+            Coords = vector3(-265.1, -960.2, 31.2),
+        },
+        {
+            Id = "diamond-casino",
+            Label = "Diamond Casino",
+            Coords = vector3(925.2, 46.4, 81.1),
+        },
+        {
+            Id = "airport",
+            Label = "Los Santos Airport",
+            Coords = vector3(-1037.7, -2737.8, 20.2),
+        },
+        {
+            Id = "vinewood",
+            Label = "Vinewood",
+            Coords = vector3(-594.4, -929.9, 23.9),
+        },
+    },
 }

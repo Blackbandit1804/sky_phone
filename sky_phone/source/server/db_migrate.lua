@@ -1517,6 +1517,125 @@ local schema = {
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
+    {
+        name = "sky_phone_skyride_profiles",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            {
+                name = "owner_identifier",
+                type = "VARCHAR(80) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_skyride_owner", columns = "(`owner_identifier`)" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_skyride_rides",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            {
+                name = "passenger_profile_id",
+                type = "CHAR(36) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            {
+                name = "driver_profile_id",
+                type = "CHAR(36) NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            { name = "passenger_name", type = "VARCHAR(80) NOT NULL" },
+            { name = "driver_name", type = "VARCHAR(80) NULL" },
+            {
+                name = "status",
+                type = "ENUM('payment_pending','searching','accepted','arrived','in_progress','completing','completed','cancelled') NOT NULL",
+            },
+            {
+                name = "service_class",
+                type = "ENUM('taxi','comfort','xl','premium') NOT NULL",
+            },
+            { name = "pickup_label", type = "VARCHAR(80) NOT NULL" },
+            { name = "pickup_x", type = "DECIMAL(10,3) NOT NULL" },
+            { name = "pickup_y", type = "DECIMAL(10,3) NOT NULL" },
+            { name = "pickup_z", type = "DECIMAL(10,3) NOT NULL" },
+            { name = "destination_label", type = "VARCHAR(80) NOT NULL" },
+            { name = "destination_x", type = "DECIMAL(10,3) NOT NULL" },
+            { name = "destination_y", type = "DECIMAL(10,3) NOT NULL" },
+            { name = "destination_z", type = "DECIMAL(10,3) NOT NULL" },
+            { name = "distance_meters", type = "INT UNSIGNED NOT NULL" },
+            { name = "duration_seconds", type = "INT UNSIGNED NOT NULL" },
+            { name = "price", type = "INT UNSIGNED NOT NULL" },
+            { name = "payout_amount", type = "INT UNSIGNED NOT NULL" },
+            {
+                name = "currency",
+                type = "VARCHAR(8) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_general_ci",
+            },
+            { name = "driver_vehicle_model", type = "VARCHAR(64) NULL" },
+            { name = "driver_vehicle_color", type = "VARCHAR(64) NULL" },
+            { name = "driver_vehicle_plate", type = "VARCHAR(16) NULL" },
+            { name = "cancelled_by", type = "ENUM('passenger','driver','system') NULL" },
+            { name = "cancel_reason", type = "VARCHAR(32) NULL" },
+            { name = "passenger_rating", type = "TINYINT UNSIGNED NULL" },
+            { name = "rating_comment", type = "VARCHAR(300) NULL" },
+            { name = "tip_amount", type = "INT UNSIGNED NOT NULL DEFAULT 0" },
+            {
+                name = "refund_status",
+                type = "ENUM('none','pending','processing','completed') NOT NULL DEFAULT 'none'",
+            },
+            {
+                name = "tip_status",
+                type = "ENUM('none','processing','completed','failed') NOT NULL DEFAULT 'none'",
+            },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            {
+                name = "updated_at",
+                type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            },
+            { name = "accepted_at", type = "DATETIME NULL" },
+            { name = "arrived_at", type = "DATETIME NULL" },
+            { name = "started_at", type = "DATETIME NULL" },
+            { name = "completed_at", type = "DATETIME NULL" },
+            { name = "cancelled_at", type = "DATETIME NULL" },
+            { name = "refunded_at", type = "DATETIME NULL" },
+            { name = "paid_out_at", type = "DATETIME NULL" },
+        },
+        primaryKey = "id",
+        indexes = {
+            {
+                name = "idx_sky_phone_skyride_passenger",
+                columns = "(`passenger_profile_id`, `status`, `updated_at`)",
+            },
+            {
+                name = "idx_sky_phone_skyride_driver",
+                columns = "(`driver_profile_id`, `status`, `updated_at`)",
+            },
+            { name = "idx_sky_phone_skyride_requests", columns = "(`status`, `created_at`)" },
+            {
+                name = "idx_sky_phone_skyride_refunds",
+                columns = "(`refund_status`, `status`, `updated_at`)",
+            },
+        },
+        foreignKeys = {
+            {
+                column = "passenger_profile_id",
+                references = "`sky_phone_skyride_profiles` (`id`) ON DELETE CASCADE",
+            },
+            {
+                column = "driver_profile_id",
+                references = "`sky_phone_skyride_profiles` (`id`) ON DELETE SET NULL",
+            },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
 }
 
 Bridge.Database.Migrate("sky_phone", schema)
