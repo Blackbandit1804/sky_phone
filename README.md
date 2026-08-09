@@ -20,6 +20,47 @@ MusicTracks = {
 }
 ```
 
+## Music app
+
+The standalone `Music` app plays audio only inside the current player's NUI. It never creates a
+world sound, voice channel, positional event, or 3D-audio state that another player can hear.
+
+Server-owned MP3/OGG tracks and their optional artwork live directly in
+`sky_phone/config/music`. Define only their stable ID, title, and artist in
+`sky_phone/config/music.lua`:
+
+```lua
+Tracks = {
+    {
+        Id = "night-drive",
+        Title = "Night Drive",
+        Artist = "Sky Records",
+    },
+}
+```
+
+The resource searches `config/music` and all of its subdirectories for files whose name matches
+the ID. For the example above, place `night-drive.ogg` or `night-drive.mp3` anywhere below that
+directory. Optional artwork uses the same name with `.webp`, `.png`, `.jpg`, or `.jpeg`. If both
+audio formats exist, OGG wins; artwork priority is WEBP, PNG, JPG, then JPEG. More than one file
+with the selected extension and ID is ambiguous and the server reports it in the console. Folder
+names may contain spaces, but must not contain path separators or control characters. Do not name
+a folder itself with a supported audio or artwork extension.
+
+No frontend build is needed when tracks change. Restart the resource so FiveM republishes the
+files and reloads the track configuration. Keep existing track IDs stable because playlists store
+those IDs. Moving matching files between subdirectories does not affect playlists.
+
+When upgrading from the previous path-based configuration, rename each audio and artwork file to
+its existing ID and remove the `File` and `Artwork` fields. Do not change the ID itself, otherwise
+existing playlist entries can no longer resolve the track.
+
+Players can add public YouTube video links to their own library. Metadata is requested through
+YouTube's oEmbed endpoint on the server, while playback uses the embedded YouTube player only on
+that player's NUI. Personal songs and playlists are stored per linked iFruit account, or per phone
+IMEI while signed out, in the `sky_phone_music_*` tables. Limits and rate controls are configured in
+`config/music.lua`.
+
 ## FlipTok accounts
 
 FlipTok profiles use their own username and password login. Registration requires a linked iFruit

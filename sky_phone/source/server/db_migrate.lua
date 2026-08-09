@@ -736,6 +736,75 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_music_youtube_songs",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "account_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "device_imei", type = "CHAR(15) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "video_id", type = "CHAR(11) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "title", type = "VARCHAR(160) NOT NULL" },
+            { name = "artist", type = "VARCHAR(120) NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_music_youtube_account", columns = "(`account_id`, `video_id`)" },
+            { name = "uniq_sky_phone_music_youtube_device", columns = "(`device_imei`, `video_id`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_music_youtube_account", columns = "(`account_id`, `created_at`)" },
+            { name = "idx_sky_phone_music_youtube_device", columns = "(`device_imei`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+            { column = "device_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_music_playlists",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "account_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "device_imei", type = "CHAR(15) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "name", type = "VARCHAR(80) NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_music_playlists_account", columns = "(`account_id`, `updated_at`)" },
+            { name = "idx_sky_phone_music_playlists_device", columns = "(`device_imei`, `updated_at`)" },
+        },
+        foreignKeys = {
+            { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+            { column = "device_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_music_playlist_items",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "playlist_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "source", type = "ENUM('server', 'youtube') NOT NULL" },
+            { name = "song_id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "position", type = "SMALLINT UNSIGNED NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_music_playlist_song", columns = "(`playlist_id`, `source`, `song_id`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_music_playlist_order", columns = "(`playlist_id`, `position`, `id`)" },
+        },
+        foreignKeys = {
+            { column = "playlist_id", references = "`sky_phone_music_playlists` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_radio_profiles",
         columns = {
             { name = "identifier", type = "VARCHAR(80) NOT NULL" },

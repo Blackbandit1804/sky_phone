@@ -33,7 +33,8 @@ export default defineConfig({
       allow: [fileURLToPath(new URL('.', import.meta.url))],
       strict: false,
     },
-    host: '127.0.0.1',
+    // YouTube rejects otherwise valid embeds when the dev page uses the
+    // numeric loopback origin. Keep the local UI on the localhost origin.
+    host: 'localhost',
   },
 })
-

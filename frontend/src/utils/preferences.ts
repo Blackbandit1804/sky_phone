@@ -95,6 +95,7 @@ const DEFAULT_APP_NOTIFICATIONS: Record<
   map: { enabled: true, sounds: true },
   notes: { enabled: true, sounds: true },
   radio: { enabled: true, sounds: true },
+  music: { enabled: true, sounds: true },
   photos: { enabled: true, sounds: true },
   settings: { enabled: true, sounds: true },
 }

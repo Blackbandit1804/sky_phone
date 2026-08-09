@@ -16,6 +16,7 @@ export type PhoneAppId =
   | 'map'
   | 'notes'
   | 'radio'
+  | 'music'
   | 'photos'
   | 'app-store'
   | 'settings'
