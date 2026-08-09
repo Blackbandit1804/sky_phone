@@ -468,6 +468,46 @@ local function link_account(source, account)
             ]],
             params = { account.id, session.imei },
         },
+        {
+            query = [[
+                UPDATE `sky_phone_music_playlist_items` AS `item`
+                INNER JOIN `sky_phone_music_playlists` AS `playlist`
+                    ON `playlist`.`id` = `item`.`playlist_id`
+                INNER JOIN `sky_phone_music_youtube_songs` AS `local_song`
+                    ON `item`.`source` = 'youtube' AND `local_song`.`id` = `item`.`song_id`
+                INNER JOIN `sky_phone_music_youtube_songs` AS `cloud_song`
+                    ON `cloud_song`.`account_id` = ? AND `cloud_song`.`video_id` = `local_song`.`video_id`
+                SET `item`.`song_id` = `cloud_song`.`id`
+                WHERE `playlist`.`device_imei` = ? AND `playlist`.`account_id` IS NULL
+                    AND `local_song`.`device_imei` = ? AND `local_song`.`account_id` IS NULL
+            ]],
+            params = { account.id, session.imei, session.imei },
+        },
+        {
+            query = [[
+                DELETE `local_song` FROM `sky_phone_music_youtube_songs` AS `local_song`
+                INNER JOIN `sky_phone_music_youtube_songs` AS `cloud_song`
+                    ON `cloud_song`.`account_id` = ? AND `cloud_song`.`video_id` = `local_song`.`video_id`
+                WHERE `local_song`.`device_imei` = ? AND `local_song`.`account_id` IS NULL
+            ]],
+            params = { account.id, session.imei },
+        },
+        {
+            query = [[
+                UPDATE `sky_phone_music_youtube_songs`
+                SET `account_id` = ?, `device_imei` = NULL
+                WHERE `device_imei` = ? AND `account_id` IS NULL
+            ]],
+            params = { account.id, session.imei },
+        },
+        {
+            query = [[
+                UPDATE `sky_phone_music_playlists`
+                SET `account_id` = ?, `device_imei` = NULL
+                WHERE `device_imei` = ? AND `account_id` IS NULL
+            ]],
+            params = { account.id, session.imei },
+        },
     }) then
         return { success = false, error = "request_failed" }
     end
@@ -995,6 +1035,14 @@ Bridge.Callbacks.Register("sky_phone:device:factory-reset", function(source)
         },
         {
             query = "DELETE FROM `sky_phone_media` WHERE `device_imei` = ? AND `account_id` IS NULL",
+            params = { session.imei },
+        },
+        {
+            query = "DELETE FROM `sky_phone_music_playlists` WHERE `device_imei` = ? AND `account_id` IS NULL",
+            params = { session.imei },
+        },
+        {
+            query = "DELETE FROM `sky_phone_music_youtube_songs` WHERE `device_imei` = ? AND `account_id` IS NULL",
             params = { session.imei },
         },
         {

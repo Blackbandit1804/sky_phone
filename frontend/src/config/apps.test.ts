@@ -47,6 +47,12 @@ describe('app registry', () => {
       labelKey: 'Apps.skyride.name',
       route: '/apps/skyride',
     })
+    expect(PHONE_APPS.find((app) => app.id === 'music')).toMatchObject({
+      category: 'utilities',
+      gridOrder: 26,
+      labelKey: 'Apps.music.name',
+      route: '/apps/music',
+    })
     expect(PHONE_APPS.find((app) => app.id === 'calendar')).toMatchObject({
       gridOrder: 21,
       labelKey: 'Apps.calendar.name',
@@ -116,6 +122,7 @@ describe('app registry', () => {
     expect(isPhoneAppId('photos')).toBe(true)
     expect(isPhoneAppId('clock')).toBe(true)
     expect(isPhoneAppId('skyride')).toBe(true)
+    expect(isPhoneAppId('music')).toBe(true)
     expect(
       PHONE_APPS.filter((app) => app.category === 'games').map((app) => app.id),
     ).toEqual([

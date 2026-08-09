@@ -48,6 +48,89 @@ const radioData = {
   settings: { autoRejoin: false, notifications: true },
   volume: 50,
 }
+let musicSequence = 3
+const musicServerTracks = [
+  {
+    id: 'city-after-dark',
+    source: 'server',
+    title: 'City After Dark',
+    artist: 'Sky Records',
+    url: 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga',
+    artwork: 'https://picsum.photos/seed/sky-music-city/600/600',
+  },
+  {
+    id: 'pacific-drive',
+    source: 'server',
+    title: 'Pacific Drive',
+    artist: 'Vespucci FM',
+    url: 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga',
+    artwork: 'https://picsum.photos/seed/sky-music-pacific/600/600',
+  },
+  {
+    id: 'neon-rain',
+    source: 'server',
+    title: 'Neon Rain',
+    artist: 'Mirror Park',
+    url: 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga',
+    artwork: 'https://picsum.photos/seed/sky-music-neon/600/600',
+  },
+]
+let musicYoutubeTracks = [
+  {
+    id: 'music-youtube-1',
+    source: 'youtube',
+    videoId: 'dQw4w9WgXcQ',
+    title: 'Never Gonna Give You Up',
+    artist: 'Rick Astley',
+    artwork: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+    createdAt: Date.now() - 120000,
+  },
+]
+let musicPlaylists = [
+  {
+    id: 'music-playlist-1',
+    name: 'Night Ride',
+    createdAt: Date.now() - 86400000,
+    entries: [
+      { source: 'server', songId: 'city-after-dark' },
+      { source: 'server', songId: 'neon-rain' },
+      { source: 'youtube', songId: 'music-youtube-1' },
+    ],
+  },
+]
+
+function musicBootstrap() {
+  return {
+    serverTracks: musicServerTracks,
+    youtubeTracks: musicYoutubeTracks,
+    playlists: musicPlaylists,
+  }
+}
+
+async function fetchYoutubeMetadata(videoId) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 4500)
+  try {
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`
+    const response = await fetch(
+      `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(watchUrl)}`,
+      {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      },
+    )
+    if (!response.ok) return null
+    const data = await response.json()
+    const title = typeof data.title === 'string' ? data.title.trim() : ''
+    const artist =
+      typeof data.author_name === 'string' ? data.author_name.trim() : ''
+    return title && artist ? { artist, title } : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 let mockBankBalance = 24787
 let mockCashBalance = 2350
 let nextBankTransactionId = 7
@@ -1651,9 +1734,133 @@ function flareBootstrap() {
   }
 }
 
-app.post('/api/:endpoint', (request, response) => {
+app.post('/api/:endpoint', async (request, response) => {
   console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
+  if (endpoint === 'music:bootstrap') {
+    response.json({ success: true, data: musicBootstrap() })
+    return
+  }
+  if (endpoint === 'music:add-youtube') {
+    const value = String(request.body.url ?? '')
+    const customTitle = String(request.body.title ?? '').trim()
+    const customArtist = String(request.body.artist ?? '').trim()
+    const videoId =
+      value.match(/[?&]v=([\w-]{11})/)?.[1] ??
+      value.match(/youtu\.be\/([\w-]{11})/)?.[1]
+    if (!videoId) {
+      response.json({ success: false, error: 'invalid_youtube_url' })
+      return
+    }
+    if (customTitle.length > 160 || customArtist.length > 120) {
+      response.json({ success: false, error: 'invalid_song_metadata' })
+      return
+    }
+    if (musicYoutubeTracks.some((track) => track.videoId === videoId)) {
+      response.json({ success: false, error: 'song_exists' })
+      return
+    }
+    const metadata =
+      !customTitle || !customArtist ? await fetchYoutubeMetadata(videoId) : null
+    musicYoutubeTracks.unshift({
+      id: `music-youtube-${musicSequence++}`,
+      source: 'youtube',
+      videoId,
+      title: customTitle || metadata?.title || `YouTube ${videoId}`,
+      artist: customArtist || metadata?.artist || 'YouTube',
+      artwork: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      createdAt: Date.now(),
+    })
+    response.json({ success: true, data: musicBootstrap() })
+    return
+  }
+  if (endpoint === 'music:remove-youtube') {
+    musicYoutubeTracks = musicYoutubeTracks.filter(
+      (track) => track.id !== request.body.id,
+    )
+    musicPlaylists.forEach((playlist) => {
+      playlist.entries = playlist.entries.filter(
+        (entry) =>
+          !(entry.source === 'youtube' && entry.songId === request.body.id),
+      )
+    })
+    response.json({ success: true, data: musicBootstrap() })
+    return
+  }
+  if (endpoint === 'music:create-playlist') {
+    const name = String(request.body.name ?? '').trim()
+    if (!name) {
+      response.json({ success: false, error: 'invalid_playlist' })
+      return
+    }
+    musicPlaylists.unshift({
+      id: `music-playlist-${musicSequence++}`,
+      name,
+      createdAt: Date.now(),
+      entries: [],
+    })
+    response.json({ success: true, data: musicBootstrap() })
+    return
+  }
+  if (endpoint === 'music:rename-playlist') {
+    const playlist = musicPlaylists.find((item) => item.id === request.body.id)
+    if (!playlist) {
+      response.json({ success: false, error: 'playlist_not_found' })
+      return
+    }
+    playlist.name = String(request.body.name ?? '').trim()
+    response.json({ success: true, data: musicBootstrap() })
+    return
+  }
+  if (endpoint === 'music:delete-playlist') {
+    musicPlaylists = musicPlaylists.filter(
+      (playlist) => playlist.id !== request.body.id,
+    )
+    response.json({ success: true, data: musicBootstrap() })
+    return
+  }
+  if (endpoint === 'music:add-to-playlist') {
+    const playlist = musicPlaylists.find(
+      (item) => item.id === request.body.playlistId,
+    )
+    if (!playlist) {
+      response.json({ success: false, error: 'playlist_not_found' })
+      return
+    }
+    if (
+      playlist.entries.some(
+        (entry) =>
+          entry.source === request.body.source &&
+          entry.songId === request.body.songId,
+      )
+    ) {
+      response.json({
+        success: false,
+        error: 'song_already_in_playlist',
+      })
+      return
+    }
+    playlist.entries.push({
+      source: request.body.source,
+      songId: request.body.songId,
+    })
+    response.json({ success: true, data: musicBootstrap() })
+    return
+  }
+  if (endpoint === 'music:remove-from-playlist') {
+    const playlist = musicPlaylists.find(
+      (item) => item.id === request.body.playlistId,
+    )
+    if (playlist) {
+      playlist.entries = playlist.entries.filter(
+        (entry) =>
+          entry.source !== request.body.source ||
+          entry.songId !== request.body.songId,
+      )
+    }
+    response.json({ success: true, data: musicBootstrap() })
+    return
+  }
   if (endpoint === 'radio:get') {
     response.json({ success: true, data: radioData })
     return

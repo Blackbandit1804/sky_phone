@@ -241,6 +241,50 @@ CREATE TABLE IF NOT EXISTS `sky_phone_calendar_events` (
     FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `sky_phone_music_youtube_songs` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `account_id` BIGINT UNSIGNED NULL,
+    `device_imei` CHAR(15) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `video_id` CHAR(11) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `title` VARCHAR(160) NOT NULL,
+    `artist` VARCHAR(120) NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_music_youtube_account` (`account_id`, `video_id`),
+    UNIQUE KEY `uniq_sky_phone_music_youtube_device` (`device_imei`, `video_id`),
+    KEY `idx_sky_phone_music_youtube_account` (`account_id`, `created_at`),
+    KEY `idx_sky_phone_music_youtube_device` (`device_imei`, `created_at`),
+    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`device_imei`) REFERENCES `sky_phone_devices` (`imei`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_music_playlists` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `account_id` BIGINT UNSIGNED NULL,
+    `device_imei` CHAR(15) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `name` VARCHAR(80) NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_music_playlists_account` (`account_id`, `updated_at`),
+    KEY `idx_sky_phone_music_playlists_device` (`device_imei`, `updated_at`),
+    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`device_imei`) REFERENCES `sky_phone_devices` (`imei`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_music_playlist_items` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `playlist_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `source` ENUM('server', 'youtube') NOT NULL,
+    `song_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `position` SMALLINT UNSIGNED NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_music_playlist_song` (`playlist_id`, `source`, `song_id`),
+    KEY `idx_sky_phone_music_playlist_order` (`playlist_id`, `position`, `id`),
+    FOREIGN KEY (`playlist_id`) REFERENCES `sky_phone_music_playlists` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `sky_phone_radio_profiles` (
     `identifier` VARCHAR(80) NOT NULL,
     `history` LONGTEXT NOT NULL,

@@ -7,6 +7,7 @@ import {
   Camera,
   Flashlight,
   Moon,
+  Pause,
   Plane,
   Play,
   Signal,
@@ -28,6 +29,7 @@ import {
 import { useRouter } from 'vue-router'
 
 import { usePhoneStore } from '@/stores/phone'
+import { useMusicStore } from '@/stores/music'
 import { nuiCall } from '@/utils/nui'
 
 const props = defineProps<{ opened: boolean }>()
@@ -41,6 +43,7 @@ type ConnectivityPreference =
   | 'wifiEnabled'
 
 const phone = usePhoneStore()
+const music = useMusicStore()
 const router = useRouter()
 const panel = ref<HTMLElement | null>(null)
 const brightness = ref(phone.preferences.settings.screenBrightness)
@@ -315,27 +318,40 @@ onBeforeUnmount(() => {
           >
             <div class="control-center__media-copy">
               <span>{{ phone.t('ControlCenter.media') }}</span>
-              <strong>{{ phone.t('ControlCenter.notPlaying') }}</strong>
+              <strong>{{
+                music.currentTrack?.title ?? phone.t('ControlCenter.notPlaying')
+              }}</strong>
+              <small v-if="music.currentTrack">{{
+                music.currentTrack.artist
+              }}</small>
             </div>
             <div class="control-center__media-controls">
               <button
                 type="button"
-                disabled
+                :disabled="!music.currentTrack"
                 :aria-label="phone.t('ControlCenter.previous')"
+                @click="music.previous"
               >
                 <SkipBack aria-hidden="true" />
               </button>
               <button
                 type="button"
-                disabled
-                :aria-label="phone.t('ControlCenter.play')"
+                :disabled="!music.currentTrack && !music.allTracks.length"
+                :aria-label="
+                  phone.t(
+                    music.isPlaying ? 'Common.pause' : 'ControlCenter.play',
+                  )
+                "
+                @click="music.toggle"
               >
-                <Play aria-hidden="true" />
+                <Pause v-if="music.isPlaying" aria-hidden="true" />
+                <Play v-else aria-hidden="true" />
               </button>
               <button
                 type="button"
-                disabled
+                :disabled="!music.currentTrack"
                 :aria-label="phone.t('ControlCenter.next')"
+                @click="music.next"
               >
                 <SkipForward aria-hidden="true" />
               </button>

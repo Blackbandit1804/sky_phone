@@ -250,6 +250,7 @@ function openWidget(): void {
     clock: '/apps/clock',
     contacts: '/apps/phone',
     date: '/apps/calendar',
+    music: '/apps/music',
     transactions: '/apps/banking',
     wallet: '/apps/banking',
     weather: '/apps/weather',

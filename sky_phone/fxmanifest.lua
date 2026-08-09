@@ -37,6 +37,7 @@ server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'config/config.lua',
     'config/media.lua',
+    'config/music.lua',
     'config/locales/*.lua',
     'source/bridge/server/database.lua',
     'source/bridge/server/migrations.lua',
@@ -64,6 +65,7 @@ server_scripts {
     'source/server/map.lua',
     'source/server/skyride.lua',
     'source/server/calendar.lua',
+    'source/server/music.lua',
     'source/server/radio.lua',
 }
 
@@ -71,6 +73,7 @@ files {
     'source/html/index.html',
     'source/html/assets/**',
     'source/html/img/**',
+    'config/music/**',
 }
 
 ui_page 'source/html/index.html'
