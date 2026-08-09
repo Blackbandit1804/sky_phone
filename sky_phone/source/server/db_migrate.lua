@@ -1224,9 +1224,190 @@ local schema = {
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
+    {
+        name = "sky_phone_feather_profiles",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "account_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "handle", type = "VARCHAR(30) NOT NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "display_name", type = "VARCHAR(50) NOT NULL" },
+            { name = "bio", type = "VARCHAR(160) NOT NULL DEFAULT ''" },
+            { name = "avatar_media_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "verified", type = "TINYINT(1) NOT NULL DEFAULT 0" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_feather_account", columns = "(`account_id`)" },
+            { name = "uniq_sky_phone_feather_handle", columns = "(`handle`)" },
+        },
+        foreignKeys = {
+            { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+            { column = "avatar_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_feather_posts",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "body", type = "VARCHAR(360) NOT NULL DEFAULT ''" },
+            { name = "reply_to_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "quote_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "status", type = "ENUM('published', 'removed') NOT NULL DEFAULT 'published'" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_feather_feed", columns = "(`status`, `created_at`)" },
+            { name = "idx_sky_phone_feather_profile", columns = "(`profile_id`, `created_at`)" },
+            { name = "idx_sky_phone_feather_replies", columns = "(`reply_to_id`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "profile_id", references = "`sky_phone_feather_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "reply_to_id", references = "`sky_phone_feather_posts` (`id`) ON DELETE SET NULL" },
+            { column = "quote_id", references = "`sky_phone_feather_posts` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_feather_hashtags",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "post_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "tag", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {{ name = "uniq_sky_phone_feather_hashtag", columns = "(`post_id`, `tag`)" }},
+        indexes = {{ name = "idx_sky_phone_feather_hashtag_rank", columns = "(`tag`, `post_id`)" }},
+        foreignKeys = {
+            { column = "post_id", references = "`sky_phone_feather_posts` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_feather_post_media",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "post_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "media_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "sort_order", type = "TINYINT UNSIGNED NOT NULL" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_feather_media_order", columns = "(`post_id`, `sort_order`)" },
+            { name = "uniq_sky_phone_feather_media", columns = "(`post_id`, `media_id`)" },
+        },
+        foreignKeys = {
+            { column = "post_id", references = "`sky_phone_feather_posts` (`id`) ON DELETE CASCADE" },
+            { column = "media_id", references = "`sky_phone_media` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_feather_reactions",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "post_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "kind", type = "ENUM('like', 'bookmark') NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {{ name = "uniq_sky_phone_feather_reaction", columns = "(`post_id`, `profile_id`, `kind`)" }},
+        foreignKeys = {
+            { column = "post_id", references = "`sky_phone_feather_posts` (`id`) ON DELETE CASCADE" },
+            { column = "profile_id", references = "`sky_phone_feather_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_feather_follows",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "follower_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "following_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {{ name = "uniq_sky_phone_feather_follow", columns = "(`follower_id`, `following_id`)" }},
+        foreignKeys = {
+            { column = "follower_id", references = "`sky_phone_feather_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "following_id", references = "`sky_phone_feather_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_feather_notifications",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "recipient_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "actor_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "post_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "kind", type = "ENUM('like', 'reply', 'follow', 'quote') NOT NULL" },
+            { name = "read_at", type = "DATETIME NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {{ name = "idx_sky_phone_feather_activity", columns = "(`recipient_id`, `created_at`)" }},
+        foreignKeys = {
+            { column = "recipient_id", references = "`sky_phone_feather_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "actor_id", references = "`sky_phone_feather_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "post_id", references = "`sky_phone_feather_posts` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_feather_blocks",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "blocker_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "blocked_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {{ name = "uniq_sky_phone_feather_block", columns = "(`blocker_id`, `blocked_id`)" }},
+        foreignKeys = {
+            { column = "blocker_id", references = "`sky_phone_feather_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "blocked_id", references = "`sky_phone_feather_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_feather_reports",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "reporter_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "post_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "reason", type = "ENUM('spam', 'harassment', 'dangerous', 'illegal', 'other') NOT NULL" },
+            { name = "details", type = "VARCHAR(500) NOT NULL DEFAULT ''" },
+            { name = "status", type = "ENUM('open', 'reviewed', 'dismissed') NOT NULL DEFAULT 'open'" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {{ name = "uniq_sky_phone_feather_report", columns = "(`reporter_id`, `post_id`)" }},
+        foreignKeys = {
+            { column = "reporter_id", references = "`sky_phone_feather_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "post_id", references = "`sky_phone_feather_posts` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
 }
 
 Bridge.Database.Migrate("sky_phone", schema)
+Bridge.Database.Query("DELETE FROM `sky_phone_feather_notifications` WHERE `kind` = 'repost'", {})
+Bridge.Database.Query("DELETE FROM `sky_phone_feather_reactions` WHERE `kind` = 'repost'", {})
+Bridge.Database.Query([[
+    ALTER TABLE `sky_phone_feather_reactions`
+    MODIFY COLUMN `kind` ENUM('like', 'bookmark') NOT NULL
+]], {})
+Bridge.Database.Query([[
+    ALTER TABLE `sky_phone_feather_notifications`
+    MODIFY COLUMN `kind` ENUM('like', 'reply', 'follow', 'quote') NOT NULL
+]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_flare_swipes`
     MODIFY COLUMN `choice` ENUM('like', 'pass', 'superlike') NOT NULL

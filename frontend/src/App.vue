@@ -33,6 +33,7 @@ import { useMessagesStore } from '@/stores/messages'
 import { useDarkChatStore } from '@/stores/darkchat'
 import { useFlareStore } from '@/stores/flare'
 import { useFlipTokStore } from '@/stores/fliptok'
+import { useFeatherStore } from '@/stores/feather'
 import { useMediaStore } from '@/stores/media'
 import { useMarketplaceStore } from '@/stores/marketplace'
 import { useAppStoreStore } from '@/stores/app-store'
@@ -65,6 +66,7 @@ type AppMessage = {
     | FlareEventData
     | FlipTokVerificationData
     | FlipTokNotificationData
+    | FeatherNotificationData
     | PhoneCall
     | PhoneNotificationInput
     | PhoneOpenPayload
@@ -143,6 +145,14 @@ type FlipTokNotificationData = {
   title?: string
   videoId?: string
 }
+type FeatherNotificationData = {
+  actor?: string
+  device?: PhoneNotificationDevicePayload
+  kind?: 'like' | 'reply' | 'follow' | 'quote'
+  postId?: string
+  text?: string
+  title?: string
+}
 const REFERENCE_VIEWPORT_WIDTH = 1920
 const REFERENCE_VIEWPORT_HEIGHT = 1080
 const PHONE_BASE_SCALE = 0.69
@@ -160,6 +170,7 @@ const messages = useMessagesStore()
 const darkchat = useDarkChatStore()
 const flare = useFlareStore()
 const fliptok = useFlipTokStore()
+const feather = useFeatherStore()
 const media = useMediaStore()
 const marketplace = useMarketplaceStore()
 const appStore = useAppStoreStore()
@@ -333,6 +344,26 @@ function onMessage(event: MessageEvent<AppMessage>): void {
     }
     notifications.show(notification)
     if (phone.isOpen) void fliptok.loadActivities()
+  } else if (event.data?.type === 'feather:new' && event.data.data) {
+    const data = event.data.data as FeatherNotificationData
+    const notification: PhoneNotificationInput = {
+      appId: 'feather',
+      subtitle: data.actor,
+      text: data.text ?? phone.t('Apps.feather.notifications.default'),
+      title: data.title ?? phone.t('Apps.feather.name'),
+    }
+    if (
+      data.device &&
+      (!phone.isOpen || data.device.imei !== phone.device?.imei)
+    ) {
+      notification.device = {
+        imei: data.device.imei,
+        name: data.device.name,
+        preferences: parsePhonePreferences(data.device.settings ?? null),
+      }
+    }
+    notifications.show(notification)
+    if (phone.isOpen) void feather.loadActivities()
   } else if (
     event.data?.type === 'marketplace:new-message' &&
     event.data.data

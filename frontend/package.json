@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n FRONTEND,BACKEND -c cyan,green \"vite\" \"node testserver/index.cjs\"",
+    "dev": "concurrently -k -n FRONTEND,BACKEND -c cyan,green \"vite --port 5174 --strictPort\" \"node testserver/index.cjs 3002\"",
     "build": "pnpm typecheck && pnpm build-only",
     "build-only": "vite build && node build.cjs",
     "preview": "vite preview",

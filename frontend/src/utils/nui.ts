@@ -14,12 +14,20 @@ export async function nuiCall<T = unknown>(
     'apiPort',
   )
   const baseUrl = import.meta.env.DEV
-    ? `http://localhost:${developmentPort ?? '3001'}/api`
+    ? `http://localhost:${developmentPort ?? '3002'}/api`
     : `https://${resourceName}`
+  const requestData = import.meta.env.DEV
+    ? {
+        ...data,
+        _testScenario:
+          new URLSearchParams(window.location.search).get('testScenario') ??
+          undefined,
+      }
+    : data
 
   try {
     const response = await fetch(`${baseUrl}/${endpoint}`, {
-      body: JSON.stringify(data),
+      body: JSON.stringify(requestData),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     })

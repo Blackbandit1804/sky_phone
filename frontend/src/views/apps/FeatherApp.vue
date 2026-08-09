@@ -1,0 +1,4637 @@
+<script setup lang="ts">
+import {
+  AlignLeft,
+  AtSign,
+  Bell,
+  Camera,
+  CalendarDays,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Feather,
+  Home,
+  ImagePlus,
+  Images,
+  KeyRound,
+  Mail,
+  MessageCircle,
+  PencilLine,
+  Plus,
+  Search,
+  Share2,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+  UserMinus,
+  UserRound,
+  UsersRound,
+  Video,
+  X,
+} from 'lucide-vue-next'
+import {
+  kBlock,
+  kButton,
+  kFab,
+  kGlass,
+  kIcon,
+  kLink,
+  kList,
+  kListInput,
+  kListItem,
+  kNavbar,
+  kNavbarBackLink,
+  kPage,
+  kPreloader,
+  kSearchbar,
+  kSegmented,
+  kSegmentedButton,
+  kSheet,
+  kTabbar,
+  kTabbarLink,
+  kToast,
+  kToggle,
+  kToolbarPane,
+} from 'konsta/vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+import FeatherPostCard from '@/components/feather/FeatherPostCard.vue'
+import { useAccountStore } from '@/stores/account'
+import { useFeatherStore } from '@/stores/feather'
+import type { FeatherConnectionMode } from '@/stores/feather'
+import { useMessageMediaStore } from '@/stores/messageMedia'
+import { usePhoneStore } from '@/stores/phone'
+import type { FeatherPost, FeatherProfile } from '@/types/feather'
+import {
+  filterMailAddressInput,
+  MAIL_ADDRESS_INPUT_MAX_LENGTH,
+  normalizeMailAddress,
+} from '@/utils/mail'
+
+type Tab = 'home' | 'explore' | 'network' | 'activity' | 'profile'
+type Screen =
+  | 'main'
+  | 'composer'
+  | 'thread'
+  | 'profile'
+  | 'edit'
+  | 'connections'
+type ExploreView = 'explore' | 'trending' | 'news'
+type ActivityView = 'all' | 'mentions'
+type ProfileView = 'posts' | 'replies' | 'media'
+type SelectedPhoto = { id: number; url: string }
+type ComposerContext = {
+  body: string
+  photos: SelectedPhoto[]
+  replyTo?: FeatherPost
+}
+
+const phone = usePhoneStore()
+const account = useAccountStore()
+const feather = useFeatherStore()
+const messageMedia = useMessageMediaStore()
+const route = useRoute()
+const router = useRouter()
+const tab = ref<Tab>('home')
+const screen = ref<Screen>('main')
+const exploreView = ref<ExploreView>('explore')
+const activityView = ref<ActivityView>('all')
+const profileView = ref<ProfileView>('posts')
+const connectionMode = ref<FeatherConnectionMode>('followers')
+const settingsOpen = ref(false)
+const compactMode = ref(false)
+const showSuggestions = ref(true)
+const search = ref('')
+const networkSearch = ref('')
+const feedback = ref('')
+const busy = ref(false)
+const replyTo = ref<FeatherPost | null>(null)
+const composerBody = ref('')
+const threadReplyBody = ref('')
+const threadReplyTarget = ref<FeatherPost | null>(null)
+const threadReplyInput = ref<HTMLTextAreaElement | null>(null)
+const photos = ref<SelectedPhoto[]>([])
+const menuPost = ref<FeatherPost | null>(null)
+const reportOpen = ref(false)
+const reportReason = ref('spam')
+const reportDetails = ref('')
+const onboarding = ref({ bio: '', displayName: '', handle: '' })
+const editing = ref({ bio: '', displayName: '' })
+const authMode = ref<'login' | 'register'>('login')
+const authForm = ref({ confirm: '', email: '', password: '' })
+const authBusy = ref(false)
+const authAttempted = ref(false)
+const authError = ref('')
+const authPasswordVisible = ref(false)
+let exploreSearchTimer: number | undefined
+let networkSearchTimer: number | undefined
+
+const displayedPosts = computed(() => {
+  if (tab.value === 'explore' && search.value.trim())
+    return feather.explorePosts
+  if (tab.value === 'profile' || screen.value === 'profile')
+    return feather.profilePosts
+  return feather.feed
+})
+const displayedActivities = computed(() =>
+  activityView.value === 'mentions'
+    ? feather.activities.filter(
+        (item) => item.kind === 'reply' || item.kind === 'quote',
+      )
+    : feather.activities,
+)
+const displayedProfilePosts = computed(() => {
+  if (profileView.value === 'replies')
+    return feather.profilePosts.filter((post) => Boolean(post.reply_to_id))
+  if (profileView.value === 'media')
+    return feather.profilePosts.filter((post) => post.media.length > 0)
+  return feather.profilePosts.filter((post) => !post.reply_to_id)
+})
+const networkSections = computed(() => {
+  const sections: Array<{
+    key: 'results' | 'suggestions'
+    profiles: FeatherProfile[]
+    title: string
+  }> = []
+  if (networkSearch.value.trim()) {
+    sections.push({
+      key: 'results',
+      profiles: feather.networkResults,
+      title: t('searchResults'),
+    })
+  }
+  sections.push({
+    key: 'suggestions',
+    profiles: feather.networkSuggestions,
+    title: t('suggestedPeople'),
+  })
+  return sections
+})
+const exploreCategories: ExploreView[] = ['explore', 'trending', 'news']
+const canPost = computed(
+  () =>
+    !busy.value &&
+    composerBody.value.length <= 360 &&
+    (composerBody.value.trim().length > 0 || photos.value.length > 0),
+)
+const canReply = computed(() => {
+  const mention =
+    threadReplyTarget.value &&
+    threadReplyTarget.value.id !== feather.thread?.post.id
+      ? `@${threadReplyTarget.value.handle}`
+      : ''
+  return (
+    !busy.value &&
+    threadReplyBody.value.trim().length > 0 &&
+    threadReplyBody.value.trim() !== mention &&
+    threadReplyBody.value.length <= 360
+  )
+})
+const canSaveProfile = computed(
+  () =>
+    !busy.value &&
+    editing.value.displayName.trim().length > 0 &&
+    editing.value.displayName.length <= 50 &&
+    editing.value.bio.length <= 160,
+)
+const canCreateProfile = computed(
+  () =>
+    !busy.value &&
+    onboarding.value.displayName.trim().length > 0 &&
+    /^[a-z0-9][a-z0-9_]{1,28}[a-z0-9]$/i.test(onboarding.value.handle.trim()),
+)
+const activeProfile = computed(() => feather.viewedProfile ?? feather.profile)
+const navbarTitle = computed(() => {
+  if (screen.value === 'composer')
+    return replyTo.value ? t('reply') : t('newPost')
+  if (screen.value === 'thread') return t('posts')
+  if (screen.value === 'edit') return t('editProfile')
+  if (screen.value === 'connections')
+    return connectionMode.value === 'followers'
+      ? t('followers')
+      : t('followingCount')
+  if (screen.value === 'profile') return `@${activeProfile.value?.handle ?? ''}`
+  if (tab.value === 'activity') return t('activity')
+  if (tab.value === 'network') return t('network')
+  if (tab.value === 'profile')
+    return activeProfile.value?.display_name ?? t('profile')
+  if (tab.value === 'explore') return t('explore')
+  return t('name')
+})
+const unreadActivities = computed(
+  () => feather.activities.filter((item) => !item.read).length,
+)
+const authEmailValid = computed(
+  () => normalizeMailAddress(authForm.value.email) !== null,
+)
+const authPasswordValid = computed(() => {
+  const length = authForm.value.password.length
+  return length >= 6 && length <= 64
+})
+const authConfirmValid = computed(
+  () =>
+    authMode.value === 'login' ||
+    (authForm.value.confirm.length > 0 &&
+      authForm.value.confirm === authForm.value.password),
+)
+
+function t(path: string, params?: Record<string, string>): string {
+  return phone.t(`Apps.feather.${path}`, params)
+}
+
+function toast(path: string): void {
+  feedback.value = t(path)
+  window.setTimeout(() => {
+    feedback.value = ''
+  }, 2200)
+}
+
+function errorToast(error?: string): void {
+  const key =
+    error === 'invalid_handle'
+      ? 'errors.invalidHandle'
+      : error === 'handle_taken'
+        ? 'errors.handleTaken'
+        : error === 'invalid_post'
+          ? 'errors.invalidPost'
+          : 'errors.generic'
+  toast(key)
+}
+
+function updateAuthEmail(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const filtered = filterMailAddressInput(input.value)
+  if (input.value !== filtered) input.value = filtered
+  authForm.value.email = filtered
+}
+
+function inputValue(event: Event): string {
+  const target = event.target
+  if (
+    !(target instanceof HTMLInputElement) &&
+    !(target instanceof HTMLTextAreaElement)
+  ) {
+    console.error('[Feather] Text input event has no supported target.')
+    return ''
+  }
+  return target.value
+}
+
+function switchAuthMode(mode: 'login' | 'register'): void {
+  authMode.value = mode
+  authForm.value.confirm = ''
+  authError.value = ''
+  authAttempted.value = false
+}
+
+function authErrorMessage(error?: string): string {
+  const known = [
+    'invalid_email',
+    'invalid_password',
+    'invalid_credentials',
+    'email_taken',
+    'rate_limited',
+  ]
+  return t(`authErrors.${error && known.includes(error) ? error : 'default'}`)
+}
+
+async function submitAuth(): Promise<void> {
+  authAttempted.value = true
+  authError.value = ''
+  if (!authEmailValid.value) {
+    authError.value = t('authErrors.invalid_email')
+    return
+  }
+  if (!authPasswordValid.value) {
+    authError.value = t('authErrors.invalid_password')
+    return
+  }
+  if (!authConfirmValid.value) {
+    authError.value = t('authErrors.password_mismatch')
+    return
+  }
+
+  const email = normalizeMailAddress(authForm.value.email)
+  if (!email) return
+  authBusy.value = true
+  const response =
+    authMode.value === 'login'
+      ? await account.login(email, authForm.value.password)
+      : await account.register(email, authForm.value.password)
+  authBusy.value = false
+  if (!response.success) {
+    authError.value = authErrorMessage(response.error)
+    return
+  }
+
+  authForm.value = { confirm: '', email: '', password: '' }
+  authAttempted.value = false
+  authPasswordVisible.value = false
+  await feather.bootstrap()
+}
+
+async function createProfile(): Promise<void> {
+  if (!canCreateProfile.value) return
+  busy.value = true
+  const response = await feather.createProfile({
+    bio: onboarding.value.bio,
+    displayName: onboarding.value.displayName,
+    handle: onboarding.value.handle,
+  })
+  busy.value = false
+  if (!response.success) errorToast(response.error)
+}
+
+async function selectTab(next: Tab): Promise<void> {
+  tab.value = next
+  screen.value = 'main'
+  feather.viewedProfile = null
+  if (next === 'home') await feather.loadFeed()
+  if (next === 'explore') await feather.explore(search.value)
+  if (next === 'network') await feather.loadNetwork(networkSearch.value)
+  if (next === 'activity') {
+    await feather.loadActivities()
+    await feather.markActivities()
+  }
+  if (next === 'profile' && feather.profile) {
+    await feather.loadProfile(feather.profile.id)
+  }
+}
+
+async function setFeedMode(mode: 'for-you' | 'following'): Promise<void> {
+  await feather.loadFeed(mode)
+}
+
+async function runSearch(): Promise<void> {
+  if (exploreSearchTimer !== undefined) {
+    window.clearTimeout(exploreSearchTimer)
+    exploreSearchTimer = undefined
+  }
+  await feather.explore(search.value)
+}
+
+async function runNetworkSearch(): Promise<void> {
+  await feather.loadNetwork(networkSearch.value)
+}
+
+async function selectTopic(topic: string): Promise<void> {
+  search.value = topic
+  exploreView.value = 'explore'
+  await runSearch()
+}
+
+async function shareProfile(): Promise<void> {
+  if (!activeProfile.value) return
+  try {
+    await navigator.clipboard.writeText(`@${activeProfile.value.handle}`)
+    toast('profileCopied')
+  } catch (error) {
+    console.error('[Feather] Could not copy the profile handle.', error)
+    toast('errors.generic')
+  }
+}
+
+async function sharePost(post: FeatherPost): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(`@${post.handle}: ${post.body}`)
+    toast('postCopied')
+  } catch (error) {
+    console.error('[Feather] Could not copy the post.', error)
+    toast('errors.generic')
+  }
+}
+
+function openComposer(post?: FeatherPost): void {
+  replyTo.value = post ?? null
+  composerBody.value = ''
+  photos.value = []
+  screen.value = 'composer'
+}
+
+function openComposerMedia(app: 'camera' | 'photos'): void {
+  const remaining = 4 - photos.value.length
+  if (remaining < 1) {
+    toast('photoLimit')
+    return
+  }
+  messageMedia.begin(
+    'feather:composer',
+    'photo',
+    '/apps/feather?compose=1',
+    app === 'photos' ? remaining : 1,
+    {
+      body: composerBody.value,
+      photos: [...photos.value],
+      replyTo: replyTo.value ?? undefined,
+    } satisfies ComposerContext,
+  )
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
+}
+
+async function publish(): Promise<void> {
+  if (!canPost.value) return
+  busy.value = true
+  const response = await feather.createPost({
+    body: composerBody.value,
+    mediaIds: photos.value.map((photo) => photo.id),
+    replyToId: replyTo.value?.id,
+  })
+  busy.value = false
+  if (!response.success) {
+    errorToast(response.error)
+    return
+  }
+  if (replyTo.value) await feather.loadThread(replyTo.value.id)
+  screen.value = replyTo.value ? 'thread' : 'main'
+  replyTo.value = null
+  composerBody.value = ''
+  photos.value = []
+}
+
+async function openThread(
+  post: FeatherPost,
+  focusReply = false,
+): Promise<void> {
+  if (!(await feather.loadThread(post.id))) return
+  threadReplyBody.value = ''
+  threadReplyTarget.value = feather.thread?.post ?? null
+  screen.value = 'thread'
+  if (focusReply) {
+    await nextTick()
+    threadReplyInput.value?.focus()
+  }
+}
+
+async function focusThreadReply(post: FeatherPost): Promise<void> {
+  const previousTarget = threadReplyTarget.value
+  const previousMention =
+    previousTarget && previousTarget.id !== feather.thread?.post.id
+      ? `@${previousTarget.handle} `
+      : ''
+  const nextMention =
+    post.id !== feather.thread?.post.id ? `@${post.handle} ` : ''
+  const bodyWithoutPreviousMention = previousMention
+    ? threadReplyBody.value.replace(new RegExp(`^${previousMention}`), '')
+    : threadReplyBody.value
+  threadReplyTarget.value = post
+  if (!threadReplyBody.value.trim() || previousMention || nextMention) {
+    threadReplyBody.value = `${nextMention}${bodyWithoutPreviousMention}`
+  }
+  await nextTick()
+  threadReplyInput.value?.focus()
+}
+
+async function clearThreadReplyTarget(): Promise<void> {
+  if (!feather.thread) return
+  const mention = threadReplyTarget.value
+    ? `@${threadReplyTarget.value.handle} `
+    : ''
+  if (threadReplyBody.value.startsWith(mention))
+    threadReplyBody.value = threadReplyBody.value.slice(mention.length)
+  threadReplyTarget.value = feather.thread.post
+  await nextTick()
+  threadReplyInput.value?.focus()
+}
+
+async function publishThreadReply(): Promise<void> {
+  if (!canReply.value || !feather.thread) return
+  const postId = feather.thread.post.id
+  busy.value = true
+  const response = await feather.createPost({
+    body: threadReplyBody.value,
+    mediaIds: [],
+    replyToId: postId,
+  })
+  busy.value = false
+  if (!response.success) {
+    errorToast(response.error)
+    return
+  }
+  threadReplyBody.value = ''
+  await feather.loadThread(postId)
+  threadReplyTarget.value = feather.thread?.post ?? null
+  await nextTick()
+  threadReplyInput.value?.focus()
+}
+
+async function openProfile(profileId: number): Promise<void> {
+  if (await feather.loadProfile(profileId)) screen.value = 'profile'
+}
+
+async function followProfile(profile: FeatherProfile): Promise<void> {
+  await feather.follow(profile)
+}
+
+async function openConnections(mode: FeatherConnectionMode): Promise<void> {
+  if (!activeProfile.value) return
+  connectionMode.value = mode
+  screen.value = 'connections'
+  await feather.loadConnections(activeProfile.value.id, mode)
+}
+
+async function removeConnection(profile: FeatherProfile): Promise<void> {
+  if (await feather.removeConnection(profile, connectionMode.value))
+    toast(
+      connectionMode.value === 'followers'
+        ? 'followerRemoved'
+        : 'followingRemoved',
+    )
+}
+
+function openEdit(): void {
+  if (!feather.profile) return
+  editing.value = {
+    bio: feather.profile.bio,
+    displayName: feather.profile.display_name,
+  }
+  screen.value = 'edit'
+}
+
+async function saveProfile(): Promise<void> {
+  busy.value = true
+  const response = await feather.updateProfile(editing.value)
+  busy.value = false
+  if (!response.success) {
+    errorToast(response.error)
+    return
+  }
+  if (feather.profile) await feather.loadProfile(feather.profile.id)
+  screen.value = 'profile'
+}
+
+async function deletePost(): Promise<void> {
+  if (!menuPost.value) return
+  const success = await feather.deletePost(menuPost.value.id)
+  menuPost.value = null
+  if (success) toast('deleted')
+}
+
+async function blockPostAuthor(): Promise<void> {
+  if (!menuPost.value) return
+  const success = await feather.blockProfile(menuPost.value.profile_id)
+  menuPost.value = null
+  if (success) {
+    screen.value = 'main'
+    toast('blocked')
+  }
+}
+
+async function submitReport(): Promise<void> {
+  if (!menuPost.value) return
+  const success = await feather.reportPost(
+    menuPost.value.id,
+    reportReason.value,
+    reportDetails.value,
+  )
+  reportOpen.value = false
+  menuPost.value = null
+  reportDetails.value = ''
+  if (success) toast('reported')
+}
+
+function goBack(): void {
+  if (screen.value === 'connections') {
+    screen.value = 'profile'
+    return
+  }
+  if (screen.value === 'edit') {
+    screen.value = 'profile'
+    return
+  }
+  if (screen.value === 'thread' || screen.value === 'profile') {
+    screen.value = 'main'
+    feather.viewedProfile = null
+    return
+  }
+  if (screen.value === 'composer') {
+    screen.value = replyTo.value ? 'thread' : 'main'
+    return
+  }
+  void router.back()
+}
+
+watch(networkSearch, () => {
+  if (networkSearchTimer !== undefined) window.clearTimeout(networkSearchTimer)
+  networkSearchTimer = window.setTimeout(() => {
+    if (tab.value === 'network') void runNetworkSearch()
+  }, 250)
+})
+
+watch(
+  search,
+  (value) => {
+    if (exploreSearchTimer !== undefined)
+      window.clearTimeout(exploreSearchTimer)
+    if (!value.trim()) {
+      exploreSearchTimer = undefined
+      return
+    }
+    exploreSearchTimer = window.setTimeout(() => {
+      exploreSearchTimer = undefined
+      if (tab.value === 'explore') void runSearch()
+    }, 300)
+  },
+  { flush: 'sync' },
+)
+
+onBeforeUnmount(() => {
+  if (exploreSearchTimer !== undefined) window.clearTimeout(exploreSearchTimer)
+  if (networkSearchTimer !== undefined) window.clearTimeout(networkSearchTimer)
+})
+
+onMounted(async () => {
+  const selection =
+    messageMedia.consumeMany<ComposerContext>('feather:composer')
+  if (selection) {
+    if (selection.context) {
+      composerBody.value = selection.context.body
+      photos.value = selection.context.photos
+      replyTo.value = selection.context.replyTo ?? null
+    }
+    for (const media of selection.media) {
+      if (photos.value.some((photo) => photo.id === media.id)) continue
+      photos.value.push({ id: media.id, url: media.url })
+    }
+  }
+  if (route.query.compose === '1') screen.value = 'composer'
+  await feather.bootstrap()
+  if (feather.onboarded) {
+    await feather.loadActivities()
+    if (tab.value === 'profile' && feather.profile)
+      await feather.loadProfile(feather.profile.id)
+  }
+})
+</script>
+
+<template>
+  <kPage
+    component="main"
+    class="feather-app"
+    :class="{
+      'feather-app--active': feather.onboarded,
+      'feather-app--home':
+        feather.onboarded && screen === 'main' && tab === 'home',
+      'feather-app--light': feather.onboarded && !phone.isDarkMode,
+      'feather-app--section':
+        feather.onboarded && screen === 'main' && tab !== 'home',
+      'native-app': feather.onboarded,
+      'feather-app--compact': compactMode,
+    }"
+  >
+    <kNavbar
+      v-if="feather.onboarded"
+      class="feather-navbar"
+      :subtitle="screen === 'main' && tab === 'home' ? undefined : t('name')"
+      :title="screen === 'main' && tab === 'home' ? undefined : navbarTitle"
+    >
+      <template v-if="screen === 'main' && tab === 'home'" #title>
+        <Feather
+          class="feather-navbar__brand-mark"
+          :size="30"
+          :stroke-width="1.8"
+        />
+      </template>
+      <template v-if="screen !== 'main'" #left>
+        <kNavbarBackLink
+          v-if="screen === 'profile'"
+          :text="t('back')"
+          :show-text="false"
+          @click="goBack"
+        />
+        <kLink
+          v-else-if="screen === 'composer'"
+          component="button"
+          class="feather-composer-close"
+          :link-props="{ type: 'button' }"
+          :aria-label="t('cancel')"
+          @click="goBack"
+        >
+          <X :size="19" />
+        </kLink>
+        <kNavbarBackLink
+          v-else
+          :text="t('back')"
+          :show-text="false"
+          @click="goBack"
+        />
+      </template>
+      <template #right>
+        <kButton
+          v-if="screen === 'composer'"
+          rounded
+          small
+          :disabled="!canPost"
+          class="feather-primary feather-composer-publish"
+          @click="publish"
+        >
+          {{ busy ? t('posting') : t('post') }}
+        </kButton>
+        <kButton
+          v-else-if="screen === 'edit'"
+          rounded
+          small
+          :disabled="!canSaveProfile"
+          class="feather-primary feather-edit__navbar-save"
+          @click="saveProfile"
+        >
+          {{ busy ? t('loading') : t('saveProfile') }}
+        </kButton>
+      </template>
+    </kNavbar>
+
+    <div v-if="feather.loading && !feather.onboarded" class="feather-loading">
+      <kPreloader class="text-[#438cf5]" />
+      <span>{{ t('loading') }}</span>
+    </div>
+
+    <section v-else-if="!account.email" class="feather-auth">
+      <header class="feather-auth__hero">
+        <div class="feather-welcome__mark"><Feather :size="43" /></div>
+        <div>
+          <span>{{ t('authEyebrow') }}</span>
+          <h1>{{ t('authWelcome') }}</h1>
+          <p>{{ t('authBody') }}</p>
+        </div>
+      </header>
+
+      <form class="feather-auth__card" @submit.prevent="submitAuth">
+        <kSegmented raised class="feather-auth__modes">
+          <kSegmentedButton
+            type="button"
+            :active="authMode === 'login'"
+            @click="switchAuthMode('login')"
+          >
+            {{ t('login') }}
+          </kSegmentedButton>
+          <kSegmentedButton
+            type="button"
+            :active="authMode === 'register'"
+            @click="switchAuthMode('register')"
+          >
+            {{ t('register') }}
+          </kSegmentedButton>
+        </kSegmented>
+
+        <div class="feather-auth__copy">
+          <h2>
+            {{ t(authMode === 'login' ? 'loginTitle' : 'registerTitle') }}
+          </h2>
+          <p>{{ t(authMode === 'login' ? 'loginBody' : 'registerBody') }}</p>
+        </div>
+
+        <kList strong inset class="feather-auth__fields">
+          <kListInput
+            class="relative"
+            :value="authForm.email"
+            :label="t('email')"
+            :placeholder="t('emailPlaceholder')"
+            :maxlength="MAIL_ADDRESS_INPUT_MAX_LENGTH"
+            autocomplete="username"
+            autocapitalize="none"
+            autocorrect="off"
+            inputmode="email"
+            spellcheck="false"
+            :input-class="!authForm.email.includes('@') ? 'pr-20' : undefined"
+            :error="
+              authAttempted && !authEmailValid
+                ? t('authErrors.invalid_email')
+                : ''
+            "
+            @input="updateAuthEmail"
+          >
+            <template #media><Mail :size="19" /></template>
+            <span
+              v-if="!authForm.email.includes('@')"
+              class="feather-auth__domain"
+              >@ifruit.com</span
+            >
+          </kListInput>
+          <kListInput
+            :value="authForm.password"
+            class="relative"
+            :type="authPasswordVisible ? 'text' : 'password'"
+            :label="t('password')"
+            :placeholder="t('passwordPlaceholder')"
+            :maxlength="64"
+            :autocomplete="
+              authMode === 'login' ? 'current-password' : 'new-password'
+            "
+            :error="
+              authAttempted && !authPasswordValid
+                ? t('authErrors.invalid_password')
+                : ''
+            "
+            @input="authForm.password = inputValue($event)"
+          >
+            <template #media><KeyRound :size="19" /></template>
+            <button
+              class="feather-auth__reveal"
+              type="button"
+              :aria-label="
+                t(authPasswordVisible ? 'hidePassword' : 'showPassword')
+              "
+              @click="authPasswordVisible = !authPasswordVisible"
+            >
+              <EyeOff v-if="authPasswordVisible" :size="18" />
+              <Eye v-else :size="18" />
+            </button>
+          </kListInput>
+          <kListInput
+            v-if="authMode === 'register'"
+            :value="authForm.confirm"
+            :type="authPasswordVisible ? 'text' : 'password'"
+            :label="t('confirmPassword')"
+            :placeholder="t('confirmPasswordPlaceholder')"
+            :maxlength="64"
+            autocomplete="new-password"
+            :error="
+              authAttempted && !authConfirmValid
+                ? t('authErrors.password_mismatch')
+                : ''
+            "
+            @input="authForm.confirm = inputValue($event)"
+          >
+            <template #media><ShieldCheck :size="19" /></template>
+          </kListInput>
+        </kList>
+
+        <div v-if="authError" class="feather-auth__error" role="alert">
+          {{ authError }}
+        </div>
+
+        <kButton
+          component="button"
+          type="submit"
+          large
+          rounded
+          :disabled="authBusy"
+          class="feather-primary feather-auth__submit"
+        >
+          <kPreloader v-if="authBusy" />
+          <template v-else>
+            {{ t(authMode === 'login' ? 'loginAction' : 'registerAction') }}
+          </template>
+        </kButton>
+
+        <p class="feather-auth__switch">
+          {{ t(authMode === 'login' ? 'noAccount' : 'haveAccount') }}
+          <button
+            type="button"
+            @click="switchAuthMode(authMode === 'login' ? 'register' : 'login')"
+          >
+            {{ t(authMode === 'login' ? 'registerNow' : 'loginNow') }}
+          </button>
+        </p>
+      </form>
+
+      <div class="feather-auth__trust">
+        <ShieldCheck :size="16" />
+        <span>{{ t('authTrust') }}</span>
+      </div>
+    </section>
+
+    <section v-else-if="!feather.onboarded" class="feather-onboarding">
+      <div class="feather-welcome__mark"><Feather :size="45" /></div>
+      <span class="feather-onboarding__step">{{ t('profileStep') }}</span>
+      <h1>{{ t('welcome') }}</h1>
+      <p>{{ t('welcomeBody') }}</p>
+      <div class="feather-onboarding__account">
+        <CheckCircle2 :size="15" />
+        <span>{{ t('accountConnected') }}</span>
+        <strong>{{ account.email }}</strong>
+      </div>
+      <div class="feather-onboarding__form">
+        <div class="feather-onboarding__form-head">
+          <span><UserRound :size="20" /></span>
+          <div>
+            <h2>{{ t('createProfile') }}</h2>
+            <p>{{ t('profileDetailsHint') }}</p>
+          </div>
+        </div>
+        <kList strong inset class="feather-onboarding__fields">
+          <kListInput
+            :value="onboarding.displayName"
+            :label="t('displayName')"
+            :placeholder="t('displayNamePlaceholder')"
+            :maxlength="50"
+            @input="onboarding.displayName = inputValue($event)"
+          >
+            <template #media><UserRound :size="18" /></template>
+          </kListInput>
+          <kListInput
+            :value="onboarding.handle"
+            :label="t('handle')"
+            :placeholder="t('handlePlaceholder')"
+            :maxlength="30"
+            :info="t('handleHint')"
+            @input="onboarding.handle = inputValue($event)"
+          >
+            <template #media><AtSign :size="18" /></template>
+          </kListInput>
+          <kListInput
+            :value="onboarding.bio"
+            type="textarea"
+            :label="t('bio')"
+            :placeholder="t('bioPlaceholder')"
+            :maxlength="160"
+            :info="`${onboarding.bio.length}/160`"
+            @input="onboarding.bio = inputValue($event)"
+          >
+            <template #media><AlignLeft :size="18" /></template>
+          </kListInput>
+        </kList>
+      </div>
+      <kButton
+        large
+        rounded
+        :disabled="!canCreateProfile"
+        class="feather-primary feather-onboarding__button"
+        @click="createProfile"
+      >
+        {{ t('start') }}
+      </kButton>
+    </section>
+
+    <template v-else>
+      <section v-if="screen === 'composer'" class="feather-composer">
+        <p v-if="replyTo" class="feather-replying">
+          {{ t('replyingTo', { handle: replyTo.handle }) }}
+        </p>
+        <kGlass :highlight="false" class="feather-composer-card">
+          <div class="feather-composer-card__inner">
+            <div class="feather-composer__identity">
+              <div class="feather-compose-avatar">
+                <img
+                  v-if="feather.profile?.avatar_url"
+                  :src="feather.profile.avatar_url"
+                  alt=""
+                />
+                <UserRound v-else :size="20" />
+              </div>
+              <div>
+                <strong>{{ feather.profile?.display_name }}</strong>
+                <span>@{{ feather.profile?.handle }}</span>
+              </div>
+            </div>
+            <textarea
+              v-model="composerBody"
+              autofocus
+              :maxlength="360"
+              :placeholder="
+                replyTo ? t('replyPlaceholder') : t('composerPlaceholder')
+              "
+            ></textarea>
+            <div class="feather-composer-card__footer">
+              <span><UsersRound :size="14" /> {{ t('composerAudience') }}</span>
+              <b>{{
+                t('charactersLeft', {
+                  count: String(360 - composerBody.length),
+                })
+              }}</b>
+            </div>
+          </div>
+        </kGlass>
+
+        <section class="feather-composer-media">
+          <header>
+            <span><ImagePlus :size="21" /></span>
+            <div>
+              <strong>{{ t('mediaTitle') }}</strong>
+              <small>{{ t('mediaBody') }}</small>
+            </div>
+            <b>{{ photos.length }} / 4</b>
+          </header>
+          <div class="feather-composer-media__actions">
+            <kGlass :highlight="false">
+              <button
+                type="button"
+                :disabled="photos.length >= 4"
+                @click="openComposerMedia('photos')"
+              >
+                <span><Images :size="20" /></span>
+                <strong>{{ t('chooseGallery') }}</strong>
+                <small>{{ t('chooseGalleryBody') }}</small>
+              </button>
+            </kGlass>
+            <kGlass :highlight="false">
+              <button
+                type="button"
+                :disabled="photos.length >= 4"
+                @click="openComposerMedia('camera')"
+              >
+                <span><Camera :size="20" /></span>
+                <strong>{{ t('takePhoto') }}</strong>
+                <small>{{ t('takePhotoBody') }}</small>
+              </button>
+            </kGlass>
+          </div>
+          <div v-if="photos.length" class="feather-composer-media__selected">
+            <div class="feather-composer-media__selected-head">
+              <strong>{{ t('selectedPhotos') }}</strong>
+              <span>{{ photos.length }} / 4</span>
+            </div>
+            <div
+              class="feather-compose-media"
+              :class="`feather-compose-media--${photos.length}`"
+            >
+              <div v-for="(photo, index) in photos" :key="photo.id">
+                <img :src="photo.url" alt="" />
+                <button
+                  type="button"
+                  :aria-label="t('removePhoto', { number: String(index + 1) })"
+                  @click="photos.splice(index, 1)"
+                >
+                  <X :size="14" />
+                </button>
+                <i>{{ index + 1 }}</i>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section v-else-if="screen === 'edit'" class="feather-edit">
+        <div class="feather-edit__identity">
+          <div class="feather-edit__avatar">
+            <img
+              v-if="feather.profile?.avatar_url"
+              :src="feather.profile.avatar_url"
+              alt=""
+            />
+            <UserRound v-else :size="28" />
+          </div>
+          <div class="feather-edit__account">
+            <strong>{{ feather.profile?.display_name }}</strong>
+            <span>@{{ feather.profile?.handle }}</span>
+          </div>
+          <span class="feather-edit__badge"><PencilLine :size="14" /></span>
+        </div>
+
+        <kList strong inset class="feather-edit__fields">
+          <kListInput
+            :value="editing.displayName"
+            :label="t('displayName')"
+            :placeholder="t('displayNamePlaceholder')"
+            :maxlength="50"
+            :info="`${editing.displayName.length}/50`"
+            @input="editing.displayName = inputValue($event)"
+          >
+            <template #media><UserRound :size="18" /></template>
+          </kListInput>
+          <kListInput
+            :value="editing.bio"
+            type="textarea"
+            :label="t('bio')"
+            :placeholder="t('bioPlaceholder')"
+            :maxlength="160"
+            :info="`${editing.bio.length}/160`"
+            @input="editing.bio = inputValue($event)"
+          >
+            <template #media><AlignLeft :size="18" /></template>
+          </kListInput>
+        </kList>
+
+        <kButton
+          large
+          rounded
+          :disabled="!canSaveProfile"
+          class="feather-primary feather-edit__save"
+          @click="saveProfile"
+        >
+          <PencilLine :size="16" />
+          <span>{{ busy ? t('loading') : t('saveProfile') }}</span>
+        </kButton>
+      </section>
+
+      <section
+        v-else-if="screen === 'connections' && activeProfile"
+        class="feather-scroll feather-connections"
+      >
+        <kSegmented class="feather-connections__tabs">
+          <kSegmentedButton
+            type="button"
+            :active="connectionMode === 'followers'"
+            :class="{ 'is-active': connectionMode === 'followers' }"
+            @click="openConnections('followers')"
+          >
+            {{ t('followers') }}
+          </kSegmentedButton>
+          <kSegmentedButton
+            type="button"
+            :active="connectionMode === 'following'"
+            :class="{ 'is-active': connectionMode === 'following' }"
+            @click="openConnections('following')"
+          >
+            {{ t('followingCount') }}
+          </kSegmentedButton>
+        </kSegmented>
+
+        <div
+          v-if="feather.connectionLoading"
+          class="feather-connections__loading"
+        >
+          <kPreloader />
+        </div>
+        <kBlock
+          v-else-if="!feather.connections.length"
+          strong
+          inset
+          class="feather-connections__empty"
+        >
+          <UsersRound :size="30" />
+          <strong>{{ t('noConnections') }}</strong>
+          <p>{{ t('noConnectionsBody') }}</p>
+        </kBlock>
+        <kList v-else strong inset class="feather-connections__list">
+          <kListItem
+            v-for="person in feather.connections"
+            :key="person.id"
+            :title="person.display_name"
+            :text="`@${person.handle}`"
+          >
+            <template #media>
+              <button
+                type="button"
+                class="feather-connections__profile"
+                :aria-label="person.display_name"
+                @click="openProfile(person.id)"
+              >
+                <span class="feather-avatar feather-connections__avatar">
+                  <img
+                    v-if="person.avatar_url"
+                    :src="person.avatar_url"
+                    alt=""
+                  />
+                  <UserRound v-else :size="19" />
+                </span>
+              </button>
+            </template>
+            <template #after>
+              <kButton
+                v-if="activeProfile.is_owner"
+                outline
+                rounded
+                small
+                class="feather-connections__remove"
+                @click="removeConnection(person)"
+              >
+                <UserMinus :size="13" />
+                <span>{{ t('removeConnection') }}</span>
+              </kButton>
+              <kButton
+                v-else-if="!person.is_owner"
+                rounded
+                small
+                class="feather-follow-button"
+                :class="{
+                  'feather-follow-button--pending': !person.is_following,
+                  'feather-follow-button--following': person.is_following,
+                }"
+                @click="followProfile(person)"
+              >
+                {{ person.is_following ? t('following') : t('follow') }}
+              </kButton>
+            </template>
+          </kListItem>
+        </kList>
+      </section>
+
+      <section
+        v-else-if="screen === 'thread' && feather.thread"
+        class="feather-scroll"
+      >
+        <FeatherPostCard
+          :post="feather.thread.post"
+          @follow="feather.followPost"
+          @menu="menuPost = $event"
+          @open="() => undefined"
+          @profile="openProfile"
+          @react="feather.react"
+          @reply="focusThreadReply"
+          @share="sharePost"
+        />
+        <kGlass :highlight="false" class="feather-thread-reply">
+          <form @submit.prevent="publishThreadReply">
+            <span class="feather-avatar feather-thread-reply__avatar">
+              <img
+                v-if="feather.profile?.avatar_url"
+                :src="feather.profile.avatar_url"
+                alt=""
+              />
+              <UserRound v-else :size="19" />
+            </span>
+            <div>
+              <div
+                v-if="
+                  threadReplyTarget &&
+                  threadReplyTarget.id !== feather.thread.post.id
+                "
+                class="feather-thread-reply__comment-target"
+              >
+                <div>
+                  <span class="feather-thread-reply__target">{{
+                    t('replyingTo', { handle: threadReplyTarget.handle })
+                  }}</span>
+                  <p>{{ threadReplyTarget.body }}</p>
+                </div>
+                <kButton
+                  clear
+                  rounded
+                  small
+                  type="button"
+                  :aria-label="t('cancel')"
+                  @click="clearThreadReplyTarget"
+                >
+                  <X :size="14" />
+                </kButton>
+              </div>
+              <span v-else class="feather-thread-reply__target">{{
+                t('replyingTo', { handle: feather.thread.post.handle })
+              }}</span>
+              <textarea
+                ref="threadReplyInput"
+                v-model="threadReplyBody"
+                :maxlength="360"
+                :placeholder="t('replyPlaceholder')"
+              ></textarea>
+              <footer>
+                <span>{{
+                  t('charactersLeft', {
+                    count: String(360 - threadReplyBody.length),
+                  })
+                }}</span>
+                <kButton
+                  rounded
+                  small
+                  type="submit"
+                  :disabled="!canReply"
+                  class="feather-primary"
+                >
+                  {{ busy ? t('posting') : t('reply') }}
+                </kButton>
+              </footer>
+            </div>
+          </form>
+        </kGlass>
+        <h2 class="feather-section-title feather-thread-title">
+          {{ t('replies') }}
+          <span>{{ feather.thread.replies.length }}</span>
+        </h2>
+        <div v-if="!feather.thread.replies.length" class="feather-thread-empty">
+          <MessageCircle :size="22" />
+          <span>{{ t('noReplies') }}</span>
+        </div>
+        <FeatherPostCard
+          v-for="post in feather.thread.replies"
+          :key="post.id"
+          :post="post"
+          @follow="feather.followPost"
+          @menu="menuPost = $event"
+          @open="openThread"
+          @profile="openProfile"
+          @react="feather.react"
+          @reply="focusThreadReply"
+          @share="sharePost"
+        />
+      </section>
+
+      <section
+        v-else-if="
+          (screen === 'profile' || (screen === 'main' && tab === 'profile')) &&
+          activeProfile
+        "
+        class="feather-scroll feather-profile-screen"
+      >
+        <kGlass :highlight="false" class="feather-profile-glass">
+          <div class="feather-profile">
+            <div class="feather-profile__cover"></div>
+            <div class="feather-profile__top">
+              <div class="feather-profile__avatar">
+                <img
+                  v-if="activeProfile.avatar_url"
+                  :src="activeProfile.avatar_url"
+                  alt=""
+                />
+                <UserRound v-else :size="29" />
+              </div>
+              <kButton
+                v-if="!activeProfile.is_owner"
+                rounded
+                small
+                class="feather-follow-button"
+                :class="{
+                  'feather-follow-button--pending': !activeProfile.is_following,
+                  'feather-follow-button--following':
+                    activeProfile.is_following,
+                }"
+                @click="followProfile(activeProfile)"
+              >
+                <kIcon v-if="!activeProfile.is_following"
+                  ><UserPlus :size="14"
+                /></kIcon>
+                {{ activeProfile.is_following ? t('following') : t('follow') }}
+              </kButton>
+            </div>
+            <div class="feather-profile__identity">
+              <h1>
+                {{ activeProfile.display_name }}
+                <CheckCircle2 v-if="activeProfile.verified" :size="15" />
+              </h1>
+              <span class="feather-profile__handle"
+                >@{{ activeProfile.handle }}</span
+              >
+              <p class="feather-profile__bio">
+                {{ activeProfile.bio || t('noBio') }}
+              </p>
+              <div class="feather-profile__joined">
+                <CalendarDays :size="14" />
+                {{ t('joinedDate') }}
+              </div>
+            </div>
+            <div class="feather-profile__stats">
+              <span>
+                <strong>{{ activeProfile.post_count }}</strong>
+                <small>{{ t('posts') }}</small>
+              </span>
+              <button type="button" @click="openConnections('following')">
+                <strong>{{ activeProfile.following }}</strong>
+                <small>{{ t('followingCount') }}</small>
+              </button>
+              <button type="button" @click="openConnections('followers')">
+                <strong>{{ activeProfile.followers }}</strong>
+                <small>{{ t('followers') }}</small>
+              </button>
+            </div>
+            <div v-if="activeProfile.is_owner" class="feather-profile__actions">
+              <kButton
+                outline
+                rounded
+                class="feather-profile-action"
+                @click="shareProfile"
+              >
+                <Share2 :size="15" />
+                <span>{{ t('shareProfile') }}</span>
+              </kButton>
+              <kButton
+                rounded
+                class="feather-primary feather-profile-action"
+                @click="openEdit"
+              >
+                <PencilLine :size="15" />
+                <span>{{ t('editProfile') }}</span>
+              </kButton>
+            </div>
+          </div>
+        </kGlass>
+        <kSegmented class="feather-profile-tabs">
+          <kSegmentedButton
+            type="button"
+            :active="profileView === 'posts'"
+            :class="{ 'is-active': profileView === 'posts' }"
+            @click="profileView = 'posts'"
+          >
+            <AlignLeft :size="16" /> {{ t('posts') }}
+          </kSegmentedButton>
+          <kSegmentedButton
+            type="button"
+            :active="profileView === 'replies'"
+            :class="{ 'is-active': profileView === 'replies' }"
+            @click="profileView = 'replies'"
+          >
+            <AtSign :size="17" />
+          </kSegmentedButton>
+          <kSegmentedButton
+            type="button"
+            :active="profileView === 'media'"
+            :class="{ 'is-active': profileView === 'media' }"
+            @click="profileView = 'media'"
+          >
+            <Video :size="17" />
+          </kSegmentedButton>
+        </kSegmented>
+        <FeatherPostCard
+          v-for="post in displayedProfilePosts"
+          :key="post.id"
+          :post="post"
+          @follow="feather.followPost"
+          @menu="menuPost = $event"
+          @open="openThread"
+          @profile="openProfile"
+          @react="feather.react"
+          @reply="openThread($event, true)"
+          @share="sharePost"
+        />
+        <section
+          v-if="
+            activeProfile.is_owner &&
+            profileView === 'posts' &&
+            showSuggestions &&
+            feather.suggestions.length
+          "
+          class="feather-profile-suggestions"
+        >
+          <h2>{{ t('people') }}</h2>
+          <div class="feather-profile-suggestions__rail">
+            <article
+              v-for="person in feather.suggestions"
+              :key="person.id"
+              class="feather-profile-suggestion"
+            >
+              <button type="button" @click="openProfile(person.id)">
+                <span class="feather-avatar feather-profile-suggestion__avatar">
+                  <img
+                    v-if="person.avatar_url"
+                    :src="person.avatar_url"
+                    alt=""
+                  />
+                  <UserRound v-else :size="20" />
+                </span>
+                <span class="feather-profile-suggestion__identity">
+                  <strong>{{ person.display_name }}</strong>
+                  <small>@{{ person.handle }}</small>
+                  <p>{{ person.bio || t('noBio') }}</p>
+                </span>
+              </button>
+              <kButton
+                rounded
+                small
+                class="feather-follow-button"
+                :class="{
+                  'feather-follow-button--pending': !person.is_following,
+                  'feather-follow-button--following': person.is_following,
+                }"
+                @click="followProfile(person)"
+              >
+                {{ person.is_following ? t('following') : t('follow') }}
+              </kButton>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <section v-else-if="screen === 'main'" class="feather-main">
+        <div v-if="tab === 'home'" class="feather-feed-tabs">
+          <kSegmented class="feather-context-tabs">
+            <kSegmentedButton
+              type="button"
+              :active="feather.mode === 'for-you'"
+              :class="{ 'is-active': feather.mode === 'for-you' }"
+              @click="setFeedMode('for-you')"
+              >{{ t('forYou') }}</kSegmentedButton
+            >
+            <kSegmentedButton
+              type="button"
+              :active="feather.mode === 'following'"
+              :class="{ 'is-active': feather.mode === 'following' }"
+              @click="setFeedMode('following')"
+              >{{ t('following') }}</kSegmentedButton
+            >
+          </kSegmented>
+          <kButton
+            rounded
+            small
+            class="feather-feed-add"
+            @click="selectTab('network')"
+          >
+            <UsersRound :size="15" />
+            {{ t('add') }}
+          </kButton>
+        </div>
+
+        <div v-if="tab === 'explore'" class="feather-explore-head">
+          <kSearchbar
+            :value="search"
+            class="feather-explore-search"
+            :placeholder="t('postSearchPlaceholder')"
+            @clear="search = ''"
+            @input="search = inputValue($event)"
+            @keyup.enter="runSearch"
+          />
+          <kSegmented class="feather-context-tabs feather-explore-tabs">
+            <kSegmentedButton
+              v-for="category in exploreCategories"
+              :key="category"
+              type="button"
+              :active="exploreView === category"
+              :class="{ 'is-active': exploreView === category }"
+              @click="exploreView = category"
+            >
+              {{ t(`exploreTabs.${category}`) }}
+            </kSegmentedButton>
+          </kSegmented>
+        </div>
+
+        <div v-if="tab === 'activity'" class="feather-activity-head">
+          <kSegmented class="feather-context-tabs">
+            <kSegmentedButton
+              type="button"
+              :active="activityView === 'all'"
+              :class="{ 'is-active': activityView === 'all' }"
+              @click="activityView = 'all'"
+            >
+              {{ t('all') }}
+            </kSegmentedButton>
+            <kSegmentedButton
+              type="button"
+              :active="activityView === 'mentions'"
+              :class="{ 'is-active': activityView === 'mentions' }"
+              @click="activityView = 'mentions'"
+            >
+              {{ t('mentions') }}
+            </kSegmentedButton>
+          </kSegmented>
+        </div>
+
+        <div v-if="tab === 'network'" class="feather-scroll feather-network">
+          <kGlass :highlight="false" class="feather-network-glass">
+            <header class="feather-network__hero">
+              <div>
+                <small>{{ t('network') }}</small>
+                <h1>{{ t('networkTitle') }}</h1>
+                <p>{{ t('networkBody') }}</p>
+              </div>
+              <UsersRound :size="35" />
+            </header>
+          </kGlass>
+          <kSearchbar
+            :value="networkSearch"
+            class="feather-network-search"
+            :placeholder="t('networkSearchPlaceholder')"
+            @clear="networkSearch = ''"
+            @input="networkSearch = inputValue($event)"
+            @keyup.enter="runNetworkSearch"
+          />
+          <div v-if="feather.networkLoading" class="feather-network-loading">
+            <kPreloader />
+          </div>
+          <template v-else>
+            <section
+              v-for="section in networkSections"
+              :key="section.key"
+              class="feather-network-section"
+            >
+              <h2 class="feather-section-title">{{ section.title }}</h2>
+              <kBlock
+                v-if="!section.profiles.length"
+                strong
+                inset
+                class="feather-network-empty"
+              >
+                <Search :size="25" />
+                <strong>{{
+                  section.key === 'results'
+                    ? t('noPeopleFound')
+                    : t('noSuggestions')
+                }}</strong>
+                <p>
+                  {{
+                    section.key === 'results'
+                      ? t('noPeopleFoundBody')
+                      : t('noSuggestionsBody')
+                  }}
+                </p>
+              </kBlock>
+              <kList v-else strong inset class="feather-network-list">
+                <kListItem
+                  v-for="person in section.profiles"
+                  :key="person.id"
+                  class="feather-network-person"
+                  content-class="feather-network-person__content"
+                  inner-class="feather-network-person__inner"
+                  media-class="feather-network-person__media"
+                  title-wrap-class="feather-network-person__title-wrap"
+                >
+                  <template #media>
+                    <button
+                      type="button"
+                      class="feather-network-person__avatar"
+                      :aria-label="person.display_name"
+                      @click="openProfile(person.id)"
+                    >
+                      <span class="feather-avatar">
+                        <img
+                          v-if="person.avatar_url"
+                          :src="person.avatar_url"
+                          alt=""
+                        />
+                        <UserRound v-else :size="20" />
+                      </span>
+                    </button>
+                  </template>
+                  <template #title>
+                    <button
+                      type="button"
+                      class="feather-network-person__name"
+                      @click="openProfile(person.id)"
+                    >
+                      <span>{{ person.display_name }}</span>
+                      <CheckCircle2
+                        v-if="person.verified"
+                        :size="13"
+                        :aria-label="t('verified')"
+                      />
+                    </button>
+                  </template>
+                  <template #subtitle
+                    ><span class="feather-network-person__handle"
+                      >@{{ person.handle }}</span
+                    ></template
+                  >
+                  <template #text
+                    ><span class="feather-network-person__bio">{{
+                      person.bio || t('noBio')
+                    }}</span></template
+                  >
+                  <template #footer>
+                    <span class="feather-network-person__stats">
+                      <span
+                        ><strong>{{ person.followers }}</strong>
+                        {{ t('followers') }}</span
+                      >
+                      <i></i>
+                      <span>{{
+                        t('postsCount', { count: String(person.post_count) })
+                      }}</span>
+                    </span>
+                  </template>
+                  <template #after>
+                    <kButton
+                      rounded
+                      small
+                      class="feather-follow-button feather-network-person__follow"
+                      :class="{
+                        'feather-follow-button--pending': !person.is_following,
+                        'feather-follow-button--following': person.is_following,
+                      }"
+                      @click="followProfile(person)"
+                    >
+                      <kIcon v-if="!person.is_following"
+                        ><UserPlus :size="13"
+                      /></kIcon>
+                      {{ person.is_following ? t('following') : t('follow') }}
+                    </kButton>
+                  </template>
+                </kListItem>
+              </kList>
+            </section>
+          </template>
+        </div>
+
+        <div
+          v-else-if="tab === 'explore' && !search.trim()"
+          class="feather-scroll feather-trends"
+        >
+          <div v-if="!feather.topics.length" class="feather-empty">
+            <Search :size="34" />
+            <h2>{{ t('noTrendingHashtags') }}</h2>
+            <p>{{ t('noTrendingHashtagsBody') }}</p>
+          </div>
+          <button
+            v-for="topic in feather.topics"
+            :key="topic.tag"
+            type="button"
+            class="feather-trend"
+            @click="selectTopic(topic.tag)"
+          >
+            <span>{{ t(`trendKinds.${exploreView}`) }}</span>
+            <strong>{{ topic.tag }}</strong>
+            <small>{{ t('postsCount', { count: String(topic.count) }) }}</small>
+            <b>•••</b>
+          </button>
+        </div>
+
+        <div v-else-if="tab === 'activity'" class="feather-scroll">
+          <div v-if="!displayedActivities.length" class="feather-empty">
+            <Bell :size="34" />
+            <h2>{{ t('noActivity') }}</h2>
+            <p>{{ t('activityBody') }}</p>
+          </div>
+          <button
+            v-for="item in displayedActivities"
+            :key="item.id"
+            class="feather-activity"
+            type="button"
+            @click="
+              item.post_id
+                ? feather
+                    .loadThread(item.post_id)
+                    .then((ok) => ok && (screen = 'thread'))
+                : openProfile(item.profile_id)
+            "
+          >
+            <div class="feather-avatar">
+              <img v-if="item.avatar_url" :src="item.avatar_url" alt="" />
+              <UserRound v-else :size="20" />
+            </div>
+            <p>
+              <strong>{{ item.display_name }}</strong>
+              {{ t(`activityKinds.${item.kind}`) }}
+            </p>
+          </button>
+        </div>
+
+        <div v-else class="feather-scroll">
+          <div
+            v-if="tab === 'explore' && feather.exploreLoading"
+            class="feather-network-loading"
+          >
+            <kPreloader />
+          </div>
+          <div
+            v-else-if="!displayedPosts.length && !feather.loading"
+            class="feather-empty"
+          >
+            <Search v-if="tab === 'explore'" :size="34" />
+            <Feather v-else :size="34" />
+            <h2>
+              {{ tab === 'explore' ? t('emptyExplore') : t('emptyFeed') }}
+            </h2>
+            <p>
+              {{
+                tab === 'explore' ? t('emptyExploreBody') : t('emptyFeedBody')
+              }}
+            </p>
+          </div>
+          <FeatherPostCard
+            v-for="post in displayedPosts"
+            v-show="tab !== 'explore' || !feather.exploreLoading"
+            :key="post.id"
+            :post="post"
+            @follow="feather.followPost"
+            @menu="menuPost = $event"
+            @open="openThread"
+            @profile="openProfile"
+            @react="feather.react"
+            @reply="openThread($event, true)"
+            @share="sharePost"
+          />
+          <template v-if="tab === 'explore' && feather.suggestions.length">
+            <h2 class="feather-section-title">{{ t('people') }}</h2>
+            <div
+              v-for="person in feather.suggestions"
+              :key="person.id"
+              class="feather-person"
+            >
+              <div class="feather-avatar">
+                <img
+                  v-if="person.avatar_url"
+                  :src="person.avatar_url"
+                  alt=""
+                /><UserRound v-else :size="20" />
+              </div>
+              <button type="button" @click="openProfile(person.id)">
+                <strong>{{ person.display_name }}</strong
+                ><span>@{{ person.handle }}</span>
+              </button>
+              <kButton
+                rounded
+                small
+                class="feather-follow-button"
+                :class="{
+                  'feather-follow-button--pending': !person.is_following,
+                  'feather-follow-button--following': person.is_following,
+                }"
+                @click="followProfile(person)"
+              >
+                <kIcon v-if="!person.is_following"
+                  ><UserPlus :size="14"
+                /></kIcon>
+                {{ person.is_following ? t('following') : t('follow') }}
+              </kButton>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <kTabbar
+        v-if="screen === 'main'"
+        component="nav"
+        icons
+        labels
+        class="bottom-0 left-0 fixed"
+        inner-class="!w-full !max-w-none !gap-0 !px-1"
+        :aria-label="t('name')"
+      >
+        <kToolbarPane class="feather-tab-pane">
+          <kTabbarLink
+            component="button"
+            :active="tab === 'home'"
+            :link-props="{ class: 'feather-tab-button', type: 'button' }"
+            @click="selectTab('home')"
+          >
+            <template #label
+              ><span class="feather-tab-label">{{ t('home') }}</span></template
+            >
+            <template #icon
+              ><kIcon
+                ><Home
+                  :size="20"
+                  :fill="tab === 'home' ? 'currentColor' : 'none'" /></kIcon
+            ></template>
+          </kTabbarLink>
+          <kTabbarLink
+            component="button"
+            :active="tab === 'explore'"
+            :link-props="{ class: 'feather-tab-button', type: 'button' }"
+            @click="selectTab('explore')"
+          >
+            <template #label
+              ><span class="feather-tab-label">{{
+                t('explore')
+              }}</span></template
+            >
+            <template #icon
+              ><kIcon><Search :size="20" /></kIcon
+            ></template>
+          </kTabbarLink>
+          <kTabbarLink
+            component="button"
+            :active="tab === 'network'"
+            :link-props="{ class: 'feather-tab-button', type: 'button' }"
+            @click="selectTab('network')"
+          >
+            <template #label
+              ><span class="feather-tab-label">{{
+                t('network')
+              }}</span></template
+            >
+            <template #icon>
+              <kIcon
+                ><UsersRound
+                  :size="20"
+                  :fill="tab === 'network' ? 'currentColor' : 'none'"
+              /></kIcon>
+            </template>
+          </kTabbarLink>
+          <kTabbarLink
+            component="button"
+            :active="tab === 'activity'"
+            :link-props="{ class: 'feather-tab-button', type: 'button' }"
+            @click="selectTab('activity')"
+          >
+            <template #label
+              ><span class="feather-tab-label">{{
+                t('activityNav')
+              }}</span></template
+            >
+            <template #icon>
+              <span class="feather-tab-icon">
+                <kIcon
+                  ><Bell
+                    :size="20"
+                    :fill="tab === 'activity' ? 'currentColor' : 'none'"
+                /></kIcon>
+                <b v-if="unreadActivities">{{ unreadActivities }}</b>
+              </span>
+            </template>
+          </kTabbarLink>
+          <kTabbarLink
+            component="button"
+            :active="tab === 'profile'"
+            :link-props="{ class: 'feather-tab-button', type: 'button' }"
+            @click="selectTab('profile')"
+          >
+            <template #label
+              ><span class="feather-tab-label">{{
+                t('profile')
+              }}</span></template
+            >
+            <template #icon
+              ><kIcon
+                ><UserRound
+                  :size="20"
+                  :fill="tab === 'profile' ? 'currentColor' : 'none'" /></kIcon
+            ></template>
+          </kTabbarLink>
+        </kToolbarPane>
+      </kTabbar>
+      <kFab
+        v-if="screen === 'main'"
+        component="button"
+        type="button"
+        class="feather-compose-fab"
+        :aria-label="t('newPost')"
+        @click="openComposer()"
+      >
+        <template #icon><Plus :size="20" /></template>
+      </kFab>
+    </template>
+
+    <kSheet :opened="settingsOpen" @backdropclick="settingsOpen = false">
+      <kBlock strong inset class="feather-settings-sheet">
+        <header>
+          <div>
+            <span>{{ t('settingsEyebrow') }}</span>
+            <h2>{{ t('settings') }}</h2>
+          </div>
+          <kButton clear rounded @click="settingsOpen = false">
+            {{ t('done') }}
+          </kButton>
+        </header>
+        <kList strong inset>
+          <kListItem :title="t('compactMode')" :text="t('compactModeBody')">
+            <template #after>
+              <kToggle
+                :checked="compactMode"
+                :aria-label="t('compactMode')"
+                @change="compactMode = !compactMode"
+              />
+            </template>
+          </kListItem>
+          <kListItem
+            :title="t('showSuggestions')"
+            :text="t('showSuggestionsBody')"
+          >
+            <template #after>
+              <kToggle
+                :checked="showSuggestions"
+                :aria-label="t('showSuggestions')"
+                @change="showSuggestions = !showSuggestions"
+              />
+            </template>
+          </kListItem>
+        </kList>
+      </kBlock>
+    </kSheet>
+
+    <kSheet :opened="menuPost !== null" @backdropclick="menuPost = null">
+      <kBlock strong inset class="feather-action-sheet">
+        <kButton v-if="menuPost?.is_owner" large tonal @click="deletePost"
+          ><Trash2 :size="18" /> {{ t('delete') }}</kButton
+        >
+        <template v-else>
+          <kButton large tonal @click="reportOpen = true">{{
+            t('report')
+          }}</kButton>
+          <kButton large tonal @click="blockPostAuthor">{{
+            t('block', { handle: menuPost?.handle ?? '' })
+          }}</kButton>
+        </template>
+        <kButton large clear @click="menuPost = null">{{
+          t('cancel')
+        }}</kButton>
+      </kBlock>
+    </kSheet>
+
+    <kSheet :opened="reportOpen" @backdropclick="reportOpen = false">
+      <kBlock strong inset class="feather-report">
+        <h2>{{ t('reportTitle') }}</h2>
+        <p>{{ t('reportBody') }}</p>
+        <select v-model="reportReason">
+          <option
+            v-for="reason in [
+              'spam',
+              'harassment',
+              'dangerous',
+              'illegal',
+              'other',
+            ]"
+            :key="reason"
+            :value="reason"
+          >
+            {{ t(`reasons.${reason}`) }}
+          </option>
+        </select>
+        <textarea
+          v-model="reportDetails"
+          maxlength="500"
+          :placeholder="t('bioPlaceholder')"
+        ></textarea>
+        <kButton large rounded class="feather-primary" @click="submitReport">{{
+          t('reportSubmit')
+        }}</kButton>
+        <kButton large clear @click="reportOpen = false">
+          {{ t('cancel') }}
+        </kButton>
+      </kBlock>
+    </kSheet>
+
+    <kToast :opened="Boolean(feedback)">{{ feedback }}</kToast>
+  </kPage>
+</template>
+
+<style scoped>
+.feather-app {
+  --feather-blue: #438cf5;
+  --feather-blue-dark: #2867d8;
+  background: #fff;
+  color: #111923;
+}
+:global(.dark) .feather-app {
+  background: #090d12;
+  color: #f4f7fa;
+}
+.feather-navbar {
+  --k-navbar-bg-color: color-mix(in srgb, #fff 91%, transparent);
+  --k-safe-area-top: 46px;
+  flex: 0 0 auto;
+  border-bottom: 0.5px solid color-mix(in srgb, currentColor 12%, transparent);
+  backdrop-filter: blur(18px);
+}
+:global(.dark) .feather-navbar {
+  --k-navbar-bg-color: color-mix(in srgb, #090d12 91%, transparent);
+}
+.feather-explore-search {
+  width: auto;
+  margin: 10px 12px 8px;
+}
+.feather-explore-search :deep(form) {
+  min-height: 32px;
+}
+.feather-primary {
+  --k-button-bg-color: var(--feather-blue);
+  --k-button-text-color: #fff;
+}
+.feather-loading,
+.feather-welcome {
+  display: flex;
+  min-height: 75%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 13px;
+  padding: 30px;
+  text-align: center;
+}
+.feather-loading {
+  flex-direction: row;
+  font-size: 13px;
+}
+.feather-welcome h1,
+.feather-onboarding h1 {
+  margin: 4px 0 0;
+  font-size: 27px;
+  letter-spacing: -0.8px;
+}
+.feather-welcome p,
+.feather-onboarding > p {
+  max-width: 290px;
+  margin: 0 0 12px;
+  color: #738092;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.feather-welcome__mark {
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 86px;
+  border-radius: 27px;
+  color: #fff;
+  background: linear-gradient(145deg, #76d0ff, #438cf5 55%, #2757d8);
+  box-shadow: 0 15px 35px rgb(45 111 224 / 25%);
+}
+.feather-auth {
+  min-height: 100%;
+  overflow-y: auto;
+  padding: 25px 15px 30px;
+  background:
+    radial-gradient(circle at 85% 2%, rgb(90 183 255 / 19%), transparent 34%),
+    radial-gradient(circle at 0 37%, rgb(67 140 245 / 9%), transparent 38%);
+}
+.feather-auth__hero {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 4px 3px 18px;
+}
+.feather-auth__hero .feather-welcome__mark {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  border-radius: 21px;
+  box-shadow: 0 12px 27px rgb(45 111 224 / 24%);
+}
+.feather-auth__hero span {
+  color: var(--feather-blue);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.feather-auth__hero h1 {
+  margin: 2px 0 1px;
+  font-size: 24px;
+  letter-spacing: -0.7px;
+}
+.feather-auth__hero p {
+  margin: 0;
+  color: #738092;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.feather-auth__card {
+  padding: 13px;
+  border: 0.5px solid rgb(67 140 245 / 18%);
+  border-radius: 22px;
+  background: rgb(255 255 255 / 86%);
+  box-shadow: 0 18px 42px rgb(31 66 120 / 12%);
+  backdrop-filter: blur(20px);
+}
+:global(.dark) .feather-auth__card {
+  border-color: rgb(118 192 255 / 16%);
+  background: rgb(18 25 34 / 88%);
+  box-shadow: 0 18px 42px rgb(0 0 0 / 25%);
+}
+.feather-auth__modes {
+  margin-bottom: 14px;
+}
+.feather-auth__modes :deep(.k-segmented-button-active) {
+  color: var(--feather-blue);
+}
+.feather-auth__copy {
+  padding: 0 3px 8px;
+}
+.feather-auth__copy h2 {
+  margin: 0 0 3px;
+  font-size: 17px;
+  letter-spacing: -0.25px;
+}
+.feather-auth__copy p {
+  margin: 0;
+  color: #788493;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.feather-auth__fields {
+  margin: 4px 0 10px;
+}
+.feather-auth__fields :deep(.k-list-item-media) {
+  color: var(--feather-blue);
+}
+.feather-auth__domain,
+.feather-auth__reveal {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+}
+.feather-auth__domain {
+  pointer-events: none;
+  color: #7b8796;
+  font-size: 11px;
+}
+.feather-auth__reveal {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  color: #788493;
+  background: transparent;
+}
+.feather-auth__reveal:active {
+  background: rgb(67 140 245 / 10%);
+}
+.feather-auth__error {
+  margin: 0 4px 10px;
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: #c43d52;
+  background: rgb(240 79 101 / 10%);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.feather-auth__submit {
+  width: 100%;
+  min-height: 43px;
+  box-shadow: 0 9px 20px rgb(67 140 245 / 25%);
+}
+.feather-auth__switch {
+  margin: 12px 0 1px;
+  color: #7a8695;
+  font-size: 10px;
+  text-align: center;
+}
+.feather-auth__switch button {
+  border: 0;
+  padding: 0 2px;
+  color: var(--feather-blue);
+  background: transparent;
+  font: inherit;
+  font-weight: 750;
+}
+.feather-auth__trust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 13px 15px 0;
+  color: #7b8796;
+  font-size: 9px;
+  line-height: 1.35;
+  text-align: center;
+}
+.feather-auth__trust svg {
+  flex: 0 0 auto;
+  color: #39a87b;
+}
+.feather-onboarding {
+  min-height: 100%;
+  overflow-y: auto;
+  padding: 55px 14px 30px;
+  text-align: center;
+}
+.feather-onboarding .feather-welcome__mark {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto;
+  border-radius: 25px;
+  box-shadow: 0 14px 34px rgb(45 111 224 / 28%);
+}
+.feather-onboarding h1 {
+  margin-top: 7px;
+  font-size: 30px;
+  letter-spacing: -0.9px;
+}
+.feather-onboarding > p {
+  max-width: 310px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.feather-onboarding__button {
+  width: calc(100% - 20px);
+  min-height: 46px;
+  margin: 17px 10px 0;
+  font-size: 14px;
+  font-weight: 750;
+  box-shadow: 0 10px 24px rgb(67 140 245 / 24%);
+}
+.feather-onboarding__button:disabled {
+  --k-button-bg-color: rgb(67 140 245 / 13%);
+  --k-button-text-color: #71839a;
+  color: #71839a !important;
+  background: rgb(67 140 245 / 13%) !important;
+  opacity: 1;
+  box-shadow: none;
+}
+.feather-onboarding__step {
+  display: inline-block;
+  margin-top: 15px;
+  color: var(--feather-blue);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.15px;
+  text-transform: uppercase;
+}
+.feather-onboarding__account {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 2px 9px;
+  margin: 3px 10px 15px;
+  border: 1px solid rgb(44 155 109 / 12%);
+  border-radius: 15px;
+  padding: 11px 13px;
+  color: #2c9b6d;
+  background: rgb(44 155 109 / 9%);
+  text-align: left;
+}
+.feather-onboarding__account svg {
+  grid-row: span 2;
+}
+.feather-onboarding__account span {
+  font-size: 11px;
+  font-weight: 750;
+}
+.feather-onboarding__account strong {
+  overflow: hidden;
+  color: #6f7c8b;
+  font-size: 10.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+.feather-onboarding__form {
+  margin: 0 2px;
+  border: 1px solid rgb(67 140 245 / 13%);
+  border-radius: 23px;
+  padding: 13px 10px 10px;
+  background: rgb(67 140 245 / 4%);
+  box-shadow: 0 14px 34px rgb(31 66 120 / 9%);
+  text-align: left;
+}
+.feather-onboarding__form-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 8px 9px;
+}
+.feather-onboarding__form-head > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--feather-blue);
+  background: rgb(67 140 245 / 12%);
+}
+.feather-onboarding__form-head h2 {
+  margin: 0 0 2px;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+}
+.feather-onboarding__form-head p {
+  margin: 0;
+  color: #738092;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.feather-onboarding__fields {
+  margin: 0;
+}
+.feather-onboarding__fields :deep(.k-list-item-media) {
+  color: #72b5ff;
+}
+.feather-onboarding__fields :deep(.k-list-input .text-xs) {
+  font-size: 12px;
+  line-height: 1.35;
+}
+.feather-onboarding__fields :deep(input),
+.feather-onboarding__fields :deep(textarea) {
+  font-size: 15px;
+  line-height: 1.4;
+}
+.feather-onboarding__fields :deep(textarea) {
+  min-height: 54px;
+  resize: none;
+}
+.feather-main {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  padding-bottom: 56px;
+}
+.feather-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+.feather-feed-tabs {
+  padding: 0;
+  border-bottom: 0.5px solid color-mix(in srgb, currentColor 11%, transparent);
+}
+.feather-explore-head {
+  padding: 0;
+  border-bottom: 0.5px solid color-mix(in srgb, currentColor 11%, transparent);
+}
+.feather-activity-head {
+  border-bottom: 0.5px solid color-mix(in srgb, currentColor 11%, transparent);
+}
+.feather-context-tabs,
+.feather-profile-tabs {
+  background: transparent;
+}
+.feather-context-tabs :deep(.k-button),
+.feather-profile-tabs :deep(.k-button) {
+  min-height: 41px;
+  overflow: visible;
+  border-radius: 0;
+  color: #6f7b89;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 650;
+}
+.feather-context-tabs :deep(.k-button.is-active),
+.feather-profile-tabs :deep(.k-button.is-active) {
+  color: currentColor;
+  font-weight: 750;
+}
+.feather-context-tabs :deep(.k-button.is-active)::after,
+.feather-profile-tabs :deep(.k-button.is-active)::after {
+  position: absolute;
+  right: 22%;
+  bottom: 0;
+  left: 22%;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--feather-blue);
+  content: '';
+}
+.feather-trends__header {
+  padding: 17px 14px 9px;
+}
+.feather-trends__header span {
+  color: #738091;
+  font-size: 11px;
+}
+.feather-trends__header h2 {
+  margin: 2px 0 0;
+  font-size: 20px;
+  letter-spacing: -0.5px;
+}
+.feather-trend {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  border: 0;
+  border-bottom: 0.5px solid color-mix(in srgb, currentColor 11%, transparent);
+  padding: 12px 14px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.feather-trend span,
+.feather-trend small {
+  color: #778391;
+  font-size: 10px;
+}
+.feather-trend strong {
+  margin: 2px 0;
+  font-size: 14px;
+}
+.feather-trend:active {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+.feather-empty {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  padding: 65px 35px;
+  color: #8290a1;
+  text-align: center;
+}
+.feather-empty h2 {
+  margin: 13px 0 4px;
+  color: inherit;
+  font-size: 16px;
+}
+.feather-empty p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.feather-tab-icon {
+  position: relative;
+}
+.feather-tab-icon b {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 14px;
+  border-radius: 8px;
+  padding: 1px 3px;
+  color: #fff;
+  background: #f04f65;
+  font-size: 8px;
+}
+.feather-composer {
+  min-height: calc(100% - 44px);
+  padding: 12px 14px;
+}
+.feather-replying {
+  margin: 2px 0 10px 48px;
+  color: var(--feather-blue);
+  font-size: 11px;
+}
+.feather-composer__row {
+  display: flex;
+  gap: 10px;
+}
+.feather-compose-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  overflow: hidden;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(145deg, #71c8ff, #377be7);
+}
+.feather-compose-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.feather-composer textarea {
+  width: 100%;
+  min-height: 165px;
+  resize: none;
+  border: 0;
+  padding: 8px 0;
+  outline: none;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.4;
+}
+.feather-compose-media {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  margin: 5px 0 8px 52px;
+}
+.feather-compose-media > div {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.feather-compose-media img {
+  width: 100%;
+  height: 115px;
+  object-fit: cover;
+}
+.feather-compose-media button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(0 0 0 / 65%);
+}
+.feather-composer__tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-left: 52px;
+  border-top: 0.5px solid color-mix(in srgb, currentColor 12%, transparent);
+  color: #7e8996;
+  font-size: 10px;
+}
+.feather-composer__tools :deep(.k-button) {
+  color: var(--feather-blue);
+  font-size: 11px;
+}
+.feather-section-title {
+  margin: 0;
+  padding: 13px 14px 8px;
+  border-bottom: 0.5px solid color-mix(in srgb, currentColor 12%, transparent);
+  font-size: 14px;
+}
+.feather-profile__cover {
+  height: 104px;
+  background: linear-gradient(135deg, #bceaff, #69baf8 53%, #3a78e5);
+}
+.feather-profile {
+  border-bottom: 0.5px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+.feather-profile__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  height: 50px;
+  padding: 0 14px;
+}
+.feather-profile__top :deep(.k-button) {
+  margin-top: 9px;
+}
+.feather-profile__avatar {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  overflow: hidden;
+  transform: translateY(-38px);
+  border: 3px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(145deg, #71c8ff, #377be7);
+}
+:global(.dark) .feather-profile__avatar {
+  border-color: #090d12;
+}
+.feather-profile__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.feather-profile__identity h1 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.45px;
+}
+.feather-profile__identity h1 svg {
+  color: var(--feather-blue);
+}
+.feather-profile__identity {
+  padding: 3px 14px 0;
+}
+.feather-profile__handle {
+  display: block;
+  margin-top: 1px;
+  color: #7c8795;
+  font-size: 12px;
+}
+.feather-profile__bio {
+  margin: 10px 0 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.feather-profile__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0 14px 13px;
+  color: #7c8795;
+  font-size: 12px;
+}
+.feather-profile__stats span,
+.feather-profile__stats button {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  border: 0;
+  border-radius: 11px;
+  padding: 8px 4px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  font: inherit;
+  text-align: center;
+}
+.feather-profile__stats button {
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    transform 150ms ease,
+    background-color 150ms ease;
+}
+.feather-profile__stats button:active {
+  transform: scale(0.96);
+  color: var(--feather-blue);
+  background: color-mix(in srgb, var(--feather-blue) 13%, transparent);
+}
+.feather-profile__stats strong {
+  color: currentColor;
+  font-size: 15px;
+  line-height: 18px;
+}
+.feather-profile__stats small {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 9.5px;
+  line-height: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-profile-tabs {
+  border-bottom: 0.5px solid color-mix(in srgb, currentColor 11%, transparent);
+}
+.feather-profile__avatar--edit {
+  margin: 60px auto 15px;
+  transform: none;
+}
+.feather-activity,
+.feather-person {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  border: 0;
+  border-bottom: 0.5px solid color-mix(in srgb, currentColor 12%, transparent);
+  padding: 12px 14px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.feather-avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  overflow: hidden;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(145deg, #71c8ff, #377be7);
+}
+.feather-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.feather-activity p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.feather-person > button {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.feather-person span {
+  color: #7c8795;
+  font-size: 11.5px;
+}
+.feather-person strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-action-sheet,
+.feather-report {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+.feather-report h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.feather-report p {
+  margin: 0;
+  color: #7c8795;
+  font-size: 11px;
+}
+.feather-report select,
+.feather-report textarea {
+  width: 100%;
+  border: 0.5px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 10px;
+  padding: 10px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  font: inherit;
+  font-size: 12px;
+}
+.feather-report textarea {
+  min-height: 70px;
+  resize: none;
+}
+
+/* Feather's signed-in product surface follows the supplied X iOS references. */
+.dark.feather-app {
+  --feather-blue: #1d9bf0;
+  --feather-border: #2f3336;
+  --feather-muted: #71767b;
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 24px;
+  overflow: hidden;
+  background: #000;
+  color: #e7e9ea;
+}
+.dark.feather-app .feather-navbar {
+  --k-navbar-bg-color: color-mix(in srgb, #000 90%, transparent);
+  --k-safe-area-top: 46px;
+  border-bottom-color: var(--feather-border);
+  background: color-mix(in srgb, #000 88%, transparent);
+  backdrop-filter: blur(18px);
+}
+.dark.feather-app .feather-explore-search {
+  width: auto;
+}
+.dark.feather-app .feather-explore-search :deep(form) {
+  min-height: 36px;
+  border-radius: 999px;
+  color: #e7e9ea;
+  background: #202327;
+}
+.dark.feather-app .feather-main {
+  height: auto;
+  flex: 1;
+  padding-bottom: 58px;
+  background: #000;
+}
+.dark.feather-app .feather-scroll {
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.dark.feather-app .feather-scroll::-webkit-scrollbar {
+  display: none;
+}
+.dark.feather-app .feather-feed-tabs,
+.dark.feather-app .feather-explore-head,
+.dark.feather-app .feather-activity-head,
+.dark.feather-app .feather-profile-tabs {
+  border-bottom: 1px solid var(--feather-border);
+  background: #000;
+}
+.dark.feather-app .feather-context-tabs,
+.dark.feather-app .feather-profile-tabs {
+  min-width: 100%;
+  padding: 0;
+}
+.dark.feather-app .feather-context-tabs :deep(.k-button),
+.dark.feather-app .feather-profile-tabs :deep(.k-button) {
+  min-height: 46px;
+  border-radius: 0;
+  color: var(--feather-muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.dark.feather-app .feather-context-tabs :deep(.k-button.is-active),
+.dark.feather-app .feather-profile-tabs :deep(.k-button.is-active) {
+  color: #e7e9ea;
+}
+.dark.feather-app .feather-context-tabs :deep(.k-button.is-active)::after,
+.dark.feather-app .feather-profile-tabs :deep(.k-button.is-active)::after {
+  right: 20%;
+  left: 20%;
+  height: 3px;
+  background: #eff3f4;
+}
+.dark.feather-app .feather-explore-tabs {
+  display: flex;
+  justify-content: flex-start !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none;
+}
+.dark.feather-app .feather-explore-tabs :deep(.k-button) {
+  width: auto !important;
+  min-width: 92px;
+  flex: 0 0 auto !important;
+}
+.dark.feather-app .feather-explore-tabs::-webkit-scrollbar {
+  display: none;
+}
+.dark.feather-app .feather-trend {
+  position: relative;
+  min-height: 83px;
+  border-bottom: 1px solid var(--feather-border);
+  padding: 14px 42px 13px 14px;
+  color: #e7e9ea;
+  background: #000;
+}
+.dark.feather-app .feather-trend span,
+.dark.feather-app .feather-trend small {
+  color: var(--feather-muted);
+  font-size: 11px;
+  font-weight: 550;
+}
+.dark.feather-app .feather-trend strong {
+  margin: 3px 0;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.dark.feather-app .feather-trend b {
+  position: absolute;
+  top: 20px;
+  right: 14px;
+  color: var(--feather-muted);
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.dark.feather-app .feather-network__hero {
+  padding: 30px 22px 23px;
+  border-bottom: 1px solid var(--feather-border);
+}
+.dark.feather-app .feather-network__hero svg {
+  color: var(--feather-blue);
+}
+.dark.feather-app .feather-network__hero h1 {
+  margin: 13px 0 5px;
+  font-size: 25px;
+  letter-spacing: -0.8px;
+}
+.dark.feather-app .feather-network__hero p {
+  margin: 0;
+  color: var(--feather-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.dark.feather-app .feather-section-title {
+  border-bottom-color: var(--feather-border);
+  color: #e7e9ea;
+  background: #000;
+  font-size: 17px;
+}
+.dark.feather-app .feather-person,
+.dark.feather-app .feather-activity {
+  align-items: flex-start;
+  border-bottom-color: var(--feather-border);
+  color: #e7e9ea;
+  background: #000;
+}
+.dark.feather-app .feather-person > button p {
+  display: -webkit-box;
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: #e7e9ea;
+  font-size: 11px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.dark.feather-app .feather-person > :deep(.k-button) {
+  --k-button-bg-color: #eff3f4;
+  --k-button-text-color: #0f1419;
+  min-width: 66px;
+  font-weight: 800;
+}
+.dark.feather-app .feather-empty {
+  align-items: flex-start;
+  padding: 72px 28px;
+  color: var(--feather-muted);
+  text-align: left;
+}
+.dark.feather-app .feather-empty svg {
+  display: none;
+}
+.dark.feather-app .feather-empty h2 {
+  max-width: 245px;
+  margin: 0 0 10px;
+  color: #e7e9ea;
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: -1px;
+}
+.dark.feather-app .feather-empty p {
+  max-width: 250px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.dark.feather-app .feather-tab-icon b {
+  background: var(--feather-blue);
+}
+.dark.feather-app .feather-composer,
+.dark.feather-app .feather-edit {
+  min-height: 100%;
+  color: #e7e9ea;
+  background: #000;
+}
+.dark.feather-app .feather-composer textarea {
+  min-height: 190px;
+  color: #e7e9ea;
+  caret-color: var(--feather-blue);
+  font-size: 18px;
+}
+.dark.feather-app .feather-composer__tools {
+  border-top-color: var(--feather-border);
+}
+.dark.feather-app .feather-profile-screen {
+  background: #000;
+}
+.dark.feather-app .feather-profile {
+  border-bottom-color: var(--feather-border);
+  background: #000;
+}
+.dark.feather-app .feather-profile__cover {
+  height: 154px;
+  background: linear-gradient(180deg, #168ad0, #1d9bf0);
+}
+.dark.feather-app .feather-profile__top {
+  height: 58px;
+  padding: 0 14px;
+}
+.dark.feather-app .feather-profile__avatar {
+  width: 84px;
+  height: 84px;
+  transform: translateY(-42px);
+  border: 4px solid #000;
+  background: #16181c;
+}
+.dark.feather-app .feather-profile h1 {
+  margin-top: 6px;
+  color: #e7e9ea;
+  font-size: 23px;
+  line-height: 1.15;
+}
+.dark.feather-app .feather-profile > span,
+.dark.feather-app .feather-profile__joined,
+.dark.feather-app .feather-profile__stats {
+  color: var(--feather-muted);
+}
+.dark.feather-app .feather-profile > span {
+  font-size: 14px;
+}
+.dark.feather-app .feather-profile > p {
+  margin-top: 13px;
+  color: #e7e9ea;
+  font-size: 14px;
+}
+.dark.feather-app .feather-profile__joined {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 10px 14px 0;
+  font-size: 12px;
+}
+.dark.feather-app .feather-profile__stats {
+  gap: 19px;
+  padding-top: 11px;
+  padding-bottom: 14px;
+  font-size: 13px;
+}
+.dark.feather-app .feather-profile__stats strong {
+  color: #e7e9ea;
+}
+.dark.feather-app .feather-profile__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 14px 16px;
+}
+.dark.feather-app .feather-profile__actions :deep(.k-button) {
+  min-height: 39px;
+  border-color: #536471;
+  color: #e7e9ea;
+  font-size: 13px;
+  font-weight: 800;
+}
+.dark.feather-app .feather-profile-tabs :deep(.k-button) {
+  min-width: 62px;
+  gap: 5px;
+}
+.dark.feather-app .feather-profile-suggestions {
+  padding: 14px 0 17px;
+  border-bottom: 1px solid var(--feather-border);
+}
+.dark.feather-app .feather-profile-suggestions h2 {
+  margin: 0 14px 12px;
+  font-size: 20px;
+}
+.dark.feather-app .feather-profile-suggestions__rail {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 0 14px;
+  scrollbar-width: none;
+}
+.dark.feather-app .feather-profile-suggestion {
+  position: relative;
+  width: 218px;
+  min-width: 218px;
+  overflow: hidden;
+  border: 1px solid var(--feather-border);
+  border-radius: 17px;
+  background: #000;
+}
+.dark.feather-app .feather-profile-suggestion__cover {
+  height: 76px;
+  background: linear-gradient(135deg, #123d64, #1d9bf0);
+}
+.dark.feather-app .feather-profile-suggestion > button {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  border: 0;
+  padding: 31px 12px 12px;
+  color: #e7e9ea;
+  background: transparent;
+  text-align: left;
+}
+.dark.feather-app .feather-profile-suggestion__avatar {
+  position: absolute;
+  top: 46px;
+  left: 11px;
+  width: 58px;
+  height: 58px;
+  border: 3px solid #000;
+}
+.dark.feather-app .feather-profile-suggestion strong {
+  font-size: 16px;
+}
+.dark.feather-app .feather-profile-suggestion small {
+  color: var(--feather-muted);
+  font-size: 12px;
+}
+.dark.feather-app .feather-profile-suggestion p {
+  display: -webkit-box;
+  margin: 10px 0 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.dark.feather-app .feather-profile-suggestion > :deep(.k-button) {
+  position: absolute;
+  right: 10px;
+  bottom: 74px;
+  z-index: 2;
+  --k-button-bg-color: #eff3f4;
+  --k-button-text-color: #0f1419;
+  min-width: 67px;
+  font-weight: 800;
+}
+.dark.feather-app .feather-settings-sheet,
+.dark.feather-app .feather-action-sheet,
+.dark.feather-app .feather-report {
+  color: #e7e9ea;
+  background: #000;
+}
+.feather-settings-sheet > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 10px;
+}
+.feather-settings-sheet > header span {
+  color: var(--feather-blue);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.feather-settings-sheet > header h2 {
+  margin: 1px 0 0;
+  font-size: 21px;
+}
+.dark.feather-app .feather-settings-sheet :deep(.k-list),
+.dark.feather-app .feather-settings-sheet :deep(.k-list-item) {
+  color: #e7e9ea;
+  background: #16181c;
+}
+.feather-app--compact :deep(.feather-post) {
+  padding-block: 7px;
+}
+.feather-app--compact :deep(.feather-post__text) {
+  font-size: 12.5px;
+}
+
+/* Signed-in Feather mirrors the compact, card-led Local Pages shell. */
+.feather-app--active {
+  --feather-blue: #58a6ff;
+  --feather-blue-dark: #2778dc;
+  --color-primary: var(--feather-blue);
+  --feather-panel: #20262c;
+  --feather-muted: #9ba4aa;
+  --feather-border: rgb(255 255 255 / 8%);
+  position: relative;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: #12171b !important;
+  color: #f7f8f4;
+  font-family: Inter, system-ui, sans-serif;
+}
+.feather-app--active.feather-app--light {
+  --feather-panel: #f0f1ec;
+  --feather-muted: #70797e;
+  --feather-border: rgb(0 0 0 / 8%);
+  background: #fbfbf6 !important;
+  color: #171b1e;
+}
+.feather-app--active button,
+.feather-app--active input,
+.feather-app--active textarea,
+.feather-app--active select {
+  font: inherit;
+}
+.feather-app--active .feather-navbar {
+  --k-navbar-bg-color: color-mix(in srgb, #12171b 91%, transparent);
+  --k-safe-area-top: 46px;
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  right: 0;
+  left: 0;
+  flex: none;
+  border-bottom: 0;
+  background: color-mix(in srgb, #12171b 88%, transparent);
+  backdrop-filter: blur(18px);
+}
+.feather-app--active.feather-app--light .feather-navbar {
+  --k-navbar-bg-color: color-mix(in srgb, #fbfbf6 91%, transparent);
+  background: color-mix(in srgb, #fbfbf6 88%, transparent);
+}
+.feather-app--active.feather-app--section .feather-navbar {
+  border-bottom: 1px solid var(--feather-border);
+}
+.feather-navbar__brand-mark {
+  display: block;
+  color: currentColor;
+  filter: drop-shadow(0 3px 8px rgb(0 0 0 / 18%));
+  transform: translateY(4px);
+}
+.feather-app--active .feather-main {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  height: auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 9px;
+  padding: 108px 13px 105px;
+  background: transparent;
+}
+.feather-app--active.feather-app--home .feather-main {
+  padding-top: 106px;
+}
+.feather-app--active .feather-scroll {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.feather-app--active .feather-scroll::-webkit-scrollbar {
+  display: none;
+}
+.feather-hero-glass,
+.feather-network-glass,
+.feather-profile-glass {
+  display: block;
+  width: 100%;
+  flex: none;
+  overflow: hidden;
+  border-radius: 17px;
+}
+.feather-hero {
+  display: flex;
+  min-height: 105px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  color: #e9f5ff;
+  background: linear-gradient(125deg, #173f6d, #2778dc);
+}
+.feather-hero > div {
+  min-width: 0;
+  max-width: 215px;
+}
+.feather-hero small,
+.feather-hero strong,
+.feather-hero span {
+  display: block;
+}
+.feather-hero small,
+.feather-network__hero small {
+  color: #a8d4ff;
+  font-size: 9.5px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.feather-hero strong {
+  margin: 4px 0 3px;
+  font-size: 18px;
+  line-height: 1.12;
+}
+.feather-hero span {
+  font-size: 11px;
+  line-height: 1.3;
+}
+.feather-hero > svg {
+  flex: none;
+  color: #b9ddff;
+  filter: drop-shadow(0 5px 8px rgb(0 0 0 / 24%));
+}
+.feather-app--active .feather-feed-tabs,
+.feather-app--active .feather-activity-head,
+.feather-app--active .feather-profile-tabs {
+  flex: none;
+  overflow: hidden;
+  border: 0;
+  border-radius: 13px;
+  padding: 4px;
+  background: var(--feather-panel);
+}
+.feather-app--active .feather-feed-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+.feather-app--active .feather-feed-tabs .feather-context-tabs {
+  min-width: 0;
+  flex: 1;
+}
+.feather-app--active .feather-feed-add {
+  --k-button-bg-color: var(--feather-blue-dark);
+  --k-button-text-color: #fff;
+  width: 76px !important;
+  min-width: 76px;
+  min-height: 34px;
+  flex: 0 0 76px !important;
+  gap: 5px;
+  border-radius: 9px;
+  padding: 0 11px;
+  box-shadow: 0 4px 12px rgb(20 80 155 / 24%);
+  font-size: 11px;
+  font-weight: 850;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    filter 160ms ease;
+}
+.feather-app--active .feather-explore-head {
+  display: grid;
+  flex: none;
+  gap: 7px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 17px;
+  padding: 9px;
+  background: var(--feather-panel);
+}
+.feather-app--active .feather-explore-search {
+  width: auto;
+  margin: 0;
+}
+.feather-app--active .feather-explore-search :deep(form) {
+  min-height: 39px;
+  border-radius: 12px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+.feather-app--active .feather-context-tabs,
+.feather-app--active .feather-profile-tabs {
+  min-width: 100%;
+  padding: 0;
+  background: transparent;
+}
+.feather-app--active .feather-context-tabs :deep(.k-button),
+.feather-app--active .feather-profile-tabs :deep(.k-button) {
+  min-height: 34px;
+  overflow: hidden;
+  border-radius: 9px;
+  color: var(--feather-muted);
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.feather-app--active .feather-context-tabs :deep(.k-button.is-active),
+.feather-app--active .feather-profile-tabs :deep(.k-button.is-active) {
+  color: #fff;
+  background: var(--feather-blue-dark);
+}
+.feather-app--active.feather-app--light
+  .feather-context-tabs
+  :deep(.k-button.is-active),
+.feather-app--active.feather-app--light
+  .feather-profile-tabs
+  :deep(.k-button.is-active) {
+  color: #fff;
+}
+.feather-app--active .feather-context-tabs :deep(.k-button.is-active)::after,
+.feather-app--active .feather-profile-tabs :deep(.k-button.is-active)::after {
+  display: none;
+}
+.feather-app--active .feather-feed-tabs {
+  overflow: visible;
+  border-bottom: 1px solid var(--feather-border);
+  border-radius: 0;
+  margin-right: -13px;
+  margin-left: -13px;
+  padding: 0 13px;
+  background: transparent;
+}
+.feather-app--active .feather-feed-tabs .feather-context-tabs {
+  overflow: visible;
+  background: transparent;
+}
+.feather-app--active .feather-feed-tabs .feather-context-tabs :deep(.k-button) {
+  position: relative;
+  min-height: 42px;
+  overflow: visible;
+  border-radius: 0;
+  color: var(--feather-muted);
+  background: transparent !important;
+  box-shadow: none;
+}
+.feather-app--active
+  .feather-feed-tabs
+  .feather-context-tabs
+  :deep(.k-button.is-active) {
+  color: inherit;
+  background: transparent !important;
+}
+.feather-app--active
+  .feather-feed-tabs
+  .feather-context-tabs
+  :deep(.k-button.is-active)::after {
+  position: absolute;
+  right: 24%;
+  bottom: -1px;
+  left: 24%;
+  display: block;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: var(--feather-blue);
+  content: '';
+}
+.feather-app--active .feather-feed-add {
+  margin-block: 4px;
+}
+@media (hover: hover) {
+  .feather-app--active .feather-feed-add:hover {
+    filter: brightness(1.13);
+    box-shadow: 0 7px 17px rgb(39 120 220 / 38%);
+    transform: translateY(-2px);
+  }
+}
+.feather-app--active .feather-feed-add:active {
+  filter: brightness(0.96);
+  box-shadow: 0 3px 9px rgb(20 80 155 / 26%);
+  transform: translateY(0) scale(0.97);
+}
+.feather-app--active .feather-explore-tabs {
+  display: flex;
+  width: 100%;
+  justify-content: stretch !important;
+  gap: 4px;
+  overflow: hidden !important;
+}
+.feather-app--active .feather-explore-tabs :deep(.k-button) {
+  width: 0 !important;
+  min-width: 0;
+  flex: 1 1 0 !important;
+}
+.feather-app--active .feather-main > .feather-scroll {
+  padding-top: 1px;
+}
+.feather-app--active :deep(.feather-post-glass) {
+  flex: none;
+  border: 1px solid var(--feather-border);
+  background: color-mix(in srgb, var(--feather-panel) 90%, transparent);
+  box-shadow: 0 5px 18px rgb(0 0 0 / 10%);
+}
+.feather-app--active :deep(.feather-post) {
+  padding: 11px 11px 8px;
+}
+.feather-app--active :deep(.feather-post__header strong) {
+  font-size: 13px;
+}
+.feather-app--active :deep(.feather-post__header span) {
+  color: var(--feather-muted);
+  font-size: 10.5px;
+}
+.feather-app--active :deep(.feather-post__text) {
+  font-size: 12.5px;
+  line-height: 1.42;
+}
+.feather-app--active :deep(.feather-actions) {
+  color: var(--feather-muted);
+}
+.feather-app--active :deep(.feather-follow) {
+  --k-button-bg-color: transparent;
+  --k-button-text-color: var(--feather-blue);
+}
+.feather-app--active .feather-trend,
+.feather-app--active .feather-person,
+.feather-app--active .feather-activity {
+  position: relative;
+  width: 100%;
+  flex: none;
+  border: 1px solid var(--feather-border);
+  border-radius: 15px;
+  padding: 11px;
+  color: inherit;
+  background: var(--feather-panel);
+  box-shadow: 0 5px 18px rgb(0 0 0 / 9%);
+}
+.feather-app--active .feather-trend {
+  min-height: 76px;
+  padding-right: 40px;
+}
+.feather-app--active .feather-trend span,
+.feather-app--active .feather-trend small,
+.feather-app--active .feather-person span {
+  color: var(--feather-muted);
+  font-size: 10.5px;
+}
+.feather-app--active .feather-trend strong {
+  margin: 3px 0;
+  font-size: 14px;
+}
+.feather-app--active .feather-trend b {
+  position: absolute;
+  top: 15px;
+  right: 12px;
+  color: var(--feather-muted);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.feather-network-glass {
+  margin-bottom: 2px;
+}
+.feather-app--active .feather-network-search {
+  width: auto;
+  flex: none;
+  margin: 0;
+}
+.feather-app--active .feather-network-search :deep(form) {
+  min-height: 40px;
+  border: 1px solid var(--feather-border);
+  border-radius: 13px;
+  color: inherit;
+  background: var(--feather-panel);
+  box-shadow: 0 5px 18px rgb(0 0 0 / 9%);
+}
+.feather-network-loading {
+  display: grid;
+  min-height: 80px;
+  flex: none;
+  place-items: center;
+}
+.feather-network-section {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+}
+.feather-network-list {
+  overflow: hidden;
+  margin: 0 !important;
+  border: 1px solid var(--feather-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--feather-panel) 97%, transparent);
+  box-shadow: 0 7px 22px rgb(0 0 0 / 9%);
+}
+.feather-network-person :deep(.feather-network-person__content) {
+  min-height: 91px;
+  align-items: flex-start;
+  padding-block: 11px;
+}
+.feather-network-person :deep(.feather-network-person__media) {
+  margin-right: 10px;
+  padding-block: 0;
+}
+.feather-network-person :deep(.feather-network-person__inner) {
+  min-width: 0;
+  padding-block: 0;
+}
+.feather-network-person :deep(.feather-network-person__title-wrap) {
+  align-items: center;
+}
+.feather-network-person
+  :deep(.feather-network-person__title-wrap > div:first-child) {
+  min-width: 0;
+  flex: 1;
+}
+.feather-network-person__handle {
+  display: block;
+  margin-top: 1px;
+  color: var(--feather-muted);
+  font-size: 9.5px;
+  line-height: 1.2;
+}
+.feather-network-person__bio {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 5px;
+  color: color-mix(in srgb, currentColor 82%, var(--feather-muted));
+  font-size: 10px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.feather-network-person__avatar {
+  display: block;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+}
+.feather-network-person__avatar .feather-avatar {
+  width: 44px;
+  height: 44px;
+  border: 2px solid color-mix(in srgb, var(--feather-blue) 25%, transparent);
+  box-shadow: 0 5px 13px rgb(0 0 0 / 14%);
+}
+.feather-network-person__name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 850;
+  text-align: left;
+}
+.feather-network-person__name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-network-person__name svg {
+  flex: none;
+  color: var(--feather-blue);
+}
+.feather-network-person__stats {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--feather-muted);
+  font-size: 8.5px;
+  font-weight: 600;
+}
+.feather-network-person__stats strong {
+  color: inherit;
+  font-size: inherit;
+}
+.feather-network-person__stats i {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.feather-network-person__follow {
+  min-width: 63px !important;
+  min-height: 28px !important;
+  padding-inline: 8px !important;
+  font-size: 9px !important;
+}
+.feather-app--active .feather-network-empty {
+  display: flex;
+  min-height: 112px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  border: 1px solid var(--feather-border);
+  color: var(--feather-muted);
+  background: var(--feather-panel);
+  text-align: center;
+}
+.feather-app--active .feather-network-empty strong {
+  color: inherit;
+  font-size: 13px;
+}
+.feather-app--active .feather-network-empty p {
+  margin: 0;
+  font-size: 10.5px;
+}
+.feather-app--active .feather-network__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  padding: 15px;
+  background: linear-gradient(125deg, #173f6d, #2778dc);
+}
+.feather-app--active .feather-network__hero > div {
+  min-width: 0;
+}
+.feather-app--active .feather-network__hero h1 {
+  margin: 4px 0 3px;
+  color: #fff;
+  font-size: 19px;
+  letter-spacing: -0.4px;
+}
+.feather-app--active .feather-network__hero p {
+  margin: 0;
+  color: #d8ebff;
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+.feather-app--active .feather-network__hero > svg {
+  flex: none;
+  color: #b9ddff;
+}
+.feather-app--active .feather-section-title {
+  flex: none;
+  border: 0;
+  padding: 7px 3px 1px;
+  color: inherit;
+  background: transparent;
+  font-size: 14px;
+}
+.feather-app--active .feather-person > button p {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--feather-muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.feather-app--active .feather-person > :deep(.k-button) {
+  min-width: 72px;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+.feather-app--active .feather-follow-button {
+  min-width: 72px;
+  min-height: 31px;
+  border-width: 1px;
+  padding-inline: 10px 12px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1px;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+.feather-app--active .feather-follow-button :deep(.k-icon) {
+  margin-right: 4px;
+}
+.feather-app--active .feather-follow-button--pending {
+  --k-button-bg-color: var(--feather-blue) !important;
+  --k-button-text-color: #fff !important;
+  border-color: color-mix(in srgb, var(--feather-blue) 76%, #fff);
+  box-shadow: 0 4px 12px rgb(29 155 240 / 24%);
+}
+.feather-app--active .feather-follow-button--following {
+  --k-button-bg-color: transparent !important;
+  --k-button-text-color: currentColor !important;
+  border-color: color-mix(in srgb, currentColor 22%, transparent);
+  box-shadow: none;
+}
+@media (hover: hover) {
+  .feather-app--active .feather-follow-button--pending:hover,
+  .feather-app--active :deep(.feather-follow:hover) {
+    transform: translateY(-1px);
+    background: color-mix(in srgb, var(--feather-blue) 10%, transparent);
+  }
+}
+.feather-app--active .feather-empty {
+  min-height: 230px;
+  justify-content: center;
+  padding: 35px 25px;
+  color: var(--feather-muted);
+  text-align: center;
+}
+.feather-app--active .feather-empty h2 {
+  margin: 10px 0 4px;
+  color: inherit;
+  font-size: 16px;
+  letter-spacing: -0.2px;
+}
+.feather-app--active .feather-thread-reply {
+  margin: 10px 0 5px;
+  border: 1px solid var(--feather-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--feather-panel) 88%, transparent);
+}
+.feather-thread-reply form {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px;
+}
+.feather-thread-reply form > div {
+  min-width: 0;
+  flex: 1;
+}
+.feather-thread-reply__avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+.feather-thread-reply__target {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--feather-blue);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+.feather-thread-reply__comment-target {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-bottom: 7px;
+  border-left: 2px solid var(--feather-blue);
+  border-radius: 0 10px 10px 0;
+  padding: 7px 6px 7px 9px;
+  background: color-mix(in srgb, var(--feather-blue) 9%, transparent);
+}
+.feather-thread-reply__comment-target > div {
+  min-width: 0;
+  flex: 1;
+}
+.feather-thread-reply__comment-target .feather-thread-reply__target {
+  margin-bottom: 2px;
+}
+.feather-thread-reply__comment-target p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--feather-muted);
+  font-size: 9.5px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.feather-thread-reply__comment-target :deep(.k-button) {
+  width: 25px;
+  min-width: 25px;
+  height: 25px;
+  min-height: 25px;
+  padding: 0;
+  color: var(--feather-muted);
+}
+.feather-thread-reply textarea {
+  display: block;
+  width: 100%;
+  min-height: 58px;
+  border: 0;
+  outline: 0;
+  padding: 3px 0 7px;
+  color: inherit;
+  background: transparent;
+  caret-color: var(--feather-blue);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  resize: none;
+}
+.feather-thread-reply textarea::placeholder {
+  color: var(--feather-muted);
+}
+.feather-thread-reply footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--feather-border);
+  padding-top: 7px;
+}
+.feather-thread-reply footer > span {
+  color: var(--feather-muted);
+  font-size: 9px;
+}
+.feather-thread-reply footer :deep(.k-button) {
+  min-width: 62px;
+  min-height: 29px;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+.feather-app--active .feather-thread-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+}
+.feather-thread-title span {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--feather-blue);
+  background: color-mix(in srgb, var(--feather-blue) 14%, transparent);
+  font-size: 9.5px;
+}
+.feather-thread-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 22px 12px;
+  color: var(--feather-muted);
+  font-size: 11px;
+}
+.feather-thread-empty svg {
+  color: var(--feather-blue);
+}
+.feather-app--active .feather-empty p {
+  max-width: 230px;
+  font-size: 12px;
+}
+.feather-tab-pane {
+  width: 100% !important;
+  max-width: none;
+  margin-right: auto;
+  margin-left: auto;
+  flex: none;
+  gap: 2px;
+  padding: 0 4px;
+}
+:global(.feather-tab-pane) {
+  width: 100% !important;
+  max-width: none;
+  margin-right: auto;
+  margin-left: auto;
+  flex: none;
+}
+:global(.feather-tab-button) {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  flex: 1 1 0 !important;
+  padding-right: 3px !important;
+  padding-left: 3px !important;
+}
+.feather-tab-label {
+  display: block;
+  max-width: 52px;
+  overflow: hidden;
+  font-size: 9.5px;
+  line-height: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-tab-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.feather-compose-fab {
+  position: absolute;
+  z-index: 12;
+  right: 14px;
+  bottom: 91px;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border: 1px solid color-mix(in srgb, var(--feather-blue) 72%, #fff);
+  color: #fff;
+  background: var(--feather-blue);
+  box-shadow:
+    0 7px 20px rgb(29 155 240 / 32%),
+    0 2px 7px rgb(0 0 0 / 18%);
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+.feather-compose-fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 3px 10px rgb(29 155 240 / 25%);
+}
+.feather-tab-icon b {
+  position: absolute;
+  top: -5px;
+  right: -8px;
+  min-width: 14px;
+  border-radius: 8px;
+  padding: 1px 3px;
+  color: #fff;
+  background: #f04f65;
+  font-size: 8px;
+  text-align: center;
+}
+.feather-app--active > .feather-scroll,
+.feather-app--active > .feather-composer,
+.feather-app--active > .feather-edit {
+  position: absolute;
+  top: 104px;
+  right: 0;
+  bottom: 24px;
+  left: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.feather-app--active > .feather-scroll {
+  padding: 13px;
+}
+.feather-app--active > .feather-profile-screen {
+  bottom: 96px;
+}
+.feather-profile-glass {
+  flex: none;
+}
+.feather-app--active .feather-profile-glass {
+  overflow: hidden;
+  border: 1px solid var(--feather-border);
+  border-radius: 18px;
+}
+.feather-app--active .feather-profile {
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+}
+.feather-app--active .feather-profile__cover {
+  height: 112px;
+  background: linear-gradient(135deg, #173f6d, #58a6ff);
+}
+.feather-app--active .feather-profile__top {
+  height: 50px;
+  padding: 0 13px;
+}
+.feather-app--active .feather-profile__avatar {
+  width: 76px;
+  height: 76px;
+  transform: translateY(-38px);
+  border: 3px solid var(--feather-panel);
+  background: linear-gradient(145deg, #72c9ff, #377be7);
+}
+.feather-app--active .feather-profile__identity {
+  padding: 4px 13px 0;
+}
+.feather-app--active .feather-profile__identity h1 {
+  color: inherit;
+  font-size: 20px;
+}
+.feather-app--active .feather-profile__handle,
+.feather-app--active .feather-profile__joined,
+.feather-app--active .feather-profile__stats {
+  color: var(--feather-muted);
+}
+.feather-app--active .feather-profile__handle {
+  font-size: 11.5px;
+}
+.feather-app--active .feather-profile__bio {
+  margin: 10px 0 8px;
+  color: inherit;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.feather-app--active .feather-profile__joined {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.feather-app--active .feather-profile__joined svg {
+  flex: none;
+}
+.feather-app--active .feather-profile__stats {
+  padding: 12px 13px;
+  font-size: 11.5px;
+}
+.feather-app--active .feather-profile__stats span {
+  border: 1px solid var(--feather-border);
+  background: color-mix(in srgb, var(--feather-blue) 8%, transparent);
+}
+.feather-app--active .feather-profile__stats strong {
+  color: var(--feather-blue);
+}
+.feather-app--active .feather-profile__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 0 13px 13px;
+}
+.feather-app--active .feather-profile__actions :deep(.k-button) {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  gap: 6px;
+  border-color: color-mix(in srgb, var(--feather-blue) 55%, transparent);
+  color: inherit;
+  padding-inline: 7px;
+  font-size: 10.5px;
+  font-weight: 750;
+}
+.feather-app--active .feather-profile-action span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-app--active .feather-profile-action svg {
+  flex: none;
+}
+.feather-app--active .feather-profile-tabs {
+  margin-top: 1px;
+}
+.feather-app--active .feather-profile-suggestions {
+  flex: none;
+  margin-top: 7px;
+  border: 0;
+  border-radius: 17px;
+  padding: 13px 0;
+  background: var(--feather-panel);
+}
+.feather-app--active .feather-profile-suggestions h2 {
+  margin: 0 13px 10px;
+  font-size: 16px;
+}
+.feather-app.feather-app--active .feather-profile-suggestions__rail {
+  display: flex;
+  gap: 9px;
+  overflow-x: auto;
+  padding: 0 13px;
+  scrollbar-width: none;
+}
+.feather-app.feather-app--active .feather-profile-suggestion {
+  position: relative;
+  width: 240px;
+  min-width: 240px;
+  min-height: 88px;
+  overflow: hidden;
+  border: 1px solid var(--feather-border);
+  border-radius: 15px;
+  border-color: var(--feather-border);
+  background: color-mix(in srgb, var(--feather-panel) 87%, #111);
+}
+.feather-app--active.feather-app--light .feather-profile-suggestion {
+  background: #fff;
+}
+.feather-app.feather-app--active .feather-profile-suggestion > button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  border: 0;
+  padding: 11px 72px 11px 11px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.feather-app.feather-app--active .feather-profile-suggestion__avatar {
+  position: static;
+  width: 42px;
+  height: 42px;
+  border: 0;
+}
+.feather-app--active .feather-profile-suggestion__identity {
+  min-width: 0;
+}
+.feather-app--active .feather-profile-suggestion__identity strong,
+.feather-app--active .feather-profile-suggestion__identity small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-app--active .feather-profile-suggestion__identity strong {
+  font-size: 12.5px;
+}
+.feather-app--active .feather-profile-suggestion__identity small {
+  color: var(--feather-muted);
+  font-size: 10.5px;
+}
+.feather-app--active .feather-profile-suggestion__identity p {
+  display: -webkit-box;
+  margin: 5px 0 0;
+  overflow: hidden;
+  font-size: 10.5px;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.feather-app.feather-app--active
+  .feather-profile-suggestion
+  > :deep(.k-button) {
+  position: absolute;
+  top: 10px;
+  right: 9px;
+  bottom: auto;
+  min-width: 56px;
+  min-height: 27px;
+  padding-inline: 8px;
+  font-size: 10px;
+}
+.feather-app--active .feather-composer,
+.feather-app--active .feather-edit {
+  color: inherit;
+  background: transparent;
+}
+.feather-app--active .feather-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 13px 13px 34px;
+  background: transparent;
+}
+.feather-composer-close {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--feather-border);
+  border-radius: 50%;
+  color: inherit;
+  background: var(--feather-panel);
+}
+.feather-composer-publish {
+  min-width: 62px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 850;
+}
+.feather-composer-card {
+  flex: none;
+  overflow: hidden;
+  border-radius: 18px;
+}
+.feather-composer-card__inner {
+  padding: 13px;
+}
+.feather-composer__identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.feather-composer__identity > div:last-child {
+  min-width: 0;
+}
+.feather-composer__identity strong,
+.feather-composer__identity span {
+  display: block;
+}
+.feather-composer__identity strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-composer__identity span {
+  color: var(--feather-muted);
+  font-size: 10.5px;
+}
+.feather-app--active .feather-composer-card textarea {
+  min-height: 135px;
+  margin-top: 9px;
+  padding: 4px 1px 10px;
+  color: inherit;
+  caret-color: var(--feather-blue);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.feather-composer-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--feather-border);
+  padding-top: 9px;
+  color: var(--feather-muted);
+  font-size: 10px;
+}
+.feather-composer-card__footer span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  color: var(--feather-blue);
+}
+.feather-composer-card__footer b {
+  flex: none;
+  font-weight: 750;
+}
+.feather-composer-media {
+  flex: none;
+  border: 1px solid var(--feather-border);
+  border-radius: 18px;
+  padding: 13px;
+  background: var(--feather-panel);
+}
+.feather-composer-media > header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.feather-composer-media > header > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--feather-blue);
+  background: color-mix(in srgb, var(--feather-blue) 14%, transparent);
+}
+.feather-composer-media > header > div {
+  min-width: 0;
+  flex: 1;
+}
+.feather-composer-media > header strong,
+.feather-composer-media > header small {
+  display: block;
+}
+.feather-composer-media > header strong {
+  font-size: 13px;
+}
+.feather-composer-media > header small {
+  margin-top: 1px;
+  color: var(--feather-muted);
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+.feather-composer-media > header > b {
+  flex: none;
+  border-radius: 8px;
+  padding: 4px 7px;
+  color: var(--feather-blue);
+  background: color-mix(in srgb, var(--feather-blue) 11%, transparent);
+  font-size: 10px;
+}
+.feather-composer-media__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 11px;
+}
+.feather-composer-media__actions > * {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+.feather-composer-media__actions button {
+  width: 100%;
+  min-height: 105px;
+  border: 0;
+  padding: 10px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.feather-composer-media__actions button > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 7px;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff;
+  background: var(--feather-blue-dark);
+}
+.feather-composer-media__actions button strong,
+.feather-composer-media__actions button small {
+  display: block;
+}
+.feather-composer-media__actions button strong {
+  font-size: 11.5px;
+}
+.feather-composer-media__actions button small {
+  margin-top: 2px;
+  color: var(--feather-muted);
+  font-size: 9px;
+  line-height: 1.25;
+}
+.feather-composer-media__actions button:disabled {
+  opacity: 0.38;
+}
+@media (hover: hover) {
+  .feather-composer-media__actions button:not(:disabled):hover {
+    background: color-mix(in srgb, var(--feather-blue) 9%, transparent);
+  }
+}
+.feather-composer-media__selected {
+  margin-top: 13px;
+}
+.feather-composer-media__selected-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  font-size: 11px;
+}
+.feather-composer-media__selected-head span {
+  color: var(--feather-blue);
+  font-size: 10px;
+  font-weight: 800;
+}
+.feather-app--active .feather-compose-media {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+.feather-app--active .feather-compose-media--1 {
+  grid-template-columns: 1fr;
+}
+.feather-app--active .feather-compose-media > div {
+  min-height: 94px;
+  border: 1px solid var(--feather-border);
+  border-radius: 12px;
+}
+.feather-app--active .feather-compose-media--1 > div {
+  min-height: 165px;
+}
+.feather-app--active .feather-compose-media img {
+  height: 100%;
+  min-height: 94px;
+}
+.feather-app--active .feather-compose-media i {
+  position: absolute;
+  bottom: 5px;
+  left: 5px;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(0 0 0 / 68%);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 850;
+}
+.feather-app--active .feather-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 14px 13px 34px;
+}
+.feather-edit__navbar-save {
+  min-width: 58px;
+  min-height: 30px;
+  padding-inline: 12px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.feather-edit__identity {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid var(--feather-border);
+  border-radius: 18px;
+  padding: 13px;
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      color-mix(in srgb, var(--feather-blue) 22%, transparent),
+      transparent 48%
+    ),
+    color-mix(in srgb, var(--feather-panel) 94%, transparent);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 8%);
+}
+.feather-edit__avatar {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--feather-blue) 58%, #fff);
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(145deg, #71c8ff, #377be7);
+  box-shadow: 0 7px 18px rgb(29 155 240 / 22%);
+}
+.feather-edit__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.feather-edit__account {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.feather-edit__account strong {
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.25;
+  letter-spacing: -0.2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-edit__account span {
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--feather-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-edit__badge {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--feather-blue);
+  box-shadow: 0 5px 14px rgb(29 155 240 / 25%);
+}
+.feather-edit__fields {
+  overflow: hidden;
+  margin: 0 !important;
+  border: 1px solid var(--feather-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--feather-panel) 96%, transparent);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 7%);
+}
+.feather-edit__fields :deep(.k-list-item-media) {
+  align-self: flex-start;
+  margin-top: 20px;
+  color: var(--feather-blue);
+}
+.feather-edit__fields :deep(input),
+.feather-edit__fields :deep(textarea) {
+  font-size: 13px;
+  line-height: 1.45;
+}
+.feather-edit__fields :deep(textarea) {
+  min-height: 128px;
+  resize: none;
+}
+.feather-edit__fields :deep(.k-list-input-info) {
+  color: var(--feather-muted);
+  font-size: 9px;
+}
+.feather-edit__save {
+  width: 100%;
+  min-height: 43px;
+  margin-top: 1px;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgb(29 155 240 / 22%);
+}
+.feather-edit__save :deep(.k-icon) {
+  margin-right: 7px;
+}
+.feather-connections {
+  padding-top: 10px !important;
+}
+.feather-connections__tabs {
+  width: 100%;
+  margin-bottom: 11px;
+  border: 1px solid var(--feather-border);
+  border-radius: 15px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--feather-panel) 94%, transparent);
+}
+.feather-connections__tabs :deep(button) {
+  min-height: 31px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.feather-connections__loading {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  color: var(--feather-blue);
+}
+.feather-connections__empty {
+  display: flex;
+  min-height: 180px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  border: 1px solid var(--feather-border);
+  border-radius: 18px;
+  color: var(--feather-muted);
+  text-align: center;
+}
+.feather-connections__empty strong {
+  margin-top: 9px;
+  color: inherit;
+  font-size: 14px;
+}
+.feather-connections__empty p {
+  max-width: 210px;
+  margin: 4px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.feather-connections__list {
+  overflow: hidden;
+  margin: 0 !important;
+  border: 1px solid var(--feather-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--feather-panel) 96%, transparent);
+}
+.feather-connections__list :deep(.k-list-item-content) {
+  min-height: 62px;
+}
+.feather-connections__list :deep(.k-list-item-title) {
+  max-width: 108px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-connections__list :deep(.k-list-item-text) {
+  max-width: 108px;
+  overflow: hidden;
+  color: var(--feather-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-connections__profile {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.feather-connections__avatar {
+  width: 39px;
+  height: 39px;
+}
+.feather-connections__remove {
+  min-width: 70px;
+  min-height: 29px;
+  gap: 4px;
+  border-color: color-mix(in srgb, #f04f65 62%, transparent);
+  color: #f04f65;
+  font-size: 9px;
+  font-weight: 800;
+}
+.feather-app--active .feather-settings-sheet,
+.feather-app--active .feather-action-sheet,
+.feather-app--active .feather-report {
+  color: inherit;
+  background: var(--feather-panel);
+}
+</style>

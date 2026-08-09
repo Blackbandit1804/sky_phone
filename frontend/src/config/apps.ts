@@ -26,6 +26,7 @@ import {
   Tag,
   MapPinHouse,
   Flame,
+  Feather,
 } from 'lucide-vue-next'
 import { defineAsyncComponent, markRaw } from 'vue'
 
@@ -57,6 +58,7 @@ import citymarktIcon from '@/assets/img/app-icons/citymarkt.webp'
 import localPagesIcon from '@/assets/img/app-icons/local-pages.webp'
 import flareIcon from '@/assets/img/app-icons/flare.svg'
 import flipTokIcon from '@/assets/img/app-icons/fliptok.webp'
+import featherIcon from '@/assets/img/app-icons/feather.svg'
 import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
@@ -64,6 +66,20 @@ import type {
 } from '@/types/apps'
 
 export const PHONE_APPS: PhoneAppDefinition[] = [
+  {
+    category: 'social',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/FeatherApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 25,
+    icon: markRaw(Feather),
+    iconClass: 'app-icon--feather',
+    iconImage: featherIcon,
+    id: 'feather',
+    labelKey: 'Apps.feather.name',
+    route: '/apps/feather',
+  },
   {
     category: 'social',
     component: markRaw(

@@ -423,3 +423,81 @@ CREATE TABLE IF NOT EXISTS `sky_phone_flare_messages` (
     FOREIGN KEY (`match_id`) REFERENCES `sky_phone_flare_matches` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`sender_account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_feather_profiles` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `account_id` BIGINT UNSIGNED NOT NULL,
+    `handle` VARCHAR(30) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL, `display_name` VARCHAR(50) NOT NULL,
+    `bio` VARCHAR(160) NOT NULL DEFAULT '', `avatar_media_id` BIGINT UNSIGNED NULL, `verified` TINYINT(1) NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`), UNIQUE KEY `uniq_sky_phone_feather_account` (`account_id`), UNIQUE KEY `uniq_sky_phone_feather_handle` (`handle`),
+    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`avatar_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_feather_posts` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, `profile_id` BIGINT UNSIGNED NOT NULL, `body` VARCHAR(360) NOT NULL DEFAULT '',
+    `reply_to_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL, `quote_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `status` ENUM('published','removed') NOT NULL DEFAULT 'published', `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`), KEY `idx_sky_phone_feather_feed` (`status`,`created_at`), KEY `idx_sky_phone_feather_profile` (`profile_id`,`created_at`),
+    KEY `idx_sky_phone_feather_replies` (`reply_to_id`,`created_at`),
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_feather_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`reply_to_id`) REFERENCES `sky_phone_feather_posts` (`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`quote_id`) REFERENCES `sky_phone_feather_posts` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_feather_hashtags` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `post_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `tag` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL, `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`), UNIQUE KEY `uniq_sky_phone_feather_hashtag` (`post_id`,`tag`),
+    KEY `idx_sky_phone_feather_hashtag_rank` (`tag`,`post_id`),
+    FOREIGN KEY (`post_id`) REFERENCES `sky_phone_feather_posts` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_feather_post_media` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `post_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `media_id` BIGINT UNSIGNED NOT NULL, `sort_order` TINYINT UNSIGNED NOT NULL, PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_feather_media_order` (`post_id`,`sort_order`), UNIQUE KEY `uniq_sky_phone_feather_media` (`post_id`,`media_id`),
+    FOREIGN KEY (`post_id`) REFERENCES `sky_phone_feather_posts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_feather_reactions` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `post_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` BIGINT UNSIGNED NOT NULL, `kind` ENUM('like','bookmark') NOT NULL, `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`), UNIQUE KEY `uniq_sky_phone_feather_reaction` (`post_id`,`profile_id`,`kind`),
+    FOREIGN KEY (`post_id`) REFERENCES `sky_phone_feather_posts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_feather_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_feather_follows` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `follower_id` BIGINT UNSIGNED NOT NULL, `following_id` BIGINT UNSIGNED NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), UNIQUE KEY `uniq_sky_phone_feather_follow` (`follower_id`,`following_id`),
+    FOREIGN KEY (`follower_id`) REFERENCES `sky_phone_feather_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`following_id`) REFERENCES `sky_phone_feather_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_feather_notifications` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, `recipient_id` BIGINT UNSIGNED NOT NULL, `actor_id` BIGINT UNSIGNED NOT NULL,
+    `post_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL, `kind` ENUM('like','reply','follow','quote') NOT NULL,
+    `read_at` DATETIME NULL, `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_feather_activity` (`recipient_id`,`created_at`),
+    FOREIGN KEY (`recipient_id`) REFERENCES `sky_phone_feather_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`actor_id`) REFERENCES `sky_phone_feather_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`post_id`) REFERENCES `sky_phone_feather_posts` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_feather_blocks` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `blocker_id` BIGINT UNSIGNED NOT NULL, `blocked_id` BIGINT UNSIGNED NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), UNIQUE KEY `uniq_sky_phone_feather_block` (`blocker_id`,`blocked_id`),
+    FOREIGN KEY (`blocker_id`) REFERENCES `sky_phone_feather_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`blocked_id`) REFERENCES `sky_phone_feather_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_feather_reports` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, `reporter_id` BIGINT UNSIGNED NOT NULL,
+    `post_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, `reason` ENUM('spam','harassment','dangerous','illegal','other') NOT NULL,
+    `details` VARCHAR(500) NOT NULL DEFAULT '', `status` ENUM('open','reviewed','dismissed') NOT NULL DEFAULT 'open',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), UNIQUE KEY `uniq_sky_phone_feather_report` (`reporter_id`,`post_id`),
+    FOREIGN KEY (`reporter_id`) REFERENCES `sky_phone_feather_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`post_id`) REFERENCES `sky_phone_feather_posts` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

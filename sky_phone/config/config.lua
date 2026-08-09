@@ -283,6 +283,22 @@ Config.FlipTok = {
     ReportAdminGroups = { "admin" },
 }
 
+Config.Feather = {
+    PageSize = 20,
+    TextMaxLength = 360,
+    BioMaxLength = 160,
+    DisplayNameMaxLength = 50,
+    HandleMaxLength = 30,
+    SearchMaxLength = 80,
+    HashtagMaxLength = 64,
+    TrendingTopicLimit = 10,
+    ReportDetailsMaxLength = 500,
+    MaxImages = 4,
+    PostsPerMinute = 8,
+    ActionsPerMinute = 90,
+    ReportsPerDay = 10,
+}
+
 Config.MapMarkers = {
     MaximumMarkers = 50,
     LabelMaxLength = 40,
