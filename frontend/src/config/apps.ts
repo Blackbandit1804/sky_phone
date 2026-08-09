@@ -26,6 +26,7 @@ import {
   Tag,
   MapPinHouse,
   Flame,
+  Music2,
 } from 'lucide-vue-next'
 import { defineAsyncComponent, markRaw } from 'vue'
 
@@ -58,6 +59,7 @@ import localPagesIcon from '@/assets/img/app-icons/local-pages.webp'
 import flareIcon from '@/assets/img/app-icons/flare.svg'
 import flipTokIcon from '@/assets/img/app-icons/fliptok.webp'
 import picstagramIcon from '@/assets/img/app-icons/picstagram.webp'
+import musicIcon from '@/assets/img/app-icons/music.svg'
 import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
@@ -65,6 +67,20 @@ import type {
 } from '@/types/apps'
 
 export const PHONE_APPS: PhoneAppDefinition[] = [
+  {
+    category: 'utilities',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/MusicApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 25,
+    icon: markRaw(Music2),
+    iconClass: 'app-icon--music',
+    iconImage: musicIcon,
+    id: 'music',
+    labelKey: 'Apps.music.name',
+    route: '/apps/music',
+  },
   {
     category: 'social',
     component: markRaw(

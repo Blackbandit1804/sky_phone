@@ -2,20 +2,13 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { useBankingStore } from '@/stores/banking'
 import { useCallsStore } from '@/stores/calls'
+import { useMusicStore } from '@/stores/music'
 import { usePhoneStore } from '@/stores/phone'
 import { useWeatherStore } from '@/stores/weather'
 
 const now = ref(new Date())
 let clockConsumers = 0
 let clockInterval: number | undefined
-
-const tracks = [
-  { artist: 'Sky Radio', title: 'Night Drive' },
-  { artist: 'Los Santos FM', title: 'Pacific Coast' },
-  { artist: 'Mirror Park', title: 'After Hours' },
-]
-const trackIndex = ref(0)
-const playing = ref(false)
 
 export function useClockService() {
   const phone = usePhoneStore()
@@ -80,15 +73,21 @@ export function useWeatherService() {
 }
 
 export function useMusicService() {
+  const music = useMusicStore()
   return {
-    current: computed(() => tracks[trackIndex.value]),
+    current: computed(
+      () =>
+        music.currentTrack ?? {
+          artist: 'Music',
+          title: 'Not Playing',
+        },
+    ),
     next(): void {
-      trackIndex.value = (trackIndex.value + 1) % tracks.length
-      playing.value = true
+      void music.next()
     },
-    playing,
+    playing: computed(() => music.isPlaying),
     toggle(): void {
-      playing.value = !playing.value
+      void music.toggle()
     },
   }
 }

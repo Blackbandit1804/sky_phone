@@ -20,6 +20,32 @@ MusicTracks = {
 }
 ```
 
+## Music app
+
+The standalone `Music` app plays audio only inside the current player's NUI. It never creates a
+world sound, voice channel, positional event, or 3D-audio state that another player can hear.
+
+Server-owned MP3/OGG tracks live in `frontend/public/music`. Define their stable ID, title, artist,
+file, and optional artwork in `sky_phone/config/music.lua`, then run `build_frontend.bat`:
+
+```lua
+Tracks = {
+    {
+        Id = "night-drive",
+        Title = "Night Drive",
+        Artist = "Sky Records",
+        File = "music/night-drive.ogg",
+        Artwork = "music/night-drive.webp",
+    },
+}
+```
+
+Players can add public YouTube video links to their own library. Metadata is requested through
+YouTube's oEmbed endpoint on the server, while playback uses the embedded YouTube player only on
+that player's NUI. Personal songs and playlists are stored per linked iFruit account, or per phone
+IMEI while signed out, in the `sky_phone_music_*` tables. Limits and rate controls are configured in
+`config/music.lua`.
+
 ## FlipTok accounts
 
 FlipTok profiles use their own username and password login. Registration requires a linked iFruit
