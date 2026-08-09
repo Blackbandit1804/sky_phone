@@ -25,8 +25,9 @@ MusicTracks = {
 The standalone `Music` app plays audio only inside the current player's NUI. It never creates a
 world sound, voice channel, positional event, or 3D-audio state that another player can hear.
 
-Server-owned MP3/OGG tracks live in `frontend/public/music`. Define their stable ID, title, artist,
-file, and optional artwork in `sky_phone/config/music.lua`, then run `build_frontend.bat`:
+Server-owned MP3/OGG tracks and their optional artwork live directly in
+`sky_phone/config/music`. Define their stable ID, title, artist, and paths in
+`sky_phone/config/music.lua`:
 
 ```lua
 Tracks = {
@@ -34,11 +35,15 @@ Tracks = {
         Id = "night-drive",
         Title = "Night Drive",
         Artist = "Sky Records",
-        File = "music/night-drive.ogg",
-        Artwork = "music/night-drive.webp",
+        File = "config/music/night-drive.ogg",
+        Artwork = "config/music/night-drive.webp",
     },
 }
 ```
+
+No frontend build is needed when tracks change. Restart the resource so FiveM republishes the
+files and reloads the track configuration. Keep existing track IDs stable because playlists store
+those IDs.
 
 Players can add public YouTube video links to their own library. Metadata is requested through
 YouTube's oEmbed endpoint on the server, while playback uses the embedded YouTube player only on

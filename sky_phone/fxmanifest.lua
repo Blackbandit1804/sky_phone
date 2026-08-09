@@ -71,7 +71,7 @@ files {
     'source/html/index.html',
     'source/html/assets/**',
     'source/html/img/**',
-    'source/html/music/**',
+    'config/music/**',
 }
 
 ui_page 'source/html/index.html'

@@ -1,6 +1,9 @@
 Bridge.Database.AfterMigration("sky_phone", function()
 local server_tracks = {}
 local server_tracks_by_id = {}
+local music_asset_prefix = "config/music/"
+local audio_extensions = { mp3 = true, ogg = true }
+local artwork_extensions = { jpeg = true, jpg = true, png = true, webp = true }
 
 local function trim(value)
     return type(value) == "string" and value:match("^%s*(.-)%s*$") or nil
@@ -24,6 +27,29 @@ local function optional_text(value)
     return normalized ~= "" and normalized or nil
 end
 
+local function normalize_music_asset_path(value, allowed_extensions)
+    local path = trim(value)
+    if not path
+        or path:sub(1, #music_asset_prefix) ~= music_asset_prefix
+        or not path:match("^[%w%._%-%/]+$")
+        or path:find("..", 1, true)
+        or path:find("//", 1, true)
+        or path:find("\\", 1, true)
+    then
+        return nil
+    end
+
+    local extension = path:match("%.([%w]+)$")
+    if not extension or not allowed_extensions[extension:lower()] then
+        return nil
+    end
+    return path
+end
+
+local function music_asset_url(path)
+    return ("https://cfx-nui-%s/%s"):format(GetCurrentResourceName(), path)
+end
+
 local function affected_rows(result)
     if type(result) == "number" then
         return result
@@ -45,25 +71,25 @@ local function normalize_server_tracks()
         local id = trim(configured.Id)
         local title = trim(configured.Title)
         local artist = trim(configured.Artist)
-        local file = trim(configured.File)
-        local artwork = trim(configured.Artwork)
-        local valid_file = file
-            and file:match("^music/[%w%._%-%/]+%.[mM][pP]3$")
-            or file and file:match("^music/[%w%._%-%/]+%.[oO][gG][gG]$")
+        local title_length = text_length(title)
+        local artist_length = text_length(artist)
+        local file = normalize_music_asset_path(configured.File, audio_extensions)
+        local configured_artwork = optional_text(configured.Artwork)
+        local artwork = configured_artwork
+            and normalize_music_asset_path(configured_artwork, artwork_extensions)
+            or nil
 
         if not id
             or not id:match("^[%w%-_]+$")
             or #id > 48
-            or not title
-            or not text_length(title)
-            or text_length(title) > 160
-            or not artist
-            or not text_length(artist)
-            or text_length(artist) > 120
-            or not valid_file
-            or (artwork and not artwork:match("^music/[%w%._%-%/]+%.[pP][nN][gG]$")
-                and not artwork:match("^music/[%w%._%-%/]+%.[jJ][pP][eE]?[gG]$")
-                and not artwork:match("^music/[%w%._%-%/]+%.[wW][eE][bB][pP]$"))
+            or not title_length
+            or title_length < 1
+            or title_length > 160
+            or not artist_length
+            or artist_length < 1
+            or artist_length > 120
+            or not file
+            or (configured_artwork and not artwork)
             or server_tracks_by_id[id]
         then
             Bridge.Debug(
@@ -78,8 +104,8 @@ local function normalize_server_tracks()
                 source = "server",
                 title = title,
                 artist = artist,
-                url = file,
-                artwork = artwork,
+                url = music_asset_url(file),
+                artwork = artwork and music_asset_url(artwork) or nil,
             }
             server_tracks[#server_tracks + 1] = track
             server_tracks_by_id[id] = track

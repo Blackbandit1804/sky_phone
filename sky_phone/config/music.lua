@@ -1,13 +1,13 @@
 Config.Music = {
-    -- Put MP3/OGG files in frontend/public/music and rebuild the frontend.
-    -- File and Artwork paths are relative to the published NUI root.
+    -- Put server-owned audio and artwork directly in config/music.
+    -- Paths must stay inside that directory. Restart the resource after changes.
     Tracks = {
         -- {
         --     Id = "night-drive",
         --     Title = "Night Drive",
         --     Artist = "Sky Records",
-        --     File = "music/night-drive.ogg",
-        --     Artwork = "music/night-drive.webp",
+        --     File = "config/music/night-drive.ogg",
+        --     Artwork = "config/music/night-drive.webp",
         -- },
     },
 
