@@ -31,6 +31,7 @@ import { useAccountStore } from '@/stores/account'
 import { useMailStore } from '@/stores/mail'
 import { useMessagesStore } from '@/stores/messages'
 import { useDarkChatStore } from '@/stores/darkchat'
+import { useFlareStore } from '@/stores/flare'
 import { useFlipTokStore } from '@/stores/fliptok'
 import { useMediaStore } from '@/stores/media'
 import { useMarketplaceStore } from '@/stores/marketplace'
@@ -61,6 +62,7 @@ type AppMessage = {
     | MarketplaceEventData
     | MessagesEventData
     | DarkChatEventData
+    | FlareEventData
     | FlipTokVerificationData
     | FlipTokNotificationData
     | PhoneCall
@@ -95,6 +97,15 @@ type DarkChatEventData = {
   device?: PhoneNotificationDevicePayload
   notificationMode?: 'full' | 'private' | 'hidden'
   preview?: string
+  sender?: string
+  text?: string
+  title?: string
+}
+
+type FlareEventData = {
+  body?: string
+  device?: PhoneNotificationDevicePayload
+  matchId?: string
   sender?: string
   text?: string
   title?: string
@@ -147,6 +158,7 @@ const banking = useBankingStore()
 const mail = useMailStore()
 const messages = useMessagesStore()
 const darkchat = useDarkChatStore()
+const flare = useFlareStore()
 const fliptok = useFlipTokStore()
 const media = useMediaStore()
 const marketplace = useMarketplaceStore()
@@ -441,6 +453,44 @@ function onMessage(event: MessageEvent<AppMessage>): void {
       }
       notifications.show(notification)
     }
+  } else if (
+    (event.data?.type === 'flare:new-match' ||
+      event.data?.type === 'flare:new-message') &&
+    event.data.data
+  ) {
+    const data = event.data.data as FlareEventData
+    void flare.bootstrap()
+    if (
+      data.matchId &&
+      event.data.type === 'flare:new-message' &&
+      flare.activeMatchId === data.matchId
+    ) {
+      void flare.loadThread(data.matchId)
+    }
+    const notification: PhoneNotificationInput = {
+      appId: 'flare',
+      subtitle: data.sender,
+      text:
+        data.text ??
+        phone.t(
+          event.data.type === 'flare:new-match'
+            ? 'Apps.flare.newMatchNotification'
+            : 'Apps.flare.newMessageNotification',
+          { sender: data.sender ?? '' },
+        ),
+      title: data.title ?? phone.t('Apps.flare.name'),
+    }
+    if (
+      data.device &&
+      (!phone.isOpen || data.device.imei !== phone.device?.imei)
+    ) {
+      notification.device = {
+        imei: data.device.imei,
+        name: data.device.name,
+        preferences: parsePhonePreferences(data.device.settings ?? null),
+      }
+    }
+    notifications.show(notification)
   } else if (event.data?.type === 'calls:changed') {
     void calls.loadRecents()
   } else if (event.data?.type === 'banking:changed') {

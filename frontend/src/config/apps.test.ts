@@ -124,10 +124,11 @@ describe('app registry', () => {
       PHONE_APPS.filter((app) => app.category === 'social').map(
         (app) => app.id,
       ),
-    ).toEqual([
-      'fliptok',
-      'radio',
-      'local-pages',
+      ).toEqual([
+        'fliptok',
+        'flare',
+        'radio',
+        'local-pages',
       'phone',
       'darkchat',
       'banking',
