@@ -891,10 +891,6 @@ onBeforeUnmount(() => {
   height: 21px;
 }
 
-.map-control--marker {
-  --color-primary: #0a84ff;
-}
-
 .map-placement-panel {
   position: absolute;
   z-index: 4;

@@ -1152,7 +1152,7 @@ onBeforeUnmount(() => {
               t(composeKind === 'post' ? 'choosePhotosHint' : 'chooseStoryHint')
             }}</span>
           </div>
-          <k-button rounded tonal @click="chooseComposeMedia">
+          <k-button rounded @click="chooseComposeMedia">
             {{
               t(
                 selectedMedia.length
