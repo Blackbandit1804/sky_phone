@@ -253,8 +253,10 @@ local function load_device_security(imei)
     return rows[1]
 end
 
-local function security_status(imei)
-    local security = load_device_security(imei)
+local function security_status(imei, security, security_loaded)
+    if not security_loaded then
+        security = load_device_security(imei)
+    end
     return {
         enabled = security ~= nil,
         length = security and tonumber(security.passcode_length) or nil,
@@ -348,7 +350,7 @@ local function account_devices(account_id, current_imei)
     return rows
 end
 
-local function bootstrap(source)
+local function bootstrap(source, security, security_loaded)
     local session, error_response = SkyPhone.RequireDeviceSession(source)
     if not session then
         return nil, error_response
@@ -361,7 +363,7 @@ local function bootstrap(source)
 
     return {
         token = session.token,
-        security = security_status(device.imei),
+        security = security_status(device.imei, security, security_loaded),
         device = {
             imei = device.imei,
             name = device.device_name,
@@ -646,6 +648,7 @@ function SkyPhone.RefreshDevice(imei)
 end
 
 local function open_phone(source, used_item)
+    local opened_at = GetGameTimer()
     Bridge.Debug(
         "debug",
         "[sky_phone] Usable phone callback invoked for source %s.",
@@ -685,14 +688,15 @@ local function open_phone(source, used_item)
         token = ("%s:%s:%s"):format(imei, tostring(source), tostring(GetGameTimer())),
         unlocked = security == nil,
     }
-    local payload = bootstrap(source)
+    local payload = bootstrap(source, security, true)
     Bridge.Debug(
         "debug",
-        "[sky_phone] Triggering client open for source %s slot %s IMEI %s account_linked=%s.",
+        "[sky_phone] Triggering client open for source %s slot %s IMEI %s account_linked=%s after %sms.",
         tostring(source),
         tostring(slot.slot),
         imei,
         tostring(payload.account ~= nil),
+        tostring(GetGameTimer() - opened_at),
         { always = true }
     )
     TriggerClientEvent("sky_phone:device:open", source, payload)
