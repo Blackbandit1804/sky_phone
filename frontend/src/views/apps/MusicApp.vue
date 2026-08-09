@@ -25,6 +25,7 @@ import {
   kToolbarPane,
 } from 'konsta/vue'
 import {
+  Check,
   CirclePlus,
   Ellipsis,
   ExternalLink,
@@ -43,19 +44,25 @@ import {
   X,
 } from 'lucide-vue-next'
 import type { CSSProperties } from 'vue'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useMusicStore } from '@/stores/music'
 import { usePhoneStore } from '@/stores/phone'
 import type { MusicPlaylist, MusicTrack } from '@/types/music'
 
 type MusicTab = 'library' | 'playlists' | 'search'
-type MusicSheet = 'playlist' | 'playlist-picker' | 'rename' | 'youtube'
+type MusicSheet =
+  | 'playlist'
+  | 'playlist-picker'
+  | 'rename'
+  | 'track-picker'
+  | 'youtube'
 
 const MUSIC_POPOVER_WIDTH = 240
 const MUSIC_POPOVER_ITEM_HEIGHT = 52
 const MUSIC_POPOVER_INSET = 8
 const MUSIC_POPOVER_GAP = 7
+const MUSIC_SHEET_TRANSITION_MS = 420
 
 const music = useMusicStore()
 const phone = usePhoneStore()
@@ -74,11 +81,13 @@ const youtubeUrl = ref('')
 const youtubeTitle = ref('')
 const youtubeArtist = ref('')
 const playlistName = ref('')
+const playlistCreationTrack = ref<MusicTrack | null>(null)
 const searchQuery = ref('')
 const toastText = ref('')
 const confirmRemoveTrack = ref(false)
 const confirmDeletePlaylist = ref(false)
 const scrollEl = ref<HTMLElement | null>(null)
+let playerPickerTimer: number | null = null
 
 const allTracks = computed(() => music.allTracks)
 const normalizedSearch = computed(() => searchQuery.value.trim().toLowerCase())
@@ -93,12 +102,19 @@ const searchResults = computed(() => {
 const playlistTracks = computed(() =>
   activePlaylist.value ? music.tracksForPlaylist(activePlaylist.value) : [],
 )
+const availablePlaylistTracks = computed(() => {
+  const playlist = activePlaylist.value
+  if (!playlist) return []
+  return allTracks.value.filter((track) => !playlistHasTrack(playlist, track))
+})
 const recentTracks = computed(() => allTracks.value.slice(0, 6))
 const featuredTrack = computed(() => allTracks.value[0] ?? null)
 const sheetTitle = computed(() => {
   if (activeSheet.value === 'youtube') return phone.t('Apps.music.addYouTube')
   if (activeSheet.value === 'playlist-picker')
     return phone.t('Apps.music.choosePlaylist')
+  if (activeSheet.value === 'track-picker')
+    return phone.t('Apps.music.addSongs')
   if (activeSheet.value === 'rename')
     return phone.t('Apps.music.renamePlaylist')
   return phone.t('Apps.music.newPlaylist')
@@ -126,6 +142,11 @@ function errorText(): string {
 function closeMenus(): void {
   addMenuOpened.value = false
   actionMenuOpened.value = false
+}
+
+function dismissMenus(): void {
+  closeMenus()
+  actionTrack.value = null
 }
 
 function positionPopover(target: HTMLElement, itemCount: number): boolean {
@@ -168,7 +189,8 @@ function positionPopover(target: HTMLElement, itemCount: number): boolean {
 
 function openAddMenu(event: MouseEvent): void {
   const target = event.currentTarget as HTMLElement
-  if (!positionPopover(target, 2)) return
+  if (!positionPopover(target, activePlaylist.value ? 3 : 2)) return
+  actionTrack.value = null
   actionMenuOpened.value = false
   addMenuOpened.value = true
 }
@@ -190,6 +212,37 @@ function closeSheet(): void {
   if (music.isLoading) return
   activeSheet.value = null
   music.error = ''
+  actionTrack.value = null
+  playlistCreationTrack.value = null
+}
+
+function openNewPlaylist(track: MusicTrack | null = null): void {
+  if (music.isLoading) return
+  playlistCreationTrack.value = track
+  openSheet('playlist')
+}
+
+function openPlaylistPicker(track: MusicTrack | null): void {
+  if (!track) return
+  actionTrack.value = track
+  openSheet('playlist-picker')
+}
+
+function openActivePlaylistTrackPicker(): void {
+  if (!activePlaylist.value) return
+  actionTrack.value = null
+  openSheet('track-picker')
+}
+
+function openCurrentTrackPlaylistPicker(): void {
+  const track = music.currentTrack
+  if (!track) return
+  playerOpened.value = false
+  if (playerPickerTimer !== null) window.clearTimeout(playerPickerTimer)
+  playerPickerTimer = window.setTimeout(() => {
+    playerPickerTimer = null
+    if (!playerOpened.value) openPlaylistPicker(track)
+  }, MUSIC_SHEET_TRANSITION_MS)
 }
 
 function requestDeletePlaylist(): void {
@@ -200,6 +253,11 @@ function requestDeletePlaylist(): void {
 function requestRemoveTrack(): void {
   closeMenus()
   confirmRemoveTrack.value = true
+}
+
+function cancelRemoveTrack(): void {
+  confirmRemoveTrack.value = false
+  actionTrack.value = null
 }
 
 function openTrackMenu(event: MouseEvent, track: MusicTrack): void {
@@ -262,29 +320,63 @@ async function submitYouTube(): Promise<void> {
 }
 
 async function submitPlaylist(): Promise<void> {
+  if (music.isLoading) return
   const name = playlistName.value.trim()
   if (!name) return
-  const success =
-    activeSheet.value === 'rename' && activePlaylist.value
-      ? await music.renamePlaylist(activePlaylist.value.id, name)
-      : await music.createPlaylist(name)
-  if (!success) return
   if (activeSheet.value === 'rename' && activePlaylist.value) {
+    if (!(await music.renamePlaylist(activePlaylist.value.id, name))) return
     activePlaylist.value =
       music.playlists.find(
         (playlist) => playlist.id === activePlaylist.value?.id,
       ) ?? null
     showToast('Apps.music.playlistRenamed')
+    activeSheet.value = null
+    return
+  }
+
+  const previousIds = new Set(music.playlists.map((playlist) => playlist.id))
+  const pendingTrack = playlistCreationTrack.value
+  if (!(await music.createPlaylist(name))) return
+
+  const createdPlaylist = music.playlists.find(
+    (playlist) => !previousIds.has(playlist.id),
+  )
+  if (pendingTrack) {
+    playlistCreationTrack.value = null
+    if (!createdPlaylist) {
+      music.error = 'request_failed'
+      activeSheet.value = 'playlist-picker'
+      return
+    }
+    if (!(await music.addToPlaylist(createdPlaylist.id, pendingTrack))) {
+      activeSheet.value = 'playlist-picker'
+      return
+    }
+    showToast('Apps.music.playlistCreatedWithSong')
+    actionTrack.value = null
   } else {
     showToast('Apps.music.playlistCreated')
   }
+  playlistCreationTrack.value = null
   activeSheet.value = null
 }
 
 async function addTrackToPlaylist(playlist: MusicPlaylist): Promise<void> {
-  if (!actionTrack.value) return
-  if (await music.addToPlaylist(playlist.id, actionTrack.value)) {
+  const track = actionTrack.value
+  if (music.isLoading || !track || playlistHasTrack(playlist, track)) return
+  if (await music.addToPlaylist(playlist.id, track)) {
     activeSheet.value = null
+    actionTrack.value = null
+    showToast('Apps.music.addedToPlaylist')
+  }
+}
+
+async function addTrackToActivePlaylist(track: MusicTrack): Promise<void> {
+  const playlist = activePlaylist.value
+  if (music.isLoading || !playlist || playlistHasTrack(playlist, track)) return
+  if (await music.addToPlaylist(playlist.id, track)) {
+    activePlaylist.value =
+      music.playlists.find((candidate) => candidate.id === playlist.id) ?? null
     showToast('Apps.music.addedToPlaylist')
   }
 }
@@ -296,6 +388,7 @@ async function removeFromActivePlaylist(): Promise<void> {
     activePlaylist.value =
       music.playlists.find((playlist) => playlist.id === playlistId) ?? null
     actionMenuOpened.value = false
+    actionTrack.value = null
     showToast('Apps.music.removedFromPlaylist')
   }
 }
@@ -305,6 +398,7 @@ async function removePersonalTrack(): Promise<void> {
   if (await music.removeYouTube(actionTrack.value.id)) {
     confirmRemoveTrack.value = false
     actionMenuOpened.value = false
+    actionTrack.value = null
     showToast('Apps.music.songRemoved')
   }
 }
@@ -320,6 +414,18 @@ async function deleteActivePlaylist(): Promise<void> {
 
 function playlistArtwork(playlist: MusicPlaylist): MusicTrack[] {
   return music.tracksForPlaylist(playlist).slice(0, 4)
+}
+
+function playlistHasTrack(playlist: MusicPlaylist, track: MusicTrack): boolean {
+  return playlist.entries.some(
+    (entry) => entry.source === track.source && entry.songId === track.id,
+  )
+}
+
+function actionTrackIsInPlaylist(playlist: MusicPlaylist): boolean {
+  return Boolean(
+    actionTrack.value && playlistHasTrack(playlist, actionTrack.value),
+  )
 }
 
 function fallbackArtwork(
@@ -366,6 +472,10 @@ watch(
 
 onMounted(() => {
   void music.load()
+})
+
+onBeforeUnmount(() => {
+  if (playerPickerTimer !== null) window.clearTimeout(playerPickerTimer)
 })
 </script>
 
@@ -448,17 +558,29 @@ onMounted(() => {
               })
             }}
           </p>
-          <k-button
-            large
-            rounded
-            :disabled="!playlistTracks.length"
-            @click="
-              playlistTracks[0] && playTrack(playlistTracks[0], playlistTracks)
-            "
-          >
-            <Play :size="18" fill="currentColor" />
-            {{ phone.t('Apps.music.play') }}
-          </k-button>
+          <div class="music-playlist-actions">
+            <k-button
+              large
+              rounded
+              :disabled="!playlistTracks.length"
+              @click="
+                playlistTracks[0] &&
+                playTrack(playlistTracks[0], playlistTracks)
+              "
+            >
+              <Play :size="18" fill="currentColor" />
+              {{ phone.t('Apps.music.play') }}
+            </k-button>
+            <k-button
+              large
+              rounded
+              tonal
+              @click="openActivePlaylistTrackPicker"
+            >
+              <CirclePlus :size="18" />
+              {{ phone.t('Apps.music.addSongs') }}
+            </k-button>
+          </div>
         </section>
 
         <k-list v-if="playlistTracks.length" nested class="music-track-list">
@@ -649,7 +771,7 @@ onMounted(() => {
           <ListMusic :size="48" />
           <strong>{{ phone.t('Apps.music.noPlaylists') }}</strong>
           <span>{{ phone.t('Apps.music.noPlaylistsBody') }}</span>
-          <k-button rounded @click="openSheet('playlist')">
+          <k-button rounded @click="openNewPlaylist()">
             <Plus :size="17" />
             {{ phone.t('Apps.music.newPlaylist') }}
           </k-button>
@@ -797,7 +919,7 @@ onMounted(() => {
       class="music-popover-dismiss"
       aria-hidden="true"
       tabindex="-1"
-      @click="closeMenus"
+      @click="dismissMenus"
     />
     <section
       v-if="addMenuOpened"
@@ -812,6 +934,12 @@ onMounted(() => {
     >
       <k-list nested>
         <template v-if="activePlaylist">
+          <k-list-button
+            link-component="button"
+            @click="openActivePlaylistTrackPicker"
+          >
+            <CirclePlus :size="18" /> {{ phone.t('Apps.music.addSongs') }}
+          </k-list-button>
           <k-list-button link-component="button" @click="openSheet('rename')">
             <ListMusic :size="18" />
             {{ phone.t('Apps.music.renamePlaylist') }}
@@ -828,7 +956,7 @@ onMounted(() => {
           <k-list-button link-component="button" @click="openSheet('youtube')">
             <ExternalLink :size="18" /> {{ phone.t('Apps.music.addYouTube') }}
           </k-list-button>
-          <k-list-button link-component="button" @click="openSheet('playlist')">
+          <k-list-button link-component="button" @click="openNewPlaylist()">
             <ListMusic :size="18" /> {{ phone.t('Apps.music.newPlaylist') }}
           </k-list-button>
         </template>
@@ -849,7 +977,7 @@ onMounted(() => {
       <k-list nested>
         <k-list-button
           link-component="button"
-          @click="openSheet('playlist-picker')"
+          @click="openPlaylistPicker(actionTrack)"
         >
           <CirclePlus :size="18" /> {{ phone.t('Apps.music.addToPlaylist') }}
         </k-list-button>
@@ -880,7 +1008,9 @@ onMounted(() => {
       <section class="music-sheet-content">
         <header>
           <k-link component="button" @click="closeSheet">{{
-            phone.t('Common.cancel')
+            phone.t(
+              activeSheet === 'track-picker' ? 'Common.done' : 'Common.cancel',
+            )
           }}</k-link>
           <strong>{{ sheetTitle }}</strong>
           <span />
@@ -943,7 +1073,13 @@ onMounted(() => {
             <k-list-item
               v-for="playlist in music.playlists"
               :key="playlist.id"
-              link
+              :link="!actionTrackIsInPlaylist(playlist)"
+              link-component="button"
+              :chevron="false"
+              :link-props="{
+                type: 'button',
+                disabled: music.isLoading || actionTrackIsInPlaylist(playlist),
+              }"
               :title="playlist.name"
               :subtitle="
                 phone.t('Apps.music.songCount', {
@@ -953,15 +1089,94 @@ onMounted(() => {
               @click="addTrackToPlaylist(playlist)"
             >
               <template #media><ListMusic :size="22" /></template>
+              <template #after>
+                <span
+                  v-if="actionTrackIsInPlaylist(playlist)"
+                  class="music-picker-added"
+                >
+                  <Check :size="16" />
+                  {{ phone.t('Apps.music.alreadyAdded') }}
+                </span>
+                <CirclePlus v-else :size="19" />
+              </template>
             </k-list-item>
           </k-list>
+          <k-button
+            v-if="music.playlists.length"
+            rounded
+            tonal
+            class="music-picker-create"
+            :disabled="music.isLoading"
+            @click="openNewPlaylist(actionTrack)"
+          >
+            <Plus :size="17" /> {{ phone.t('Apps.music.newPlaylist') }}
+          </k-button>
           <k-block v-else class="music-empty" inset>
             <ListMusic :size="42" />
             <strong>{{ phone.t('Apps.music.noPlaylists') }}</strong>
             <span>{{ phone.t('Apps.music.createPlaylistFirst') }}</span>
-            <k-button rounded @click="openSheet('playlist')">{{
-              phone.t('Apps.music.newPlaylist')
-            }}</k-button>
+            <k-button
+              rounded
+              :disabled="music.isLoading"
+              @click="openNewPlaylist(actionTrack)"
+              >{{ phone.t('Apps.music.newPlaylist') }}</k-button
+            >
+          </k-block>
+          <p v-if="music.error" class="music-form-error" role="alert">
+            {{ errorText() }}
+          </p>
+        </template>
+
+        <template v-else-if="activeSheet === 'track-picker'">
+          <p>{{ phone.t('Apps.music.addSongsBody') }}</p>
+          <k-list
+            v-if="availablePlaylistTracks.length"
+            inset
+            strong
+            class="music-picker-list"
+          >
+            <k-list-item
+              v-for="track in availablePlaylistTracks"
+              :key="`${track.source}:${track.id}`"
+              link
+              link-component="button"
+              :chevron="false"
+              :link-props="{ type: 'button', disabled: music.isLoading }"
+              :title="track.title"
+              :subtitle="track.artist"
+              @click="addTrackToActivePlaylist(track)"
+            >
+              <template #media>
+                <span class="music-row-art" :style="fallbackArtwork(track)">
+                  <img
+                    v-if="track.artwork"
+                    :src="track.artwork"
+                    alt=""
+                    @error="hideBrokenArtwork"
+                  />
+                  <Music2 v-else :size="20" />
+                </span>
+              </template>
+              <template #after><CirclePlus :size="20" /></template>
+            </k-list-item>
+          </k-list>
+          <k-block v-else class="music-empty" inset>
+            <Check v-if="allTracks.length" :size="42" />
+            <Music2 v-else :size="42" />
+            <strong>{{
+              phone.t(
+                allTracks.length
+                  ? 'Apps.music.allSongsAdded'
+                  : 'Apps.music.emptyLibrary',
+              )
+            }}</strong>
+            <span>{{
+              phone.t(
+                allTracks.length
+                  ? 'Apps.music.allSongsAddedBody'
+                  : 'Apps.music.emptyLibraryBody',
+              )
+            }}</span>
           </k-block>
           <p v-if="music.error" class="music-form-error" role="alert">
             {{ errorText() }}
@@ -976,6 +1191,7 @@ onMounted(() => {
               :label="phone.t('Apps.music.playlistName')"
               input-id="music-playlist-name"
               maxlength="80"
+              :disabled="music.isLoading"
               :placeholder="phone.t('Apps.music.playlistPlaceholder')"
               :value="playlistName"
               @input="playlistName = eventValue($event)"
@@ -1014,7 +1230,14 @@ onMounted(() => {
             <X :size="20" />
           </k-link>
           <span>{{ phone.t('Apps.music.nowPlaying') }}</span>
-          <i />
+          <k-link
+            component="button"
+            icon-only
+            :aria-label="phone.t('Apps.music.addToPlaylist')"
+            @click="openCurrentTrackPlaylistPicker"
+          >
+            <CirclePlus :size="21" />
+          </k-link>
         </header>
         <div
           class="music-player-art"
@@ -1096,10 +1319,10 @@ onMounted(() => {
       :opened="confirmRemoveTrack"
       :title="phone.t('Apps.music.removeSongTitle')"
       :content="phone.t('Apps.music.removeSongBody')"
-      @backdropclick="confirmRemoveTrack = false"
+      @backdropclick="cancelRemoveTrack"
     >
       <template #buttons>
-        <k-dialog-button @click="confirmRemoveTrack = false">{{
+        <k-dialog-button @click="cancelRemoveTrack">{{
           phone.t('Common.cancel')
         }}</k-dialog-button>
         <k-dialog-button strong @click="removePersonalTrack">{{
@@ -1494,6 +1717,18 @@ onMounted(() => {
   width: 100%;
 }
 
+.music-playlist-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.music-playlist-actions :deep(button) {
+  min-width: 0;
+  padding-inline: 10px;
+}
+
 .music-mini-player {
   position: absolute;
   z-index: 32;
@@ -1627,6 +1862,19 @@ onMounted(() => {
   margin-top: 12px;
 }
 
+.music-picker-added {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--music-muted);
+  font-size: 11px;
+}
+
+.music-picker-create {
+  width: calc(100% - 32px);
+  margin: 14px 16px 0 !important;
+}
+
 .music-popover-dismiss {
   position: absolute;
   z-index: 199;
@@ -1686,6 +1934,10 @@ onMounted(() => {
 .music-player > header :deep(button) {
   justify-self: start;
   color: #fff;
+}
+
+.music-player > header > :last-child {
+  justify-self: end;
 }
 
 .music-player-art {

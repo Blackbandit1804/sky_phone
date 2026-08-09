@@ -1675,17 +1675,22 @@ app.post('/api/:endpoint', async (request, response) => {
       return
     }
     if (
-      !playlist.entries.some(
+      playlist.entries.some(
         (entry) =>
           entry.source === request.body.source &&
           entry.songId === request.body.songId,
       )
     ) {
-      playlist.entries.push({
-        source: request.body.source,
-        songId: request.body.songId,
+      response.json({
+        success: false,
+        error: 'song_already_in_playlist',
       })
+      return
     }
+    playlist.entries.push({
+      source: request.body.source,
+      songId: request.body.songId,
+    })
     response.json({ success: true, data: musicBootstrap() })
     return
   }

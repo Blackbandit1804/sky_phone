@@ -10,6 +10,9 @@ import {
 } from 'vitest'
 
 import type { MusicTrack } from '@/types/music'
+import { nuiCall } from '@/utils/nui'
+
+vi.mock('@/utils/nui', () => ({ nuiCall: vi.fn() }))
 
 class FakeAudio extends EventTarget {
   static latest: FakeAudio | null = null
@@ -117,6 +120,7 @@ beforeEach(() => {
   createObjectUrlMock.mockReset()
   createObjectUrlMock.mockReturnValue('blob:sky-music')
   revokeObjectUrlMock.mockReset()
+  vi.mocked(nuiCall).mockReset()
 })
 
 afterEach(() => {
@@ -196,5 +200,54 @@ describe('music server playback', () => {
     expect(music.currentTrack?.id).toBe('second')
     expect(fakeAudio.src).toBe('blob:sky-music')
     expect(createObjectUrlMock).toHaveBeenCalledOnce()
+  })
+})
+
+describe('music playlists', () => {
+  it('adds a track with the expected payload and applies the refreshed playlist', async () => {
+    const serverTrack = track('night-drive')
+    vi.mocked(nuiCall).mockResolvedValueOnce({
+      data: {
+        playlists: [
+          {
+            createdAt: 1,
+            entries: [{ songId: serverTrack.id, source: serverTrack.source }],
+            id: 'playlist-1',
+            name: 'Night Ride',
+          },
+        ],
+        serverTracks: [serverTrack],
+        youtubeTracks: [],
+      },
+      success: true,
+    })
+    const music = useMusicStore()
+
+    const success = await music.addToPlaylist('playlist-1', serverTrack)
+
+    expect(success).toBe(true)
+    expect(nuiCall).toHaveBeenCalledWith('music:add-to-playlist', {
+      playlistId: 'playlist-1',
+      songId: 'night-drive',
+      source: 'server',
+    })
+    expect(music.playlists[0]?.entries).toEqual([
+      { songId: 'night-drive', source: 'server' },
+    ])
+  })
+
+  it('surfaces a duplicate-track error and releases the loading state', async () => {
+    const serverTrack = track('night-drive')
+    vi.mocked(nuiCall).mockResolvedValueOnce({
+      error: 'song_already_in_playlist',
+      success: false,
+    })
+    const music = useMusicStore()
+
+    const success = await music.addToPlaylist('playlist-1', serverTrack)
+
+    expect(success).toBe(false)
+    expect(music.error).toBe('song_already_in_playlist')
+    expect(music.isLoading).toBe(false)
   })
 })

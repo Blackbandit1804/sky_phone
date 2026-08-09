@@ -190,6 +190,28 @@ local function affected_rows(result)
     return type(result) == "table" and tonumber(result.affectedRows) or 0
 end
 
+local playlist_add_locks = {}
+
+local function with_playlist_add_lock(playlist_id, callback)
+    local previous_lock = playlist_add_locks[playlist_id]
+    local current_lock = promise.new()
+    playlist_add_locks[playlist_id] = current_lock
+
+    if previous_lock then
+        Citizen.Await(previous_lock)
+    end
+
+    local success, result = xpcall(callback, debug.traceback)
+    current_lock:resolve(true)
+    if playlist_add_locks[playlist_id] == current_lock then
+        playlist_add_locks[playlist_id] = nil
+    end
+    if not success then
+        error(result, 0)
+    end
+    return result
+end
+
 local function uuid()
     local rows = Bridge.Database.Query("SELECT UUID() AS `id`", {})
     local id = rows[1] and rows[1].id
@@ -701,27 +723,40 @@ Bridge.Callbacks.Register("sky_phone:music:add-to-playlist", function(source, da
         return { success = false, error = "invalid_song" }
     end
 
-    local counts = Bridge.Database.Query([[
-        SELECT COUNT(*) AS `count`, COALESCE(MAX(`position`), 0) AS `last_position`
-        FROM `sky_phone_music_playlist_items` WHERE `playlist_id` = ?
-    ]], { playlist_id })
-    if (tonumber(counts[1] and counts[1].count) or 0) >= Config.Music.MaximumPlaylistSongs then
-        return { success = false, error = "playlist_song_limit" }
+    local mutation_error = with_playlist_add_lock(playlist_id, function()
+        local counts = Bridge.Database.Query([[
+            SELECT COUNT(*) AS `count`, COALESCE(MAX(`position`), 0) AS `last_position`,
+                COALESCE(MAX(`source` = ? AND `song_id` = ?), 0) AS `already_exists`
+            FROM `sky_phone_music_playlist_items` WHERE `playlist_id` = ?
+        ]], { source_type, song_id, playlist_id })
+        if tonumber(counts[1] and counts[1].already_exists) == 1 then
+            return "song_already_in_playlist"
+        end
+        if (tonumber(counts[1] and counts[1].count) or 0) >= Config.Music.MaximumPlaylistSongs then
+            return "playlist_song_limit"
+        end
+        local insert_result = Bridge.Database.Query([[
+            INSERT IGNORE INTO `sky_phone_music_playlist_items`
+                (`playlist_id`, `source`, `song_id`, `position`)
+            VALUES (?, ?, ?, ?)
+        ]], {
+            playlist_id,
+            source_type,
+            song_id,
+            (tonumber(counts[1] and counts[1].last_position) or 0) + 1,
+        })
+        if affected_rows(insert_result) ~= 1 then
+            return "song_already_in_playlist"
+        end
+        Bridge.Database.Query(
+            "UPDATE `sky_phone_music_playlists` SET `updated_at` = CURRENT_TIMESTAMP WHERE `id` = ?",
+            { playlist_id }
+        )
+        return nil
+    end)
+    if mutation_error then
+        return { success = false, error = mutation_error }
     end
-    Bridge.Database.Query([[
-        INSERT IGNORE INTO `sky_phone_music_playlist_items`
-            (`playlist_id`, `source`, `song_id`, `position`)
-        VALUES (?, ?, ?, ?)
-    ]], {
-        playlist_id,
-        source_type,
-        song_id,
-        (tonumber(counts[1] and counts[1].last_position) or 0) + 1,
-    })
-    Bridge.Database.Query(
-        "UPDATE `sky_phone_music_playlists` SET `updated_at` = CURRENT_TIMESTAMP WHERE `id` = ?",
-        { playlist_id }
-    )
     return { success = true, data = bootstrap(account_id, imei) }
 end)
 
