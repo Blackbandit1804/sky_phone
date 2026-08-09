@@ -18,6 +18,10 @@ function isoTime(offsetMilliseconds) {
   return new Date(Date.now() + offsetMilliseconds).toISOString()
 }
 
+function unixTime(offsetSeconds = 0) {
+  return Math.floor(Date.now() / 1000) + offsetSeconds
+}
+
 let authenticated = true
 let draft = null
 const radioData = {
@@ -463,6 +467,155 @@ const mockGarageVehicles = [
 ]
 
 let mockGarageValet = null
+
+const skyRideProfile = {
+  acceptanceRate: 96,
+  avatarUrl:
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=240&q=80',
+  cancelledRides: 3,
+  completedRides: 146,
+  currency: '$',
+  defaultPaymentMethod: 'bank',
+  earningsToday: 284,
+  id: 'skyride-profile-demo',
+  memberSince: unixTime(-214 * 24 * 60 * 60),
+  name: 'Alex Morgan',
+  rating: 4.92,
+}
+const skyRideDriver = {
+  avatarUrl:
+    'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=240&q=80',
+  id: 'skyride-driver-nova',
+  location: { x: -121.8, y: -904.6, z: 29.3 },
+  name: 'Nova Hayes',
+  phoneNumber: '5550199',
+  rating: 4.97,
+  trips: 842,
+  vehicle: {
+    color: 'Obsidian Black',
+    model: 'Enus Deity',
+    plate: 'RIDE 01',
+  },
+}
+const skyRidePassenger = {
+  avatarUrl: skyRideProfile.avatarUrl,
+  id: skyRideProfile.id,
+  name: skyRideProfile.name,
+  phoneNumber: '5550142',
+  rating: skyRideProfile.rating,
+  trips: skyRideProfile.completedRides,
+}
+
+function skyRideWithoutLiveContact(ride) {
+  const passenger = { ...ride.passenger }
+  delete passenger.phoneNumber
+  let driver = null
+  if (ride.driver) {
+    driver = { ...ride.driver }
+    delete driver.location
+    delete driver.phoneNumber
+  }
+  return { ...ride, driver, passenger }
+}
+
+const skyRideQuickLocations = [
+  {
+    coords: { x: -265.1, y: -960.2, z: 31.2 },
+    id: 'legion-square',
+    label: 'Legion Square',
+  },
+  {
+    coords: { x: 925.2, y: 46.4, z: 81.1 },
+    id: 'diamond-casino',
+    label: 'Diamond Casino',
+  },
+  {
+    coords: { x: -1037.7, y: -2737.8, z: 20.2 },
+    id: 'airport',
+    label: 'Los Santos Airport',
+  },
+  {
+    coords: { x: -594.4, y: -929.9, z: 23.9 },
+    id: 'vinewood',
+    label: 'Vinewood',
+  },
+]
+let skyRideSequence = 4
+let skyRideDriverOnline = false
+let skyRideActiveRide = null
+let skyRidePendingRating = null
+let skyRideAvailableRequests = [
+  {
+    createdAt: unixTime(-90),
+    currency: '$',
+    destination: skyRideQuickLocations[1],
+    driver: null,
+    id: 'skyride-request-demo',
+    passenger: {
+      avatarUrl:
+        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80',
+      id: 'skyride-passenger-jordan',
+      name: 'Jordan Lee',
+      rating: 4.84,
+      trips: 38,
+    },
+    pickup: skyRideQuickLocations[0],
+    price: 42,
+    serviceClass: 'comfort',
+    status: 'searching',
+    updatedAt: unixTime(-90),
+  },
+]
+let skyRideHistory = [
+  skyRideWithoutLiveContact({
+    createdAt: unixTime(-22 * 60 * 60),
+    currency: '$',
+    destination: skyRideQuickLocations[3],
+    driver: skyRideDriver,
+    finalPrice: 31,
+    id: 'skyride-history-1',
+    passenger: skyRidePassenger,
+    pickup: skyRideQuickLocations[0],
+    price: 31,
+    serviceClass: 'taxi',
+    status: 'completed',
+    updatedAt: unixTime(-21 * 60 * 60),
+  }),
+  skyRideWithoutLiveContact({
+    createdAt: unixTime(-3 * 24 * 60 * 60),
+    currency: '$',
+    destination: skyRideQuickLocations[2],
+    driver: skyRideDriver,
+    finalPrice: 68,
+    id: 'skyride-history-2',
+    passenger: skyRidePassenger,
+    pickup: skyRideQuickLocations[1],
+    price: 68,
+    serviceClass: 'premium',
+    status: 'completed',
+    updatedAt: unixTime(-3 * 24 * 60 * 60 + 18 * 60),
+  }),
+]
+const skyRideQuotes = new Map()
+
+function skyRideBootstrap() {
+  return {
+    activeRide: skyRideActiveRide,
+    availableRequests: skyRideAvailableRequests,
+    driverEligible: true,
+    driverOnline: skyRideDriverOnline,
+    history: skyRideHistory,
+    pendingRating: skyRidePendingRating,
+    profile: skyRideProfile,
+    quickLocations: skyRideQuickLocations,
+  }
+}
+
+function skyRideUpdate(fields) {
+  return Object.fromEntries(
+    fields.map((field) => [field, skyRideBootstrap()[field]]),
+  )
+}
 
 let contactSequence = 2
 const contacts = [
@@ -2307,6 +2460,377 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint.startsWith('fliptok:')) {
     response.json({ success: true })
+    return
+  }
+  if (endpoint === 'skyride:get-player-coords') {
+    response.json({
+      success: true,
+      data: { coords: { x: -265.1, y: -960.2, z: 31.2 } },
+    })
+    return
+  }
+  if (endpoint === 'skyride:bootstrap') {
+    response.json({ success: true, data: skyRideBootstrap() })
+    return
+  }
+  if (endpoint === 'skyride:history') {
+    response.json({ success: true, data: { items: skyRideHistory } })
+    return
+  }
+  if (endpoint === 'skyride:quote') {
+    const pickup = request.body.pickup
+    const destination = request.body.destination
+    if (!pickup?.coords || !destination?.coords) {
+      response.json({ success: false, error: 'invalid_location' })
+      return
+    }
+
+    const distanceMeters = Math.max(
+      750,
+      Math.round(
+        Math.hypot(
+          Number(destination.coords.x) - Number(pickup.coords.x),
+          Number(destination.coords.y) - Number(pickup.coords.y),
+        ) * 1.25,
+      ),
+    )
+    const durationSeconds = Math.max(60, Math.round(distanceMeters / 12))
+    const distanceUnit = 'kilometer'
+    const distance = distanceMeters / 1000
+    const expiresAt = unixTime(2 * 60)
+    const definitions = [
+      {
+        baseFare: 12,
+        etaMinutes: 3,
+        minimumFare: 15,
+        pricePerKilometer: 18,
+        pricePerMile: 29,
+        pricePerMinute: 1,
+        seats: 4,
+        serviceClass: 'taxi',
+      },
+      {
+        baseFare: 16,
+        etaMinutes: 5,
+        minimumFare: 22,
+        pricePerKilometer: 24,
+        pricePerMile: 39,
+        pricePerMinute: 2,
+        seats: 4,
+        serviceClass: 'comfort',
+      },
+      {
+        baseFare: 20,
+        etaMinutes: 7,
+        minimumFare: 28,
+        pricePerKilometer: 30,
+        pricePerMile: 48,
+        pricePerMinute: 2,
+        seats: 6,
+        serviceClass: 'xl',
+      },
+      {
+        baseFare: 28,
+        etaMinutes: 8,
+        minimumFare: 38,
+        pricePerKilometer: 40,
+        pricePerMile: 64,
+        pricePerMinute: 3,
+        seats: 4,
+        serviceClass: 'premium',
+      },
+    ]
+    const requestedCustomFare = request.body.customFare
+    if (
+      requestedCustomFare !== undefined &&
+      (!definitions.some(
+        (definition) =>
+          definition.serviceClass === requestedCustomFare?.serviceClass,
+      ) ||
+        !Number.isInteger(requestedCustomFare?.price))
+    ) {
+      response.json({ success: false, error: 'invalid_custom_fare' })
+      return
+    }
+    const options = definitions.map((definition) => {
+      const pricePerDistanceUnit =
+        distanceUnit === 'mile'
+          ? definition.pricePerMile
+          : definition.pricePerKilometer
+      const calculatedPrice = Math.round(
+        Math.max(
+          definition.minimumFare,
+          definition.baseFare +
+            distance * pricePerDistanceUnit +
+            (durationSeconds / 60) * definition.pricePerMinute,
+        ),
+      )
+      const minimumCustomPrice = Math.round(
+        Math.max(5, definition.minimumFare, calculatedPrice * 0.5),
+      )
+      const maximumCustomPrice = Math.round(
+        Math.min(100000, calculatedPrice * 3),
+      )
+      const usesCustomFare =
+        requestedCustomFare?.serviceClass === definition.serviceClass
+      const requestedPrice = Number(requestedCustomFare?.price)
+      if (
+        usesCustomFare &&
+        (!Number.isInteger(requestedPrice) ||
+          requestedPrice < minimumCustomPrice ||
+          requestedPrice > maximumCustomPrice)
+      ) {
+        return null
+      }
+      const option = {
+        available: true,
+        calculatedPrice,
+        currency: '$',
+        etaMinutes: definition.etaMinutes,
+        fareMode: usesCustomFare ? 'custom' : 'calculated',
+        maximumCustomPrice,
+        minimumCustomPrice,
+        price: usesCustomFare ? requestedPrice : calculatedPrice,
+        pricePerDistanceUnit,
+        quoteId: 'skyride-quote-' + Date.now() + '-' + definition.serviceClass,
+        seats: definition.seats,
+        serviceClass: definition.serviceClass,
+      }
+      skyRideQuotes.set(option.quoteId, {
+        destination,
+        expiresAt,
+        option,
+        pickup,
+      })
+      return option
+    })
+    if (options.some((option) => option === null)) {
+      response.json({ success: false, error: 'invalid_custom_fare' })
+      return
+    }
+
+    response.json({
+      success: true,
+      data: {
+        destination,
+        distance,
+        distanceMeters,
+        distanceUnit,
+        durationSeconds,
+        expiresAt,
+        options,
+        pickup,
+      },
+    })
+    return
+  }
+  if (endpoint === 'skyride:request') {
+    const quote = skyRideQuotes.get(String(request.body.quoteId ?? ''))
+    if (!quote) {
+      response.json({ success: false, error: 'quote_not_found' })
+      return
+    }
+    if (quote.expiresAt <= unixTime()) {
+      response.json({ success: false, error: 'quote_expired' })
+      return
+    }
+    if (skyRideActiveRide) {
+      response.json({ success: false, error: 'active_ride_exists' })
+      return
+    }
+
+    const now = unixTime()
+    const ride = {
+      createdAt: now,
+      currency: quote.option.currency,
+      destination: quote.destination,
+      driver: null,
+      id: `skyride-ride-${skyRideSequence++}`,
+      passenger: skyRidePassenger,
+      pickup: quote.pickup,
+      price: quote.option.price,
+      serviceClass: quote.option.serviceClass,
+      status: 'searching',
+      updatedAt: now,
+    }
+    skyRideActiveRide = ride
+    skyRideAvailableRequests = [
+      skyRideWithoutLiveContact(ride),
+      ...skyRideAvailableRequests,
+    ]
+    response.json({
+      success: true,
+      data: skyRideUpdate(['activeRide']),
+    })
+    return
+  }
+  if (endpoint === 'skyride:set-driver-status') {
+    if (typeof request.body.online !== 'boolean') {
+      response.json({ success: false, error: 'invalid_driver_status' })
+      return
+    }
+    skyRideDriverOnline = request.body.online
+    response.json({
+      success: true,
+      data: skyRideUpdate(['driverOnline', 'availableRequests']),
+    })
+    return
+  }
+  if (endpoint === 'skyride:accept') {
+    if (!skyRideDriverOnline) {
+      response.json({ success: false, error: 'driver_offline' })
+      return
+    }
+    const ride = skyRideAvailableRequests.find(
+      (item) => item.id === request.body.rideId,
+    )
+    if (!ride) {
+      response.json({ success: false, error: 'ride_not_found' })
+      return
+    }
+    if (skyRideActiveRide && skyRideActiveRide.id !== ride.id) {
+      response.json({ success: false, error: 'active_ride_exists' })
+      return
+    }
+
+    skyRideActiveRide = {
+      ...ride,
+      driver: skyRideDriver,
+      status: 'accepted',
+      updatedAt: unixTime(),
+    }
+    skyRideAvailableRequests = skyRideAvailableRequests.filter(
+      (item) => item.id !== ride.id,
+    )
+    response.json({
+      success: true,
+      data: skyRideUpdate(['activeRide', 'availableRequests']),
+    })
+    return
+  }
+  if (
+    endpoint === 'skyride:arrive' ||
+    endpoint === 'skyride:start' ||
+    endpoint === 'skyride:complete'
+  ) {
+    if (!skyRideActiveRide || skyRideActiveRide.id !== request.body.rideId) {
+      response.json({ success: false, error: 'ride_not_found' })
+      return
+    }
+
+    const transition = {
+      'skyride:arrive': {
+        from: ['accepted', 'driver_arriving'],
+        to: 'arrived',
+      },
+      'skyride:start': { from: ['arrived'], to: 'in_progress' },
+      'skyride:complete': { from: ['in_progress'], to: 'completed' },
+    }[endpoint]
+    if (!transition.from.includes(skyRideActiveRide.status)) {
+      response.json({ success: false, error: 'invalid_ride_status' })
+      return
+    }
+
+    const updatedRide = {
+      ...skyRideActiveRide,
+      ...(transition.to === 'completed'
+        ? { finalPrice: skyRideActiveRide.price }
+        : {}),
+      status: transition.to,
+      updatedAt: unixTime(),
+    }
+    if (transition.to === 'completed') {
+      const passengerRide = updatedRide.passenger?.id === skyRideProfile.id
+      skyRideProfile.completedRides += 1
+      if (!passengerRide) {
+        skyRideProfile.earningsToday += Math.round(
+          updatedRide.finalPrice * 0.85,
+        )
+      }
+      const historyRide = skyRideWithoutLiveContact(updatedRide)
+      skyRideHistory = [historyRide, ...skyRideHistory]
+      skyRidePendingRating = passengerRide ? historyRide : null
+      skyRideActiveRide = null
+      response.json({
+        success: true,
+        data: skyRideUpdate([
+          'activeRide',
+          'history',
+          'pendingRating',
+          'profile',
+        ]),
+      })
+      return
+    }
+
+    skyRideActiveRide = updatedRide
+    response.json({
+      success: true,
+      data: skyRideUpdate(['activeRide']),
+    })
+    return
+  }
+  if (endpoint === 'skyride:cancel') {
+    const ride =
+      skyRideActiveRide?.id === request.body.rideId
+        ? skyRideActiveRide
+        : skyRideAvailableRequests.find(
+            (item) => item.id === request.body.rideId,
+          )
+    if (!ride) {
+      response.json({ success: false, error: 'ride_not_found' })
+      return
+    }
+
+    const cancelledRide = {
+      ...ride,
+      status: 'cancelled',
+      updatedAt: unixTime(),
+    }
+    skyRideAvailableRequests = skyRideAvailableRequests.filter(
+      (item) => item.id !== ride.id,
+    )
+    if (skyRideActiveRide?.id === ride.id) skyRideActiveRide = null
+    skyRidePendingRating = null
+    skyRideHistory = [
+      skyRideWithoutLiveContact(cancelledRide),
+      ...skyRideHistory,
+    ]
+    response.json({
+      success: true,
+      data: skyRideUpdate([
+        'activeRide',
+        'availableRequests',
+        'history',
+        'pendingRating',
+      ]),
+    })
+    return
+  }
+  if (endpoint === 'skyride:rate') {
+    const rating = Number(request.body.rating)
+    const tip = Number(request.body.tip)
+    if (
+      !skyRidePendingRating ||
+      skyRidePendingRating.id !== request.body.rideId
+    ) {
+      response.json({ success: false, error: 'ride_not_found' })
+      return
+    }
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      response.json({ success: false, error: 'invalid_rating' })
+      return
+    }
+    if (!Number.isFinite(tip) || tip < 0 || tip > 10000) {
+      response.json({ success: false, error: 'invalid_tip' })
+      return
+    }
+
+    skyRidePendingRating = null
+    response.json({
+      success: true,
+      data: skyRideUpdate(['history', 'pendingRating']),
+    })
     return
   }
   if (endpoint === 'banking:overview') {

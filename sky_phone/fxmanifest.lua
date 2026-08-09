@@ -27,6 +27,7 @@ client_scripts {
     'source/client/animations.lua',
     'source/client/camera.lua',
     'source/client/garage.lua',
+    'source/client/skyride.lua',
     'source/bridge/client/radio.lua',
     'source/client/main.lua',
     'source/client/radio.lua',
@@ -61,6 +62,7 @@ server_scripts {
     'source/server/fliptok.lua',
     'source/server/picstagram.lua',
     'source/server/map.lua',
+    'source/server/skyride.lua',
     'source/server/calendar.lua',
     'source/server/radio.lua',
 }
