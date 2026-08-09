@@ -115,12 +115,12 @@ Config.Animations = {
     },
     Transforms = {
         Portrait = {
-            position = { x = 0.0, y = 0.0, z = 0.0 },
-            rotation = { x = 0.0, y = 0.0, z = 0.0 },
+            position = vector3(0.0, 0.0, 0.0),
+            rotation = vector3(0.0, 0.0, 0.0),
         },
         Landscape = {
-            position = { x = 0.0, y = 0.0, z = 0.0 },
-            rotation = { x = 0.0, y = 0.0, z = 90.0 },
+            position = vector3(0.0, 0.0, 0.0),
+            rotation = vector3(0.0, 0.0, 90.0),
         },
     },
 }
@@ -398,22 +398,22 @@ Config.SkyRide = {
         {
             Id = "legion-square",
             Label = "Legion Square",
-            Coords = { x = -265.1, y = -960.2, z = 31.2 },
+            Coords = vector3(-265.1, -960.2, 31.2),
         },
         {
             Id = "diamond-casino",
             Label = "Diamond Casino",
-            Coords = { x = 925.2, y = 46.4, z = 81.1 },
+            Coords = vector3(925.2, 46.4, 81.1),
         },
         {
             Id = "airport",
             Label = "Los Santos Airport",
-            Coords = { x = -1037.7, y = -2737.8, z = 20.2 },
+            Coords = vector3(-1037.7, -2737.8, 20.2),
         },
         {
             Id = "vinewood",
             Label = "Vinewood",
-            Coords = { x = -594.4, y = -929.9, z = 23.9 },
+            Coords = vector3(-594.4, -929.9, 23.9),
         },
     },
 }
