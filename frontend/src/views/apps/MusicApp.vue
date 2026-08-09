@@ -1430,6 +1430,7 @@ onMounted(() => {
 }
 
 .music-searchbar {
+  width: calc(100% - 24px);
   margin: 0 12px 10px;
 }
 

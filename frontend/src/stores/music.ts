@@ -49,9 +49,12 @@ declare global {
 }
 
 const audio = new Audio()
-audio.preload = 'metadata'
+audio.preload = 'auto'
 const YOUTUBE_API_TIMEOUT_MS = 12000
 let audioBound = false
+let audioLoadController: AbortController | null = null
+let audioObjectUrl: string | null = null
+let playbackGeneration = 0
 let youtubeApiPromise: Promise<YouTubeApi> | null = null
 let youtubePlayer: YouTubePlayer | null = null
 let youtubeProgressTimer: number | null = null
@@ -60,6 +63,88 @@ export function musicTrackKey(
   track: Pick<MusicTrack, 'id' | 'source'>,
 ): string {
   return `${track.source}:${track.id}`
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+function resetAudioSource(): void {
+  audioLoadController?.abort()
+  audioLoadController = null
+  audio.pause()
+  audio.removeAttribute('src')
+  audio.load()
+  if (audioObjectUrl) {
+    URL.revokeObjectURL(audioObjectUrl)
+    audioObjectUrl = null
+  }
+}
+
+function serverAudioMimeType(url: URL): string {
+  return url.pathname.toLowerCase().endsWith('.ogg')
+    ? 'audio/ogg'
+    : 'audio/mpeg'
+}
+
+async function loadServerAudioSource(source: string): Promise<boolean> {
+  const resolvedUrl = new URL(source, window.location.href)
+  const isCfxAsset =
+    resolvedUrl.protocol === 'https:' &&
+    resolvedUrl.hostname.startsWith('cfx-nui-')
+
+  if (!isCfxAsset) {
+    audio.src = resolvedUrl.href
+    audio.load()
+    return true
+  }
+
+  const controller = new AbortController()
+  audioLoadController = controller
+  try {
+    const response = await fetch(resolvedUrl.href, {
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new Error(`Music asset request failed (${response.status}).`)
+    }
+
+    const bytes = await response.arrayBuffer()
+    if (controller.signal.aborted || audioLoadController !== controller)
+      return false
+
+    const objectUrl = URL.createObjectURL(
+      new Blob([bytes], { type: serverAudioMimeType(resolvedUrl) }),
+    )
+    if (controller.signal.aborted || audioLoadController !== controller) {
+      URL.revokeObjectURL(objectUrl)
+      return false
+    }
+
+    audioObjectUrl = objectUrl
+    audio.src = objectUrl
+    audio.load()
+    return true
+  } finally {
+    if (audioLoadController === controller) audioLoadController = null
+  }
+}
+
+function currentAudioDuration(): number {
+  if (Number.isFinite(audio.duration) && audio.duration > 0)
+    return audio.duration
+  if (audio.seekable.length) {
+    const end = audio.seekable.end(audio.seekable.length - 1)
+    if (Number.isFinite(end) && end > 0) return end
+  }
+  return 0
+}
+
+function syncAudioDuration(): void {
+  const store = useMusicStore()
+  if (store.currentTrack?.source === 'server') {
+    store.duration = currentAudioDuration()
+  }
 }
 
 function stopYoutubeProgress(): void {
@@ -82,15 +167,14 @@ function startYoutubeProgress(): void {
 function bindAudioEvents(): void {
   if (audioBound) return
   audioBound = true
-  audio.addEventListener('durationchange', () => {
-    const store = useMusicStore()
-    if (store.currentTrack?.source === 'server') {
-      store.duration = Number.isFinite(audio.duration) ? audio.duration : 0
-    }
-  })
+  audio.addEventListener('durationchange', syncAudioDuration)
+  audio.addEventListener('loadedmetadata', syncAudioDuration)
+  audio.addEventListener('canplay', syncAudioDuration)
+  audio.addEventListener('progress', syncAudioDuration)
   audio.addEventListener('timeupdate', () => {
     const store = useMusicStore()
     if (store.currentTrack?.source === 'server') {
+      syncAudioDuration()
       store.currentTime = audio.currentTime
     }
   })
@@ -260,9 +344,8 @@ async function loadYouTubeTrack(videoId: string): Promise<void> {
 }
 
 function stopActiveMedia(): void {
-  audio.pause()
-  audio.removeAttribute('src')
-  audio.load()
+  playbackGeneration += 1
+  resetAudioSource()
   youtubePlayer?.pauseVideo()
   stopYoutubeProgress()
 }
@@ -379,6 +462,7 @@ export const useMusicStore = defineStore('music', {
     async play(track: MusicTrack, queue?: MusicTrack[]): Promise<void> {
       bindAudioEvents()
       stopActiveMedia()
+      const requestedGeneration = playbackGeneration
       const playableQueue = queue?.length ? [...queue] : [...this.allTracks]
       if (!playableQueue.length) playableQueue.push(track)
       const index = playableQueue.findIndex(
@@ -393,7 +477,8 @@ export const useMusicStore = defineStore('music', {
       this.playbackError = ''
       try {
         if (track.source === 'server' && track.url) {
-          audio.src = new URL(track.url, window.location.href).href
+          const loaded = await loadServerAudioSource(track.url)
+          if (!loaded || requestedGeneration !== playbackGeneration) return
           audio.volume = this.volume
           await audio.play()
         } else if (track.source === 'youtube' && track.videoId) {
@@ -402,6 +487,8 @@ export const useMusicStore = defineStore('music', {
           throw new Error('Track has no playable source.')
         }
       } catch (error) {
+        if (requestedGeneration !== playbackGeneration || isAbortError(error))
+          return
         console.error('[Music] Playback failed:', error)
         this.isPlaying = false
         this.playbackError = 'playback_failed'
@@ -449,10 +536,20 @@ export const useMusicStore = defineStore('music', {
       await this.play(this.queue[index]!, this.queue)
     },
     seek(seconds: number): void {
-      const next = Math.max(0, Math.min(this.duration || seconds, seconds))
-      this.currentTime = next
-      if (this.currentTrack?.source === 'server') audio.currentTime = next
-      else youtubePlayer?.seekTo(next, true)
+      if (!Number.isFinite(seconds)) return
+      const duration = this.duration || currentAudioDuration()
+      const next = Math.max(0, Math.min(duration || seconds, seconds))
+      if (this.currentTrack?.source === 'server') {
+        try {
+          audio.currentTime = next
+          this.currentTime = next
+        } catch (error) {
+          console.warn('[Music] Audio seek failed:', error)
+        }
+      } else {
+        youtubePlayer?.seekTo(next, true)
+        this.currentTime = next
+      }
     },
     setVolume(value: number): void {
       this.volume = Math.max(0, Math.min(1, value))

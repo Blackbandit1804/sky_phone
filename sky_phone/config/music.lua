@@ -1,13 +1,12 @@
 Config.Music = {
-    -- Put server-owned audio and artwork directly in config/music.
-    -- Paths must stay inside that directory. Restart the resource after changes.
+    -- Files are found recursively in config/music by their Id. For example,
+    -- Id = "night-drive" finds night-drive.ogg/mp3 and optional artwork with
+    -- the same name (.webp/.png/.jpg/.jpeg), even inside subdirectories.
     Tracks = {
         -- {
         --     Id = "night-drive",
         --     Title = "Night Drive",
         --     Artist = "Sky Records",
-        --     File = "config/music/night-drive.ogg",
-        --     Artwork = "config/music/night-drive.webp",
         -- },
     },
 

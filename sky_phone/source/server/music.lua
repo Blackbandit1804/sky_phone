@@ -1,9 +1,20 @@
 Bridge.Database.AfterMigration("sky_phone", function()
 local server_tracks = {}
 local server_tracks_by_id = {}
-local music_asset_prefix = "config/music/"
-local audio_extensions = { mp3 = true, ogg = true }
-local artwork_extensions = { jpeg = true, jpg = true, png = true, webp = true }
+local configured_track_ids = {}
+local music_asset_directory = "config/music"
+local music_asset_prefix = music_asset_directory .. "/"
+local music_asset_extensions = {
+    audio = { "ogg", "mp3" },
+    artwork = { "webp", "png", "jpg", "jpeg" },
+}
+local music_asset_types = {}
+
+for kind, extensions in pairs(music_asset_extensions) do
+    for _, extension in ipairs(extensions) do
+        music_asset_types[extension] = kind
+    end
+end
 
 local function trim(value)
     return type(value) == "string" and value:match("^%s*(.-)%s*$") or nil
@@ -27,27 +38,149 @@ local function optional_text(value)
     return normalized ~= "" and normalized or nil
 end
 
-local function normalize_music_asset_path(value, allowed_extensions)
-    local path = trim(value)
-    if not path
-        or path:sub(1, #music_asset_prefix) ~= music_asset_prefix
-        or not path:match("^[%w%._%-%/]+$")
-        or path:find("..", 1, true)
-        or path:find("//", 1, true)
-        or path:find("\\", 1, true)
-    then
+local function safe_music_asset_name(name)
+    return type(name) == "string"
+        and name ~= ""
+        and name ~= "."
+        and name ~= ".."
+        and not name:find("[/\\]")
+        and not name:find("%c")
+end
+
+local function add_music_asset(index, relative_path, file_name)
+    local stem, extension = file_name:match("^(.+)%.([^.]+)$")
+    extension = extension and extension:lower() or nil
+    local kind = extension and music_asset_types[extension] or nil
+    if not stem or not kind then
+        return
+    end
+
+    local id = stem:lower()
+    local by_id = index[kind][id]
+    if not by_id then
+        by_id = {}
+        index[kind][id] = by_id
+    end
+
+    local candidates = by_id[extension]
+    if not candidates then
+        candidates = {}
+        by_id[extension] = candidates
+    end
+    candidates[#candidates + 1] = music_asset_prefix .. relative_path
+end
+
+local function discover_music_assets()
+    local index = { audio = {}, artwork = {} }
+    if type(io.readdir) ~= "function" then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] Automatic music discovery requires io.readdir. Update the FXServer artifacts.",
+            { always = true }
+        )
         return nil
     end
 
-    local extension = path:match("%.([%w]+)$")
-    if not extension or not allowed_extensions[extension:lower()] then
+    local mount_root = ("@%s/%s"):format(GetCurrentResourceName(), music_asset_directory)
+    local visited_entries = 0
+    local failure_reason = nil
+
+    local function walk(mount_path, relative_directory, depth)
+        if failure_reason then
+            return true
+        end
+        if depth > 32 then
+            failure_reason = "directory nesting exceeds 32 levels"
+            return true
+        end
+
+        local directory = io.readdir(mount_path)
+        if not directory then
+            failure_reason = ("could not read '%s'"):format(mount_path)
+            return true
+        end
+
+        local names = {}
+        local has_entries = false
+        for name in directory:lines() do
+            has_entries = true
+            if safe_music_asset_name(name) then
+                names[#names + 1] = name
+            else
+                Bridge.Debug(
+                    "warn",
+                    "[sky_phone] Skipped unsafe music path entry '%s'.",
+                    tostring(name),
+                    { always = true }
+                )
+            end
+        end
+        directory:close()
+        table.sort(names)
+
+        for _, name in ipairs(names) do
+            if visited_entries >= 10000 then
+                failure_reason = "more than 10000 files and directories were found"
+                return true
+            end
+            visited_entries = visited_entries + 1
+            local relative_path = relative_directory == ""
+                and name
+                or (relative_directory .. "/" .. name)
+            local asset_path = mount_path .. "/" .. name
+
+            -- Cfx returns an empty directory listing for regular files. Walking every
+            -- entry is portable; io.open cannot distinguish directories on Linux.
+            if not walk(asset_path, relative_path, depth + 1) then
+                add_music_asset(index, relative_path, name)
+            end
+        end
+
+        return has_entries
+    end
+
+    local success, scan_error = pcall(walk, mount_root, "", 0)
+    if not success then
+        failure_reason = tostring(scan_error)
+    end
+    if failure_reason then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] Music asset discovery failed; no server tracks were loaded: %s",
+            failure_reason,
+            { always = true }
+        )
         return nil
     end
-    return path
+
+    return index
+end
+
+local function resolve_music_asset(index, id, kind)
+    local by_extension = index[kind][id:lower()]
+    if not by_extension then
+        return nil, "missing"
+    end
+
+    for _, extension in ipairs(music_asset_extensions[kind]) do
+        local candidates = by_extension[extension]
+        if candidates then
+            table.sort(candidates)
+            if #candidates > 1 then
+                return nil, "ambiguous", candidates
+            end
+            return candidates[1]
+        end
+    end
+
+    return nil, "missing"
 end
 
 local function music_asset_url(path)
-    return ("https://cfx-nui-%s/%s"):format(GetCurrentResourceName(), path)
+    local encoded_path = path:gsub("([^A-Za-z0-9%-%._~/])", function(character)
+        return ("%%%02X"):format(character:byte())
+    end)
+    return ("https://cfx-nui-%s/%s"):format(GetCurrentResourceName(), encoded_path)
 end
 
 local function affected_rows(result)
@@ -67,20 +200,20 @@ local function uuid()
 end
 
 local function normalize_server_tracks()
+    local music_assets = discover_music_assets()
+    if not music_assets then
+        return
+    end
+
     for index, configured in ipairs(Config.Music.Tracks or {}) do
-        local id = trim(configured.Id)
-        local title = trim(configured.Title)
-        local artist = trim(configured.Artist)
+        local id = type(configured) == "table" and trim(configured.Id) or nil
+        local title = type(configured) == "table" and trim(configured.Title) or nil
+        local artist = type(configured) == "table" and trim(configured.Artist) or nil
         local title_length = text_length(title)
         local artist_length = text_length(artist)
-        local file = normalize_music_asset_path(configured.File, audio_extensions)
-        local configured_artwork = optional_text(configured.Artwork)
-        local artwork = configured_artwork
-            and normalize_music_asset_path(configured_artwork, artwork_extensions)
-            or nil
 
         if not id
-            or not id:match("^[%w%-_]+$")
+            or not id:match("^[A-Za-z0-9_-]+$")
             or #id > 48
             or not title_length
             or title_length < 1
@@ -88,27 +221,66 @@ local function normalize_server_tracks()
             or not artist_length
             or artist_length < 1
             or artist_length > 120
-            or not file
-            or (configured_artwork and not artwork)
-            or server_tracks_by_id[id]
         then
             Bridge.Debug(
                 "error",
-                "[sky_phone] Ignored invalid or duplicate Config.Music.Tracks entry at index %s.",
+                "[sky_phone] Ignored invalid Config.Music.Tracks entry at index %s. Only Id, Title, and Artist are required.",
+                tostring(index),
+                { always = true }
+            )
+        elseif configured_track_ids[id:lower()] then
+            Bridge.Debug(
+                "error",
+                "[sky_phone] Ignored duplicate Config.Music.Tracks Id '%s' at index %s. IDs are case-insensitive.",
+                id,
                 tostring(index),
                 { always = true }
             )
         else
-            local track = {
-                id = id,
-                source = "server",
-                title = title,
-                artist = artist,
-                url = music_asset_url(file),
-                artwork = artwork and music_asset_url(artwork) or nil,
-            }
-            server_tracks[#server_tracks + 1] = track
-            server_tracks_by_id[id] = track
+            configured_track_ids[id:lower()] = true
+            local file, file_error, file_candidates = resolve_music_asset(music_assets, id, "audio")
+            local artwork, artwork_error, artwork_candidates = resolve_music_asset(music_assets, id, "artwork")
+
+            if file_error == "missing" then
+                Bridge.Debug(
+                    "error",
+                    "[sky_phone] Ignored music track '%s': no %s.ogg or %s.mp3 was found under config/music.",
+                    id,
+                    id,
+                    id,
+                    { always = true }
+                )
+            elseif file_error == "ambiguous" then
+                Bridge.Debug(
+                    "error",
+                    "[sky_phone] Ignored music track '%s': multiple equally preferred audio files were found: %s",
+                    id,
+                    table.concat(file_candidates, ", "),
+                    { always = true }
+                )
+            else
+                if artwork_error == "ambiguous" then
+                    Bridge.Debug(
+                        "warn",
+                        "[sky_phone] Music track '%s' was loaded without artwork because multiple equally preferred images were found: %s",
+                        id,
+                        table.concat(artwork_candidates, ", "),
+                        { always = true }
+                    )
+                    artwork = nil
+                end
+
+                local track = {
+                    id = id,
+                    source = "server",
+                    title = title,
+                    artist = artist,
+                    url = music_asset_url(file),
+                    artwork = artwork and music_asset_url(artwork) or nil,
+                }
+                server_tracks[#server_tracks + 1] = track
+                server_tracks_by_id[id] = track
+            end
         end
     end
 end
