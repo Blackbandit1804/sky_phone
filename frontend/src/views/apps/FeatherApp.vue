@@ -726,6 +726,9 @@ onMounted(async () => {
     <kNavbar
       v-if="feather.onboarded"
       class="feather-navbar"
+      :right-class="
+        screen === 'edit' ? 'feather-navbar__edit-action' : undefined
+      "
       :subtitle="screen === 'main' && tab === 'home' ? undefined : t('name')"
       :title="screen === 'main' && tab === 'home' ? undefined : navbarTitle"
     >
@@ -4595,6 +4598,11 @@ onMounted(async () => {
   padding-inline: 12px;
   font-size: 10px;
   font-weight: 800;
+}
+.feather-navbar :deep(.feather-navbar__edit-action) {
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
 }
 .feather-edit__identity {
   position: relative;
