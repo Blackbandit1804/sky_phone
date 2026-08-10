@@ -29,6 +29,7 @@ import { useGamesStore } from '@/features/games/store'
 import { useCallsStore } from '@/stores/calls'
 import { useBankingStore } from '@/stores/banking'
 import { useBillingStore } from '@/stores/billing'
+import { useCompaniesStore } from '@/stores/companies'
 import { useAccountStore } from '@/stores/account'
 import { useMailStore } from '@/stores/mail'
 import { useMessagesStore } from '@/stores/messages'
@@ -39,6 +40,7 @@ import { usePicstagramStore } from '@/stores/picstagram'
 import { useFeatherStore } from '@/stores/feather'
 import { useMediaStore } from '@/stores/media'
 import { useMarketplaceStore } from '@/stores/marketplace'
+import { useAppCatalogStore } from '@/stores/app-catalog'
 import { useAppStoreStore } from '@/stores/app-store'
 import { useWidgetsStore } from '@/stores/widgets'
 import { isPhoneAppId } from '@/config/apps'
@@ -46,16 +48,22 @@ import { useNotesStore } from '@/stores/notes'
 import { useWeatherStore } from '@/stores/weather'
 import {
   useNotificationsStore,
+  type PhoneNotification,
   type PhoneNotificationInput,
 } from '@/stores/notifications'
 import { usePhoneStore, type PhoneOpenPayload } from '@/stores/phone'
 import type { PhoneNotificationDevicePayload } from '@/types/device'
 import type { MailCounts } from '@/types/mail'
 import type { MarketplaceCounts } from '@/types/marketplace'
+import type {
+  CompanyChangedPayload,
+  CompanyUnreadCounts,
+} from '@/types/companies'
 import type { PhoneCall } from '@/types/phone'
 import { nuiCall } from '@/utils/nui'
 import { formatTimer } from '@/utils/clock'
 import { parsePhonePreferences } from '@/utils/preferences'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 import SpringboardView from '@/views/SpringboardView.vue'
 
 type AppMessage = {
@@ -64,6 +72,7 @@ type AppMessage = {
     | CalendarReminderData
     | MailEventData
     | MarketplaceEventData
+    | CompaniesEventData
     | MessagesEventData
     | DarkChatEventData
     | FlareEventData
@@ -76,6 +85,18 @@ type AppMessage = {
     | PhoneCall
     | PhoneNotificationInput
     | PhoneOpenPayload
+    | CustomAppCatalogEventData
+    | CustomAppEventData
+}
+
+type CustomAppCatalogEventData = {
+  apps?: unknown
+}
+
+type CustomAppEventData = {
+  appId?: unknown
+  data?: unknown
+  payload?: unknown
 }
 
 type SimPickerPayload = {
@@ -100,6 +121,18 @@ type MessagesEventData = {
   device?: PhoneNotificationDevicePayload
   phoneNumber?: string
   sender?: string
+  text?: string
+  title?: string
+}
+
+type CompaniesEventData = {
+  area?: CompanyChangedPayload['area']
+  companyId?: string
+  counts?: CompanyUnreadCounts
+  device?: PhoneNotificationDevicePayload
+  kind?: 'assigned' | 'newMessage' | 'newRequest' | 'requestUpdated'
+  requestId?: string
+  subtitle?: string
   text?: string
   title?: string
 }
@@ -209,6 +242,7 @@ const games = useGamesStore()
 const calls = useCallsStore()
 const banking = useBankingStore()
 const billing = useBillingStore()
+const companies = useCompaniesStore()
 const mail = useMailStore()
 const messages = useMessagesStore()
 const darkchat = useDarkChatStore()
@@ -218,6 +252,7 @@ const picstagram = usePicstagramStore()
 const feather = useFeatherStore()
 const media = useMediaStore()
 const marketplace = useMarketplaceStore()
+const appCatalog = useAppCatalogStore()
 const appStore = useAppStoreStore()
 const widgets = useWidgetsStore()
 const notes = useNotesStore()
@@ -267,6 +302,8 @@ const phoneFrameImage = computed(
   () => PHONE_FRAME_IMAGES[phone.preferences.settings.frame],
 )
 let clockTicker: ReturnType<typeof setInterval> | undefined
+let companiesChangeTimer: number | undefined
+let pendingCompaniesChange: CompanyChangedPayload | null = null
 let unlockTimer: number | undefined
 let passcodeLockTimer: number | undefined
 let unlockedServicesFrame: number | undefined
@@ -279,7 +316,16 @@ function getViewportScale(): number {
 }
 
 function hydratePhone(payload: PhoneOpenPayload): void {
+  if (payload.device?.imei) {
+    companies.bindDeviceScope(
+      payload.device.imei,
+      payload.device.sim?.id ?? null,
+    )
+  }
   phone.open(payload)
+  phone.ensureAppNotificationPreferences(
+    appCatalog.externalApps.map((app) => app.id),
+  )
   if (payload.device?.imei) {
     notifications.hydrate(
       payload.device.data.notifications?.payload,
@@ -294,6 +340,31 @@ function hydratePhone(payload: PhoneOpenPayload): void {
   media.hydrate(payload.device?.data.media?.payload)
   appStore.hydrate(payload.device?.data.apps?.payload)
   widgets.hydrate(payload.device?.data.widgets?.payload)
+}
+
+function queueCompaniesChange(change: CompanyChangedPayload): void {
+  if (!pendingCompaniesChange) {
+    pendingCompaniesChange = { ...change }
+  } else {
+    pendingCompaniesChange = {
+      area: pendingCompaniesChange.area === change.area ? change.area : 'all',
+      companyId:
+        pendingCompaniesChange.companyId === change.companyId
+          ? change.companyId
+          : undefined,
+      requestId:
+        pendingCompaniesChange.requestId === change.requestId
+          ? change.requestId
+          : undefined,
+    }
+  }
+  if (companiesChangeTimer !== undefined) return
+  companiesChangeTimer = window.setTimeout(() => {
+    companiesChangeTimer = undefined
+    const queuedChange = pendingCompaniesChange
+    pendingCompaniesChange = null
+    if (queuedChange) void companies.applyChanged(queuedChange)
+  }, 2000)
 }
 
 function loadUnlockedPhoneData(): void {
@@ -315,6 +386,7 @@ function loadUnlockedPhoneData(): void {
     void calls.bootstrap()
     void messages.loadConversations()
     void billing.loadOverview()
+    void companies.refreshUnreadCounts()
     if (account.email) void darkchat.bootstrap()
   })
 }
@@ -345,7 +417,35 @@ async function hydrateDevelopmentPhone(): Promise<void> {
 }
 
 function onMessage(event: MessageEvent<AppMessage>): void {
-  if (event.data?.type === 'app:open') {
+  if (!isTrustedRootMessageSource(event.source, window)) return
+
+  if (event.data?.type === 'custom-apps:catalog') {
+    appCatalog.replaceCatalog(event.data.data)
+    const activeAppId = route.params.appId
+    if (typeof activeAppId === 'string' && !isPhoneAppId(activeAppId)) {
+      void router.push('/')
+    }
+  } else if (event.data?.type === 'custom-app:message') {
+    const data = event.data.data as CustomAppEventData | undefined
+    if (typeof data?.appId === 'string') {
+      appCatalog.queueHostMessage(data.appId, data.payload)
+    } else {
+      console.error('[Custom apps] Ignored a message without a valid app id.')
+    }
+  } else if (event.data?.type === 'custom-app:open') {
+    const data = event.data.data as CustomAppEventData | undefined
+    if (
+      typeof data?.appId === 'string' &&
+      appCatalog.requestOpen(data.appId, data.data)
+    ) {
+      void router.push(`/apps/${data.appId}`)
+    }
+  } else if (event.data?.type === 'custom-app:close') {
+    const data = event.data.data as CustomAppEventData | undefined
+    if (typeof data?.appId === 'string' && route.params.appId === data.appId) {
+      void router.push('/')
+    }
+  } else if (event.data?.type === 'app:open') {
     hydratePhone(event.data.data as PhoneOpenPayload)
     void nuiCall('ui:opened')
   } else if (event.data?.type === 'device:updated') {
@@ -361,10 +461,7 @@ function onMessage(event: MessageEvent<AppMessage>): void {
     const data = event.data.data as NotificationEventData
     const { device, ...input } = data
     const notification: PhoneNotificationInput = input
-    if (
-      device &&
-      (!phone.isOpen || device.imei !== phone.device?.imei)
-    ) {
+    if (device && (!phone.isOpen || device.imei !== phone.device?.imei)) {
       notification.device = {
         imei: device.imei,
         name: device.name,
@@ -406,6 +503,47 @@ function onMessage(event: MessageEvent<AppMessage>): void {
   } else if (event.data?.type === 'marketplace:changed' && event.data.data) {
     const data = event.data.data as MarketplaceEventData
     if (data.counts) marketplace.setCounts(data.counts)
+  } else if (event.data?.type === 'companies:changed') {
+    const data = event.data.data as CompaniesEventData | undefined
+    if (data?.counts) companies.applyUnreadCounts(data.counts)
+    if (data?.area) {
+      queueCompaniesChange({
+        area: data.area,
+        companyId: data.companyId,
+        requestId: data.requestId,
+      })
+    } else if (!data?.counts) queueCompaniesChange({ area: 'all' })
+  } else if (event.data?.type === 'companies:notification' && event.data.data) {
+    const data = event.data.data as CompaniesEventData
+    if (data.counts) companies.applyUnreadCounts(data.counts)
+
+    const notification: PhoneNotificationInput = {
+      appId: 'companies',
+      ...(data.requestId && data.area
+        ? {
+            route: `/apps/companies?requestId=${encodeURIComponent(data.requestId)}&area=${encodeURIComponent(data.area)}`,
+          }
+        : {}),
+      persistent: !phone.isOpen && Boolean(data.requestId && data.area),
+      subtitle: data.subtitle,
+      text:
+        data.text ??
+        phone.t(
+          `Apps.companies.notifications.${data.kind ?? 'requestUpdated'}`,
+        ),
+      title: data.title ?? phone.t('Apps.companies.name'),
+    }
+    if (
+      data.device &&
+      (!phone.isOpen || data.device.imei !== phone.device?.imei)
+    ) {
+      notification.device = {
+        imei: data.device.imei,
+        name: data.device.name,
+        preferences: parsePhonePreferences(data.device.settings ?? null),
+      }
+    }
+    notifications.show(notification)
   } else if (
     event.data?.type === 'fliptok:verification-changed' &&
     event.data.data
@@ -667,10 +805,7 @@ function onMessage(event: MessageEvent<AppMessage>): void {
       }
     }
     notifications.show(notification)
-  } else if (
-    event.data?.type === 'crewlink:notification' &&
-    event.data.data
-  ) {
+  } else if (event.data?.type === 'crewlink:notification' && event.data.data) {
     const data = event.data.data as CrewLinkNotificationData
     const notification: PhoneNotificationInput = {
       appId: 'crewlink',
@@ -754,6 +889,28 @@ function unlockPhone(): void {
     return
   }
   finishUnlock()
+}
+
+function openLockScreenNotification(notification: PhoneNotification): void {
+  if (!notification.route) return
+  pendingUnlockRoute.value = notification.route
+  notifications.dismissFromLockScreen(notification.id)
+  unlockPhone()
+}
+
+async function openNotificationPreview(
+  notification: PhoneNotification,
+): Promise<void> {
+  if (!notification.route) return
+  const imei = notification.device?.imei ?? phone.device?.imei
+  if (!imei) return
+  pendingUnlockRoute.value = notification.route
+  const response = await nuiCall('device:notification-open', { imei })
+  if (!response.success) {
+    pendingUnlockRoute.value = null
+    return
+  }
+  notifications.dismissFromLockScreen(notification.id, imei)
 }
 
 function cancelPasscode(): void {
@@ -907,6 +1064,7 @@ watch(
   (isOpen) => {
     if (unlockTimer !== undefined) window.clearTimeout(unlockTimer)
     if (!isOpen) {
+      appStore.cancelPendingInstalls()
       if (unlockedServicesFrame !== undefined) {
         window.cancelAnimationFrame(unlockedServicesFrame)
         unlockedServicesFrame = undefined
@@ -961,6 +1119,9 @@ onBeforeUnmount(() => {
   }
   weather.stop()
   if (clockTicker) clearInterval(clockTicker)
+  if (companiesChangeTimer !== undefined) {
+    window.clearTimeout(companiesChangeTimer)
+  }
   if (unlockTimer !== undefined) window.clearTimeout(unlockTimer)
   if (passcodeLockTimer !== undefined) window.clearInterval(passcodeLockTimer)
   window.removeEventListener('message', onMessage)
@@ -1007,6 +1168,7 @@ onBeforeUnmount(() => {
               100)
           "
           @close="notifications.dismiss(notification.id)"
+          @open="openNotificationPreview"
         />
         <div
           v-if="phone.isOpen || notifications.current"
@@ -1070,6 +1232,7 @@ onBeforeUnmount(() => {
                     @camera="unlockCamera"
                     @clear-notifications="notifications.clearLockScreen"
                     @dismiss-notification="notifications.dismissFromLockScreen"
+                    @open-notification="openLockScreenNotification"
                     @unlock="unlockPhone"
                   />
                 </Transition>
@@ -1096,6 +1259,7 @@ onBeforeUnmount(() => {
                 <PhoneNotifications
                   :notification="phone.isOpen ? null : notifications.current"
                   @close="notifications.dismissCurrent()"
+                  @open="openNotificationPreview"
                 />
                 <div class="phone-display-dimmer" aria-hidden="true"></div>
               </k-app>

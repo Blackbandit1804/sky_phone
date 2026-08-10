@@ -1,5 +1,15 @@
 # sky_phone
 
+## Custom Apps
+
+`sky_phone` erkennt Registrierungen gestarteter Fremd-App-Ressourcen über integrierte
+Hersteller-Aliase und übernimmt unterstützte Apps automatisch in Springboard und App Store. In
+App-Ressourcen müssen dafür keine Sky-Vorlagen abgelegt werden. Unterstützt werden die
+dokumentierten Basisverträge von LB Phone, 17Movement, High Phone, Quasar Smartphone V3 und
+YSeries; die Aliase `lb-phone`, `17mov_Phone`, `high-phone`, `qs-smartphone` und `yseries` werden
+direkt von `sky_phone` bereitgestellt. Einrichtung und ehrliche Kompatibilitätsgrenzen stehen in der
+[deutschen Custom-App-Anleitung](docs/custom-apps.md).
+
 ## FlipTok verification
 
 FlipTok verification is server-authoritative and limited to the framework groups configured in

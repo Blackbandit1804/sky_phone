@@ -8,11 +8,18 @@ export type PhoneSim = {
 }
 
 export type PhoneContact = {
+  canCall?: boolean
+  canMessage?: boolean
+  companyId?: string
   created_at?: string
   id: string
+  icon?: string
   name: string
   phone_number: string
+  readonly?: boolean
+  source?: 'personal' | 'company'
   updated_at?: string
+  verified?: boolean
 }
 
 export type CallDirection = 'incoming' | 'outgoing'

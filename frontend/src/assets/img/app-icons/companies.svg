@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img">
+  <defs>
+    <linearGradient id="companies-bg" x1="18" y1="12" x2="104" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="companies-glass" x1="42" y1="31" x2="86" y2="101" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#DBEAFE" stop-opacity=".82"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="27" fill="url(#companies-bg)"/>
+  <path d="M26 96V45c0-5 4-9 9-9h26c5 0 9 4 9 9v51H26Z" fill="url(#companies-glass)"/>
+  <path d="M60 96V28c0-5 4-9 9-9h18c5 0 9 4 9 9v68H60Z" fill="#EFF6FF" fill-opacity=".9"/>
+  <g fill="#3B82F6" fill-opacity=".82">
+    <rect x="36" y="48" width="9" height="9" rx="2"/>
+    <rect x="51" y="48" width="9" height="9" rx="2"/>
+    <rect x="36" y="64" width="9" height="9" rx="2"/>
+    <rect x="51" y="64" width="9" height="9" rx="2"/>
+    <rect x="70" y="33" width="8" height="8" rx="2"/>
+    <rect x="83" y="33" width="8" height="8" rx="2"/>
+    <rect x="70" y="48" width="8" height="8" rx="2"/>
+    <rect x="83" y="48" width="8" height="8" rx="2"/>
+    <rect x="70" y="63" width="8" height="8" rx="2"/>
+    <rect x="83" y="63" width="8" height="8" rx="2"/>
+  </g>
+  <path d="M18 96h84" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="96" cy="25" r="10" fill="#22C55E" stroke="#FFFFFF" stroke-width="4"/>
+</svg>

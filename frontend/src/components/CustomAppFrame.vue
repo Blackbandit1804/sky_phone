@@ -1,0 +1,421 @@
+<script setup lang="ts">
+import { kBlock, kButton, kPage, kPreloader } from 'konsta/vue'
+import { computed, onBeforeMount, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+
+import { getPhoneApp, isExternalPhoneApp } from '@/config/apps'
+import { useAppCatalogStore } from '@/stores/app-catalog'
+import { useNotificationsStore } from '@/stores/notifications'
+import { usePhoneStore } from '@/stores/phone'
+import type {
+  CustomAppOpenRequest,
+  ExternalPhoneAppDefinition,
+  LaunchablePhoneAppId,
+  SkyPhoneAppBridgeRequest,
+  SkyPhoneAppBridgeResponse,
+  SkyPhoneAppContextV1,
+} from '@/types/apps'
+import {
+  createCustomAppBridgeRequestHandler,
+  getSkyPhoneAppCapabilities,
+  shouldReportCustomAppReady,
+} from '@/utils/customAppBridge'
+import {
+  createCustomAppLifecycleReporter,
+  customAppOrientationCoordinator,
+  customAppLifecycleScheduler,
+  getCustomAppSafeArea,
+} from '@/utils/customAppLifecycle'
+import { nuiCall } from '@/utils/nui'
+
+const props = defineProps<{
+  app: ExternalPhoneAppDefinition
+}>()
+
+const PROTOCOL_VERSION = 1
+
+const catalog = useAppCatalogStore()
+const notifications = useNotificationsStore()
+const phone = usePhoneStore()
+const router = useRouter()
+const frame = ref<HTMLIFrameElement | null>(null)
+const frameLoaded = ref(false)
+const frameUnavailable = ref(false)
+const skyBridgeReady = ref(false)
+let loadTimeout: ReturnType<typeof setTimeout> | undefined
+const lifecycleAppId = props.app.id
+const initialOpenRequest: CustomAppOpenRequest | undefined =
+  catalog.openRequests[lifecycleAppId]
+const orientation = customAppOrientationCoordinator.createSession((landscape) =>
+  phone.setCameraLandscape(landscape),
+)
+
+const lifecycle = createCustomAppLifecycleReporter({
+  onFailure(event, error) {
+    console.error(
+      `[Custom apps] ${event} lifecycle failed for ${lifecycleAppId}: ${error}`,
+    )
+  },
+  scheduler: customAppLifecycleScheduler,
+  send: (event, data) =>
+    nuiCall('custom-app:lifecycle', {
+      appId: lifecycleAppId,
+      ...(data === undefined ? {} : { data }),
+      event,
+    }),
+})
+
+const bridgeRequests = createCustomAppBridgeRequestHandler({
+  createNotification(notification) {
+    return notifications.show({
+      ...notification,
+      appId: notification.appId as LaunchablePhoneAppId,
+    })
+  },
+  getSourceApp: () => props.app,
+  prepareExternalOpen: (appId, data) => catalog.requestOpen(appId, data),
+  resolveTarget(appId) {
+    const target = getPhoneApp(appId)
+    return target
+      ? {
+          external: isExternalPhoneApp(target),
+          id: target.id,
+          route: target.route,
+        }
+      : null
+  },
+  storageCall: (endpoint, payload) => nuiCall(endpoint, payload),
+})
+
+const frameUrl = computed(() => {
+  const url = new URL(props.app.ui)
+  url.searchParams.set('skyPhoneAppId', props.app.id)
+  return url.href
+})
+const frameOrigin = computed(() => new URL(frameUrl.value).origin)
+const postMessageOrigin = computed(() =>
+  props.app.bundled ? '*' : frameOrigin.value,
+)
+const sandbox = computed(() =>
+  props.app.bundled
+    ? 'allow-downloads allow-forms allow-modals allow-scripts'
+    : 'allow-downloads allow-forms allow-modals allow-same-origin allow-scripts',
+)
+const frameReady = computed(
+  () =>
+    frameLoaded.value &&
+    (props.app.bridgeMode === 'legacy' || skyBridgeReady.value),
+)
+const context = computed<SkyPhoneAppContextV1>(() => ({
+  appId: props.app.id,
+  capabilities: getSkyPhoneAppCapabilities(props.app.capabilities),
+  colorScheme: phone.isDarkMode ? 'dark' : 'light',
+  language: phone.lang,
+  locale: {
+    description: props.app.description,
+    name: props.app.name,
+  },
+  phoneScale: phone.preferences.settings.phoneScale / 100,
+  protocolVersion: PROTOCOL_VERSION,
+  safeArea: getCustomAppSafeArea(props.app.orientation),
+}))
+
+function postToFrame(payload: unknown): boolean {
+  const target = frame.value?.contentWindow
+  if (!target) return false
+
+  try {
+    target.postMessage(payload, postMessageOrigin.value)
+    return true
+  } catch (error) {
+    console.error(`[Custom apps] Could not message ${props.app.id}.`, error)
+    return false
+  }
+}
+
+function queueReadyLifecycle(): void {
+  void lifecycle.report('open', initialOpenRequest?.data)
+  void lifecycle.report('ready')
+}
+
+function sendContext(): void {
+  if (!skyBridgeReady.value) return
+  postToFrame({
+    appId: props.app.id,
+    context: context.value,
+    protocolVersion: PROTOCOL_VERSION,
+    type: 'sky-phone-app:context',
+  })
+}
+
+function flushOpenRequest(): void {
+  const request = catalog.openRequests[props.app.id]
+  if (!request || !frameLoaded.value) return
+  if (props.app.bridgeMode === 'sky' && !skyBridgeReady.value) return
+
+  if (
+    props.app.bridgeMode === 'legacy' ||
+    postToFrame({
+      appId: props.app.id,
+      data: request.data,
+      protocolVersion: PROTOCOL_VERSION,
+      type: 'sky-phone-app:open',
+    })
+  ) {
+    catalog.consumeOpenRequest(props.app.id, request.sequence)
+  }
+}
+
+function flushHostMessages(): void {
+  if (!frameLoaded.value) return
+  if (props.app.bridgeMode === 'sky' && !skyBridgeReady.value) return
+
+  let lastDeliveredSequence = 0
+  for (const message of catalog.hostMessages[props.app.id] ?? []) {
+    const delivered = postToFrame(
+      props.app.bridgeMode === 'sky'
+        ? {
+            appId: props.app.id,
+            payload: message.payload,
+            protocolVersion: PROTOCOL_VERSION,
+            type: 'sky-phone-app:message',
+          }
+        : message.payload,
+    )
+    if (!delivered) break
+    lastDeliveredSequence = message.sequence
+  }
+  if (lastDeliveredSequence) {
+    catalog.consumeHostMessages(props.app.id, lastDeliveredSequence)
+  }
+}
+
+function sendResponse(response: SkyPhoneAppBridgeResponse): void {
+  postToFrame({
+    appId: props.app.id,
+    ...response,
+    protocolVersion: PROTOCOL_VERSION,
+    type: 'sky-phone-app:response',
+  })
+}
+
+async function handleBridgeRequest(
+  request: SkyPhoneAppBridgeRequest,
+): Promise<void> {
+  const result = await bridgeRequests.handle(request)
+  if (!result) return
+
+  sendResponse(result.response)
+  if (result.effect?.type === 'close') {
+    void router.push('/')
+  } else if (result.effect?.type === 'open') {
+    void router.push(result.effect.route)
+  }
+}
+
+function isTrustedFrameMessage(event: MessageEvent): boolean {
+  if (event.source !== frame.value?.contentWindow) return false
+  if (props.app.bundled) {
+    return event.origin === 'null' || event.origin === frameOrigin.value
+  }
+  return event.origin === frameOrigin.value
+}
+
+function onFrameMessage(event: MessageEvent): void {
+  if (!isTrustedFrameMessage(event)) return
+  if (
+    !event.data ||
+    typeof event.data !== 'object' ||
+    Array.isArray(event.data)
+  ) {
+    return
+  }
+
+  const message = event.data as Record<string, unknown>
+  if (
+    message.appId !== props.app.id ||
+    message.protocolVersion !== PROTOCOL_VERSION
+  ) {
+    return
+  }
+
+  if (message.type === 'sky-phone-app:ready') {
+    if (!skyBridgeReady.value) {
+      if (loadTimeout !== undefined) clearTimeout(loadTimeout)
+      loadTimeout = undefined
+      skyBridgeReady.value = true
+      frameUnavailable.value = false
+      sendContext()
+      flushOpenRequest()
+      flushHostMessages()
+    }
+    if (shouldReportCustomAppReady(props.app.bridgeMode, 'bridge-ready')) {
+      queueReadyLifecycle()
+    }
+    return
+  }
+
+  if (message.type === 'sky-phone-app:request') {
+    void handleBridgeRequest(message as unknown as SkyPhoneAppBridgeRequest)
+  }
+}
+
+function onFrameLoad(): void {
+  if (props.app.bridgeMode === 'legacy') {
+    if (loadTimeout !== undefined) clearTimeout(loadTimeout)
+    loadTimeout = undefined
+  }
+  frameLoaded.value = true
+  if (props.app.bridgeMode === 'legacy' || skyBridgeReady.value) {
+    frameUnavailable.value = false
+  }
+  if (shouldReportCustomAppReady(props.app.bridgeMode, 'frame-load')) {
+    queueReadyLifecycle()
+  }
+  flushOpenRequest()
+  flushHostMessages()
+}
+
+function closeApp(): void {
+  void router.push('/')
+}
+
+onBeforeMount(() => {
+  window.addEventListener('message', onFrameMessage)
+  orientation.apply(props.app.orientation)
+  void lifecycle.report('open', initialOpenRequest?.data)
+  if (props.app.bridgeMode === 'legacy' && initialOpenRequest) {
+    catalog.consumeOpenRequest(props.app.id, initialOpenRequest.sequence)
+  }
+  loadTimeout = setTimeout(() => {
+    loadTimeout = undefined
+    frameUnavailable.value = true
+    console.error(
+      `[Custom apps] Frame readiness timed out for ${props.app.id}.`,
+    )
+  }, props.app.readyTimeoutMs)
+})
+
+onBeforeUnmount(() => {
+  if (loadTimeout !== undefined) clearTimeout(loadTimeout)
+  window.removeEventListener('message', onFrameMessage)
+  orientation.release()
+  void lifecycle.report('close')
+})
+
+watch(context, sendContext, { deep: true })
+watch(
+  () => props.app.orientation,
+  (nextOrientation) => orientation.apply(nextOrientation),
+)
+watch(() => catalog.hostMessages[props.app.id], flushHostMessages, {
+  deep: true,
+})
+watch(() => catalog.openRequests[props.app.id], flushOpenRequest, {
+  deep: true,
+})
+</script>
+
+<template>
+  <k-page
+    component="main"
+    class="custom-app-page"
+    :class="{
+      'custom-app-page--landscape': app.orientation === 'landscape',
+    }"
+  >
+    <iframe
+      ref="frame"
+      v-show="frameReady && !frameUnavailable"
+      class="custom-app-frame"
+      :class="{
+        'custom-app-frame--fix-blur': app.compatibility.fixBlur === true,
+      }"
+      :name="app.ownerResource"
+      :sandbox="sandbox"
+      :src="frameUrl"
+      :title="app.name"
+      referrerpolicy="no-referrer"
+      @load="onFrameLoad"
+    />
+
+    <div
+      v-if="!frameReady && !frameUnavailable"
+      class="custom-app-state"
+      role="status"
+    >
+      <k-preloader />
+      <k-block>{{ phone.t('Apps.customApps.loading') }}</k-block>
+    </div>
+
+    <div v-else-if="frameUnavailable" class="custom-app-state" role="alert">
+      <k-block>
+        <strong>{{ phone.t('Apps.customApps.unavailableTitle') }}</strong>
+        <p>{{ phone.t('Apps.customApps.unavailableBody') }}</p>
+      </k-block>
+      <k-button rounded @click="closeApp">
+        {{ phone.t('Apps.customApps.close') }}
+      </k-button>
+    </div>
+  </k-page>
+</template>
+
+<style scoped>
+.custom-app-page {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--phone-app-background, #000);
+}
+
+.custom-app-page--landscape {
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  width: 100cqh;
+  height: 100cqw;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.custom-app-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+}
+
+.custom-app-frame--fix-blur {
+  transform: translateZ(0);
+}
+
+.custom-app-state {
+  position: absolute;
+  inset: 44px 20px 25px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.custom-app-state :deep(.k-block) {
+  margin: 0;
+}
+
+.custom-app-state strong {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 17px;
+}
+
+.custom-app-state p {
+  margin: 0;
+  color: rgb(142 142 147);
+  font-size: 13px;
+  line-height: 1.35;
+}
+</style>

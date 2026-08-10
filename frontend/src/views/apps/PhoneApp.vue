@@ -102,6 +102,10 @@ function openContact(contact?: PhoneContact, number = ''): void {
 }
 
 async function saveContact(): Promise<void> {
+  if (editingContact.value?.readonly) {
+    error.value = phone.t('Apps.phone.errors.readonly_contact')
+    return
+  }
   const number = normalizePhoneNumber(contactNumber.value)
   if (!contactName.value.trim() || !number) {
     error.value = phone.t('Apps.phone.errors.invalid_contact')
@@ -137,6 +141,10 @@ async function answerCall(): Promise<void> {
 
 async function deleteEditedContact(): Promise<void> {
   if (!editingContact.value) return
+  if (editingContact.value.readonly) {
+    error.value = phone.t('Apps.phone.errors.readonly_contact')
+    return
+  }
   if (await calls.deleteContact(editingContact.value.id)) {
     editorOpened.value = false
   }
@@ -299,12 +307,17 @@ onMounted(() => {
               v-for="contact in visibleContacts"
               :key="contact.id"
               :title="contact.name"
-              :subtitle="formatPhoneNumber(contact.phone_number)"
+              :subtitle="
+                contact.readonly
+                  ? `${formatPhoneNumber(contact.phone_number)} · ${phone.t('Apps.phone.officialContact')}`
+                  : formatPhoneNumber(contact.phone_number)
+              "
               link
               @click="openContact(contact)"
             >
               <template #after>
                 <k-button
+                  v-if="contact.canCall !== false"
                   clear
                   rounded
                   @click.stop="startCall(contact.phone_number)"
@@ -402,31 +415,44 @@ onMounted(() => {
   <k-dialog :opened="editorOpened" @backdropclick="editorOpened = false">
     <template #title>{{
       phone.t(
-        editingContact ? 'Apps.phone.editContact' : 'Apps.phone.addContact',
+        editingContact?.readonly
+          ? 'Apps.phone.officialContact'
+          : editingContact
+            ? 'Apps.phone.editContact'
+            : 'Apps.phone.addContact',
       )
     }}</template>
     <k-list strong inset>
       <k-list-input
         :value="contactName"
         :label="phone.t('Apps.phone.contactName')"
+        :readonly="editingContact?.readonly"
         @input="contactName = eventValue($event)"
       />
       <k-list-input
         :value="contactNumber"
         :label="phone.t('Apps.phone.phoneNumber')"
         inputmode="numeric"
+        :readonly="editingContact?.readonly"
         @input="contactNumber = eventValue($event)"
       />
     </k-list>
     <p v-if="error" class="text-sm text-[#ff3b30]">{{ error }}</p>
     <template #buttons>
       <k-dialog-button @click="editorOpened = false">{{
-        phone.t('Common.cancel')
+        phone.t(editingContact?.readonly ? 'Common.done' : 'Common.cancel')
       }}</k-dialog-button>
-      <k-dialog-button v-if="editingContact" @click="deleteEditedContact">{{
+      <k-dialog-button
+        v-if="editingContact && !editingContact.readonly"
+        @click="deleteEditedContact"
+        >{{
         phone.t('Common.delete')
       }}</k-dialog-button>
-      <k-dialog-button strong @click="saveContact">{{
+      <k-dialog-button
+        v-if="!editingContact?.readonly"
+        strong
+        @click="saveContact"
+        >{{
         phone.t('Common.save')
       }}</k-dialog-button>
     </template>

@@ -3,6 +3,7 @@ import { Headphones } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 import type { RadioHudConfig, RadioHudMember } from '@/types/radio'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type RadioHudEntry = RadioHudMember & {
   state: 'recent' | 'talking'
@@ -122,6 +123,7 @@ function updateConfig(value: Partial<RadioHudConfig>): void {
 }
 
 function onMessage(event: MessageEvent<RadioHudMessage>): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (event.data?.type === 'radio:hud-config' && event.data.data) {
     updateConfig(event.data.data as Partial<RadioHudConfig>)
   } else if (event.data?.type === 'radio:hud-update' && event.data.data) {

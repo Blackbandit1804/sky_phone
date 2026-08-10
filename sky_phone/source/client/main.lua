@@ -13,7 +13,10 @@ local server_callbacks = {
     "security:change-passcode",
     "security:disable-passcode",
     "device:save",
+    "device:notification-open",
     "notifications:save",
+    "custom-app:storage:get",
+    "custom-app:storage:set",
     "device:factory-reset",
     "account:login",
     "account:register",
@@ -166,6 +169,26 @@ local server_callbacks = {
     "crewlink:create-ping",
     "crewlink:remove-ping",
     "crewlink:live",
+    "companies:list",
+    "companies:get",
+    "companies:my-requests",
+    "companies:get-request",
+    "companies:work-context",
+    "companies:work-queue",
+    "companies:list-members",
+    "companies:create-request",
+    "companies:cancel-request",
+    "companies:send-message",
+    "companies:claim-request",
+    "companies:assign-request",
+    "companies:update-request-status",
+    "companies:update-availability",
+    "companies:update-profile",
+    "companies:update-hours",
+    "companies:update-services",
+    "companies:publish-announcement",
+    "companies:set-call-availability",
+    "companies:call-customer",
     "sim:insert",
     "sim:eject",
     "contacts:list",
@@ -228,6 +251,7 @@ local function send_open_message()
     local payload = device_payload
     payload.lang = Config.Bridge.Locale
     payload.locales = get_locale().Nui
+    SkyPhoneApps.SendCatalog()
     SendNUIMessage({
         type = "app:open",
         data = payload,
@@ -250,6 +274,7 @@ local function close_phone()
     end
 
     is_open = false
+    SkyPhoneApps.SetPhoneOpen(false)
     TriggerEvent("sky_phone:nuiClosed")
     SetNuiFocus(notification_focus or sim_picker_open, notification_focus or sim_picker_open)
     SendNUIMessage({ type = "app:close" })
@@ -293,6 +318,7 @@ end
 RegisterNUICallback("ui:ready", function(_, cb)
     Bridge.Debug("debug", "[sky_phone] NUI reported ready.", { always = true })
     TriggerEvent("sky_phone:client:nuiReady")
+    SkyPhoneApps.SendCatalog()
     if open_requested and device_payload then
         send_open_message()
     end
@@ -312,6 +338,7 @@ RegisterNUICallback("ui:opened", function(_, cb)
     end
 
     is_open = true
+    SkyPhoneApps.SetPhoneOpen(true)
     notification_focus = false
     SetNuiFocus(true, true)
     TriggerEvent("sky_phone:animation:phone", true)
@@ -515,6 +542,18 @@ end)
 
 RegisterNetEvent("sky_phone:marketplace:changed", function(data)
     SendNUIMessage({ type = "marketplace:changed", data = data })
+end)
+
+RegisterNetEvent("sky_phone:companies:changed", function(data)
+    SendNUIMessage({ type = "companies:changed", data = data })
+end)
+
+RegisterNetEvent("sky_phone:companies:notification", function(data)
+    local companies_locale = get_locale().Nui.Apps.companies
+    data.title = companies_locale.name
+    data.text = companies_locale.notifications[data.kind]
+        or companies_locale.notifications.requestUpdated
+    SendNUIMessage({ type = "companies:notification", data = data })
 end)
 
 RegisterNetEvent("sky_phone:fliptok:command-feedback", function(data)

@@ -32,8 +32,9 @@ import {
   Feather,
   ReceiptText,
   UsersRound,
+  Building2,
 } from 'lucide-vue-next'
-import { defineAsyncComponent, markRaw } from 'vue'
+import { defineAsyncComponent, markRaw, shallowReactive } from 'vue'
 
 import appStoreIcon from '@/assets/img/app-icons/apps.webp'
 import calculatorIcon from '@/assets/img/app-icons/calculator.webp'
@@ -70,13 +71,32 @@ import skyRideIcon from '@/assets/img/app-icons/skyride.svg'
 import musicIcon from '@/assets/img/app-icons/music.svg'
 import featherIcon from '@/assets/img/app-icons/feather.svg'
 import crewLinkIcon from '@/assets/img/app-icons/crewlink.svg'
+import companiesIcon from '@/assets/img/app-icons/companies.svg'
 import type {
+  BuiltinPhoneAppDefinition,
+  BuiltinPhoneAppId,
+  ExternalPhoneAppDefinition,
+  ExternalPhoneAppId,
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
   PhoneAppDefinition,
 } from '@/types/apps'
 
-export const PHONE_APPS: PhoneAppDefinition[] = [
+export const PHONE_APPS = shallowReactive<PhoneAppDefinition[]>([
+  {
+    category: 'utilities',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/CompaniesApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 28,
+    icon: markRaw(Building2),
+    iconClass: 'app-icon--companies',
+    iconImage: companiesIcon,
+    id: 'companies',
+    labelKey: 'Apps.companies.name',
+    route: '/apps/companies',
+  },
   {
     category: 'utilities',
     component: markRaw(
@@ -567,7 +587,13 @@ export const PHONE_APPS: PhoneAppDefinition[] = [
     labelKey: 'Apps.neonDrop.name',
     route: '/apps/neon-drop',
   },
-]
+])
+
+const BUILTIN_PHONE_APPS = [...PHONE_APPS] as BuiltinPhoneAppDefinition[]
+
+export const BUILTIN_PHONE_APP_IDS: ReadonlySet<BuiltinPhoneAppId> = new Set(
+  BUILTIN_PHONE_APPS.map((app) => app.id),
+)
 
 export const NON_REMOVABLE_PHONE_APP_IDS: ReadonlySet<LaunchablePhoneAppId> =
   new Set([
@@ -582,6 +608,12 @@ export const NON_REMOVABLE_PHONE_APP_IDS: ReadonlySet<LaunchablePhoneAppId> =
 
 export const PHONE_APP_IDS = PHONE_APPS.map((app) => app.id)
 
+export function replaceExternalPhoneApps(
+  apps: ExternalPhoneAppDefinition[],
+): void {
+  PHONE_APPS.splice(0, PHONE_APPS.length, ...BUILTIN_PHONE_APPS, ...apps)
+}
+
 export function getPhoneApp(
   id: string | string[] | undefined,
 ): PhoneAppDefinition | undefined {
@@ -594,8 +626,33 @@ export function isPhoneAppId(value: string): value is LaunchablePhoneAppId {
   return !!app && isLaunchablePhoneApp(app)
 }
 
+export function isExternalPhoneApp(
+  app: PhoneAppDefinition | undefined,
+): app is ExternalPhoneAppDefinition {
+  return app?.kind === 'external'
+}
+
+export function isValidExternalPhoneAppId(
+  value: string,
+): value is ExternalPhoneAppId {
+  return /^[a-z0-9][a-z0-9._-]{1,63}$/.test(value)
+}
+
+export function getPhoneAppLabel(
+  app: PhoneAppDefinition,
+  translate: (key: string) => string,
+): string {
+  return app.kind === 'external' ? app.name : translate(app.labelKey)
+}
+
+export function isPhoneAppRemovable(app: PhoneAppDefinition): boolean {
+  return app.kind === 'external'
+    ? app.removable
+    : !NON_REMOVABLE_PHONE_APP_IDS.has(app.id)
+}
+
 export function isLaunchablePhoneApp(
   app: PhoneAppDefinition,
 ): app is LaunchablePhoneAppDefinition {
-  return app.component !== null && app.route !== null
+  return app.kind === 'external' || app.component !== null
 }

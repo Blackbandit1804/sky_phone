@@ -28,6 +28,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { usePhoneStore } from '@/stores/phone'
 import { useRadioStore } from '@/stores/radio'
 import type { RadioHistoryEntry } from '@/types/radio'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type RadioTab = 'radio' | 'settings'
 
@@ -152,6 +153,7 @@ async function saveRadioProfile(): Promise<void> {
 }
 
 function onMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (event.data?.type === 'radio:updated' && event.data.data?.members) {
     memberSnapshotAt.value = Date.now()
     radio.updateMembers(event.data.data.members)

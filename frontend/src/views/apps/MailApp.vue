@@ -51,6 +51,7 @@ import {
   type MailSwipeAction,
   type MailSwipeAxis,
 } from '@/utils/mailSwipe'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type AuthMode = 'login' | 'register'
 type MailScreen = 'folders' | 'list' | 'message' | 'compose'
@@ -594,6 +595,7 @@ function goBack(): void {
 }
 
 function onMailEvent(event: MessageEvent<MailEvent>): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (event.data.type === 'mail:changed' && event.data.data?.counts) {
     mail.setCounts(event.data.data.counts)
     if (screen.value === 'list') {

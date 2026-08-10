@@ -19,6 +19,23 @@ Config.Phone = {
     DeviceName = "iFruit Phone",
 }
 
+Config.CustomApps = {
+    Enabled = true,
+    BundledApps = true,
+    ExternalApps = true,
+    ReadyTimeoutMs = 8000,
+    MaximumMessageBytes = 65536,
+    MaximumStorageBytesPerApp = 262144,
+    MaximumStorageValueBytes = 65536, -- Bridge v1 ceiling; lower values tighten the server policy.
+    MaximumStorageKeyLength = 64, -- Bridge v1 ceiling; lower values tighten the server policy.
+    MaximumStorageKeysPerApp = 128,
+    StorageRequestsPerMinute = 120,
+    AllowRemoteOrigins = {
+        -- ["https://apps.example.com"] = true,
+    },
+    TrustedAdapters = {},
+}
+
 Config.Security = {
     PasscodePepperConvar = "sky_phone_passcode_pepper",
     MaximumAttempts = 5,

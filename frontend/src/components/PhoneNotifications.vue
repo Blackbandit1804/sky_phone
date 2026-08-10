@@ -11,6 +11,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   close: []
+  open: [notification: PhoneNotification]
 }>()
 const phone = usePhoneStore()
 const icon = computed(() =>
@@ -18,6 +19,16 @@ const icon = computed(() =>
     ? getPhoneApp(props.notification.appId)?.iconImage
     : undefined,
 )
+
+function openNotification(event: MouseEvent): void {
+  if (
+    !props.notification?.route ||
+    (event.target as HTMLElement).closest('button')
+  ) {
+    return
+  }
+  emit('open', props.notification)
+}
 </script>
 
 <template>
@@ -29,7 +40,9 @@ const icon = computed(() =>
     :title-right-text="phone.t('Notifications.now')"
     button="close"
     class="phone-notification"
+    :class="{ 'is-actionable': !!notification?.route }"
     @close="emit('close')"
+    @click="openNotification"
   >
     <template v-if="icon" #icon>
       <img :src="icon" alt="" class="phone-notification__icon" />

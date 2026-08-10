@@ -14,6 +14,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   close: []
+  open: [notification: PhoneNotification]
 }>()
 const phone = usePhoneStore()
 const device = computed(() => props.notification.device!)
@@ -69,6 +70,7 @@ const wrapperStyle = computed<CSSProperties>(() => ({ zoom: props.zoom }))
           <PhoneNotifications
             :notification="notification"
             @close="emit('close')"
+            @open="emit('open', $event)"
           />
         </k-app>
       </div>

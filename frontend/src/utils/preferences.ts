@@ -38,6 +38,12 @@ export type AppNotificationPreferences = {
   sounds: boolean
 }
 
+export const DEFAULT_APP_NOTIFICATION_PREFERENCES: AppNotificationPreferences =
+  {
+    enabled: true,
+    sounds: true,
+  }
+
 export type PhonePreferencesV1 = {
   settings: {
     airplaneMode: boolean
@@ -80,6 +86,7 @@ const DEFAULT_APP_NOTIFICATIONS: Record<
   'sky-flappy': { enabled: true, sounds: true },
   'neon-drop': { enabled: true, sounds: true },
   citymarkt: { enabled: true, sounds: true },
+  companies: { enabled: true, sounds: true },
   'local-pages': { enabled: true, sounds: true },
   picstagram: { enabled: true, sounds: true },
   fliptok: { enabled: true, sounds: true },
@@ -155,28 +162,39 @@ function readChoice<T extends string>(
 function readNotifications(
   value: unknown,
 ): Record<LaunchablePhoneAppId, AppNotificationPreferences> {
-  const source =
-    value && typeof value === 'object'
-      ? (value as Partial<
-          Record<LaunchablePhoneAppId, Partial<AppNotificationPreferences>>
-        >)
-      : {}
+  const source: Record<string, unknown> =
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
   const notifications = cloneJsonData(DEFAULT_APP_NOTIFICATIONS)
 
-  for (const appId of Object.keys(notifications) as LaunchablePhoneAppId[]) {
-    notifications[appId] = {
-      enabled: readBoolean(
-        source[appId]?.enabled,
-        DEFAULT_APP_NOTIFICATIONS[appId].enabled,
-      ),
-      sounds: readBoolean(
-        source[appId]?.sounds,
-        DEFAULT_APP_NOTIFICATIONS[appId].sounds,
-      ),
+  for (const appId of Object.keys(source)) {
+    if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(appId)) continue
+    const rawPreferences =
+      source[appId] &&
+      typeof source[appId] === 'object' &&
+      !Array.isArray(source[appId])
+        ? (source[appId] as Partial<AppNotificationPreferences>)
+        : {}
+    const defaults =
+      DEFAULT_APP_NOTIFICATIONS[appId as LaunchablePhoneAppId] ??
+      DEFAULT_APP_NOTIFICATION_PREFERENCES
+    notifications[appId as LaunchablePhoneAppId] = {
+      enabled: readBoolean(rawPreferences.enabled, defaults.enabled),
+      sounds: readBoolean(rawPreferences.sounds, defaults.sounds),
     }
   }
 
   return notifications
+}
+
+export function ensureAppNotificationPreferences(
+  preferences: PhonePreferencesV1,
+  appIds: LaunchablePhoneAppId[],
+): void {
+  for (const appId of appIds) {
+    preferences.settings.notifications[appId] ??= cloneJsonData(
+      DEFAULT_APP_NOTIFICATION_PREFERENCES,
+    )
+  }
 }
 
 export function parsePhonePreferences(raw: string | null): PhonePreferencesV1 {

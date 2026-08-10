@@ -1054,6 +1054,42 @@ const contacts = [
     phone_number: '5558675309',
     updated_at: '2026-08-04 12:00:00',
   },
+  {
+    canCall: true,
+    canMessage: false,
+    companyId: 'police',
+    icon: 'https://picsum.photos/seed/companies-police-logo/180/180',
+    id: 'company:police',
+    name: 'Los Santos Police',
+    phone_number: '911',
+    readonly: true,
+    source: 'company',
+    verified: true,
+  },
+  {
+    canCall: true,
+    canMessage: false,
+    companyId: 'ambulance',
+    icon: 'https://picsum.photos/seed/companies-ems-logo/180/180',
+    id: 'company:ambulance',
+    name: 'Los Santos Medical',
+    phone_number: '912',
+    readonly: true,
+    source: 'company',
+    verified: true,
+  },
+  {
+    canCall: true,
+    canMessage: true,
+    companyId: 'bennys',
+    icon: 'https://picsum.photos/seed/companies-bennys-logo/180/180',
+    id: 'company:bennys',
+    name: "Benny's Motor Works",
+    phone_number: '5550102',
+    readonly: true,
+    source: 'company',
+    verified: true,
+  },
 ]
 const attachmentAssets = {
   gif: new Set(['celebrate', 'hearts', 'party', 'thumbs_up', 'wow']),
@@ -2097,6 +2133,488 @@ function flareBootstrap() {
   }
 }
 
+const companyCategories = [
+  { id: 'public_services', name: 'Public Services' },
+  { id: 'medical', name: 'Medical' },
+  { id: 'mechanics', name: 'Mechanics' },
+  { id: 'transport', name: 'Transport' },
+  { id: 'gastronomy', name: 'Food & Drink' },
+]
+let companyCallAvailable = false
+const companyProfiles = [
+  {
+    acceptsRequests: false,
+    announcement: {
+      body: 'Community traffic unit active around Legion Square.',
+      expiresAt: isoTime(6 * 60 * 60 * 1000),
+      publishedAt: isoTime(-35 * 60 * 1000),
+    },
+    availability: 'available',
+    availabilityUpdatedAt: isoTime(-12 * 60 * 1000),
+    canCall: true,
+    canMessage: false,
+    categoryId: 'public_services',
+    categoryName: 'Public Services',
+    coverUrl: 'https://picsum.photos/seed/companies-police-cover/900/360',
+    description:
+      'Public safety, non-emergency assistance, and community response for Los Santos.',
+    hours: [],
+    id: 'police',
+    location: {
+      address: 'Sinner Street',
+      coords: { x: 441.2, y: -981.9, z: 30.7 },
+      district: 'Mission Row',
+      label: 'Mission Row Police Station',
+    },
+    logoUrl: 'https://picsum.photos/seed/companies-police-logo/180/180',
+    name: 'Los Santos Police',
+    phoneNumber: '911',
+    revision: 3,
+    services: [
+      {
+        acceptsRequests: false,
+        active: true,
+        description: 'Immediate police response through the service line.',
+        id: 'emergency-response',
+        priceText: null,
+        title: 'Emergency Response',
+      },
+      {
+        acceptsRequests: false,
+        active: true,
+        description: 'General information and non-emergency assistance.',
+        id: 'public-assistance',
+        priceText: null,
+        title: 'Public Assistance',
+      },
+    ],
+    serviceSummary: 'Emergency response and public assistance',
+    verified: true,
+  },
+  {
+    acceptsRequests: false,
+    announcement: null,
+    availability: 'busy',
+    availabilityUpdatedAt: isoTime(-22 * 60 * 1000),
+    canCall: true,
+    canMessage: false,
+    categoryId: 'medical',
+    categoryName: 'Medical',
+    coverUrl: 'https://picsum.photos/seed/companies-ems-cover/900/360',
+    description:
+      'Emergency medical response and patient care across Los Santos County.',
+    hours: [],
+    id: 'ambulance',
+    location: {
+      address: 'Elgin Avenue',
+      coords: { x: 298.4, y: -584.6, z: 43.3 },
+      district: 'Pillbox Hill',
+      label: 'Pillbox Medical Center',
+    },
+    logoUrl: 'https://picsum.photos/seed/companies-ems-logo/180/180',
+    name: 'Los Santos Medical',
+    phoneNumber: '912',
+    revision: 1,
+    services: [
+      {
+        acceptsRequests: false,
+        active: true,
+        description: 'Urgent medical assistance through the service line.',
+        id: 'medical-response',
+        priceText: null,
+        title: 'Medical Response',
+      },
+    ],
+    serviceSummary: 'Emergency medical care',
+    verified: true,
+  },
+  {
+    acceptsRequests: true,
+    announcement: {
+      body: 'Same-day repairs available until 10 PM.',
+      expiresAt: isoTime(10 * 60 * 60 * 1000),
+      publishedAt: isoTime(-48 * 60 * 1000),
+    },
+    availability: 'available',
+    availabilityUpdatedAt: isoTime(-6 * 60 * 1000),
+    canCall: true,
+    canMessage: true,
+    categoryId: 'mechanics',
+    categoryName: 'Mechanics',
+    coverUrl: 'https://picsum.photos/seed/companies-bennys-cover/900/360',
+    description:
+      'Repairs, roadside assistance, performance upgrades, and custom bodywork.',
+    hours: [
+      { closesAt: '22:00', day: 0, isClosed: false, opensAt: '10:00' },
+      { closesAt: '22:00', day: 1, isClosed: false, opensAt: '10:00' },
+      { closesAt: '22:00', day: 2, isClosed: false, opensAt: '10:00' },
+      { closesAt: '22:00', day: 3, isClosed: false, opensAt: '10:00' },
+      { closesAt: '23:30', day: 4, isClosed: false, opensAt: '10:00' },
+      { closesAt: '23:30', day: 5, isClosed: false, opensAt: '12:00' },
+      { closesAt: null, day: 6, isClosed: true, opensAt: null },
+    ],
+    id: 'bennys',
+    location: {
+      address: 'Alta Street',
+      coords: { x: -211.6, y: -1324.2, z: 30.9 },
+      district: 'Strawberry',
+      label: "Benny's Original Motor Works",
+    },
+    logoUrl: 'https://picsum.photos/seed/companies-bennys-logo/180/180',
+    name: "Benny's Motor Works",
+    phoneNumber: '5550102',
+    revision: 7,
+    services: [
+      {
+        acceptsRequests: true,
+        active: true,
+        description: 'Diagnostics and general mechanical repairs.',
+        id: 'repair',
+        priceText: 'from $250',
+        title: 'Vehicle Repair',
+      },
+      {
+        acceptsRequests: true,
+        active: true,
+        description: 'Mobile help for disabled vehicles.',
+        id: 'roadside',
+        priceText: 'from $175',
+        title: 'Roadside Assistance',
+      },
+      {
+        acceptsRequests: true,
+        active: true,
+        description: 'Paint, wheels, and body modifications.',
+        id: 'customization',
+        priceText: 'Quote',
+        title: 'Customization',
+      },
+    ],
+    serviceSummary: 'Repairs, roadside help, and customization',
+    verified: true,
+  },
+  {
+    acceptsRequests: true,
+    announcement: null,
+    availability: 'available',
+    availabilityUpdatedAt: isoTime(-19 * 60 * 1000),
+    canCall: true,
+    canMessage: true,
+    categoryId: 'transport',
+    categoryName: 'Transport',
+    coverUrl: 'https://picsum.photos/seed/companies-taxi-cover/900/360',
+    description: 'Citywide passenger transport and pre-arranged group rides.',
+    hours: [],
+    id: 'downtown-cab',
+    location: {
+      address: 'Tangerine Street',
+      coords: { x: 900.3, y: -170.2, z: 74.1 },
+      district: 'East Vinewood',
+      label: 'Downtown Cab Co.',
+    },
+    logoUrl: 'https://picsum.photos/seed/companies-taxi-logo/180/180',
+    name: 'Downtown Cab Co.',
+    phoneNumber: '5550103',
+    revision: 2,
+    services: [
+      {
+        acceptsRequests: true,
+        active: true,
+        description: 'A driver will collect you at your location.',
+        id: 'pickup',
+        priceText: 'Metered',
+        title: 'Passenger Pickup',
+      },
+    ],
+    serviceSummary: 'Passenger pickups throughout the city',
+    verified: true,
+  },
+  {
+    acceptsRequests: true,
+    announcement: null,
+    availability: 'closed',
+    availabilityUpdatedAt: isoTime(-3 * 60 * 60 * 1000),
+    canCall: true,
+    canMessage: true,
+    categoryId: 'gastronomy',
+    categoryName: 'Food & Drink',
+    coverUrl: 'https://picsum.photos/seed/companies-burgershot-cover/900/360',
+    description: 'Burgers, fries, shakes, and late-night catering.',
+    hours: [],
+    id: 'burgershot',
+    location: {
+      address: 'San Andreas Avenue',
+      coords: { x: -1193.8, y: -892.5, z: 14 },
+      district: 'Vespucci',
+      label: 'Burger Shot',
+    },
+    logoUrl: 'https://picsum.photos/seed/companies-burgershot-logo/180/180',
+    name: 'Burger Shot',
+    phoneNumber: '5550104',
+    revision: 1,
+    services: [
+      {
+        acceptsRequests: true,
+        active: true,
+        description: 'Food order for collection at the restaurant.',
+        id: 'catering',
+        priceText: 'Quote',
+        title: 'Event Catering',
+      },
+    ],
+    serviceSummary: 'Food, drinks, and event catering',
+    verified: true,
+  },
+]
+
+let companyRequestSequence = 4
+let companyRequests = [
+  {
+    actions: {
+      allowedStatuses: ['in_progress', 'waiting_customer', 'completed'],
+      canAssign: true,
+      canCall: true,
+      canCancel: true,
+      canClaim: false,
+      canReply: true,
+    },
+    assignedLabel: 'you',
+    companyId: 'bennys',
+    companyLogoUrl: companyProfiles[2].logoUrl,
+    companyName: companyProfiles[2].name,
+    createdAt: isoTime(-2 * 60 * 60 * 1000),
+    description:
+      'My Sultan stopped near Legion Square and the engine will not start.',
+    events: [
+      {
+        createdAt: isoTime(-2 * 60 * 60 * 1000),
+        id: 'company-event-1',
+        status: 'new',
+        type: 'created',
+      },
+      {
+        createdAt: isoTime(-95 * 60 * 1000),
+        id: 'company-event-2',
+        status: 'assigned',
+        type: 'assigned',
+      },
+      {
+        createdAt: isoTime(-80 * 60 * 1000),
+        id: 'company-event-3',
+        status: 'in_progress',
+        type: 'status_changed',
+      },
+    ],
+    id: 'company-request-1',
+    media: [
+      {
+        id: 3,
+        url: 'https://picsum.photos/seed/sky-phone-3/800/600',
+      },
+      {
+        id: 4,
+        url: 'https://picsum.photos/seed/sky-phone-4/800/600',
+      },
+    ],
+    messages: [
+      {
+        author: 'customer',
+        authorLabel: 'you',
+        body: 'I am parked on the north side of the square.',
+        createdAt: isoTime(-110 * 60 * 1000),
+        id: 'company-message-1',
+        isMine: true,
+      },
+      {
+        author: 'company',
+        authorLabel: 'company',
+        body: 'A mechanic is heading your way. Please stay near the vehicle.',
+        createdAt: isoTime(-78 * 60 * 1000),
+        id: 'company-message-2',
+        isMine: false,
+      },
+    ],
+    phoneNumber: companyProfiles[2].phoneNumber,
+    revision: 3,
+    serviceId: 'roadside',
+    serviceName: 'Roadside Assistance',
+    status: 'in_progress',
+    subject: 'Vehicle will not start',
+    unreadCount: 1,
+    updatedAt: isoTime(-78 * 60 * 1000),
+  },
+  {
+    actions: {
+      allowedStatuses: ['assigned', 'cancelled'],
+      canAssign: true,
+      canCall: true,
+      canCancel: true,
+      canClaim: true,
+      canReply: true,
+    },
+    assignedLabel: null,
+    companyId: 'bennys',
+    companyLogoUrl: companyProfiles[2].logoUrl,
+    companyName: companyProfiles[2].name,
+    createdAt: isoTime(-18 * 60 * 1000),
+    description:
+      'I would like a quote for a metallic blue repaint and new wheels.',
+    events: [
+      {
+        createdAt: isoTime(-18 * 60 * 1000),
+        id: 'company-event-4',
+        status: 'new',
+        type: 'created',
+      },
+    ],
+    id: 'company-request-2',
+    media: [],
+    messages: [],
+    phoneNumber: companyProfiles[2].phoneNumber,
+    revision: 1,
+    serviceId: 'customization',
+    serviceName: 'Customization',
+    status: 'new',
+    subject: 'Repaint and wheels',
+    unreadCount: 0,
+    updatedAt: isoTime(-18 * 60 * 1000),
+  },
+  {
+    actions: {
+      allowedStatuses: [],
+      canAssign: false,
+      canCall: true,
+      canCancel: false,
+      canClaim: false,
+      canReply: false,
+    },
+    assignedLabel: 'assigned',
+    companyId: 'bennys',
+    companyLogoUrl: companyProfiles[2].logoUrl,
+    companyName: companyProfiles[2].name,
+    createdAt: isoTime(-2 * 24 * 60 * 60 * 1000),
+    description: 'Routine engine service and fluids.',
+    events: [
+      {
+        createdAt: isoTime(-2 * 24 * 60 * 60 * 1000),
+        id: 'company-event-5',
+        status: 'new',
+        type: 'created',
+      },
+      {
+        createdAt: isoTime(-26 * 60 * 60 * 1000),
+        id: 'company-event-6',
+        status: 'completed',
+        type: 'completed',
+      },
+    ],
+    id: 'company-request-3',
+    media: [],
+    messages: [],
+    phoneNumber: companyProfiles[2].phoneNumber,
+    revision: 4,
+    serviceId: 'repair',
+    serviceName: 'Vehicle Repair',
+    status: 'completed',
+    subject: 'Routine service',
+    unreadCount: 0,
+    updatedAt: isoTime(-26 * 60 * 60 * 1000),
+  },
+]
+
+const companyMembers = [
+  { id: 'member-mia', name: 'Mia Torres', online: true, role: 'Mechanic' },
+  { id: 'member-jay', name: 'Jay Coleman', online: true, role: 'Tow Operator' },
+  { id: 'member-robin', name: '', online: false, role: 'Mechanic' },
+]
+
+function companySummary(company) {
+  const { coverUrl, hours, revision, services, ...summary } = company
+  return {
+    ...summary,
+    serviceSummary:
+      company.serviceSummary ??
+      services.map((service) => service.title).join(', '),
+  }
+}
+
+function companyRequestSummary(request) {
+  const {
+    actions,
+    description,
+    events,
+    media,
+    messages,
+    phoneNumber,
+    revision,
+    ...summary
+  } = request
+  return summary
+}
+
+function companyWorkContext(testScenario = '') {
+  if (testScenario === 'companies-unauthorized') {
+    return {
+      authorized: false,
+      callAvailable: false,
+      company: null,
+      metrics: { assigned: 0, completedToday: 0, new: 0, waiting: 0 },
+      ownRequests: [],
+      permissions: {
+        canAssign: false,
+        canManageAnnouncement: false,
+        canManageHours: false,
+        canManageProfile: false,
+        canManageServices: false,
+        canSetAvailability: false,
+        canTakeCalls: false,
+      },
+      recentRequests: [],
+      role: null,
+      unreadCount: 0,
+    }
+  }
+  const manager = testScenario === 'companies-manager'
+  const open = companyRequests.filter(
+    (request) =>
+      request.companyId === 'bennys' &&
+      !['completed', 'cancelled'].includes(request.status),
+  )
+  return {
+    authorized: true,
+    callAvailable: companyCallAvailable,
+    company: companyProfiles.find((company) => company.id === 'bennys'),
+    metrics: {
+      assigned: open.filter((request) => request.assignedLabel).length,
+      completedToday: companyRequests.filter(
+        (request) =>
+          request.companyId === 'bennys' && request.status === 'completed',
+      ).length,
+      new: open.filter((request) => request.status === 'new').length,
+      waiting: open.filter((request) => request.status === 'waiting_customer')
+        .length,
+    },
+    ownRequests: open
+      .filter((request) => request.assignedLabel)
+      .map(companyRequestSummary),
+    permissions: {
+      canAssign: manager,
+      canManageAnnouncement: manager,
+      canManageHours: manager,
+      canManageProfile: manager,
+      canManageServices: manager,
+      canSetAvailability: true,
+      canTakeCalls: true,
+    },
+    recentRequests: open.slice(0, 4).map(companyRequestSummary),
+    role: manager ? 'manager' : 'employee',
+    unreadCount: open.reduce(
+      (total, request) => total + request.unreadCount,
+      0,
+    ),
+  }
+}
+
 app.post('/api/:endpoint', async (request, response, next) => {
   console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
@@ -2659,6 +3177,412 @@ app.post('/api/:endpoint', (request, response) => {
   console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
   const testScenario = String(request.body._testScenario ?? '')
+  if (endpoint.startsWith('companies:') && testScenario === 'companies-error') {
+    response.json({ success: false, error: 'service_unavailable' })
+    return
+  }
+  if (endpoint === 'companies:list') {
+    const reply = () => {
+      const search = String(request.body.search ?? '')
+        .trim()
+        .toLowerCase()
+      const categoryId = String(request.body.categoryId ?? '')
+      const availability = String(request.body.availability ?? '')
+      const offset = Math.max(0, Number(request.body.cursor ?? 0))
+      const pageSize = 3
+      let items = companyProfiles.filter((company) => {
+        if (categoryId && company.categoryId !== categoryId) return false
+        if (availability && company.availability !== availability) return false
+        if (request.body.hasLocation && !company.location) return false
+        if (request.body.acceptsRequests && !company.acceptsRequests)
+          return false
+        if (!search) return true
+        return [
+          company.name,
+          company.categoryName,
+          company.description,
+          company.location?.district,
+          ...company.services.flatMap((service) => [
+            service.title,
+            service.description,
+          ]),
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(search))
+      })
+      if (request.body.sort === 'name') {
+        items = [...items].sort((left, right) =>
+          left.name.localeCompare(right.name),
+        )
+      } else if (request.body.sort === 'updated') {
+        items = [...items].sort(
+          (left, right) =>
+            new Date(right.availabilityUpdatedAt).getTime() -
+            new Date(left.availabilityUpdatedAt).getTime(),
+        )
+      }
+      if (
+        testScenario === 'companies-empty-search' ||
+        search === 'no results'
+      ) {
+        items = []
+      }
+      const page = items.slice(offset, offset + pageSize)
+      response.json({
+        success: true,
+        data: {
+          categories: companyCategories,
+          companies: page.map(companySummary),
+          nextCursor:
+            offset + page.length < items.length
+              ? String(offset + page.length)
+              : null,
+        },
+      })
+    }
+    if (testScenario === 'companies-loading') setTimeout(reply, 1200)
+    else reply()
+    return
+  }
+  if (endpoint === 'companies:get') {
+    const company = companyProfiles.find(
+      (item) => item.id === String(request.body.companyId),
+    )
+    response.json(
+      company
+        ? { success: true, data: { company } }
+        : { success: false, error: 'company_not_found' },
+    )
+    return
+  }
+  if (endpoint === 'companies:my-requests') {
+    const list = request.body.list === 'closed' ? 'closed' : 'open'
+    const offset = Math.max(0, Number(request.body.cursor ?? 0))
+    const matches = companyRequests.filter((item) =>
+      list === 'closed'
+        ? ['completed', 'cancelled'].includes(item.status)
+        : !['completed', 'cancelled'].includes(item.status),
+    )
+    const page = matches.slice(offset, offset + 2)
+    response.json({
+      success: true,
+      data: {
+        nextCursor:
+          offset + page.length < matches.length
+            ? String(offset + page.length)
+            : null,
+        requests: page.map(companyRequestSummary),
+        unreadCount: companyRequests.reduce(
+          (total, item) => total + item.unreadCount,
+          0,
+        ),
+      },
+    })
+    return
+  }
+  if (endpoint === 'companies:get-request') {
+    const item = companyRequests.find(
+      (candidate) => candidate.id === String(request.body.requestId),
+    )
+    if (item) item.unreadCount = 0
+    response.json(
+      item
+        ? { success: true, data: { request: item } }
+        : { success: false, error: 'request_not_found' },
+    )
+    return
+  }
+  if (endpoint === 'companies:work-context') {
+    response.json({
+      success: true,
+      data: { context: companyWorkContext(testScenario) },
+    })
+    return
+  }
+  if (endpoint === 'companies:work-queue') {
+    const filter = String(request.body.filter ?? 'new')
+    const offset = Math.max(0, Number(request.body.cursor ?? 0))
+    const matches = companyRequests.filter((item) => {
+      if (item.companyId !== 'bennys') return false
+      if (filter === 'assigned') return item.assignedLabel === 'you'
+      return item.status === filter
+    })
+    const page = matches.slice(offset, offset + 2)
+    response.json({
+      success: true,
+      data: {
+        nextCursor:
+          offset + page.length < matches.length
+            ? String(offset + page.length)
+            : null,
+        requests: page.map(companyRequestSummary),
+      },
+    })
+    return
+  }
+  if (endpoint === 'companies:list-members') {
+    response.json({ success: true, data: { members: companyMembers } })
+    return
+  }
+  if (endpoint === 'companies:create-request') {
+    const company = companyProfiles.find(
+      (item) => item.id === String(request.body.companyId),
+    )
+    const service = company?.services.find(
+      (item) => item.id === String(request.body.serviceId),
+    )
+    if (!company?.acceptsRequests || !service?.acceptsRequests) {
+      response.json({ success: false, error: 'invalid_service' })
+      return
+    }
+    const now = new Date().toISOString()
+    const item = {
+      actions: {
+        allowedStatuses: ['assigned', 'cancelled'],
+        canAssign: true,
+        canCall: true,
+        canCancel: true,
+        canClaim: true,
+        canReply: true,
+      },
+      assignedLabel: null,
+      companyId: company.id,
+      companyLogoUrl: company.logoUrl,
+      companyName: company.name,
+      createdAt: now,
+      description: String(request.body.description ?? ''),
+      events: [
+        {
+          createdAt: now,
+          id: `company-event-${Date.now()}`,
+          status: 'new',
+          type: 'created',
+        },
+      ],
+      id: `company-request-${companyRequestSequence++}`,
+      media: (Array.isArray(request.body.mediaIds)
+        ? request.body.mediaIds
+        : []
+      ).flatMap((mediaId) => {
+        const media = mockMedia.find(
+          (candidate) =>
+            candidate.id === Number(mediaId) && candidate.mediaType === 'photo',
+        )
+        return media ? [{ id: media.id, url: media.url }] : []
+      }),
+      messages: [],
+      phoneNumber: company.phoneNumber,
+      revision: 1,
+      serviceId: service.id,
+      serviceName: service.title,
+      status: 'new',
+      subject: String(request.body.subject ?? ''),
+      unreadCount: 0,
+      updatedAt: now,
+    }
+    companyRequests.unshift(item)
+    response.json({ success: true, data: { request: item } })
+    return
+  }
+  if (
+    [
+      'companies:cancel-request',
+      'companies:send-message',
+      'companies:claim-request',
+      'companies:assign-request',
+      'companies:update-request-status',
+    ].includes(endpoint)
+  ) {
+    const item = companyRequests.find(
+      (candidate) => candidate.id === String(request.body.requestId),
+    )
+    if (!item) {
+      response.json({ success: false, error: 'request_not_found' })
+      return
+    }
+    if (Number(request.body.revision) !== item.revision) {
+      response.json({ success: false, error: 'revision_conflict' })
+      return
+    }
+    const now = new Date().toISOString()
+    if (endpoint === 'companies:cancel-request') {
+      item.status = 'cancelled'
+      item.actions = {
+        allowedStatuses: [],
+        canAssign: false,
+        canCall: true,
+        canCancel: false,
+        canClaim: false,
+        canReply: false,
+      }
+      item.events.push({
+        createdAt: now,
+        id: `company-event-${Date.now()}`,
+        status: 'cancelled',
+        type: 'cancelled',
+      })
+    }
+    if (endpoint === 'companies:send-message') {
+      item.messages.push({
+        author: 'customer',
+        authorLabel: 'you',
+        body: String(request.body.body ?? ''),
+        createdAt: now,
+        id: `company-message-${Date.now()}`,
+        isMine: true,
+      })
+    }
+    if (endpoint === 'companies:claim-request') {
+      item.assignedLabel = 'you'
+      item.status = 'assigned'
+      item.actions.canClaim = false
+      item.events.push({
+        createdAt: now,
+        id: `company-event-${Date.now()}`,
+        status: 'assigned',
+        type: 'assigned',
+      })
+    }
+    if (endpoint === 'companies:assign-request') {
+      const member = companyMembers.find(
+        (candidate) => candidate.id === String(request.body.memberId),
+      )
+      if (!member?.online) {
+        response.json({ success: false, error: 'not_authorized' })
+        return
+      }
+      item.assignedLabel = 'assigned'
+      item.status = 'assigned'
+      item.actions.canClaim = false
+      item.events.push({
+        createdAt: now,
+        id: `company-event-${Date.now()}`,
+        status: 'assigned',
+        type: 'assigned',
+      })
+    }
+    if (endpoint === 'companies:update-request-status') {
+      item.status = String(request.body.status)
+      item.events.push({
+        createdAt: now,
+        id: `company-event-${Date.now()}`,
+        status: item.status,
+        type:
+          item.status === 'completed'
+            ? 'completed'
+            : item.status === 'cancelled'
+              ? 'cancelled'
+              : 'status_changed',
+      })
+    }
+    item.revision += 1
+    item.updatedAt = now
+    response.json({
+      success: true,
+      data: {
+        context: companyWorkContext(testScenario),
+        request: item,
+      },
+    })
+    return
+  }
+  if (
+    [
+      'companies:update-availability',
+      'companies:update-profile',
+      'companies:update-hours',
+      'companies:update-services',
+      'companies:publish-announcement',
+    ].includes(endpoint)
+  ) {
+    const company = companyProfiles.find((item) => item.id === 'bennys')
+    if (
+      testScenario === 'companies-conflict' ||
+      Number(request.body.revision) !== company.revision
+    ) {
+      response.json({ success: false, error: 'revision_conflict' })
+      return
+    }
+    if (endpoint === 'companies:update-availability') {
+      company.availability = String(request.body.availability)
+      company.availabilityUpdatedAt = new Date().toISOString()
+    }
+    if (endpoint === 'companies:update-profile') {
+      company.acceptsRequests = request.body.acceptsRequests === true
+      company.description = String(request.body.description ?? '')
+      company.location = {
+        ...company.location,
+        address: String(request.body.address ?? ''),
+        coords:
+          request.body.coords && typeof request.body.coords === 'object'
+            ? { ...request.body.coords }
+            : company.location.coords,
+        district: String(request.body.district ?? ''),
+        label: String(request.body.locationLabel ?? ''),
+      }
+      const logo = mockMedia.find(
+        (item) => item.id === Number(request.body.logoMediaId),
+      )
+      const cover = mockMedia.find(
+        (item) => item.id === Number(request.body.coverMediaId),
+      )
+      if (logo) company.logoUrl = logo.url
+      if (cover) company.coverUrl = cover.url
+    }
+    if (endpoint === 'companies:update-hours') {
+      company.hours = Array.isArray(request.body.hours)
+        ? request.body.hours
+        : []
+    }
+    if (endpoint === 'companies:update-services') {
+      company.services = Array.isArray(request.body.services)
+        ? request.body.services.map((service, index) => ({
+            ...service,
+            id: service.id || `service-${Date.now()}-${index}`,
+          }))
+        : []
+      company.serviceSummary = company.services
+        .filter((service) => service.active)
+        .map((service) => service.title)
+        .join(', ')
+    }
+    if (endpoint === 'companies:publish-announcement') {
+      const body = String(request.body.body ?? '').trim()
+      company.announcement = body
+        ? {
+            body,
+            expiresAt: request.body.expiresAt || null,
+            publishedAt: new Date().toISOString(),
+          }
+        : null
+    }
+    company.revision += 1
+    response.json({
+      success: true,
+      data: {
+        company,
+        context: companyWorkContext(testScenario),
+      },
+    })
+    return
+  }
+  if (endpoint === 'companies:set-call-availability') {
+    companyCallAvailable = request.body.available === true
+    response.json({
+      success: true,
+      data: { context: companyWorkContext(testScenario) },
+    })
+    return
+  }
+  if (endpoint === 'companies:call-customer') {
+    const item = companyRequests.find(
+      (candidate) => candidate.id === String(request.body.requestId),
+    )
+    response.json(
+      item ? { success: true } : { success: false, error: 'request_not_found' },
+    )
+    return
+  }
   if (endpoint === 'crewlink:bootstrap') {
     response.json({ success: true, data: crewLinkBootstrap(testScenario) })
     return
@@ -2734,7 +3658,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:update-group') {
-    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const group = crewLinkGroups.find(
+      (item) => item.id === request.body.groupId,
+    )
     if (!group) {
       response.json({ success: false, error: 'group_not_found' })
       return
@@ -2749,7 +3675,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:delete-group') {
-    crewLinkGroups = crewLinkGroups.filter((item) => item.id !== request.body.groupId)
+    crewLinkGroups = crewLinkGroups.filter(
+      (item) => item.id !== request.body.groupId,
+    )
     delete crewLinkMembers[request.body.groupId]
     delete crewLinkPings[request.body.groupId]
     crewLinkProfile.activeGroupId = crewLinkGroups[0]?.id ?? null
@@ -2757,7 +3685,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:set-active') {
-    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const group = crewLinkGroups.find(
+      (item) => item.id === request.body.groupId,
+    )
     if (!group) {
       response.json({ success: false, error: 'group_not_found' })
       return
@@ -2802,7 +3732,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:rotate-code') {
-    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const group = crewLinkGroups.find(
+      (item) => item.id === request.body.groupId,
+    )
     if (group) group.inviteCode = 'FRESH247'
     response.json({ success: true, data: { inviteCode: 'FRESH247' } })
     return
@@ -2848,7 +3780,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:transfer-owner') {
-    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const group = crewLinkGroups.find(
+      (item) => item.id === request.body.groupId,
+    )
     const members = crewLinkMembers[request.body.groupId] ?? []
     const current = members.find((item) => item.id === crewLinkProfile.id)
     const next = members.find((item) => item.id === request.body.profileId)
@@ -2867,13 +3801,17 @@ app.post('/api/:endpoint', (request, response) => {
     crewLinkMembers[request.body.groupId] = members.filter(
       (item) => item.id !== request.body.profileId,
     )
-    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const group = crewLinkGroups.find(
+      (item) => item.id === request.body.groupId,
+    )
     if (group) group.memberCount = crewLinkMembers[request.body.groupId].length
     response.json({ success: true })
     return
   }
   if (endpoint === 'crewlink:leave') {
-    crewLinkGroups = crewLinkGroups.filter((item) => item.id !== request.body.groupId)
+    crewLinkGroups = crewLinkGroups.filter(
+      (item) => item.id !== request.body.groupId,
+    )
     crewLinkProfile.activeGroupId = crewLinkGroups[0]?.id ?? null
     response.json({ success: true, data: crewLinkBootstrap() })
     return
@@ -5243,6 +6181,10 @@ app.post('/api/:endpoint', (request, response) => {
       return
     }
     let contact = contacts.find((item) => item.id === request.body.id)
+    if (contact?.readonly) {
+      response.json({ success: false, error: 'readonly_contact' })
+      return
+    }
     if (contact) {
       contact.name = name
       contact.phone_number = phoneNumber
@@ -5266,6 +6208,10 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'contacts:delete') {
     const index = contacts.findIndex((item) => item.id === request.body.id)
+    if (index >= 0 && contacts[index].readonly) {
+      response.json({ success: false, error: 'readonly_contact' })
+      return
+    }
     if (index >= 0) contacts.splice(index, 1)
     response.json({ success: true })
     return

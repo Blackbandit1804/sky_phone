@@ -1,4 +1,4 @@
-const resourceName = window.GetParentResourceName?.() ?? 'sky_phone'
+const resourceName = globalThis.window?.GetParentResourceName?.() ?? 'sky_phone'
 
 export type NuiResponse<T = unknown> = {
   success: boolean

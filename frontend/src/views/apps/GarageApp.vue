@@ -44,6 +44,7 @@ import type {
   GarageVehicleStatus,
   GarageValetState,
 } from '@/types/garage'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type GarageFilter = 'all' | GarageVehicleStatus
 
@@ -208,6 +209,7 @@ async function cancelValet(): Promise<void> {
 }
 
 function handleValetStatus(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (event.data?.type !== 'garage:valet-status') return
   garage.setValetState((event.data.data as GarageValetState | null) ?? null)
 }

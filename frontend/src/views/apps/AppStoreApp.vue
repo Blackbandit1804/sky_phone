@@ -11,7 +11,11 @@ import { Gamepad2, Grid2X2, Search } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { PHONE_APPS } from '@/config/apps'
+import {
+  getPhoneAppLabel,
+  isLaunchablePhoneApp,
+  PHONE_APPS,
+} from '@/config/apps'
 import { useAppStoreStore } from '@/stores/app-store'
 import { usePhoneStore } from '@/stores/phone'
 import type {
@@ -35,16 +39,11 @@ const tabBarColors = {
 }
 const catalog = computed(() =>
   PHONE_APPS.filter((app): app is LaunchablePhoneAppDefinition => {
-    if (
-      app.component === null ||
-      app.route === null ||
-      app.id === 'app-store'
-    ) {
+    if (!isLaunchablePhoneApp(app) || app.id === 'app-store') {
       return false
     }
 
-    const installed =
-      app.category !== 'games' || appStore.claimedApps.includes(app.id)
+    const installed = appStore.isInstalled(app.id)
     return (
       !installed ||
       appStore.homeLayout.hidden.includes(app.id) ||
@@ -63,7 +62,9 @@ const shownApps = computed(() => {
   const search = query.value.trim().toLocaleLowerCase(phone.lang)
   if (!search) return catalog.value
   return catalog.value.filter((app) =>
-    phone.t(app.labelKey).toLocaleLowerCase(phone.lang).includes(search),
+    getPhoneAppLabel(app, phone.t)
+      .toLocaleLowerCase(phone.lang)
+      .includes(search),
   )
 })
 
@@ -76,8 +77,7 @@ function appAction(
 ): 'get' | 'installing' | 'open' {
   if (appStore.installingApps[app.id]) return 'installing'
 
-  const installed =
-    app.category !== 'games' || appStore.claimedApps.includes(app.id)
+  const installed = appStore.isInstalled(app.id)
   if (
     installed &&
     !appStore.homeLayout.hidden.includes(app.id) &&
@@ -130,13 +130,13 @@ function handleApp(app: LaunchablePhoneAppDefinition): void {
             draggable="false"
           />
           <div>
-            <strong>{{ phone.t(app.labelKey) }}</strong>
+            <strong>{{ getPhoneAppLabel(app, phone.t) }}</strong>
             <small>{{ phone.t(`Home.groups.${app.category}`) }}</small>
           </div>
           <button
             type="button"
             :disabled="appStore.installingApps[app.id]"
-            :aria-label="`${phone.t(app.labelKey)} ${phone.t(
+            :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
               `Apps.appStore.${appAction(app)}`,
             )}`"
             @click="handleApp(app)"

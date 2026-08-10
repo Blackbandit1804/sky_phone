@@ -51,6 +51,7 @@ import type {
   BillingStatus,
   InvoiceSummary,
 } from '@/types/billing'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type BillingTab = 'overview' | 'inbox' | 'history'
 type BillingScreen = 'main' | 'detail'
@@ -225,6 +226,7 @@ async function disputeInvoice(): Promise<void> {
 }
 
 function onBillingMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (
     event.data?.type !== 'billing:changed' &&
     event.data?.type !== 'billing:new'
