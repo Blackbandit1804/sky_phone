@@ -4383,12 +4383,13 @@ onMounted(async () => {
   color: inherit;
   background: var(--feather-panel);
 }
-.feather-composer-publish {
-  min-width: 62px;
-  min-height: 36px;
-  padding: 0 14px;
-  font-size: 12px;
-  font-weight: 850;
+.feather-composer-publish,
+.feather-edit__navbar-save {
+  min-width: 58px;
+  min-height: 30px;
+  padding-inline: 12px;
+  font-size: 10px;
+  font-weight: 800;
 }
 .feather-composer-card {
   flex: none;
@@ -4605,17 +4606,15 @@ onMounted(async () => {
   gap: 13px;
   padding: 14px 13px 34px;
 }
-.feather-edit__navbar-save {
-  min-width: 58px;
-  min-height: 30px;
-  padding-inline: 12px;
-  font-size: 10px;
-  font-weight: 800;
-}
 .feather-navbar :deep(.feather-navbar__plain-action) {
+  background-image: none !important;
   background: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.feather-navbar :deep(.feather-navbar__plain-action > span) {
+  display: none !important;
 }
 .feather-edit__identity {
   position: relative;
