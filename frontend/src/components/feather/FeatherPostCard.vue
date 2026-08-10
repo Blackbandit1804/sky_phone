@@ -17,6 +17,7 @@ import type { FeatherPost } from '@/types/feather'
 const props = defineProps<{ post: FeatherPost }>()
 defineEmits<{
   follow: [post: FeatherPost]
+  media: [post: FeatherPost, index: number]
   menu: [post: FeatherPost]
   open: [post: FeatherPost]
   profile: [profileId: number]
@@ -127,12 +128,20 @@ function relativeTime(timestamp: number): string {
           class="feather-media"
           :class="`feather-media--${Math.min(post.media.length, 4)}`"
         >
-          <img
-            v-for="item in post.media"
+          <button
+            v-for="(item, index) in post.media"
             :key="item.id"
-            :src="item.url"
-            alt=""
-          />
+            type="button"
+            class="feather-media__item"
+            :aria-label="
+              phone.t('Apps.feather.openImage', {
+                number: String(index + 1),
+              })
+            "
+            @click.stop="$emit('media', post, index)"
+          >
+            <img :src="item.url" alt="" />
+          </button>
         </div>
 
         <footer class="feather-actions">
@@ -307,7 +316,17 @@ function relativeTime(timestamp: number): string {
   border: 0.5px solid color-mix(in srgb, currentColor 12%, transparent);
   border-radius: 14px;
 }
-.feather-media img {
+.feather-media__item {
+  min-width: 0;
+  min-height: 105px;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.feather-media__item img {
+  display: block;
   width: 100%;
   height: 100%;
   min-height: 105px;
@@ -318,7 +337,7 @@ function relativeTime(timestamp: number): string {
 .feather-media--4 {
   grid-template-columns: repeat(2, 1fr);
 }
-.feather-media--3 img:first-child {
+.feather-media--3 .feather-media__item:first-child {
   grid-row: span 2;
 }
 .feather-actions {

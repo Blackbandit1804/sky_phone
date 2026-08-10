@@ -7,6 +7,8 @@ import {
   Camera,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   EyeOff,
   Feather,
@@ -62,7 +64,7 @@ import { useFeatherStore } from '@/stores/feather'
 import type { FeatherConnectionMode } from '@/stores/feather'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
-import type { FeatherPost, FeatherProfile } from '@/types/feather'
+import type { FeatherMedia, FeatherPost, FeatherProfile } from '@/types/feather'
 import {
   filterMailAddressInput,
   MAIL_ADDRESS_INPUT_MAX_LENGTH,
@@ -116,6 +118,7 @@ const menuPost = ref<FeatherPost | null>(null)
 const reportOpen = ref(false)
 const reportReason = ref('spam')
 const reportDetails = ref('')
+const mediaPreview = ref<{ index: number; items: FeatherMedia[] } | null>(null)
 const onboarding = ref({ bio: '', displayName: '', handle: '' })
 const editing = ref({ bio: '', displayName: '' })
 const authMode = ref<'login' | 'register'>('login')
@@ -148,6 +151,10 @@ const displayedProfilePosts = computed(() => {
   if (profileView.value === 'media')
     return feather.profilePosts.filter((post) => post.media.length > 0)
   return feather.profilePosts.filter((post) => !post.reply_to_id)
+})
+const previewMedia = computed(() => {
+  if (!mediaPreview.value) return null
+  return mediaPreview.value.items[mediaPreview.value.index] ?? null
 })
 const networkSections = computed(() => {
   const sections: Array<{
@@ -239,6 +246,28 @@ const authConfirmValid = computed(
 
 function t(path: string, params?: Record<string, string>): string {
   return phone.t(`Apps.feather.${path}`, params)
+}
+
+function openMediaPreview(post: FeatherPost, index: number): void {
+  mediaPreview.value = { index, items: post.media }
+}
+
+function closeMediaPreview(): void {
+  mediaPreview.value = null
+}
+
+function moveMediaPreview(direction: number): void {
+  if (!mediaPreview.value || mediaPreview.value.items.length < 2) return
+  mediaPreview.value.index =
+    (mediaPreview.value.index + direction + mediaPreview.value.items.length) %
+    mediaPreview.value.items.length
+}
+
+function handleMediaPreviewKeydown(event: KeyboardEvent): void {
+  if (!mediaPreview.value) return
+  if (event.key === 'Escape') closeMediaPreview()
+  if (event.key === 'ArrowLeft') moveMediaPreview(-1)
+  if (event.key === 'ArrowRight') moveMediaPreview(1)
 }
 
 function toast(path: string): void {
@@ -651,9 +680,11 @@ watch(
 onBeforeUnmount(() => {
   if (exploreSearchTimer !== undefined) window.clearTimeout(exploreSearchTimer)
   if (networkSearchTimer !== undefined) window.clearTimeout(networkSearchTimer)
+  window.removeEventListener('keydown', handleMediaPreviewKeydown)
 })
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleMediaPreviewKeydown)
   const selection =
     messageMedia.consumeMany<ComposerContext>('feather:composer')
   if (selection) {
@@ -1217,6 +1248,7 @@ onMounted(async () => {
         <FeatherPostCard
           :post="feather.thread.post"
           @follow="feather.followPost"
+          @media="openMediaPreview"
           @menu="menuPost = $event"
           @open="() => undefined"
           @profile="openProfile"
@@ -1300,6 +1332,7 @@ onMounted(async () => {
           :key="post.id"
           :post="post"
           @follow="feather.followPost"
+          @media="openMediaPreview"
           @menu="menuPost = $event"
           @open="openThread"
           @profile="openProfile"
@@ -1456,6 +1489,7 @@ onMounted(async () => {
           :key="post.id"
           :post="post"
           @follow="feather.followPost"
+          @media="openMediaPreview"
           @menu="menuPost = $event"
           @open="openThread"
           @profile="openProfile"
@@ -1800,6 +1834,7 @@ onMounted(async () => {
             :key="post.id"
             :post="post"
             @follow="feather.followPost"
+            @media="openMediaPreview"
             @menu="menuPost = $event"
             @open="openThread"
             @profile="openProfile"
@@ -2048,6 +2083,44 @@ onMounted(async () => {
       </kBlock>
     </kSheet>
 
+    <div
+      v-if="mediaPreview && previewMedia"
+      class="feather-media-preview"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('imagePreview')"
+      @click="closeMediaPreview"
+    >
+      <img
+        :src="previewMedia.url"
+        :alt="t('postImage', { number: String(mediaPreview.index + 1) })"
+        @click.stop
+      />
+      <template v-if="mediaPreview.items.length > 1">
+        <kButton
+          clear
+          rounded
+          class="feather-media-preview__arrow feather-media-preview__arrow--left"
+          :aria-label="t('previousImage')"
+          @click.stop="moveMediaPreview(-1)"
+        >
+          <ChevronLeft :size="27" />
+        </kButton>
+        <kButton
+          clear
+          rounded
+          class="feather-media-preview__arrow feather-media-preview__arrow--right"
+          :aria-label="t('nextImage')"
+          @click.stop="moveMediaPreview(1)"
+        >
+          <ChevronRight :size="27" />
+        </kButton>
+        <span class="feather-media-preview__count">
+          {{ mediaPreview.index + 1 }} / {{ mediaPreview.items.length }}
+        </span>
+      </template>
+    </div>
+
     <kToast :opened="Boolean(feedback)">{{ feedback }}</kToast>
   </kPage>
 </template>
@@ -2058,6 +2131,57 @@ onMounted(async () => {
   --feather-blue-dark: #2867d8;
   background: #fff;
   color: #111923;
+}
+.feather-media-preview {
+  position: absolute;
+  z-index: 120;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 12px 42px;
+  background: rgb(0 0 0 / 92%);
+  cursor: zoom-out;
+}
+.feather-media-preview > img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 55%);
+  cursor: default;
+}
+.feather-media-preview__arrow {
+  --k-button-bg-color: rgb(22 27 34 / 78%);
+  --k-button-text-color: #fff;
+  position: absolute;
+  top: 50%;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  backdrop-filter: blur(14px);
+  transform: translateY(-50%);
+}
+.feather-media-preview__arrow--left {
+  left: 14px;
+}
+.feather-media-preview__arrow--right {
+  right: 14px;
+}
+.feather-media-preview__count {
+  position: absolute;
+  bottom: 48px;
+  left: 50%;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #fff;
+  background: rgb(22 27 34 / 78%);
+  backdrop-filter: blur(14px);
+  font-size: 11px;
+  font-weight: 700;
+  transform: translateX(-50%);
 }
 :global(.dark) .feather-app {
   background: #090d12;
