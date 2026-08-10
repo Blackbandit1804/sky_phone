@@ -150,6 +150,7 @@ describe('app registry', () => {
       'flare',
       'radio',
       'local-pages',
+      'crewlink',
       'phone',
       'darkchat',
       'banking',
