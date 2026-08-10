@@ -82,6 +82,10 @@ type SimPickerPayload = {
   number: string
 }
 
+type NotificationEventData = Omit<PhoneNotificationInput, 'device'> & {
+  device?: PhoneNotificationDevicePayload
+}
+
 type MailEventData = {
   counts?: MailCounts
   device?: PhoneNotificationDevicePayload
@@ -265,6 +269,13 @@ function getViewportScale(): number {
 
 function hydratePhone(payload: PhoneOpenPayload): void {
   phone.open(payload)
+  if (payload.device?.imei) {
+    notifications.hydrate(
+      payload.device.data.notifications?.payload,
+      payload.device.imei,
+    )
+    notifications.hideDevicePreview(payload.device.imei)
+  }
   account.hydrate(payload.account ?? null)
   notes.hydrate(payload.notes ?? [])
   clock.hydrate(payload.device?.data.alarms?.payload)
@@ -336,7 +347,20 @@ function onMessage(event: MessageEvent<AppMessage>): void {
   } else if (event.data?.type === 'app:resume') {
     activitySuspended.value = false
   } else if (event.data?.type === 'notification:show' && event.data.data) {
-    notifications.show(event.data.data as PhoneNotificationInput)
+    const data = event.data.data as NotificationEventData
+    const { device, ...input } = data
+    const notification: PhoneNotificationInput = input
+    if (
+      device &&
+      (!phone.isOpen || device.imei !== phone.device?.imei)
+    ) {
+      notification.device = {
+        imei: device.imei,
+        name: device.name,
+        preferences: parsePhonePreferences(device.settings ?? null),
+      }
+    }
+    notifications.show(notification)
   } else if (event.data?.type === 'mail:changed' && event.data.data) {
     const data = event.data.data as MailEventData
     if (data.counts) mail.setCounts(data.counts)
@@ -749,6 +773,17 @@ function toggleControlCenter(): void {
   controlCenterOpened.value = !controlCenterOpened.value
 }
 
+function lockPhone(): void {
+  if (!phone.isOpen || isLocked.value) return
+  controlCenterOpened.value = false
+  isUnlocking.value = false
+  passcodeVisible.value = false
+  passcodeBusy.value = false
+  passcodeError.value = ''
+  pendingUnlockRoute.value = null
+  isLocked.value = true
+}
+
 function unlockCamera(): void {
   if (phone.security.enabled) {
     pendingUnlockRoute.value = '/apps/camera'
@@ -975,7 +1010,9 @@ onBeforeUnmount(() => {
                 <PhoneStatusBar
                   v-if="!isLocked"
                   :control-center-opened="controlCenterOpened"
+                  lockable
                   @control-center="toggleControlCenter"
+                  @lock="lockPhone"
                 />
                 <SpringboardView />
                 <RouterView v-slot="{ Component }">
@@ -995,7 +1032,10 @@ onBeforeUnmount(() => {
                 <Transition name="lock-screen">
                   <PhoneLockScreen
                     v-if="isLocked"
+                    :notifications="notifications.lockScreenNotifications"
                     @camera="unlockCamera"
+                    @clear-notifications="notifications.clearLockScreen"
+                    @dismiss-notification="notifications.dismissFromLockScreen"
                     @unlock="unlockPhone"
                   />
                 </Transition>
@@ -1020,7 +1060,7 @@ onBeforeUnmount(() => {
                   />
                 </Transition>
                 <PhoneNotifications
-                  :notification="notifications.current"
+                  :notification="phone.isOpen ? null : notifications.current"
                   @close="notifications.dismissCurrent()"
                 />
                 <div class="phone-display-dimmer" aria-hidden="true"></div>

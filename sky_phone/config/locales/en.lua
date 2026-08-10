@@ -42,7 +42,7 @@ Locales["en"] = {
             open = "Open Control Center", play = "Play", previous = "Previous track", quickActions = "Quick actions",
             timer = "Timer", unmuteRingtone = "Unmute ringtone and notifications", volume = "Volume", wifi = "Wi-Fi",
         },
-        Notifications = { now = "now" },
+        Notifications = { clearAll = "Clear All", now = "now" },
         LockScreen = {
             label = "Lock Screen", flashlight = "Flashlight", camera = "Camera", swipeUp = "Swipe up to open",
             passcode = {

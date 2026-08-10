@@ -268,10 +268,6 @@ button {
   transform: translateY(calc(100% - 190px));
   transform-origin: right bottom;
 }
-.notification-phone-background {
-  position: absolute;
-  inset: 0;
-}
 .phone-device {
   position: relative;
   width: 390px;
@@ -458,6 +454,19 @@ button {
   width: calc(50% - 70px);
   text-align: center;
 }
+.phone-status-bar__time-button {
+  top: 0;
+  height: 48px;
+  border: 0;
+  padding: 17px 0 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
 .phone-status-bar__indicators {
   position: absolute;
   top: 0;
@@ -569,7 +578,7 @@ button {
   left: 30px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   min-height: 26px;
   filter: drop-shadow(0 1px 2px #0009);
 }
@@ -615,9 +624,123 @@ button {
     0 2px 16px #0006;
   filter: blur(0.24px);
 }
+.lock-screen__status-time {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.lock-screen__notifications {
+  position: absolute;
+  z-index: 2;
+  top: 285px;
+  right: 18px;
+  bottom: 142px;
+  left: 18px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+.lock-screen__notifications::-webkit-scrollbar {
+  display: none;
+}
+.lock-screen__notifications-clear {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  justify-self: end;
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #fff;
+  background: #1c1c20b8;
+  box-shadow: 0 2px 10px #0004;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.lock-screen__notification {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 72px;
+  border-radius: 18px;
+  padding: 11px 38px 11px 11px;
+  color: #fff;
+  background-color: rgb(28 28 32 / 72%);
+  text-shadow: 0 1px 3px #0009;
+}
+.lock-screen__notification-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  object-fit: contain;
+}
+.lock-screen__notification-copy {
+  min-width: 0;
+}
+.lock-screen__notification-heading {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.lock-screen__notification-heading strong {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lock-screen__notification-heading span,
+.lock-screen__notification-copy small {
+  color: #ffffffa6;
+  font-size: 10px;
+  line-height: 14px;
+}
+.lock-screen__notification-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lock-screen__notification-copy p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 15px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.lock-screen__notification-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  color: #fff;
+  background: #0007;
+  cursor: pointer;
+}
 .lock-screen__footer {
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   right: 0;
   bottom: 25px;
   left: 0;
@@ -655,6 +778,16 @@ button {
   border-left: 2px solid currentColor;
   transform: rotate(45deg);
   animation: lock-chevron 1.8s ease-in-out infinite;
+}
+.lock-screen.lock-screen-enter-active {
+  transform-origin: top left;
+  transition:
+    transform 0.44s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.28s ease-out;
+}
+.lock-screen.lock-screen-enter-from {
+  transform: translate3d(-28px, -22px, 0) scale(0.84);
+  opacity: 0;
 }
 .lock-screen-leave-active {
   transition:
@@ -694,6 +827,7 @@ button {
   .lock-screen__swipe-chevron {
     animation: none;
   }
+  .lock-screen.lock-screen-enter-active,
   .lock-screen-leave-active {
     transition-duration: 0.18s;
   }

@@ -2,8 +2,8 @@
 import { kApp } from 'konsta/vue'
 import { computed, type CSSProperties } from 'vue'
 
+import PhoneLockScreen from '@/components/PhoneLockScreen.vue'
 import PhoneNotifications from '@/components/PhoneNotifications.vue'
-import PhoneStatusBar from '@/components/PhoneStatusBar.vue'
 import { PHONE_FRAME_IMAGES } from '@/config/appearance'
 import type { PhoneNotification } from '@/stores/notifications'
 import { usePhoneStore } from '@/stores/phone'
@@ -61,11 +61,11 @@ const wrapperStyle = computed<CSSProperties>(() => ({ zoom: props.zoom }))
             [`phone-app--${preferences.settings.graphicsMode}`]: true,
           }"
         >
-          <div
-            class="notification-phone-background"
-            :class="`wallpaper--${preferences.settings.wallpaper}`"
-          ></div>
-          <PhoneStatusBar />
+          <PhoneLockScreen
+            :notifications="[]"
+            :preferences="preferences"
+            preview
+          />
           <PhoneNotifications
             :notification="notification"
             @close="emit('close')"

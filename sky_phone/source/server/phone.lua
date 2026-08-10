@@ -947,6 +947,60 @@ Bridge.Callbacks.Register("sky_phone:device:save", function(source, data)
     return { success = true, data = { revision = 1 } }
 end)
 
+Bridge.Callbacks.Register("sky_phone:notifications:save", function(source, data)
+    if not SkyPhone.AllowOperation(source, "notifications_save", 240, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    if type(data) ~= "table" or not SkyPhoneImei.IsValid(data.imei) or type(data.payload) ~= "table" then
+        return { success = false, error = "invalid_request" }
+    end
+    if #SkyPhone.FindDeviceSlots(source, data.imei) == 0 then
+        Bridge.Debug(
+            "warn",
+            "[sky_phone] Source %s attempted to save notifications for unowned device %s.",
+            tostring(source),
+            tostring(data.imei)
+        )
+        return { success = false, error = "device_not_owned" }
+    end
+    if data.payload.version ~= 1 or type(data.payload.items) ~= "table" then
+        return { success = false, error = "invalid_request" }
+    end
+    local item_count = #data.payload.items
+    local key_count = 0
+    for key in pairs(data.payload.items) do
+        if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or key > item_count then
+            return { success = false, error = "invalid_request" }
+        end
+        key_count = key_count + 1
+    end
+    if key_count ~= item_count then
+        return { success = false, error = "invalid_request" }
+    end
+    for _, item in ipairs(data.payload.items) do
+        if type(item) ~= "table"
+            or type(item.appId) ~= "string" or #item.appId > 64
+            or type(item.id) ~= "string" or #item.id > 100
+            or type(item.title) ~= "string" or #item.title > 200
+            or type(item.text) ~= "string" or #item.text > 2000
+            or (item.subtitle ~= nil and (type(item.subtitle) ~= "string" or #item.subtitle > 200))
+        then
+            return { success = false, error = "invalid_request" }
+        end
+    end
+
+    local encoded = json.encode(data.payload)
+    if #encoded > max_device_data_bytes then
+        return { success = false, error = "payload_too_large" }
+    end
+    Bridge.Database.Query([[
+        INSERT INTO `sky_phone_device_data` (`device_imei`, `namespace`, `payload`)
+        VALUES (?, 'notifications', ?)
+        ON DUPLICATE KEY UPDATE `payload` = VALUES(`payload`), `revision` = `revision` + 1
+    ]], { data.imei, encoded })
+    return { success = true }
+end)
+
 for _, endpoint in ipairs({ "account:login", "mail:login" }) do
     Bridge.Callbacks.Register("sky_phone:" .. endpoint, function(source, data)
         return authenticate(source, data, false)

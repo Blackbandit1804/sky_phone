@@ -13,6 +13,7 @@ local server_callbacks = {
     "security:change-passcode",
     "security:disable-passcode",
     "device:save",
+    "notifications:save",
     "device:factory-reset",
     "account:login",
     "account:register",
@@ -614,6 +615,10 @@ RegisterNetEvent("sky_phone:billing:new", function(data)
         :gsub("{issuer}", tostring(data.issuer))
         :gsub("{amount}", ("%s %s"):format(tostring(data.amount), Config.Billing.Currency))
     SendNUIMessage({ type = "billing:new", data = data })
+end)
+
+RegisterNetEvent("sky_phone:notification:test", function(data)
+    SendNUIMessage({ type = "notification:show", data = data })
 end)
 
 RegisterNetEvent("sky_phone:messages:changed", function(data)
