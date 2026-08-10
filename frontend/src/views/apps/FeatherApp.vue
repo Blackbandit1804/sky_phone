@@ -2112,7 +2112,7 @@ onMounted(async () => {
           :aria-label="t('previousImage')"
           @click.stop="moveMediaPreview(-1)"
         >
-          <ChevronLeft :size="27" />
+          <ChevronLeft :size="20" :stroke-width="2.8" />
         </kButton>
         <kButton
           clear
@@ -2121,7 +2121,7 @@ onMounted(async () => {
           :aria-label="t('nextImage')"
           @click.stop="moveMediaPreview(1)"
         >
-          <ChevronRight :size="27" />
+          <ChevronRight :size="20" :stroke-width="2.8" />
         </kButton>
         <span class="feather-media-preview__count">
           {{ mediaPreview.index + 1 }} / {{ mediaPreview.items.length }}
@@ -2161,21 +2161,29 @@ onMounted(async () => {
   cursor: default;
 }
 .feather-media-preview__arrow {
-  --k-button-bg-color: rgb(22 27 34 / 78%);
+  --k-button-bg-color: rgb(10 14 20 / 88%);
   --k-button-text-color: #fff;
   position: absolute;
   top: 50%;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgb(255 255 255 / 18%);
-  backdrop-filter: blur(14px);
+  width: 34px !important;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border: 1.5px solid rgb(255 255 255 / 58%);
+  padding: 0;
+  color: #fff !important;
+  background: rgb(10 14 20 / 88%) !important;
+  box-shadow:
+    0 5px 16px rgb(0 0 0 / 58%),
+    inset 0 0 0 1px rgb(255 255 255 / 8%);
+  backdrop-filter: blur(10px);
   transform: translateY(-50%);
 }
 .feather-media-preview__arrow--left {
-  left: 14px;
+  left: 10px;
 }
 .feather-media-preview__arrow--right {
-  right: 14px;
+  right: 10px;
 }
 .feather-media-preview__count {
   position: absolute;
