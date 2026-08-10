@@ -65,6 +65,7 @@ Config.Payphones = {
         Dictionary = "anim@scripted@payphone_hits@male@",
         PedClip = "FXFR_PAV_1_INTRO_MALE",
         PropClip = "FXFR_PAV_1_INTRO_PHONE",
+        HangupDurationMs = 1200,
     },
 }
 

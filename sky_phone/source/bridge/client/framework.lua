@@ -55,5 +55,5 @@ function Bridge.Framework.ShowHelpNotification(message, key)
     local control = key == "E" and "~INPUT_CONTEXT~" or ("[%s]"):format(tostring(key or "E"))
     BeginTextCommandDisplayHelp("STRING")
     AddTextComponentSubstringPlayerName(("%s  %s"):format(control, tostring(message or "")))
-    EndTextCommandDisplayHelp(0, false, true, -1)
+    EndTextCommandDisplayHelp(0, false, false, -1)
 end

@@ -10,7 +10,10 @@ local call_channel = 0
 local replacement_prop = nil
 local hidden_prop = nil
 local animation_scene = nil
+local animation_ped = nil
+local animation_floor_z = nil
 local visuals_starting = false
+local visuals_ending = false
 local hangup_requested = false
 
 local configured_models = {}
@@ -68,9 +71,10 @@ end
 
 local function stop_call_visuals()
     local animation = Config.Payphones.Animation
-    local ped = PlayerPedId()
+    local ped = animation_ped or PlayerPedId()
     local visuals_active = animation_scene ~= nil or replacement_prop ~= nil
     visuals_starting = false
+    visuals_ending = false
 
     if visuals_active and DoesEntityExist(ped) then
         StopAnimTask(ped, animation.Dictionary, animation.PedClip, 0.0)
@@ -82,6 +86,9 @@ local function stop_call_visuals()
         DisposeSynchronizedScene(animation_scene)
         animation_scene = nil
     end
+
+    animation_ped = nil
+    animation_floor_z = nil
 
     if replacement_prop and DoesEntityExist(replacement_prop) then
         StopEntityAnim(replacement_prop, animation.PropClip, animation.Dictionary, 0.0)
@@ -96,6 +103,69 @@ local function stop_call_visuals()
     end
     hidden_prop = nil
     RemoveAnimDict(animation.Dictionary)
+end
+
+local function keep_animation_ped_grounded()
+    if not animation_ped or not animation_floor_z or not DoesEntityExist(animation_ped) then
+        return
+    end
+    local coords = GetEntityCoords(animation_ped)
+    if coords.z >= animation_floor_z - 0.15 then
+        return
+    end
+    SetEntityCoordsNoOffset(animation_ped, coords.x, coords.y, animation_floor_z, false, false, false)
+    SetEntityVelocity(animation_ped, 0.0, 0.0, 0.0)
+end
+
+local function play_hangup_visuals()
+    if visuals_ending then
+        return
+    end
+    if not animation_scene or not animation_ped or not DoesEntityExist(animation_ped) then
+        stop_call_visuals()
+        active_booth = nil
+        return
+    end
+
+    visuals_ending = true
+    local scene = animation_scene
+    local starting_phase = math.max(0.0, math.min(1.0, GetSynchronizedScenePhase(scene)))
+    local duration_ms = math.max(250, math.floor(tonumber(Config.Payphones.Animation.HangupDurationMs) or 1200))
+    local started_at = GetGameTimer()
+    SetSynchronizedSceneRate(scene, 0.0)
+    if replacement_prop and DoesEntityExist(replacement_prop) then
+        SetEntityAnimSpeed(
+            replacement_prop,
+            Config.Payphones.Animation.Dictionary,
+            Config.Payphones.Animation.PropClip,
+            0.0
+        )
+    end
+
+    CreateThread(function()
+        while animation_scene == scene do
+            local progress = math.min(1.0, (GetGameTimer() - started_at) / duration_ms)
+            local phase = starting_phase * (1.0 - progress)
+            SetSynchronizedScenePhase(scene, phase)
+            if replacement_prop and DoesEntityExist(replacement_prop) then
+                SetEntityAnimCurrentTime(
+                    replacement_prop,
+                    Config.Payphones.Animation.Dictionary,
+                    Config.Payphones.Animation.PropClip,
+                    phase
+                )
+            end
+            keep_animation_ped_grounded()
+            if progress >= 1.0 then
+                break
+            end
+            Wait(0)
+        end
+        if animation_scene == scene then
+            stop_call_visuals()
+            active_booth = nil
+        end
+    end)
 end
 
 local function start_call_visuals()
@@ -168,6 +238,15 @@ local function start_call_visuals()
         return
     end
     SetSynchronizedSceneHoldLastFrame(animation_scene, true)
+    animation_ped = ped
+    local ped_coords = GetEntityCoords(animation_ped)
+    local found_ground, ground_z = GetGroundZFor_3dCoord(
+        ped_coords.x,
+        ped_coords.y,
+        ped_coords.z + 1.0,
+        false
+    )
+    animation_floor_z = found_ground and ground_z or ped_coords.z
     TaskSynchronizedScene(
         ped,
         animation_scene,
@@ -334,15 +413,14 @@ RegisterNetEvent("sky_phone:payphone:state", function(data)
     else
         clear_active_call_state()
         leave_call_voice()
-        stop_call_visuals()
-        active_booth = nil
+        play_hangup_visuals()
     end
     SendNUIMessage({ type = "payphone:state", data = data })
 end)
 
 CreateThread(function()
     while true do
-        if not Config.Payphones.Enabled or payphone_open or active_call_id then
+        if not Config.Payphones.Enabled or payphone_open or active_call_id or visuals_ending then
             nearest_payphone = nil
             Wait(Config.Payphones.ScanIntervalMs)
         else
@@ -391,18 +469,26 @@ end)
 
 CreateThread(function()
     while true do
-        if active_call_id and active_booth then
+        local call_id = active_call_id
+        local booth = active_booth
+        if call_id and booth then
+            keep_animation_ped_grounded()
             Bridge.Framework.ShowHelpNotification(call_help_message(), "E")
             if IsControlJustReleased(0, 38) and not hangup_requested then
                 hangup_requested = true
-                Bridge.Callbacks.Trigger("sky_phone:payphone:hangup", { id = active_call_id })
+                Bridge.Callbacks.Trigger("sky_phone:payphone:hangup", { id = call_id })
             end
 
-            local distance = #(GetEntityCoords(PlayerPedId()) - active_booth.coords)
-            if distance > Config.Payphones.MaximumCallDistance and not hangup_requested then
-                hangup_requested = true
-                Bridge.Callbacks.Trigger("sky_phone:payphone:hangup", { id = active_call_id })
+            if active_call_id == call_id and active_booth == booth then
+                local distance = #(GetEntityCoords(PlayerPedId()) - booth.coords)
+                if distance > Config.Payphones.MaximumCallDistance and not hangup_requested then
+                    hangup_requested = true
+                    Bridge.Callbacks.Trigger("sky_phone:payphone:hangup", { id = call_id })
+                end
             end
+            Wait(0)
+        elseif visuals_ending then
+            keep_animation_ped_grounded()
             Wait(0)
         else
             Wait(250)

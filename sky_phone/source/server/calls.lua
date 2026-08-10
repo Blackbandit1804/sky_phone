@@ -100,8 +100,8 @@ local function send_state(call, source, state, channel)
         channel = channel,
     }
     if call.payphone and outgoing then
-        payload.elapsedSeconds = call.payphone.billed_seconds or 0
-        payload.totalCost = (call.payphone.billed_seconds or 0) * call.payphone.price_per_second
+        payload.elapsedSeconds = call.payphone.elapsed_seconds or 0
+        payload.totalCost = call.payphone.total_cost or 0
         TriggerClientEvent("sky_phone:payphone:state", source, payload)
         return
     end
@@ -116,6 +116,59 @@ local function notify_recents(device, source)
     end
 end
 
+local function settle_payphone_call(call, duration)
+    local payphone = call.payphone
+    local elapsed_seconds = math.max(0, math.floor(tonumber(duration) or 0))
+    local price_per_second = math.max(0, math.floor(tonumber(payphone.price_per_second) or 0))
+    local billable_seconds = elapsed_seconds
+    local total_cost = billable_seconds * price_per_second
+
+    if total_cost > 0 then
+        local available_money = tonumber(Bridge.Framework.GetMoney(call.caller_source, Config.Payphones.PaymentAccount))
+        if not available_money then
+            Bridge.Debug(
+                "error",
+                "[sky_phone] Payphone settlement could not read the balance for source %s.",
+                tostring(call.caller_source)
+            )
+            billable_seconds = 0
+            total_cost = 0
+        elseif available_money < total_cost then
+            billable_seconds = math.min(elapsed_seconds, math.floor(math.max(0, available_money) / price_per_second))
+            total_cost = billable_seconds * price_per_second
+        end
+    end
+
+    local charged = total_cost == 0
+    if total_cost > 0 then
+        local success, result = pcall(
+            Bridge.Framework.RemoveMoney,
+            call.caller_source,
+            Config.Payphones.PaymentAccount,
+            total_cost
+        )
+        charged = success and result and true or false
+        if not success then
+            Bridge.Debug(
+                "error",
+                "[sky_phone] Payphone settlement failed for source %s: %s",
+                tostring(call.caller_source),
+                tostring(result)
+            )
+        elseif not result then
+            Bridge.Debug(
+                "warn",
+                "[sky_phone] Payphone settlement was rejected for source %s.",
+                tostring(call.caller_source)
+            )
+        end
+    end
+
+    payphone.elapsed_seconds = elapsed_seconds
+    payphone.total_cost = charged and total_cost or 0
+    return charged and billable_seconds == elapsed_seconds
+end
+
 local function finish_call(call, status)
     if not call or call.ended then
         return
@@ -123,6 +176,11 @@ local function finish_call(call, status)
     call.ended = true
     local ended_at = os.time()
     local duration = call.answered_at and math.max(0, ended_at - call.answered_at) or 0
+    if call.payphone and call.answered_at and not settle_payphone_call(call, duration)
+        and status ~= "disconnected"
+    then
+        status = "insufficient_funds"
+    end
     local callee_status = status
     if status == "no_answer" or status == "cancelled" then
         callee_status = "missed"
@@ -552,7 +610,8 @@ Bridge.Callbacks.Register("sky_phone:payphone:dial", function(source, data)
         callee_device = target,
         started_at = os.time(),
         payphone = {
-            billed_seconds = 0,
+            elapsed_seconds = 0,
+            total_cost = 0,
             coords = booth_coords,
             price_per_second = price_per_second,
         },
@@ -675,33 +734,16 @@ CreateThread(function()
                 calls_to_finish[call_id] = "disconnected"
             elseif call.payphone and call.answered_at and not call.ended then
                 local elapsed_seconds = math.max(0, os.time() - call.answered_at)
-                local seconds_due = elapsed_seconds - call.payphone.billed_seconds
-                if seconds_due > 0 then
-                    local amount_due = seconds_due * call.payphone.price_per_second
-                    local charged = amount_due == 0
-                    if amount_due > 0 then
-                        local success, result = pcall(
-                            Bridge.Framework.RemoveMoney,
-                            call.caller_source,
-                            Config.Payphones.PaymentAccount,
-                            amount_due
-                        )
-                        charged = success and result and true or false
-                        if not success then
-                            Bridge.Debug(
-                                "error",
-                                "[sky_phone] Payphone billing failed for source %s: %s",
-                                tostring(call.caller_source),
-                                tostring(result)
-                            )
-                        end
-                    end
-                    if charged then
-                        call.payphone.billed_seconds = elapsed_seconds
-                        send_state(call, call.caller_source, "connected", call.channel)
-                    else
-                        calls_to_finish[call_id] = "insufficient_funds"
-                    end
+                local total_cost = elapsed_seconds * call.payphone.price_per_second
+                local available_money = tonumber(
+                    Bridge.Framework.GetMoney(call.caller_source, Config.Payphones.PaymentAccount)
+                )
+                if total_cost > 0 and (not available_money or available_money < total_cost) then
+                    calls_to_finish[call_id] = "insufficient_funds"
+                elseif call.payphone.elapsed_seconds ~= elapsed_seconds then
+                    call.payphone.elapsed_seconds = elapsed_seconds
+                    call.payphone.total_cost = total_cost
+                    send_state(call, call.caller_source, "connected", call.channel)
                 end
             end
         end
