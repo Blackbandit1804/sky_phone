@@ -124,6 +124,7 @@ local server_callbacks = {
     "feather:connections",
     "feather:remove-connection",
     "feather:profile",
+    "feather:bookmarks",
     "feather:thread",
     "feather:activities",
     "feather:mark-activities",

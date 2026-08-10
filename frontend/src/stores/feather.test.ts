@@ -129,6 +129,36 @@ describe('Feather store', () => {
     expect(store.connections).toEqual([profile])
   })
 
+  it('loads bookmarked posts for the owner profile', async () => {
+    const bookmarkedPost = { ...post, is_bookmarked: true }
+    vi.mocked(nuiCall).mockResolvedValue({
+      success: true,
+      data: { items: [bookmarkedPost] },
+    })
+    const store = useFeatherStore()
+
+    expect(await store.loadBookmarks()).toBe(true)
+    expect(nuiCall).toHaveBeenCalledWith('feather:bookmarks')
+    expect(store.bookmarkedPosts).toEqual([bookmarkedPost])
+    expect(store.bookmarksLoading).toBe(false)
+  })
+
+  it('removes an unbookmarked post from the saved profile tab', async () => {
+    vi.mocked(nuiCall).mockResolvedValue({ success: true })
+    const store = useFeatherStore()
+    const bookmarkedPost = { ...post, is_bookmarked: true }
+    store.bookmarkedPosts = [bookmarkedPost]
+
+    await store.react(bookmarkedPost, 'bookmark')
+
+    expect(store.bookmarkedPosts).toEqual([])
+    expect(nuiCall).toHaveBeenCalledWith('feather:react', {
+      active: false,
+      id: bookmarkedPost.id,
+      kind: 'bookmark',
+    })
+  })
+
   it('removes an owned connection and updates the profile count', async () => {
     vi.mocked(nuiCall).mockResolvedValue({ success: true })
     const store = useFeatherStore()

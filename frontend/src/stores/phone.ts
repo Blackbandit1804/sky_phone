@@ -548,6 +548,8 @@ const defaultLocales: LocaleTree = {
       noReplies: 'No replies yet. Start the conversation.',
       likes: 'Likes',
       bookmarks: 'Bookmarks',
+      noBookmarks: 'No saved posts yet',
+      noBookmarksBody: 'Posts you bookmark will appear here.',
       delete: 'Delete',
       report: 'Report',
       block: 'Block @{handle}',

@@ -2673,6 +2673,17 @@ app.post('/api/:endpoint', (request, response) => {
     })
     return
   }
+  if (endpoint === 'feather:bookmarks') {
+    response.json({
+      success: true,
+      data: {
+        items: featherPosts.filter((post) => post.is_bookmarked),
+        offset: 0,
+        hasMore: false,
+      },
+    })
+    return
+  }
   if (endpoint === 'feather:thread') {
     const post = featherPosts.find((item) => item.id === request.body.id)
     response.json(

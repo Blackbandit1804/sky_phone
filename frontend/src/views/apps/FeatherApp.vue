@@ -3,6 +3,7 @@ import {
   AlignLeft,
   AtSign,
   Bell,
+  Bookmark,
   Camera,
   CalendarDays,
   CheckCircle2,
@@ -78,7 +79,7 @@ type Screen =
   | 'connections'
 type ExploreView = 'explore' | 'trending' | 'news'
 type ActivityView = 'all' | 'mentions'
-type ProfileView = 'posts' | 'replies' | 'media'
+type ProfileView = 'posts' | 'replies' | 'media' | 'bookmarks'
 type SelectedPhoto = { id: number; url: string }
 type ComposerContext = {
   body: string
@@ -141,6 +142,7 @@ const displayedActivities = computed(() =>
     : feather.activities,
 )
 const displayedProfilePosts = computed(() => {
+  if (profileView.value === 'bookmarks') return feather.bookmarkedPosts
   if (profileView.value === 'replies')
     return feather.profilePosts.filter((post) => Boolean(post.reply_to_id))
   if (profileView.value === 'media')
@@ -354,8 +356,14 @@ async function selectTab(next: Tab): Promise<void> {
     await feather.markActivities()
   }
   if (next === 'profile' && feather.profile) {
+    profileView.value = 'posts'
     await feather.loadProfile(feather.profile.id)
   }
+}
+
+async function selectProfileView(next: ProfileView): Promise<void> {
+  profileView.value = next
+  if (next === 'bookmarks') await feather.loadBookmarks()
 }
 
 async function setFeedMode(mode: 'for-you' | 'following'): Promise<void> {
@@ -518,7 +526,10 @@ async function publishThreadReply(): Promise<void> {
 }
 
 async function openProfile(profileId: number): Promise<void> {
-  if (await feather.loadProfile(profileId)) screen.value = 'profile'
+  if (await feather.loadProfile(profileId)) {
+    profileView.value = 'posts'
+    screen.value = 'profile'
+  }
 }
 
 async function followProfile(profile: FeatherProfile): Promise<void> {
@@ -1391,7 +1402,7 @@ onMounted(async () => {
             type="button"
             :active="profileView === 'posts'"
             :class="{ 'is-active': profileView === 'posts' }"
-            @click="profileView = 'posts'"
+            @click="selectProfileView('posts')"
           >
             <AlignLeft :size="16" /> {{ t('posts') }}
           </kSegmentedButton>
@@ -1399,7 +1410,7 @@ onMounted(async () => {
             type="button"
             :active="profileView === 'replies'"
             :class="{ 'is-active': profileView === 'replies' }"
-            @click="profileView = 'replies'"
+            @click="selectProfileView('replies')"
           >
             <AtSign :size="17" />
           </kSegmentedButton>
@@ -1407,13 +1418,41 @@ onMounted(async () => {
             type="button"
             :active="profileView === 'media'"
             :class="{ 'is-active': profileView === 'media' }"
-            @click="profileView = 'media'"
+            @click="selectProfileView('media')"
           >
             <Video :size="17" />
           </kSegmentedButton>
+          <kSegmentedButton
+            v-if="activeProfile.is_owner"
+            type="button"
+            :active="profileView === 'bookmarks'"
+            :class="{ 'is-active': profileView === 'bookmarks' }"
+            :aria-label="t('bookmarks')"
+            :title="t('bookmarks')"
+            @click="selectProfileView('bookmarks')"
+          >
+            <Bookmark :size="17" />
+          </kSegmentedButton>
         </kSegmented>
+        <div
+          v-if="profileView === 'bookmarks' && feather.bookmarksLoading"
+          class="feather-network-loading"
+        >
+          <kPreloader />
+        </div>
+        <div
+          v-else-if="
+            profileView === 'bookmarks' && !displayedProfilePosts.length
+          "
+          class="feather-empty"
+        >
+          <Bookmark :size="34" />
+          <h2>{{ t('noBookmarks') }}</h2>
+          <p>{{ t('noBookmarksBody') }}</p>
+        </div>
         <FeatherPostCard
           v-for="post in displayedProfilePosts"
+          v-show="profileView !== 'bookmarks' || !feather.bookmarksLoading"
           :key="post.id"
           :post="post"
           @follow="feather.followPost"

@@ -552,6 +552,19 @@ Bridge.Callbacks.Register("sky_phone:feather:profile", function(source, data)
     } }
 end)
 
+Bridge.Callbacks.Register("sky_phone:feather:bookmarks", function(source)
+    local profile, error_response = require_profile(source)
+    if not profile then return error_response end
+    local bookmarked = list_posts(
+        tonumber(profile.id),
+        "EXISTS(SELECT 1 FROM `sky_phone_feather_reactions` saved WHERE saved.`profile_id` = ? AND saved.`post_id` = fp.`id` AND saved.`kind` = 'bookmark')",
+        { profile.id },
+        "fp.`created_at` DESC",
+        0
+    )
+    return { success = true, data = bookmarked }
+end)
+
 Bridge.Callbacks.Register("sky_phone:feather:thread", function(source, data)
     local profile, error_response = require_profile(source)
     if not profile then return error_response end

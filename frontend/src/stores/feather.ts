@@ -17,6 +17,8 @@ export type FeatherConnectionMode = 'followers' | 'following'
 export const useFeatherStore = defineStore('feather', {
   state: () => ({
     activities: [] as FeatherActivity[],
+    bookmarkedPosts: [] as FeatherPost[],
+    bookmarksLoading: false,
     connectionLoading: false,
     connections: [] as FeatherProfile[],
     exploreLoading: false,
@@ -135,7 +137,14 @@ export const useFeatherStore = defineStore('feather', {
         id: post.id,
         kind,
       })
-      if (response.success) return
+      if (response.success) {
+        if (kind === 'bookmark') {
+          this.bookmarkedPosts = next
+            ? [post, ...this.bookmarkedPosts.filter((item) => item.id !== post.id)]
+            : this.bookmarkedPosts.filter((item) => item.id !== post.id)
+        }
+        return
+      }
       post[key] = !next
       if (kind === 'like') post.like_count += next ? -1 : 1
     },
@@ -163,6 +172,7 @@ export const useFeatherStore = defineStore('feather', {
         ...this.feed,
         ...this.explorePosts,
         ...this.profilePosts,
+        ...this.bookmarkedPosts,
       ]) {
         if (post.profile_id === profile.id) post.is_following = next
       }
@@ -178,6 +188,7 @@ export const useFeatherStore = defineStore('feather', {
         ...this.feed,
         ...this.explorePosts,
         ...this.profilePosts,
+        ...this.bookmarkedPosts,
       ]) {
         if (item.profile_id === post.profile_id) item.is_following = next
       }
@@ -222,6 +233,7 @@ export const useFeatherStore = defineStore('feather', {
           ...this.feed,
           ...this.explorePosts,
           ...this.profilePosts,
+          ...this.bookmarkedPosts,
         ]) {
           if (post.profile_id === target.id) post.is_following = false
         }
@@ -235,6 +247,16 @@ export const useFeatherStore = defineStore('feather', {
       if (!response.success || !response.data) return false
       this.viewedProfile = response.data.profile
       this.profilePosts = response.data.posts
+      return true
+    },
+    async loadBookmarks(): Promise<boolean> {
+      this.bookmarksLoading = true
+      const response = await nuiCall<{ items: FeatherPost[] }>(
+        'feather:bookmarks',
+      )
+      this.bookmarksLoading = false
+      if (!response.success || !response.data) return false
+      this.bookmarkedPosts = response.data.items
       return true
     },
     async loadThread(id: string): Promise<boolean> {
@@ -258,6 +280,9 @@ export const useFeatherStore = defineStore('feather', {
       this.feed = this.feed.filter((post) => post.id !== id)
       this.explorePosts = this.explorePosts.filter((post) => post.id !== id)
       this.profilePosts = this.profilePosts.filter((post) => post.id !== id)
+      this.bookmarkedPosts = this.bookmarkedPosts.filter(
+        (post) => post.id !== id,
+      )
       return true
     },
     async blockProfile(profileId: number): Promise<boolean> {
@@ -265,6 +290,9 @@ export const useFeatherStore = defineStore('feather', {
       if (!response.success) return false
       this.feed = this.feed.filter((post) => post.profile_id !== profileId)
       this.explorePosts = this.explorePosts.filter(
+        (post) => post.profile_id !== profileId,
+      )
+      this.bookmarkedPosts = this.bookmarkedPosts.filter(
         (post) => post.profile_id !== profileId,
       )
       this.networkResults = this.networkResults.filter(
