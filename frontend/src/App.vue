@@ -18,6 +18,7 @@ import PhonePasscode from '@/components/PhonePasscode.vue'
 import PhoneNotifications from '@/components/PhoneNotifications.vue'
 import NotificationPhonePreview from '@/components/NotificationPhonePreview.vue'
 import PhoneStatusBar from '@/components/PhoneStatusBar.vue'
+import PayphoneOverlay from '@/components/PayphoneOverlay.vue'
 import RadioHud from '@/components/RadioHud.vue'
 import SimPhonePicker, {
   type SimPhoneChoice,
@@ -940,6 +941,7 @@ onBeforeUnmount(() => {
 <template>
   <PhoneMediaCapture />
   <RadioHud />
+  <PayphoneOverlay />
   <SimPhonePicker
     v-if="simPicker"
     :choices="simPicker.choices"

@@ -32,6 +32,7 @@ client_scripts {
     'source/client/skyride.lua',
     'source/client/housing.lua',
     'source/bridge/client/radio.lua',
+    'source/client/payphones.lua',
     'source/client/main.lua',
     'source/client/radio.lua',
 }

@@ -41,6 +41,34 @@ Config.Calls = {
     RecentPageSize = 100,
 }
 
+Config.Payphones = {
+    Enabled = true,
+    Props = {
+        "prop_phonebox_01b",
+        "p_phonebox_01b_s",
+        "prop_phonebox_01a",
+        "prop_phonebox_04",
+    },
+    ReplacementProp = "sf_prop_sf_phonebox_01b_s",
+    PricePerSecond = 1,
+    PaymentAccount = "cash", -- cash or bank
+    Currency = "$",
+    NoAnswerTimeoutSeconds = 30,
+    CallerNumber = "PAYPHONE",
+    InteractionDistance = 1.8,
+    ServerValidationDistance = 3.0,
+    MaximumCallDistance = 4.0,
+    ScanDistance = 25.0,
+    ScanIntervalMs = 1000,
+    ModelLoadTimeoutMs = 5000,
+    Animation = {
+        Dictionary = "anim@scripted@payphone_hits@male@",
+        PedClip = "FXFR_PAV_1_INTRO_MALE",
+        PropClip = "FXFR_PAV_1_INTRO_PHONE",
+        HangupDurationMs = 2000,
+    },
+}
+
 Config.Radio = {
     VoiceProvider = "auto", -- auto, yaca, pma, saltychat
     DefaultVolume = 50,
