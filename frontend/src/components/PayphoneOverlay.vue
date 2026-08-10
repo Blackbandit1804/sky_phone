@@ -494,9 +494,9 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 2;
   top: 22.7%;
-  left: 34.4%;
-  width: 54.5%;
-  height: 16.65%;
+  left: 33.5%;
+  width: 54.3%;
+  height: 17.3%;
   padding: 3.4%;
   overflow: hidden;
   border-radius: 6px;
@@ -581,7 +581,7 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 2;
   top: 44.7%;
-  left: 36.35%;
+  left: 35.3%;
   width: 50.9%;
   height: 29%;
   display: grid;
@@ -644,7 +644,7 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 2;
   top: 75.6%;
-  left: 36.35%;
+  left: 35.3%;
   width: 50.9%;
   height: 5.9%;
   display: grid;
