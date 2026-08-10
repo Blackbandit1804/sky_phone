@@ -195,7 +195,7 @@ local function play_hangup_visuals()
     visuals_ending = true
     local scene = animation_scene
     local starting_phase = math.max(0.0, math.min(1.0, GetSynchronizedScenePhase(scene)))
-    local duration_ms = math.max(250, math.floor(tonumber(Config.Payphones.Animation.HangupDurationMs) or 1200))
+    local duration_ms = math.max(250, math.floor(tonumber(Config.Payphones.Animation.HangupDurationMs) or 2000))
     local started_at = GetGameTimer()
     SetSynchronizedSceneRate(scene, 0.0)
 

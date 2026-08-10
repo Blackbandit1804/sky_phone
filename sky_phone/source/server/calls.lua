@@ -272,7 +272,7 @@ local function finish_call(call, status)
     if call.payphone then
         local hangup_duration = math.max(
             250,
-            math.floor(tonumber(Config.Payphones.Animation.HangupDurationMs) or 1200)
+            math.floor(tonumber(Config.Payphones.Animation.HangupDurationMs) or 2000)
         )
         send_payphone_visual(call, "stop", hangup_duration)
     end
