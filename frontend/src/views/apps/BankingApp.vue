@@ -578,7 +578,7 @@ onBeforeUnmount(() => {
           {{ phone.t(`Apps.banking.forms.${action}.title`) }}
         </h2>
         <p>{{ phone.t(`Apps.banking.forms.${action}.body`) }}</p>
-        <k-list inset strong class="banking-form-list">
+        <k-list aria-live="polite" inset strong class="banking-form-list">
           <k-list-input
             :label="phone.t('Apps.banking.recipientPhone')"
             input-id="banking-transfer-target"
@@ -617,9 +617,6 @@ onBeforeUnmount(() => {
           </k-list>
           <p v-else>{{ phone.t('Apps.banking.noContacts') }}</p>
         </div>
-        <p v-if="formError" class="banking-form-error" role="alert">
-          {{ formError }}
-        </p>
         <k-button
           large
           rounded

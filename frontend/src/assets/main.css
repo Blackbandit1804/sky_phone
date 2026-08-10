@@ -3190,13 +3190,6 @@ button {
   line-height: 1.4;
 }
 
-.banking-sheet__content .banking-form-error {
-  margin: 10px 3px 0;
-  color: #ff8b98;
-  font-size: 11px;
-  line-height: 1.4;
-}
-
 .banking-sheet__content > button:last-child {
   margin-top: 15px;
 }

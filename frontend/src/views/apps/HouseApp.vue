@@ -205,7 +205,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page component="main" class="house-page !pt-[44px] !pb-[25px]">
+  <k-page component="main" class="house-page">
     <k-navbar
       class="house-navbar"
       :subtitle="phone.t('Apps.house.subtitle')"
@@ -336,19 +336,19 @@ onBeforeUnmount(() => {
 
     <k-sheet
       :opened="Boolean(selectedProperty)"
+      class="house-detail-sheet"
       @backdropclick="selectedPropertyId = null"
     >
       <section v-if="selectedProperty" class="house-detail">
-        <k-link
+        <k-glass
           component="button"
-          icon-only
           class="house-detail__close"
+          type="button"
           :aria-label="phone.t('Common.close')"
-          :link-props="{ type: 'button' }"
           @click="selectedPropertyId = null"
         >
           <X :size="18" />
-        </k-link>
+        </k-glass>
 
         <span class="house-detail__mark"><House :size="46" /></span>
         <small>{{ accessLabel(selectedProperty) }}</small>
@@ -505,6 +505,7 @@ onBeforeUnmount(() => {
 
     <k-sheet
       :opened="candidatesOpened"
+      class="house-candidates-sheet"
       @backdropclick="candidatesOpened = false"
     >
       <section class="house-candidates">
@@ -565,11 +566,7 @@ onBeforeUnmount(() => {
       </template>
     </k-dialog>
 
-    <k-toast
-      :opened="toastOpened"
-      position="center"
-      @click="toastOpened = false"
-    >
+    <k-toast :opened="toastOpened" class="house-toast" position="center">
       {{ toastText }}
     </k-toast>
   </k-page>
@@ -583,10 +580,17 @@ onBeforeUnmount(() => {
   --house-panel: rgb(255 255 255/0.84);
   --house-text: #161619;
   --house-muted: #72727a;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
   background:
     radial-gradient(circle at 15% 4%, #ffd39b 0, transparent 32%),
     linear-gradient(165deg, #f4e9dd 0, #f3f3f7 47%, #e8edf3 100%);
   color: var(--house-text);
+}
+.house-toast {
+  pointer-events: none;
 }
 :global(.phone-app.dark .house-page) {
   --house-bg: #101114;
@@ -598,11 +602,21 @@ onBeforeUnmount(() => {
     linear-gradient(165deg, #26201d 0, #111216 48%, #171d25 100%);
 }
 .house-navbar {
+  --k-safe-area-top: 46px;
   --k-navbar-bg-color: transparent;
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: 0;
+  left: 0;
+  background: transparent !important;
+}
+.house-navbar::after {
+  opacity: 0;
 }
 .house-scroll {
-  position: relative;
-  height: 100%;
+  position: absolute;
+  inset: 104px 0 25px;
   padding: 9px 13px 34px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -626,7 +640,8 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 .house-state {
-  height: 100%;
+  position: absolute;
+  inset: 104px 0 25px;
   padding: 30px;
   display: flex;
   flex-direction: column;
@@ -742,11 +757,7 @@ onBeforeUnmount(() => {
   text-align: left;
   box-shadow: 0 8px 20px #24252b12;
   cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background-color 140ms ease,
-    box-shadow 140ms ease,
-    opacity 100ms ease;
+  transition: opacity 100ms ease;
 }
 :global(.phone-app.dark .house-property) {
   border-color: #ffffff12;
@@ -835,35 +846,35 @@ onBeforeUnmount(() => {
   font-size: 8px;
   text-align: center;
 }
-.house-detail-sheet,
-.house-candidates-sheet {
+:global(.house-detail-sheet),
+:global(.house-candidates-sheet) {
   --k-sheet-bg-color: var(--house-bg);
   height: 88%;
   overflow: hidden;
   border-radius: 28px 28px 0 0;
 }
 .house-detail {
+  position: relative;
   height: 100%;
   padding: 18px 14px 40px;
   overflow-y: auto;
   text-align: center;
 }
 .house-detail__close {
-  position: absolute;
+  position: sticky;
   z-index: 2;
-  top: 13px;
-  right: 14px;
+  top: 0;
   width: 32px;
   height: 32px;
+  margin: 0 0 -32px auto;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--house-panel);
 }
 .house-detail__mark {
   width: 83px;
   height: 83px;
-  margin: 9px auto 8px;
+  margin: 45px auto 8px;
   border-radius: 27px;
   display: grid;
   place-items: center;
@@ -902,6 +913,7 @@ onBeforeUnmount(() => {
   --k-button-bg-color: var(--house-accent);
   width: 100%;
   margin-bottom: 18px;
+  gap: 6px;
 }
 .house-detail h3 {
   margin: 0 0 8px;
@@ -924,14 +936,11 @@ onBeforeUnmount(() => {
   padding: 12px;
   background: var(--house-panel);
   color: var(--house-text);
-  font-size: 10px;
+  font-size: 13px;
+  line-height: 1.2;
   font-weight: 800;
   cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background-color 140ms ease,
-    box-shadow 140ms ease,
-    opacity 100ms ease;
+  transition: opacity 100ms ease;
 }
 .house-actions svg {
   color: var(--house-accent);
@@ -939,18 +948,6 @@ onBeforeUnmount(() => {
 .house-actions button:disabled {
   cursor: default;
   opacity: 0.42;
-}
-@media (hover: hover) and (pointer: fine) {
-  .house-property:hover,
-  .house-actions button:not(:disabled):hover {
-    border-color: #f47a3870;
-    background-color: rgb(255 255 255/0.94);
-    box-shadow: 0 10px 24px #7b3a1c1c;
-  }
-  :global(.phone-app.dark .house-property:hover),
-  :global(.phone-app.dark .house-actions button:not(:disabled):hover) {
-    background-color: rgb(49 45 44/0.96);
-  }
 }
 .house-property:active,
 .house-actions button:not(:disabled):active {
@@ -974,10 +971,12 @@ onBeforeUnmount(() => {
 }
 .house-keys header small {
   color: var(--house-muted);
-  font-size: 8px;
+  font-size: 10px;
+  line-height: 1.2;
 }
 .house-keys header strong {
-  font-size: 14px;
+  font-size: 17px;
+  line-height: 1.2;
 }
 .house-keys__empty {
   padding: 18px;
