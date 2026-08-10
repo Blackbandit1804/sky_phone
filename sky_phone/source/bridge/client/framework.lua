@@ -50,3 +50,10 @@ function Bridge.Framework.Notify(title, message, notification_type, duration)
 
     Bridge.Debug("error", "[sky_phone] Notification requested for unsupported framework '%s'.", tostring(framework_name))
 end
+
+function Bridge.Framework.ShowHelpNotification(message, key)
+    local control = key == "E" and "~INPUT_CONTEXT~" or ("[%s]"):format(tostring(key or "E"))
+    BeginTextCommandDisplayHelp("STRING")
+    AddTextComponentSubstringPlayerName(("%s  %s"):format(control, tostring(message or "")))
+    EndTextCommandDisplayHelp(0, false, true, -1)
+end

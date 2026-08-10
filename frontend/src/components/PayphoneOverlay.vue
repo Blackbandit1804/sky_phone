@@ -648,8 +648,8 @@ onBeforeUnmount(() => {
   width: 50.9%;
   height: 5.9%;
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
-  gap: 3%;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3.2%;
 }
 
 .payphone-action {
@@ -676,10 +676,12 @@ onBeforeUnmount(() => {
 }
 
 .payphone-action--call {
+  grid-column: span 2;
   background: linear-gradient(#3dbd74, #187c43);
 }
 
 .payphone-action--hangup {
+  grid-column: span 2;
   background: linear-gradient(#e95c55, #a12420);
 }
 

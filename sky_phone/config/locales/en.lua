@@ -30,7 +30,9 @@ Locales["en"] = {
         default = "The phone could not be opened.",
     },
     Payphone = {
-        Interact = "Press ~INPUT_CONTEXT~ to use the payphone.",
+        Interact = "Use the payphone.",
+        RingingHelp = "Calling {number}... | Hang up",
+        ConnectedHelp = "Connected to {number} | {duration} | {currency}{cost} | Hang up",
     },
     Nui = {
         Payphone = {
