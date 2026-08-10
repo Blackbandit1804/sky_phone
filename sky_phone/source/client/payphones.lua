@@ -10,16 +10,77 @@ local call_channel = 0
 local replacement_prop = nil
 local hidden_prop = nil
 local animation_scene = nil
+local network_animation_scene = nil
 local animation_ped = nil
 local animation_floor_z = nil
 local visuals_starting = false
 local visuals_ending = false
 local hangup_requested = false
+local remote_visuals = {}
 
 local configured_models = {}
 for _, model_name in ipairs(Config.Payphones.Props or {}) do
     configured_models[joaat(model_name)] = model_name
 end
+
+local function valid_visual_number(value, maximum)
+    local number = tonumber(value)
+    if not number or number ~= number or math.abs(number) > maximum then
+        return nil
+    end
+    return number
+end
+
+local function restore_remote_visual(id)
+    local visual = remote_visuals[id]
+    if not visual then
+        return
+    end
+    remote_visuals[id] = nil
+    if not visual.hidden_entity or not DoesEntityExist(visual.hidden_entity) then
+        return
+    end
+
+    for _, other in pairs(remote_visuals) do
+        if other.model_hash == visual.model_hash and #(other.coords - visual.coords) < 0.5 then
+            other.hidden_entity = other.hidden_entity or visual.hidden_entity
+            return
+        end
+    end
+    SetEntityVisible(visual.hidden_entity, true, false)
+end
+
+RegisterNetEvent("sky_phone:payphone:visual:start", function(data)
+    if type(data) ~= "table" or type(data.id) ~= "string" or type(data.model) ~= "string"
+        or tonumber(data.callerSource) == GetPlayerServerId(PlayerId())
+    then
+        return
+    end
+    local model_hash = joaat(data.model)
+    if not configured_models[model_hash] or type(data.coords) ~= "table" then
+        return
+    end
+    local x = valid_visual_number(data.coords.x, 10000.0)
+    local y = valid_visual_number(data.coords.y, 10000.0)
+    local z = valid_visual_number(data.coords.z, 2000.0)
+    if not x or not y or not z then
+        return
+    end
+
+    restore_remote_visual(data.id)
+    remote_visuals[data.id] = {
+        coords = vector3(x, y, z),
+        model_hash = model_hash,
+        hidden_entity = nil,
+    }
+end)
+
+RegisterNetEvent("sky_phone:payphone:visual:stop", function(data)
+    if type(data) ~= "table" or type(data.id) ~= "string" then
+        return
+    end
+    restore_remote_visual(data.id)
+end)
 
 local function get_locale()
     return Locales[Config.Bridge.Locale] or Locales["en"]
@@ -81,7 +142,11 @@ local function stop_call_visuals()
         ClearPedTasksImmediately(ped)
     end
 
-    if animation_scene then
+    if network_animation_scene then
+        NetworkStopSynchronisedScene(network_animation_scene)
+        network_animation_scene = nil
+        animation_scene = nil
+    elseif animation_scene then
         SetSynchronizedSceneHoldLastFrame(animation_scene, false)
         DisposeSynchronizedScene(animation_scene)
         animation_scene = nil
@@ -133,28 +198,12 @@ local function play_hangup_visuals()
     local duration_ms = math.max(250, math.floor(tonumber(Config.Payphones.Animation.HangupDurationMs) or 1200))
     local started_at = GetGameTimer()
     SetSynchronizedSceneRate(scene, 0.0)
-    if replacement_prop and DoesEntityExist(replacement_prop) then
-        SetEntityAnimSpeed(
-            replacement_prop,
-            Config.Payphones.Animation.Dictionary,
-            Config.Payphones.Animation.PropClip,
-            0.0
-        )
-    end
 
     CreateThread(function()
         while animation_scene == scene do
             local progress = math.min(1.0, (GetGameTimer() - started_at) / duration_ms)
             local phase = starting_phase * (1.0 - progress)
             SetSynchronizedScenePhase(scene, phase)
-            if replacement_prop and DoesEntityExist(replacement_prop) then
-                SetEntityAnimCurrentTime(
-                    replacement_prop,
-                    Config.Payphones.Animation.Dictionary,
-                    Config.Payphones.Animation.PropClip,
-                    phase
-                )
-            end
             keep_animation_ped_grounded()
             if progress >= 1.0 then
                 break
@@ -202,7 +251,7 @@ local function start_call_visuals()
         coords.x,
         coords.y,
         coords.z,
-        false,
+        true,
         true,
         false
     )
@@ -217,27 +266,42 @@ local function start_call_visuals()
     SetEntityRotation(replacement, rotation.x, rotation.y, rotation.z, 2, false)
     FreezeEntityPosition(replacement, true)
     SetEntityCollision(replacement, false, false)
+    local replacement_network_id = NetworkGetNetworkIdFromEntity(replacement)
+    if replacement_network_id == 0 then
+        Bridge.Debug("error", "[sky_phone] The animated payphone replacement prop is not networked.")
+        SetEntityAsMissionEntity(replacement, true, true)
+        DeleteEntity(replacement)
+        visuals_starting = false
+        SetModelAsNoLongerNeeded(replacement_hash)
+        RemoveAnimDict(animation.Dictionary)
+        return
+    end
+    SetNetworkIdCanMigrate(replacement_network_id, false)
     SetEntityVisible(original, false, false)
     hidden_prop = original
     replacement_prop = replacement
 
     local ped = PlayerPedId()
-    animation_scene = CreateSynchronizedScene(
+    network_animation_scene = NetworkCreateSynchronisedScene(
         coords.x,
         coords.y,
         coords.z,
         rotation.x,
         rotation.y,
         rotation.z,
-        2
+        2,
+        true,
+        false,
+        1.0,
+        0.0,
+        1.0
     )
-    if not animation_scene or animation_scene == -1 then
-        Bridge.Debug("error", "[sky_phone] The payphone synchronized scene could not be created.")
-        animation_scene = nil
+    if not network_animation_scene or network_animation_scene == -1 then
+        Bridge.Debug("error", "[sky_phone] The payphone network synchronized scene could not be created.")
+        network_animation_scene = nil
         stop_call_visuals()
         return
     end
-    SetSynchronizedSceneHoldLastFrame(animation_scene, true)
     animation_ped = ped
     local ped_coords = GetEntityCoords(animation_ped)
     local found_ground, ground_z = GetGroundZFor_3dCoord(
@@ -247,19 +311,43 @@ local function start_call_visuals()
         false
     )
     animation_floor_z = found_ground and ground_z or ped_coords.z
-    TaskSynchronizedScene(
+    NetworkAddPedToSynchronisedScene(
         ped,
-        animation_scene,
+        network_animation_scene,
         animation.Dictionary,
         animation.PedClip,
         8.0,
         -8.0,
         2,
         0,
-        1.0,
+        1000.0,
         0
     )
-    PlayEntityAnim(replacement, animation.PropClip, animation.Dictionary, 8.0, false, true, false, 0.0, 0)
+    NetworkAddEntityToSynchronisedScene(
+        replacement,
+        network_animation_scene,
+        animation.Dictionary,
+        animation.PropClip,
+        8.0,
+        -8.0,
+        0
+    )
+    NetworkStartSynchronisedScene(network_animation_scene)
+
+    local scene_deadline = GetGameTimer() + 1000
+    repeat
+        animation_scene = NetworkGetLocalSceneFromNetworkId(network_animation_scene)
+        if animation_scene and animation_scene ~= -1 then
+            break
+        end
+        Wait(0)
+    until GetGameTimer() >= scene_deadline
+    if not animation_scene or animation_scene == -1 then
+        Bridge.Debug("error", "[sky_phone] The local handle for the payphone network scene was not created.")
+        animation_scene = nil
+        stop_call_visuals()
+        return
+    end
     visuals_starting = false
     SetModelAsNoLongerNeeded(replacement_hash)
 end
@@ -469,6 +557,43 @@ end)
 
 CreateThread(function()
     while true do
+        local has_visuals = next(remote_visuals) ~= nil
+        if has_visuals then
+            local player_coords = GetEntityCoords(PlayerPedId())
+            for _, visual in pairs(remote_visuals) do
+                if visual.hidden_entity and not DoesEntityExist(visual.hidden_entity) then
+                    visual.hidden_entity = nil
+                end
+                if #(player_coords - visual.coords) <= Config.Payphones.ScanDistance then
+                    if not visual.hidden_entity then
+                        local entity = GetClosestObjectOfType(
+                            visual.coords.x,
+                            visual.coords.y,
+                            visual.coords.z,
+                            1.0,
+                            visual.model_hash,
+                            false,
+                            false,
+                            false
+                        )
+                        if entity ~= 0 and DoesEntityExist(entity) then
+                            visual.hidden_entity = entity
+                        end
+                    end
+                    if visual.hidden_entity then
+                        SetEntityVisible(visual.hidden_entity, false, false)
+                    end
+                end
+            end
+            Wait(250)
+        else
+            Wait(1000)
+        end
+    end
+end)
+
+CreateThread(function()
+    while true do
         local call_id = active_call_id
         local booth = active_booth
         if call_id and booth then
@@ -506,4 +631,11 @@ AddEventHandler("onResourceStop", function(resource_name)
     leave_call_voice()
     stop_call_visuals()
     clear_active_call_state()
+    local visual_ids = {}
+    for id in pairs(remote_visuals) do
+        visual_ids[#visual_ids + 1] = id
+    end
+    for _, id in ipairs(visual_ids) do
+        restore_remote_visual(id)
+    end
 end)

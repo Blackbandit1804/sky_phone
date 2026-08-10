@@ -169,6 +169,47 @@ local function settle_payphone_call(call, duration)
     return charged and billable_seconds == elapsed_seconds
 end
 
+local function send_payphone_visual(call, action, delay_ms)
+    if not call.payphone then
+        return
+    end
+    local coords = call.payphone.coords
+    local payload = {
+        id = call.id,
+        callerSource = call.caller_source,
+        model = call.payphone.model,
+        coords = { x = coords.x, y = coords.y, z = coords.z },
+    }
+    local event_name = ("sky_phone:payphone:visual:%s"):format(action)
+    local routing_bucket = call.payphone.routing_bucket
+    local targets = {}
+    if action == "stop" and call.payphone.visual_targets then
+        for _, target in ipairs(call.payphone.visual_targets) do
+            targets[#targets + 1] = target
+        end
+    else
+        for _, player_source in ipairs(Bridge.Framework.GetPlayers()) do
+            local target = tonumber(player_source) or player_source
+            if GetPlayerRoutingBucket(target) == routing_bucket then
+                targets[#targets + 1] = target
+            end
+        end
+        if action == "start" then
+            call.payphone.visual_targets = targets
+        end
+    end
+    local function dispatch()
+        for _, target in ipairs(targets) do
+            TriggerClientEvent(event_name, target, payload)
+        end
+    end
+    if delay_ms and delay_ms > 0 then
+        SetTimeout(delay_ms, dispatch)
+    else
+        dispatch()
+    end
+end
+
 local function finish_call(call, status)
     if not call or call.ended then
         return
@@ -227,6 +268,13 @@ local function finish_call(call, status)
     end
     if call.callee_device and not call.payphone then
         notify_recents(call.callee_device, call.callee_source)
+    end
+    if call.payphone then
+        local hangup_duration = math.max(
+            250,
+            math.floor(tonumber(Config.Payphones.Animation.HangupDurationMs) or 1200)
+        )
+        send_payphone_visual(call, "stop", hangup_duration)
     end
     calls[call.id] = nil
 end
@@ -540,7 +588,7 @@ local function valid_payphone_position(source, data)
     if #(player_coords - booth_coords) > Config.Payphones.ServerValidationDistance then
         return nil
     end
-    return booth_coords
+    return booth_coords, data.model
 end
 
 local function payphone_terminal(number, state)
@@ -559,7 +607,7 @@ Bridge.Callbacks.Register("sky_phone:payphone:dial", function(source, data)
     if not Config.Payphones.Enabled or not SkyPhone.AllowOperation(source, "payphone_dial", 15, 60) then
         return { success = false, error = "rate_limited" }
     end
-    local booth_coords = valid_payphone_position(source, data)
+    local booth_coords, booth_model = valid_payphone_position(source, data)
     if not booth_coords then
         return { success = false, error = "invalid_payphone" }
     end
@@ -613,7 +661,9 @@ Bridge.Callbacks.Register("sky_phone:payphone:dial", function(source, data)
             elapsed_seconds = 0,
             total_cost = 0,
             coords = booth_coords,
+            model = booth_model,
             price_per_second = price_per_second,
+            routing_bucket = GetPlayerRoutingBucket(source),
         },
     }
     calls[id] = call
@@ -624,6 +674,7 @@ Bridge.Callbacks.Register("sky_phone:payphone:dial", function(source, data)
     dial_locks[source] = nil
 
     send_state(call, source, "ringing")
+    send_payphone_visual(call, "start")
     SkyPhone.OpenDeviceForCall(callee_source, target.imei)
     TriggerClientEvent("sky_phone:call:incoming", callee_source, {
         id = id,
