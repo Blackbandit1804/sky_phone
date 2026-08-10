@@ -29,6 +29,7 @@ client_scripts {
     'source/client/garage.lua',
     'source/client/skyride.lua',
     'source/bridge/client/radio.lua',
+    'source/client/payphones.lua',
     'source/client/main.lua',
     'source/client/radio.lua',
 }

@@ -90,7 +90,7 @@ end
 
 local function send_state(call, source, state, channel)
     local outgoing = source == call.caller_source
-    TriggerClientEvent("sky_phone:call:state", source, {
+    local payload = {
         id = call.id,
         state = state,
         direction = outgoing and "outgoing" or "incoming",
@@ -98,7 +98,14 @@ local function send_state(call, source, state, channel)
         startedAt = call.started_at,
         answeredAt = call.answered_at,
         channel = channel,
-    })
+    }
+    if call.payphone and outgoing then
+        payload.elapsedSeconds = call.payphone.billed_seconds or 0
+        payload.totalCost = (call.payphone.billed_seconds or 0) * call.payphone.price_per_second
+        TriggerClientEvent("sky_phone:payphone:state", source, payload)
+        return
+    end
+    TriggerClientEvent("sky_phone:call:state", source, payload)
 end
 
 local function notify_recents(device, source)
@@ -120,26 +127,33 @@ local function finish_call(call, status)
     if status == "no_answer" or status == "cancelled" then
         callee_status = "missed"
     end
-    Bridge.Database.Transaction({
-        {
-            query = [[
-                UPDATE `sky_phone_calls`
-                SET `status` = ?, `ended_at` = CURRENT_TIMESTAMP, `duration_seconds` = ?
-                WHERE `id` = ?
-            ]],
-            params = { status, duration, call.id },
-        },
-        {
-            query = "UPDATE `sky_phone_call_entries` SET `status` = ? WHERE `call_id` = ? AND `direction` = 'outgoing'",
-            params = { status, call.id },
-        },
-        {
-            query = "UPDATE `sky_phone_call_entries` SET `status` = ? WHERE `call_id` = ? AND `direction` = 'incoming'",
-            params = { callee_status, call.id },
-        },
-    })
+    if call.payphone and call.answered_at and status == "insufficient_funds" then
+        callee_status = "completed"
+    end
+    if not call.payphone then
+        Bridge.Database.Transaction({
+            {
+                query = [[
+                    UPDATE `sky_phone_calls`
+                    SET `status` = ?, `ended_at` = CURRENT_TIMESTAMP, `duration_seconds` = ?
+                    WHERE `id` = ?
+                ]],
+                params = { status, duration, call.id },
+            },
+            {
+                query = "UPDATE `sky_phone_call_entries` SET `status` = ? WHERE `call_id` = ? AND `direction` = 'outgoing'",
+                params = { status, call.id },
+            },
+            {
+                query = "UPDATE `sky_phone_call_entries` SET `status` = ? WHERE `call_id` = ? AND `direction` = 'incoming'",
+                params = { callee_status, call.id },
+            },
+        })
+    end
     active_by_source[call.caller_source] = nil
-    active_by_sim[call.caller_sim_id] = nil
+    if call.caller_sim_id then
+        active_by_sim[call.caller_sim_id] = nil
+    end
     if call.callee_source then
         active_by_source[call.callee_source] = nil
     end
@@ -150,8 +164,10 @@ local function finish_call(call, status)
     if call.callee_source then
         send_state(call, call.callee_source, callee_status)
     end
-    notify_recents(call.caller_device, call.caller_source)
-    if call.callee_device then
+    if call.caller_device then
+        notify_recents(call.caller_device, call.caller_source)
+    end
+    if call.callee_device and not call.payphone then
         notify_recents(call.callee_device, call.callee_source)
     end
     calls[call.id] = nil
@@ -440,6 +456,146 @@ Bridge.Callbacks.Register("sky_phone:calls:dial", function(source, data)
     return { success = true, data = { id = id, state = "ringing", direction = "outgoing", otherNumber = number, startedAt = call.started_at } }
 end)
 
+local payphone_models = {}
+for _, model_name in ipairs(Config.Payphones.Props or {}) do
+    payphone_models[model_name] = true
+end
+
+local function valid_payphone_position(source, data)
+    if type(data) ~= "table" or not payphone_models[data.model] or type(data.coords) ~= "table" then
+        return nil
+    end
+    local x = tonumber(data.coords.x)
+    local y = tonumber(data.coords.y)
+    local z = tonumber(data.coords.z)
+    if not x or not y or not z or x ~= x or y ~= y or z ~= z
+        or math.abs(x) > 10000.0 or math.abs(y) > 10000.0 or math.abs(z) > 2000.0
+    then
+        return nil
+    end
+    local ped = GetPlayerPed(source)
+    if not ped or ped == 0 then
+        return nil
+    end
+    local player_coords = GetEntityCoords(ped)
+    local booth_coords = vector3(x, y, z)
+    if #(player_coords - booth_coords) > Config.Payphones.ServerValidationDistance then
+        return nil
+    end
+    return booth_coords
+end
+
+local function payphone_terminal(number, state)
+    return {
+        id = ("payphone-terminal-%s-%s"):format(os.time(), math.random(100000, 999999)),
+        state = state,
+        direction = "outgoing",
+        otherNumber = number,
+        startedAt = os.time(),
+        elapsedSeconds = 0,
+        totalCost = 0,
+    }
+end
+
+Bridge.Callbacks.Register("sky_phone:payphone:dial", function(source, data)
+    if not Config.Payphones.Enabled or not SkyPhone.AllowOperation(source, "payphone_dial", 15, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local booth_coords = valid_payphone_position(source, data)
+    if not booth_coords then
+        return { success = false, error = "invalid_payphone" }
+    end
+    if active_by_source[source] or dial_locks[source] then
+        return { success = false, error = "busy" }
+    end
+
+    local number = SkyPhoneSimNumber.Normalize(data.phoneNumber, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
+    if not number then
+        return { success = false, error = "invalid_number" }
+    end
+    local price_per_second = math.max(0, math.floor(tonumber(Config.Payphones.PricePerSecond) or 0))
+    local available_money = Bridge.Framework.GetMoney(source, Config.Payphones.PaymentAccount)
+    if price_per_second > 0 and (not available_money or available_money < price_per_second) then
+        return { success = false, error = "insufficient_funds" }
+    end
+
+    dial_locks[source] = true
+    local targets = Bridge.Database.Query([[
+        SELECT s.`id`, s.`phone_number`, d.`imei`, d.`account_id`, d.`device_name`
+        FROM `sky_phone_sims` s LEFT JOIN `sky_phone_devices` d ON d.`sim_id` = s.`id`
+        WHERE s.`phone_number` = ? LIMIT 1
+    ]], { number })
+    local target = targets[1]
+    if not target or not target.imei then
+        dial_locks[source] = nil
+        return { success = true, data = payphone_terminal(number, "unavailable") }
+    end
+    local callee_source = find_device_holder(target.imei)
+    if not callee_source or callee_source == source or airplane_mode(target.imei) then
+        dial_locks[source] = nil
+        return { success = true, data = payphone_terminal(number, "unavailable") }
+    end
+    if active_by_source[callee_source] or active_by_sim[target.id] or dialing_by_sim[target.id] then
+        dial_locks[source] = nil
+        return { success = true, data = payphone_terminal(number, "busy") }
+    end
+    dialing_by_sim[target.id] = true
+
+    local id = uuid()
+    local call = {
+        id = id,
+        caller_source = source,
+        caller_number = Config.Payphones.CallerNumber,
+        callee_source = callee_source,
+        callee_sim_id = target.id,
+        callee_number = number,
+        callee_device = target,
+        started_at = os.time(),
+        payphone = {
+            billed_seconds = 0,
+            coords = booth_coords,
+            price_per_second = price_per_second,
+        },
+    }
+    calls[id] = call
+    active_by_source[source] = id
+    active_by_source[callee_source] = id
+    active_by_sim[target.id] = id
+    dialing_by_sim[target.id] = nil
+    dial_locks[source] = nil
+
+    send_state(call, source, "ringing")
+    SkyPhone.OpenDeviceForCall(callee_source, target.imei)
+    TriggerClientEvent("sky_phone:call:incoming", callee_source, {
+        id = id,
+        state = "ringing",
+        direction = "incoming",
+        otherNumber = call.caller_number,
+        startedAt = call.started_at,
+        device = {
+            imei = target.imei,
+            name = target.device_name,
+        },
+    })
+    SetTimeout(math.max(1, math.floor(tonumber(Config.Payphones.NoAnswerTimeoutSeconds) or 30)) * 1000, function()
+        if calls[id] and not calls[id].answered_at then
+            finish_call(calls[id], "no_answer")
+        end
+    end)
+    return {
+        success = true,
+        data = {
+            id = id,
+            state = "ringing",
+            direction = "outgoing",
+            otherNumber = number,
+            startedAt = call.started_at,
+            elapsedSeconds = 0,
+            totalCost = 0,
+        },
+    }
+end)
+
 Bridge.Callbacks.Register("sky_phone:calls:answer", function(source, data)
     local call = type(data) == "table" and calls[data.id] or nil
     if not call or call.callee_source ~= source or call.answered_at then
@@ -455,8 +611,10 @@ Bridge.Callbacks.Register("sky_phone:calls:answer", function(source, data)
     call.answered_at = os.time()
     call.channel = next_voice_channel
     next_voice_channel = next_voice_channel + 1
-    Bridge.Database.Query("UPDATE `sky_phone_calls` SET `status` = 'connected', `answered_at` = CURRENT_TIMESTAMP WHERE `id` = ?", { call.id })
-    Bridge.Database.Query("UPDATE `sky_phone_call_entries` SET `status` = 'connected' WHERE `call_id` = ?", { call.id })
+    if not call.payphone then
+        Bridge.Database.Query("UPDATE `sky_phone_calls` SET `status` = 'connected', `answered_at` = CURRENT_TIMESTAMP WHERE `id` = ?", { call.id })
+        Bridge.Database.Query("UPDATE `sky_phone_call_entries` SET `status` = 'connected' WHERE `call_id` = ?", { call.id })
+    end
     send_state(call, call.caller_source, "connected", call.channel)
     send_state(call, call.callee_source, "connected", call.channel)
     return { success = true }
@@ -474,7 +632,21 @@ end)
 Bridge.Callbacks.Register("sky_phone:calls:hangup", function(source, data)
     local call_id = active_by_source[source]
     local call = call_id and calls[call_id] or nil
-    if not call or (type(data) == "table" and data.id and data.id ~= call.id) then
+    if not call or (call.payphone and call.caller_source == source)
+        or (type(data) == "table" and data.id and data.id ~= call.id)
+    then
+        return { success = false, error = "call_not_found" }
+    end
+    finish_call(call, call.answered_at and "completed" or "cancelled")
+    return { success = true }
+end)
+
+Bridge.Callbacks.Register("sky_phone:payphone:hangup", function(source, data)
+    local call_id = active_by_source[source]
+    local call = call_id and calls[call_id] or nil
+    if not call or not call.payphone or call.caller_source ~= source
+        or (type(data) == "table" and data.id and data.id ~= call.id)
+    then
         return { success = false, error = "call_not_found" }
     end
     finish_call(call, call.answered_at and "completed" or "cancelled")
@@ -483,17 +655,58 @@ end)
 
 CreateThread(function()
     while true do
-        Wait(2000)
-        local invalid_calls = {}
+        Wait(1000)
+        local calls_to_finish = {}
         for call_id, call in pairs(calls) do
-            if not SkyPhone.FindDeviceSlots(call.caller_source, call.caller_device.imei)[1]
-                or (call.callee_source and not SkyPhone.FindDeviceSlots(call.callee_source, call.callee_device.imei)[1])
-            then
-                invalid_calls[#invalid_calls + 1] = call_id
+            local caller_valid = true
+            if call.payphone then
+                local caller_ped = GetPlayerPed(call.caller_source)
+                caller_valid = caller_ped and caller_ped ~= 0
+                if caller_valid then
+                    caller_valid = #(GetEntityCoords(caller_ped) - call.payphone.coords)
+                        <= Config.Payphones.MaximumCallDistance
+                end
+            else
+                caller_valid = SkyPhone.FindDeviceSlots(call.caller_source, call.caller_device.imei)[1] ~= nil
+            end
+            local callee_valid = not call.callee_source
+                or SkyPhone.FindDeviceSlots(call.callee_source, call.callee_device.imei)[1] ~= nil
+            if not caller_valid or not callee_valid then
+                calls_to_finish[call_id] = "disconnected"
+            elseif call.payphone and call.answered_at and not call.ended then
+                local elapsed_seconds = math.max(0, os.time() - call.answered_at)
+                local seconds_due = elapsed_seconds - call.payphone.billed_seconds
+                if seconds_due > 0 then
+                    local amount_due = seconds_due * call.payphone.price_per_second
+                    local charged = amount_due == 0
+                    if amount_due > 0 then
+                        local success, result = pcall(
+                            Bridge.Framework.RemoveMoney,
+                            call.caller_source,
+                            Config.Payphones.PaymentAccount,
+                            amount_due
+                        )
+                        charged = success and result and true or false
+                        if not success then
+                            Bridge.Debug(
+                                "error",
+                                "[sky_phone] Payphone billing failed for source %s: %s",
+                                tostring(call.caller_source),
+                                tostring(result)
+                            )
+                        end
+                    end
+                    if charged then
+                        call.payphone.billed_seconds = elapsed_seconds
+                        send_state(call, call.caller_source, "connected", call.channel)
+                    else
+                        calls_to_finish[call_id] = "insufficient_funds"
+                    end
+                end
             end
         end
-        for _, call_id in ipairs(invalid_calls) do
-            finish_call(calls[call_id], "disconnected")
+        for call_id, status in pairs(calls_to_finish) do
+            finish_call(calls[call_id], status)
         end
     end
 end)
