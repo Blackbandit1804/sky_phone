@@ -2772,6 +2772,7 @@ onMounted(async () => {
   place-items: center;
   width: 76px;
   height: 76px;
+  flex: 0 0 76px;
   overflow: hidden;
   transform: translateY(-38px);
   border: 3px solid #fff;
