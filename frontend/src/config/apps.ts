@@ -30,6 +30,7 @@ import {
   House,
   Music2,
   Feather,
+  ReceiptText,
 } from 'lucide-vue-next'
 import { defineAsyncComponent, markRaw } from 'vue'
 
@@ -56,6 +57,7 @@ import skyFlappyIcon from '@/assets/img/app-icons/sky-flappy.webp'
 import neonDropIcon from '@/assets/img/app-icons/neon-drop.webp'
 import weatherIcon from '@/assets/img/app-icons/weather.webp'
 import bankingIcon from '@/assets/img/app-icons/banking.webp'
+import billingIcon from '@/assets/img/app-icons/billing.svg'
 import garageIcon from '@/assets/img/app-icons/garage.webp'
 import houseIcon from '@/assets/img/app-icons/house.svg'
 import citymarktIcon from '@/assets/img/app-icons/citymarkt.webp'
@@ -296,6 +298,20 @@ export const PHONE_APPS: PhoneAppDefinition[] = [
     id: 'banking',
     labelKey: 'Apps.banking.name',
     route: '/apps/banking',
+  },
+  {
+    category: 'utilities',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/BillingApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 6,
+    icon: markRaw(ReceiptText),
+    iconClass: 'app-icon--billing',
+    iconImage: billingIcon,
+    id: 'billing',
+    labelKey: 'Apps.billing.name',
+    route: '/apps/billing',
   },
   {
     category: 'social',

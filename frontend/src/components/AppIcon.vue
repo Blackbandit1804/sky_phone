@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 
 import { NON_REMOVABLE_PHONE_APP_IDS } from '@/config/apps'
 import { useMailStore } from '@/stores/mail'
+import { useBillingStore } from '@/stores/billing'
 import { useMarketplaceStore } from '@/stores/marketplace'
 import { useDarkChatStore } from '@/stores/darkchat'
 import { usePhoneStore } from '@/stores/phone'
@@ -35,6 +36,7 @@ const emit = defineEmits<{
 
 const phone = usePhoneStore()
 const mail = useMailStore()
+const billing = useBillingStore()
 const marketplace = useMarketplaceStore()
 const darkchat = useDarkChatStore()
 const router = useRouter()
@@ -60,6 +62,7 @@ const unreadCount = computed(() => {
   if (props.app.id === 'mail') return mail.counts.unread
   if (props.app.id === 'citymarkt') return marketplace.counts.unread
   if (props.app.id === 'darkchat') return darkchat.unreadCount
+  if (props.app.id === 'billing') return billing.overview?.unreadCount ?? 0
   return 0
 })
 const notificationBadgeColors = {

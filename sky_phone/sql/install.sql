@@ -202,6 +202,63 @@ CREATE TABLE IF NOT EXISTS `sky_phone_bank_transactions` (
     KEY `idx_sky_phone_bank_reference` (`reference`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `sky_phone_billing_invoices` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `recipient_identifier` VARCHAR(80) NOT NULL,
+    `issuer_identifier` VARCHAR(80) NOT NULL DEFAULT '',
+    `issuer_account` VARCHAR(80) NOT NULL,
+    `issuer_label` VARCHAR(80) NOT NULL,
+    `title` VARCHAR(160) NOT NULL,
+    `description` VARCHAR(1000) NOT NULL DEFAULT '',
+    `amount` BIGINT UNSIGNED NOT NULL,
+    `currency` VARCHAR(8) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    `status` ENUM('open', 'processing', 'paid', 'disputed', 'cancelled', 'refunded') NOT NULL DEFAULT 'open',
+    `read_at` DATETIME NULL,
+    `issued_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `due_at` DATETIME NULL,
+    `paid_at` DATETIME NULL,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `payment_reference` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_billing_recipient` (`recipient_identifier`, `status`, `due_at`, `id`),
+    KEY `idx_sky_phone_billing_issuer` (`issuer_identifier`, `status`, `id`),
+    KEY `idx_sky_phone_billing_unread` (`recipient_identifier`, `read_at`),
+    KEY `idx_sky_phone_billing_account` (`issuer_account`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_billing_payments` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `invoice_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `recipient_identifier` VARCHAR(80) NOT NULL,
+    `amount` BIGINT UNSIGNED NOT NULL,
+    `status` ENUM('processing', 'paid', 'failed') NOT NULL DEFAULT 'processing',
+    `error_code` VARCHAR(48) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL DEFAULT '',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_billing_payment_invoice` (`invoice_id`, `id`),
+    FOREIGN KEY (`invoice_id`) REFERENCES `sky_phone_billing_invoices` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_billing_events` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `invoice_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `event` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    `actor_identifier` VARCHAR(80) NOT NULL DEFAULT '',
+    `note` VARCHAR(255) NOT NULL DEFAULT '',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_billing_event_invoice` (`invoice_id`, `id`),
+    FOREIGN KEY (`invoice_id`) REFERENCES `sky_phone_billing_invoices` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_billing_accounts` (
+    `account_key` VARCHAR(80) NOT NULL,
+    `balance` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`account_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `sky_phone_sms_messages` (
     `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `sender_sim_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
