@@ -53,7 +53,6 @@ server_scripts {
     'source/bridge/server/inventory/*.lua',
     'source/server/db_migrate.lua',
     'source/server/phone.lua',
-    'source/server/debug.lua',
     'source/server/sim.lua',
     'source/server/calls.lua',
     'source/server/media.lua',

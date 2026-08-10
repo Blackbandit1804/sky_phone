@@ -19,11 +19,6 @@ Config.Phone = {
     DeviceName = "iFruit Phone",
 }
 
-Config.NotificationTest = {
-    Command = "phonenotifytest",
-    AdminGroups = { "admin" },
-}
-
 Config.Security = {
     PasscodePepperConvar = "sky_phone_passcode_pepper",
     MaximumAttempts = 5,

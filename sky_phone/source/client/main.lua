@@ -617,10 +617,6 @@ RegisterNetEvent("sky_phone:billing:new", function(data)
     SendNUIMessage({ type = "billing:new", data = data })
 end)
 
-RegisterNetEvent("sky_phone:notification:test", function(data)
-    SendNUIMessage({ type = "notification:show", data = data })
-end)
-
 RegisterNetEvent("sky_phone:messages:changed", function(data)
     SendNUIMessage({ type = "messages:changed", data = data })
 end)
