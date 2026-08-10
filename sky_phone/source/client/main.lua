@@ -147,6 +147,25 @@ local server_callbacks = {
     "map:markers",
     "map:create-marker",
     "map:delete-marker",
+    "crewlink:bootstrap",
+    "crewlink:create-profile",
+    "crewlink:update-profile",
+    "crewlink:create-group",
+    "crewlink:update-group",
+    "crewlink:delete-group",
+    "crewlink:set-active",
+    "crewlink:join-code",
+    "crewlink:rotate-code",
+    "crewlink:nearby",
+    "crewlink:invite-nearby",
+    "crewlink:respond-invite",
+    "crewlink:update-member",
+    "crewlink:transfer-owner",
+    "crewlink:remove-member",
+    "crewlink:leave",
+    "crewlink:create-ping",
+    "crewlink:remove-ping",
+    "crewlink:live",
     "sim:insert",
     "sim:eject",
     "contacts:list",
@@ -615,6 +634,22 @@ RegisterNetEvent("sky_phone:billing:new", function(data)
         :gsub("{issuer}", tostring(data.issuer))
         :gsub("{amount}", ("%s %s"):format(tostring(data.amount), Config.Billing.Currency))
     SendNUIMessage({ type = "billing:new", data = data })
+end)
+
+RegisterNetEvent("sky_phone:crewlink:changed", function(data)
+    SendNUIMessage({ type = "crewlink:changed", data = data })
+end)
+
+RegisterNetEvent("sky_phone:crewlink:notification", function(data)
+    local crewlink_locale = get_locale().Nui.Apps.crewlink
+    local notification_text = crewlink_locale.notifications[data.kind]
+        or crewlink_locale.notifications.default
+    data.title = crewlink_locale.name
+    data.text = notification_text
+        :gsub("{actor}", tostring(data.actor or ""))
+        :gsub("{group}", tostring(data.groupName or ""))
+        :gsub("{ping}", tostring(data.pingLabel or ""))
+    SendNUIMessage({ type = "crewlink:notification", data = data })
 end)
 
 RegisterNetEvent("sky_phone:messages:changed", function(data)

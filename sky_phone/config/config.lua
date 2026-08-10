@@ -393,6 +393,29 @@ Config.MapMarkers = {
     ActionsPerMinute = 60,
 }
 
+Config.CrewLink = {
+    UsernameMinLength = 3,
+    UsernameMaxLength = 20,
+    GroupNameMinLength = 3,
+    GroupNameMaxLength = 32,
+    MaximumGroupsPerProfile = 5,
+    MaximumMembersPerGroup = 16,
+    InviteCodeLength = 8,
+    InviteLifetimeSeconds = 30,
+    NearbyInviteDistance = 5.0,
+    NearbyScanLimit = 12,
+    PingLabelMaxLength = 48,
+    PingLifetimeSeconds = 300,
+    MaximumActivePings = 12,
+    ActionsPerMinute = 30,
+    LiveRequestsPerMinute = 120,
+    OverheadRefreshMilliseconds = 3000,
+    OverheadDistance = 50.0,
+    ExternalPingResources = {
+        -- ["example_resource"] = true,
+    },
+}
+
 Config.Calendar = {
     TitleMaxLength = 120,
     NoteMaxLength = 2000,

@@ -186,6 +186,16 @@ type BillingNotificationData = {
   text?: string
   title?: string
 }
+
+type CrewLinkNotificationData = {
+  actor?: string
+  device?: PhoneNotificationDevicePayload
+  groupName?: string
+  kind?: 'invite' | 'member_joined' | 'ping' | 'role' | 'removed'
+  pingLabel?: string
+  text?: string
+  title?: string
+}
 const REFERENCE_VIEWPORT_WIDTH = 1920
 const REFERENCE_VIEWPORT_HEIGHT = 1080
 const PHONE_BASE_SCALE = 0.69
@@ -645,6 +655,28 @@ function onMessage(event: MessageEvent<AppMessage>): void {
           issuer: data.issuer ?? '',
         }),
       title: data.title ?? phone.t('Apps.billing.name'),
+    }
+    if (
+      data.device &&
+      (!phone.isOpen || data.device.imei !== phone.device?.imei)
+    ) {
+      notification.device = {
+        imei: data.device.imei,
+        name: data.device.name,
+        preferences: parsePhonePreferences(data.device.settings ?? null),
+      }
+    }
+    notifications.show(notification)
+  } else if (
+    event.data?.type === 'crewlink:notification' &&
+    event.data.data
+  ) {
+    const data = event.data.data as CrewLinkNotificationData
+    const notification: PhoneNotificationInput = {
+      appId: 'crewlink',
+      subtitle: data.groupName,
+      text: data.text ?? phone.t('Apps.crewlink.notifications.default'),
+      title: data.title ?? phone.t('Apps.crewlink.name'),
     }
     if (
       data.device &&

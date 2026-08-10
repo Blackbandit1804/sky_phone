@@ -31,6 +31,7 @@ import {
   Music2,
   Feather,
   ReceiptText,
+  UsersRound,
 } from 'lucide-vue-next'
 import { defineAsyncComponent, markRaw } from 'vue'
 
@@ -68,6 +69,7 @@ import picstagramIcon from '@/assets/img/app-icons/picstagram.webp'
 import skyRideIcon from '@/assets/img/app-icons/skyride.svg'
 import musicIcon from '@/assets/img/app-icons/music.svg'
 import featherIcon from '@/assets/img/app-icons/feather.svg'
+import crewLinkIcon from '@/assets/img/app-icons/crewlink.svg'
 import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
@@ -186,6 +188,20 @@ export const PHONE_APPS: PhoneAppDefinition[] = [
     id: 'local-pages',
     labelKey: 'Apps.localPages.name',
     route: '/apps/local-pages',
+  },
+  {
+    category: 'social',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/CrewLinkApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 27,
+    icon: markRaw(UsersRound),
+    iconClass: 'app-icon--crewlink',
+    iconImage: crewLinkIcon,
+    id: 'crewlink',
+    labelKey: 'Apps.crewlink.name',
+    route: '/apps/crewlink',
   },
   {
     category: 'social',

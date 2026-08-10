@@ -142,6 +142,243 @@ let mockMapMarkers = [
     label: 'Meeting point',
   },
 ]
+let crewLinkProfile = {
+  activeGroupId: 'crewlink-group-night-shift',
+  id: 'crewlink-profile-skyline',
+  mapVisible: true,
+  overheadVisible: false,
+  username: 'Skyline',
+}
+let crewLinkGroups = [
+  {
+    allowMemberPings: true,
+    colour: 'cyan',
+    id: 'crewlink-group-night-shift',
+    inviteCode: 'N1GHT247',
+    isOwner: true,
+    memberCount: 6,
+    name: 'Night Shift',
+    overheadAllowed: true,
+    role: 'owner',
+  },
+  {
+    allowMemberPings: false,
+    colour: 'violet',
+    id: 'crewlink-group-coastline',
+    isOwner: false,
+    memberCount: 4,
+    name: 'Coastline Crew',
+    overheadAllowed: true,
+    role: 'member',
+  },
+]
+const crewLinkMembers = {
+  'crewlink-group-night-shift': [
+    {
+      coords: { x: -155.2, y: -1005.8, z: 28.4 },
+      id: 'crewlink-profile-skyline',
+      joinedAt: Date.now() - 36 * 86400000,
+      mapVisible: true,
+      online: true,
+      overheadVisible: false,
+      role: 'owner',
+      source: 1,
+      username: 'Skyline',
+    },
+    {
+      coords: { x: -67.6, y: -818.1, z: 326.2 },
+      id: 'crewlink-profile-nova',
+      joinedAt: Date.now() - 30 * 86400000,
+      mapVisible: true,
+      online: true,
+      overheadVisible: true,
+      role: 'coordinator',
+      source: 22,
+      username: 'Nova',
+    },
+    {
+      coords: { x: 214.8, y: -810.4, z: 30.7 },
+      id: 'crewlink-profile-ghost',
+      joinedAt: Date.now() - 20 * 86400000,
+      mapVisible: true,
+      online: true,
+      overheadVisible: true,
+      role: 'moderator',
+      source: 38,
+      username: 'Ghost',
+    },
+    {
+      id: 'crewlink-profile-luna',
+      joinedAt: Date.now() - 12 * 86400000,
+      mapVisible: false,
+      online: true,
+      overheadVisible: false,
+      role: 'member',
+      source: 41,
+      username: 'Luna',
+    },
+    {
+      id: 'crewlink-profile-mason',
+      joinedAt: Date.now() - 8 * 86400000,
+      mapVisible: true,
+      online: false,
+      overheadVisible: false,
+      role: 'member',
+      username: 'Mason',
+    },
+    {
+      id: 'crewlink-profile-raven',
+      joinedAt: Date.now() - 2 * 86400000,
+      mapVisible: true,
+      online: false,
+      overheadVisible: false,
+      role: 'guest',
+      username: 'Raven',
+    },
+  ],
+  'crewlink-group-coastline': [
+    {
+      coords: { x: -1204.3, y: -1488.9, z: 4.4 },
+      id: 'crewlink-profile-skyline',
+      joinedAt: Date.now() - 5 * 86400000,
+      mapVisible: true,
+      online: true,
+      overheadVisible: false,
+      role: 'member',
+      source: 1,
+      username: 'Skyline',
+    },
+    {
+      coords: { x: -1315.5, y: -1520.2, z: 4.4 },
+      id: 'crewlink-profile-wave',
+      joinedAt: Date.now() - 40 * 86400000,
+      mapVisible: true,
+      online: true,
+      overheadVisible: true,
+      role: 'owner',
+      source: 18,
+      username: 'Wave',
+    },
+    {
+      id: 'crewlink-profile-sunset',
+      joinedAt: Date.now() - 20 * 86400000,
+      mapVisible: true,
+      online: false,
+      overheadVisible: false,
+      role: 'moderator',
+      username: 'Sunset',
+    },
+    {
+      id: 'crewlink-profile-finn',
+      joinedAt: Date.now() - 10 * 86400000,
+      mapVisible: false,
+      online: true,
+      overheadVisible: false,
+      role: 'guest',
+      source: 56,
+      username: 'Finn',
+    },
+  ],
+}
+const crewLinkPings = {
+  'crewlink-group-night-shift': [
+    {
+      coords: { x: 233.1, y: -876.4, z: 30.5 },
+      createdAt: Date.now() - 45000,
+      creatorProfileId: 'crewlink-profile-ghost',
+      creatorUsername: 'Ghost',
+      expiresAt: Date.now() + 255000,
+      id: 'crewlink-ping-meeting',
+      label: 'Meet behind the garage',
+      type: 'meeting',
+    },
+    {
+      coords: { x: 452.6, y: -980.2, z: 30.7 },
+      createdAt: Date.now() - 110000,
+      creatorProfileId: 'crewlink-profile-nova',
+      creatorUsername: 'Nova',
+      expiresAt: Date.now() + 190000,
+      id: 'crewlink-ping-danger',
+      label: 'Avoid Mission Row',
+      type: 'danger',
+    },
+    {
+      coords: { x: -1034.2, y: -2732.1, z: 20.1 },
+      createdAt: Date.now() - 25000,
+      creatorProfileId: null,
+      creatorUsername: 'sky_mission',
+      expiresAt: Date.now() + 275000,
+      id: 'crewlink-ping-target',
+      label: 'Airport pickup',
+      sourceResource: 'sky_mission',
+      type: 'target',
+    },
+  ],
+  'crewlink-group-coastline': [
+    {
+      coords: { x: -1302.2, y: -1541.4, z: 4.2 },
+      createdAt: Date.now() - 80000,
+      creatorProfileId: 'crewlink-profile-wave',
+      creatorUsername: 'Wave',
+      expiresAt: Date.now() + 220000,
+      id: 'crewlink-ping-coast',
+      label: 'Boardwalk meeting',
+      type: 'info',
+    },
+  ],
+}
+let crewLinkInvitations = [
+  {
+    colour: 'orange',
+    expiresAt: Date.now() + 25000,
+    groupId: 'crewlink-group-sandy',
+    groupName: 'Sandy Trails',
+    id: 'crewlink-invite-sandy',
+    inviterUsername: 'Dusty',
+  },
+]
+const crewLinkNearby = [
+  { distance: 2.4, source: 72, username: 'Echo' },
+  { distance: 4.7, source: 83, username: 'Atlas' },
+]
+const crewLinkLimits = {
+  maximumGroups: 5,
+  maximumMembers: 16,
+  nearbyDistance: 5,
+  overheadDistance: 50,
+  pingLifetimeSeconds: 300,
+}
+
+function crewLinkBootstrap(testScenario = '') {
+  if (testScenario === 'crewlink-onboarding') {
+    return { groups: [], invitations: [], profile: null }
+  }
+  if (testScenario === 'crewlink-empty') {
+    return {
+      activeGroup: null,
+      groups: [],
+      invitations: crewLinkInvitations,
+      limits: crewLinkLimits,
+      profile: { ...crewLinkProfile, activeGroupId: null },
+    }
+  }
+  const activeSummary = crewLinkGroups.find(
+    (group) => group.id === crewLinkProfile.activeGroupId,
+  )
+  return {
+    activeGroup: activeSummary
+      ? {
+          ...activeSummary,
+          members: crewLinkMembers[activeSummary.id] ?? [],
+          pings: crewLinkPings[activeSummary.id] ?? [],
+        }
+      : null,
+    groups: crewLinkGroups,
+    invitations: crewLinkInvitations,
+    limits: crewLinkLimits,
+    profile: crewLinkProfile,
+  }
+}
 const flipTokProfile = {
   id: 1,
   handle: 'skyline',
@@ -2422,6 +2659,260 @@ app.post('/api/:endpoint', (request, response) => {
   console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
   const testScenario = String(request.body._testScenario ?? '')
+  if (endpoint === 'crewlink:bootstrap') {
+    response.json({ success: true, data: crewLinkBootstrap(testScenario) })
+    return
+  }
+  if (endpoint === 'crewlink:create-profile') {
+    const username = String(request.body.username ?? '').trim()
+    if (!/^[A-Za-z0-9][A-Za-z0-9._]{1,18}[A-Za-z0-9]$/.test(username)) {
+      response.json({ success: false, error: 'invalid_username' })
+      return
+    }
+    crewLinkProfile = {
+      activeGroupId: null,
+      id: `crewlink-profile-${Date.now()}`,
+      mapVisible: true,
+      overheadVisible: false,
+      username,
+    }
+    response.json({ success: true, data: crewLinkBootstrap() })
+    return
+  }
+  if (endpoint === 'crewlink:update-profile') {
+    crewLinkProfile = {
+      ...crewLinkProfile,
+      mapVisible: request.body.mapVisible === true,
+      overheadVisible: request.body.overheadVisible === true,
+      username: String(request.body.username ?? crewLinkProfile.username),
+    }
+    for (const members of Object.values(crewLinkMembers)) {
+      const own = members.find((member) => member.id === crewLinkProfile.id)
+      if (own) {
+        own.mapVisible = crewLinkProfile.mapVisible
+        own.overheadVisible = crewLinkProfile.overheadVisible
+        own.username = crewLinkProfile.username
+      }
+    }
+    response.json({ success: true, data: crewLinkBootstrap() })
+    return
+  }
+  if (endpoint === 'crewlink:create-group') {
+    const name = String(request.body.name ?? '').trim()
+    if (name.length < 3) {
+      response.json({ success: false, error: 'invalid_group' })
+      return
+    }
+    const id = `crewlink-group-${Date.now()}`
+    crewLinkGroups.unshift({
+      allowMemberPings: true,
+      colour: request.body.colour ?? 'cyan',
+      id,
+      inviteCode: Math.random().toString(36).slice(2, 10).toUpperCase(),
+      isOwner: true,
+      memberCount: 1,
+      name,
+      overheadAllowed: true,
+      role: 'owner',
+    })
+    crewLinkMembers[id] = [
+      {
+        coords: { x: -155.2, y: -1005.8, z: 28.4 },
+        id: crewLinkProfile.id,
+        joinedAt: Date.now(),
+        mapVisible: crewLinkProfile.mapVisible,
+        online: true,
+        overheadVisible: crewLinkProfile.overheadVisible,
+        role: 'owner',
+        source: 1,
+        username: crewLinkProfile.username,
+      },
+    ]
+    crewLinkPings[id] = []
+    crewLinkProfile.activeGroupId = id
+    response.json({ success: true, data: crewLinkBootstrap() })
+    return
+  }
+  if (endpoint === 'crewlink:update-group') {
+    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    if (!group) {
+      response.json({ success: false, error: 'group_not_found' })
+      return
+    }
+    Object.assign(group, {
+      allowMemberPings: request.body.allowMemberPings,
+      colour: request.body.colour,
+      name: request.body.name,
+      overheadAllowed: request.body.overheadAllowed,
+    })
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'crewlink:delete-group') {
+    crewLinkGroups = crewLinkGroups.filter((item) => item.id !== request.body.groupId)
+    delete crewLinkMembers[request.body.groupId]
+    delete crewLinkPings[request.body.groupId]
+    crewLinkProfile.activeGroupId = crewLinkGroups[0]?.id ?? null
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'crewlink:set-active') {
+    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    if (!group) {
+      response.json({ success: false, error: 'group_not_found' })
+      return
+    }
+    crewLinkProfile.activeGroupId = group.id
+    response.json({ success: true, data: crewLinkBootstrap() })
+    return
+  }
+  if (endpoint === 'crewlink:join-code') {
+    if (String(request.body.code).toUpperCase() !== 'SANDY247') {
+      response.json({ success: false, error: 'invalid_code' })
+      return
+    }
+    const id = 'crewlink-group-sandy'
+    if (!crewLinkGroups.some((group) => group.id === id)) {
+      crewLinkGroups.push({
+        allowMemberPings: true,
+        colour: 'orange',
+        id,
+        isOwner: false,
+        memberCount: 3,
+        name: 'Sandy Trails',
+        overheadAllowed: false,
+        role: 'member',
+      })
+      crewLinkMembers[id] = [
+        {
+          coords: { x: 1702.1, y: 3591.4, z: 35.4 },
+          id: crewLinkProfile.id,
+          joinedAt: Date.now(),
+          mapVisible: true,
+          online: true,
+          overheadVisible: false,
+          role: 'member',
+          username: crewLinkProfile.username,
+        },
+      ]
+      crewLinkPings[id] = []
+    }
+    crewLinkProfile.activeGroupId = id
+    response.json({ success: true, data: crewLinkBootstrap() })
+    return
+  }
+  if (endpoint === 'crewlink:rotate-code') {
+    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    if (group) group.inviteCode = 'FRESH247'
+    response.json({ success: true, data: { inviteCode: 'FRESH247' } })
+    return
+  }
+  if (endpoint === 'crewlink:nearby') {
+    response.json({ success: true, data: crewLinkNearby })
+    return
+  }
+  if (endpoint === 'crewlink:invite-nearby') {
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'crewlink:respond-invite') {
+    const invitation = crewLinkInvitations.find(
+      (item) => item.id === request.body.invitationId,
+    )
+    crewLinkInvitations = crewLinkInvitations.filter(
+      (item) => item.id !== request.body.invitationId,
+    )
+    if (request.body.accepted && invitation) {
+      crewLinkGroups.push({
+        allowMemberPings: true,
+        colour: invitation.colour,
+        id: invitation.groupId,
+        isOwner: false,
+        memberCount: 4,
+        name: invitation.groupName,
+        overheadAllowed: true,
+        role: 'member',
+      })
+      crewLinkMembers[invitation.groupId] = []
+      crewLinkPings[invitation.groupId] = []
+      crewLinkProfile.activeGroupId = invitation.groupId
+    }
+    response.json({ success: true, data: crewLinkBootstrap() })
+    return
+  }
+  if (endpoint === 'crewlink:update-member') {
+    const members = crewLinkMembers[request.body.groupId] ?? []
+    const member = members.find((item) => item.id === request.body.profileId)
+    if (member) member.role = request.body.role
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'crewlink:transfer-owner') {
+    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const members = crewLinkMembers[request.body.groupId] ?? []
+    const current = members.find((item) => item.id === crewLinkProfile.id)
+    const next = members.find((item) => item.id === request.body.profileId)
+    if (group) {
+      group.isOwner = false
+      group.role = 'coordinator'
+      delete group.inviteCode
+    }
+    if (current) current.role = 'coordinator'
+    if (next) next.role = 'owner'
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'crewlink:remove-member') {
+    const members = crewLinkMembers[request.body.groupId] ?? []
+    crewLinkMembers[request.body.groupId] = members.filter(
+      (item) => item.id !== request.body.profileId,
+    )
+    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    if (group) group.memberCount = crewLinkMembers[request.body.groupId].length
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'crewlink:leave') {
+    crewLinkGroups = crewLinkGroups.filter((item) => item.id !== request.body.groupId)
+    crewLinkProfile.activeGroupId = crewLinkGroups[0]?.id ?? null
+    response.json({ success: true, data: crewLinkBootstrap() })
+    return
+  }
+  if (endpoint === 'crewlink:create-ping') {
+    const groupId = crewLinkProfile.activeGroupId
+    const ping = {
+      coords: request.body.coords ?? { x: -155.2, y: -1005.8, z: 28.4 },
+      createdAt: Date.now(),
+      creatorProfileId: crewLinkProfile.id,
+      creatorUsername: crewLinkProfile.username,
+      expiresAt: Date.now() + 300000,
+      id: `crewlink-ping-${Date.now()}`,
+      label: request.body.label,
+      type: request.body.type,
+    }
+    crewLinkPings[groupId] = [ping, ...(crewLinkPings[groupId] ?? [])]
+    response.json({ success: true, data: ping })
+    return
+  }
+  if (endpoint === 'crewlink:remove-ping') {
+    const groupId = crewLinkProfile.activeGroupId
+    crewLinkPings[groupId] = (crewLinkPings[groupId] ?? []).filter(
+      (item) => item.id !== request.body.pingId,
+    )
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'crewlink:live') {
+    const groupId = crewLinkProfile.activeGroupId
+    response.json({
+      success: true,
+      data: {
+        members: crewLinkMembers[groupId] ?? [],
+        pings: crewLinkPings[groupId] ?? [],
+      },
+    })
+    return
+  }
   if (endpoint === 'feather:bootstrap') {
     const empty = testScenario === 'feather-empty'
     const visibleProfiles = featherProfiles.filter(

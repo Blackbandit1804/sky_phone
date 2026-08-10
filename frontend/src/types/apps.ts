@@ -35,6 +35,7 @@ export type PhoneAppId =
   | 'picstagram'
   | 'skyride'
   | 'feather'
+  | 'crewlink'
 
 export type LaunchablePhoneAppId = PhoneAppId
 
