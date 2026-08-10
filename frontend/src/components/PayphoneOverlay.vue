@@ -493,13 +493,13 @@ onBeforeUnmount(() => {
 .payphone-display {
   position: absolute;
   z-index: 2;
-  top: 22.9%;
+  top: 22.7%;
   left: 34.4%;
   width: 54.5%;
-  height: 16.5%;
+  height: 16.65%;
   padding: 3.4%;
   overflow: hidden;
-  border-radius: 2%;
+  border-radius: 6px;
   background:
     linear-gradient(155deg, rgb(132 162 143 / 92%), rgb(70 99 81 / 94%)),
     #75927f;
@@ -580,15 +580,15 @@ onBeforeUnmount(() => {
 .payphone-keypad {
   position: absolute;
   z-index: 2;
-  top: 43.8%;
-  left: 35.2%;
-  width: 53.4%;
-  height: 30.7%;
+  top: 44.7%;
+  left: 36.35%;
+  width: 50.9%;
+  height: 29%;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(4, 1fr);
   gap: 2.8% 3.2%;
-  padding: 1.4%;
+  padding: 0;
 }
 
 .payphone-keypad button {
@@ -643,12 +643,12 @@ onBeforeUnmount(() => {
 .payphone-actions {
   position: absolute;
   z-index: 2;
-  top: 76%;
-  left: 35.2%;
-  width: 53.4%;
-  height: 6.2%;
+  top: 75.6%;
+  left: 36.35%;
+  width: 50.9%;
+  height: 5.9%;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
   gap: 3%;
 }
 
