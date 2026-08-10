@@ -27,6 +27,7 @@ import { useClockStore } from '@/stores/clock'
 import { useGamesStore } from '@/features/games/store'
 import { useCallsStore } from '@/stores/calls'
 import { useBankingStore } from '@/stores/banking'
+import { useBillingStore } from '@/stores/billing'
 import { useAccountStore } from '@/stores/account'
 import { useMailStore } from '@/stores/mail'
 import { useMessagesStore } from '@/stores/messages'
@@ -70,6 +71,7 @@ type AppMessage = {
     | PicstagramVerificationData
     | PicstagramNotificationData
     | FeatherNotificationData
+    | BillingNotificationData
     | PhoneCall
     | PhoneNotificationInput
     | PhoneOpenPayload
@@ -171,6 +173,14 @@ type FeatherNotificationData = {
   text?: string
   title?: string
 }
+
+type BillingNotificationData = {
+  amount?: number
+  device?: PhoneNotificationDevicePayload
+  issuer?: string
+  text?: string
+  title?: string
+}
 const REFERENCE_VIEWPORT_WIDTH = 1920
 const REFERENCE_VIEWPORT_HEIGHT = 1080
 const PHONE_BASE_SCALE = 0.69
@@ -183,6 +193,7 @@ const clock = useClockStore()
 const games = useGamesStore()
 const calls = useCallsStore()
 const banking = useBankingStore()
+const billing = useBillingStore()
 const mail = useMailStore()
 const messages = useMessagesStore()
 const darkchat = useDarkChatStore()
@@ -281,6 +292,7 @@ function loadUnlockedPhoneData(): void {
     else marketplace.setCounts({ active: 0, unread: 0 })
     void calls.bootstrap()
     void messages.loadConversations()
+    void billing.loadOverview()
     if (account.email) void darkchat.bootstrap()
   })
 }
@@ -593,6 +605,33 @@ function onMessage(event: MessageEvent<AppMessage>): void {
     void calls.loadRecents()
   } else if (event.data?.type === 'banking:changed') {
     void banking.load()
+  } else if (event.data?.type === 'billing:changed') {
+    void billing.loadOverview()
+  } else if (event.data?.type === 'billing:new' && event.data.data) {
+    const data = event.data.data as BillingNotificationData
+    void billing.loadOverview()
+    const notification: PhoneNotificationInput = {
+      appId: 'billing',
+      subtitle: data.issuer,
+      text:
+        data.text ??
+        phone.t('Apps.billing.notifications.newInvoice', {
+          amount: String(data.amount ?? 0),
+          issuer: data.issuer ?? '',
+        }),
+      title: data.title ?? phone.t('Apps.billing.name'),
+    }
+    if (
+      data.device &&
+      (!phone.isOpen || data.device.imei !== phone.device?.imei)
+    ) {
+      notification.device = {
+        imei: data.device.imei,
+        name: data.device.name,
+        preferences: parsePhonePreferences(data.device.settings ?? null),
+      }
+    }
+    notifications.show(notification)
   } else if (
     (event.data?.type === 'call:incoming' ||
       event.data?.type === 'call:state') &&

@@ -158,6 +158,12 @@ local server_callbacks = {
     "calls:hangup",
     "banking:overview",
     "banking:transfer",
+    "billing:overview",
+    "billing:list",
+    "billing:detail",
+    "billing:markRead",
+    "billing:pay",
+    "billing:dispute",
     "messages:conversations",
     "messages:thread",
     "messages:send",
@@ -595,6 +601,19 @@ end)
 
 RegisterNetEvent("sky_phone:banking:changed", function()
     SendNUIMessage({ type = "banking:changed" })
+end)
+
+RegisterNetEvent("sky_phone:billing:changed", function()
+    SendNUIMessage({ type = "billing:changed" })
+end)
+
+RegisterNetEvent("sky_phone:billing:new", function(data)
+    local billing_locale = get_locale().Nui.Apps.billing
+    data.title = billing_locale.name
+    data.text = billing_locale.notifications.newInvoice
+        :gsub("{issuer}", tostring(data.issuer))
+        :gsub("{amount}", ("%s %s"):format(tostring(data.amount), Config.Billing.Currency))
+    SendNUIMessage({ type = "billing:new", data = data })
 end)
 
 RegisterNetEvent("sky_phone:messages:changed", function(data)

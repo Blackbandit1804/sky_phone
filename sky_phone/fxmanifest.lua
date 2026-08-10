@@ -62,6 +62,7 @@ server_scripts {
     'source/server/notes.lua',
     'source/server/mail.lua',
     'source/server/banking.lua',
+    'source/server/billing.lua',
     'source/server/garage.lua',
     'source/server/housing.lua',
     'source/server/marketplace.lua',

@@ -490,6 +490,72 @@ const mockBankTransactions = [
     createdAt: Date.now() - 120 * 60 * 60 * 1000,
   },
 ]
+let mockBillingInvoices = [
+  {
+    id: '31cc4342-1abd-4c34-a283-fc653632e54f',
+    amount: 1300,
+    currency: '$',
+    description: 'Emergency treatment and medication.',
+    direction: 'inbox',
+    dueAt: Date.now() + 2 * 86400000,
+    issuedAt: Date.now() - 2 * 3600000,
+    issuerAccount: 'ambulance',
+    issuerLabel: 'Los Santos Medical',
+    isUnread: true,
+    paidAt: null,
+    paymentReference: '',
+    status: 'open',
+    title: 'Medical treatment',
+  },
+  {
+    id: '1098d704-a8e7-4050-99c9-a496399669ae',
+    amount: 999,
+    currency: '$',
+    description: 'Vehicle repair and replacement parts.',
+    direction: 'inbox',
+    dueAt: Date.now() - 86400000,
+    issuedAt: Date.now() - 4 * 86400000,
+    issuerAccount: 'mechanic',
+    issuerLabel: 'Benny’s Motorworks',
+    isUnread: true,
+    paidAt: null,
+    paymentReference: '',
+    status: 'open',
+    title: 'Vehicle repair',
+  },
+  {
+    id: '666f23e1-747e-4df9-b3bb-603340e0af98',
+    amount: 480,
+    currency: '$',
+    description: 'Tow service from Vespucci Boulevard.',
+    direction: 'inbox',
+    dueAt: Date.now() - 10 * 86400000,
+    issuedAt: Date.now() - 14 * 86400000,
+    issuerAccount: 'mechanic',
+    issuerLabel: 'Los Santos Customs',
+    isUnread: false,
+    paidAt: Date.now() - 9 * 86400000,
+    paymentReference: 'mock-payment-1',
+    status: 'paid',
+    title: 'Tow service',
+  },
+  {
+    id: '6c6817ae-c859-459c-9934-7ae0ff3b55fb',
+    amount: 750,
+    currency: '$',
+    description: 'Consulting services.',
+    direction: 'sent',
+    dueAt: Date.now() + 5 * 86400000,
+    issuedAt: Date.now() - 86400000,
+    issuerAccount: 'consulting',
+    issuerLabel: 'Alex Morgan',
+    isUnread: false,
+    paidAt: null,
+    paymentReference: '',
+    status: 'open',
+    title: 'Consulting',
+  },
+]
 const mockGarageVehicles = [
   {
     id: 'vehicle-1',
@@ -2847,6 +2913,38 @@ app.post('/api/:endpoint', (request, response) => {
     playerName: 'Alex Morgan',
     transactions: mockBankTransactions,
   })
+  const billingInvoice = (invoice) => ({
+    ...invoice,
+    canDispute: invoice.direction === 'inbox' && invoice.status === 'open',
+    canPay: invoice.direction === 'inbox' && invoice.status === 'open',
+    isOverdue:
+      invoice.status === 'open' &&
+      invoice.dueAt !== null &&
+      invoice.dueAt < Date.now(),
+  })
+  const billingOverview = (direction) => {
+    const visible = mockBillingInvoices.filter(
+      (invoice) => invoice.direction === direction,
+    )
+    const open = visible.filter((invoice) => invoice.status === 'open')
+    return {
+      currency: '$',
+      openCount: open.length,
+      openTotal: open.reduce((total, invoice) => total + invoice.amount, 0),
+      overdueCount: open.filter(
+        (invoice) => invoice.dueAt && invoice.dueAt < Date.now(),
+      ).length,
+      supportsDisputes: true,
+      supportsSent: true,
+      unreadCount: mockBillingInvoices.filter(
+        (invoice) => invoice.direction === 'inbox' && invoice.isUnread,
+      ).length,
+      urgentInvoices: open
+        .sort((left, right) => left.dueAt - right.dueAt)
+        .slice(0, 5)
+        .map(billingInvoice),
+    }
+  }
   if (endpoint === 'flare:bootstrap') {
     response.json({ success: true, data: flareBootstrap() })
     return
@@ -3962,6 +4060,113 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'banking:overview') {
     response.json({ success: true, data: bankingOverview() })
+    return
+  }
+  if (endpoint === 'billing:overview') {
+    response.json({
+      success: true,
+      data: billingOverview(
+        request.body.direction === 'sent' ? 'sent' : 'inbox',
+      ),
+    })
+    return
+  }
+  if (endpoint === 'billing:list') {
+    const direction = request.body.direction === 'sent' ? 'sent' : 'inbox'
+    const filter = String(request.body.filter ?? 'all')
+    const search = String(request.body.search ?? '').toLowerCase()
+    const offset = Math.max(0, Number(request.body.offset) || 0)
+    let invoices = mockBillingInvoices.filter(
+      (invoice) => invoice.direction === direction,
+    )
+    if (filter === 'open')
+      invoices = invoices.filter((invoice) => invoice.status === 'open')
+    if (filter === 'overdue') {
+      invoices = invoices.filter(
+        (invoice) => invoice.status === 'open' && invoice.dueAt < Date.now(),
+      )
+    }
+    if (filter === 'paid')
+      invoices = invoices.filter((invoice) => invoice.status !== 'open')
+    if (search) {
+      invoices = invoices.filter((invoice) =>
+        `${invoice.title} ${invoice.issuerLabel} ${invoice.description}`
+          .toLowerCase()
+          .includes(search),
+      )
+    }
+    const page = invoices.slice(offset, offset + 30).map(billingInvoice)
+    response.json({
+      success: true,
+      data: {
+        hasMore: offset + page.length < invoices.length,
+        invoices: page,
+        nextOffset: offset + page.length,
+      },
+    })
+    return
+  }
+  if (endpoint === 'billing:detail') {
+    const invoice = mockBillingInvoices.find(
+      (item) => item.id === request.body.id,
+    )
+    response.json(
+      invoice
+        ? { success: true, data: billingInvoice(invoice) }
+        : { success: false, error: 'invoice_not_found' },
+    )
+    return
+  }
+  if (endpoint === 'billing:markRead') {
+    const invoice = mockBillingInvoices.find(
+      (item) => item.id === request.body.id,
+    )
+    if (invoice) invoice.isUnread = false
+    response.json({
+      success: true,
+      data: { unreadCount: billingOverview('inbox').unreadCount },
+    })
+    return
+  }
+  if (endpoint === 'billing:pay') {
+    const invoice = mockBillingInvoices.find(
+      (item) => item.id === request.body.id,
+    )
+    if (
+      !invoice ||
+      invoice.direction !== 'inbox' ||
+      invoice.status !== 'open'
+    ) {
+      response.json({ success: false, error: 'invoice_not_payable' })
+      return
+    }
+    if (mockBankBalance < invoice.amount) {
+      response.json({ success: false, error: 'insufficient_funds' })
+      return
+    }
+    mockBankBalance -= invoice.amount
+    invoice.status = 'paid'
+    invoice.paidAt = Date.now()
+    invoice.isUnread = false
+    invoice.paymentReference = `mock-billing-${Date.now()}`
+    response.json({ success: true, data: billingInvoice(invoice) })
+    return
+  }
+  if (endpoint === 'billing:dispute') {
+    const invoice = mockBillingInvoices.find(
+      (item) => item.id === request.body.id,
+    )
+    if (
+      !invoice ||
+      invoice.direction !== 'inbox' ||
+      invoice.status !== 'open'
+    ) {
+      response.json({ success: false, error: 'dispute_unavailable' })
+      return
+    }
+    invoice.status = 'disputed'
+    invoice.isUnread = false
+    response.json({ success: true, data: billingInvoice(invoice) })
     return
   }
   if (endpoint === 'garage:vehicles') {

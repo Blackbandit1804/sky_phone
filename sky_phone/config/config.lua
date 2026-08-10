@@ -181,6 +181,21 @@ Config.Banking = {
     HistoryLimit = 50,
 }
 
+Config.Billing = {
+    Enabled = true,
+    Currency = "$",
+    PaymentAccount = "bank", -- bank or cash
+    MinimumAmount = 1,
+    MaximumAmount = 1000000,
+    PageSize = 30,
+    UrgentLimit = 5,
+    ActionsPerMinute = 8,
+    AllowDisputes = true,
+    DefaultDueDays = 7,
+    MaximumTitleLength = 160,
+    MaximumDescriptionLength = 1000,
+}
+
 Config.Garage = {
     System = "auto", -- auto, custom, esx, qb, qbox, ak47, bp, cd, codem, ds-servercreator, hex, jg, my, okok, op, quasar, rx, vms, ws, zyke_garages
     MaximumVehicles = 250,
