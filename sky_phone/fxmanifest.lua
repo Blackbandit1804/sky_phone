@@ -68,6 +68,7 @@ server_scripts {
     'source/server/pages.lua',
     'source/server/fliptok.lua',
     'source/server/picstagram.lua',
+    'source/server/feather.lua',
     'source/server/map.lua',
     'source/server/skyride.lua',
     'source/server/calendar.lua',

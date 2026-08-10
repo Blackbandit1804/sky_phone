@@ -145,6 +145,7 @@ describe('app registry', () => {
       ),
     ).toEqual([
       'picstagram',
+      'feather',
       'fliptok',
       'flare',
       'radio',

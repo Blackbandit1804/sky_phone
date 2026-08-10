@@ -112,6 +112,24 @@ local server_callbacks = {
     "picstagram:report",
     "picstagram:admin-reports",
     "picstagram:admin-resolve-report",
+    "feather:bootstrap",
+    "feather:create-profile",
+    "feather:update-profile",
+    "feather:feed",
+    "feather:explore",
+    "feather:network",
+    "feather:create-post",
+    "feather:react",
+    "feather:follow",
+    "feather:connections",
+    "feather:remove-connection",
+    "feather:profile",
+    "feather:thread",
+    "feather:activities",
+    "feather:mark-activities",
+    "feather:delete",
+    "feather:block",
+    "feather:report",
     "calendar:list",
     "calendar:create",
     "calendar:update",
@@ -502,6 +520,14 @@ RegisterNetEvent("sky_phone:picstagram:new", function(data)
     data.title = picstagram_locale.name
     data.text = notification_text:gsub("{actor}", tostring(data.actor or ""))
     SendNUIMessage({ type = "picstagram:new", data = data })
+end)
+
+RegisterNetEvent("sky_phone:feather:new", function(data)
+    local feather_locale = get_locale().Nui.Apps.feather
+    local notification_text = feather_locale.notifications[data.kind] or feather_locale.notifications.default
+    data.title = feather_locale.name
+    data.text = notification_text:gsub("{actor}", tostring(data.actor or ""))
+    SendNUIMessage({ type = "feather:new", data = data })
 end)
 
 RegisterNetEvent("sky_phone:marketplace:new-message", function(data)

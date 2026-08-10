@@ -29,6 +29,7 @@ import {
   Flame,
   House,
   Music2,
+  Feather,
 } from 'lucide-vue-next'
 import { defineAsyncComponent, markRaw } from 'vue'
 
@@ -64,6 +65,7 @@ import flipTokIcon from '@/assets/img/app-icons/fliptok.webp'
 import picstagramIcon from '@/assets/img/app-icons/picstagram.webp'
 import skyRideIcon from '@/assets/img/app-icons/skyride.svg'
 import musicIcon from '@/assets/img/app-icons/music.svg'
+import featherIcon from '@/assets/img/app-icons/feather.svg'
 import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
@@ -98,6 +100,20 @@ export const PHONE_APPS: PhoneAppDefinition[] = [
     id: 'picstagram',
     labelKey: 'Apps.picstagram.name',
     route: '/apps/picstagram',
+  },
+  {
+    category: 'social',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/FeatherApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 25,
+    icon: markRaw(Feather),
+    iconClass: 'app-icon--feather',
+    iconImage: featherIcon,
+    id: 'feather',
+    labelKey: 'Apps.feather.name',
+    route: '/apps/feather',
   },
   {
     category: 'social',

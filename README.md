@@ -165,6 +165,13 @@ The homescreen is an original implementation inspired by the interaction and lay
 
 ## Development
 
-From `frontend/`, run `pnpm dev` for browser development. The phone opens automatically and NUI callbacks are mocked. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before packaging.
+From `frontend/`, run `pnpm dev` for browser development. The phone opens automatically and NUI callbacks are mocked. Feather can be opened directly with the following browser scenarios:
+
+- Full data: `http://localhost:5174/?apiPort=3002#/apps/feather`
+- Login and registration: `http://localhost:5174/?apiPort=3002&testScenario=feather-login#/apps/feather`
+- Profile onboarding: `http://localhost:5174/?apiPort=3002&testScenario=feather-onboarding#/apps/feather`
+- Empty states: `http://localhost:5174/?apiPort=3002&testScenario=feather-empty#/apps/feather`
+
+The full-data scenario includes posts, replies, quotes, media grids, profiles, ranked hashtags, network search results, and every notification type. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before packaging.
 
 `pnpm build` uses `build.cjs` to replace `sky_phone/source/html` deterministically with the Vite output. Production assets use relative paths so they work through the FiveM NUI protocol.

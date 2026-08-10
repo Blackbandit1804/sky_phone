@@ -1405,6 +1405,24 @@ let mockMedia = [
     mediaType: 'video',
     url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
   },
+  {
+    createdAt: Date.now() - 180_000,
+    id: 3,
+    mediaType: 'photo',
+    url: 'https://picsum.photos/seed/sky-phone-3/800/600',
+  },
+  {
+    createdAt: Date.now() - 240_000,
+    id: 4,
+    mediaType: 'photo',
+    url: 'https://picsum.photos/seed/sky-phone-4/800/600',
+  },
+  {
+    createdAt: Date.now() - 300_000,
+    id: 5,
+    mediaType: 'photo',
+    url: 'https://picsum.photos/seed/sky-phone-5/800/600',
+  },
 ]
 const marketplaceInquiries = [
   {
@@ -1776,7 +1794,7 @@ function flareBootstrap() {
   }
 }
 
-app.post('/api/:endpoint', async (request, response) => {
+app.post('/api/:endpoint', async (request, response, next) => {
   console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
   if (endpoint === 'music:bootstrap') {
@@ -1901,6 +1919,855 @@ app.post('/api/:endpoint', async (request, response) => {
       )
     }
     response.json({ success: true, data: musicBootstrap() })
+    return
+  }
+  next()
+})
+
+const featherProfiles = [
+  {
+    id: 1,
+    handle: 'alexmorgan',
+    display_name: 'Alex Morgan',
+    bio: 'City stories, night drives and good coffee.',
+    avatar_url: 'https://picsum.photos/seed/feather-alex/160/160',
+    verified: false,
+    is_owner: true,
+    is_following: false,
+    followers: 128,
+    following: 84,
+    post_count: 2,
+  },
+  {
+    id: 2,
+    handle: 'lsdaily',
+    display_name: 'Los Santos Daily',
+    bio: 'Independent updates from across the city.',
+    avatar_url: 'https://picsum.photos/seed/feather-daily/160/160',
+    verified: true,
+    is_owner: false,
+    is_following: true,
+    followers: 12400,
+    following: 92,
+    post_count: 842,
+  },
+  {
+    id: 3,
+    handle: 'miasantos',
+    display_name: 'Mia Santos',
+    bio: 'Music, art and the west side.',
+    avatar_url: 'https://picsum.photos/seed/feather-mia/160/160',
+    verified: false,
+    is_owner: false,
+    is_following: false,
+    followers: 834,
+    following: 310,
+    post_count: 67,
+  },
+  {
+    id: 4,
+    handle: 'bennysmotorworks',
+    display_name: "Benny's Motor Works",
+    bio: 'Custom builds, workshop stories and open appointments.',
+    avatar_url: 'https://picsum.photos/seed/feather-bennys/160/160',
+    verified: true,
+    is_owner: false,
+    is_following: true,
+    followers: 4821,
+    following: 146,
+    post_count: 318,
+  },
+  {
+    id: 5,
+    handle: 'lspd',
+    display_name: 'Los Santos Police Department',
+    bio: 'Official public safety updates for Los Santos.',
+    avatar_url: 'https://picsum.photos/seed/feather-lspd/160/160',
+    verified: true,
+    is_owner: false,
+    is_following: false,
+    followers: 31700,
+    following: 41,
+    post_count: 1294,
+  },
+  {
+    id: 6,
+    handle: 'nightshiftls',
+    display_name: 'Night Shift LS',
+    bio: 'Neon, street photography and stories after midnight.',
+    avatar_url: 'https://picsum.photos/seed/feather-night/160/160',
+    verified: false,
+    is_owner: false,
+    is_following: false,
+    followers: 2140,
+    following: 502,
+    post_count: 154,
+  },
+  {
+    id: 7,
+    handle: 'downtowneats',
+    display_name: 'Downtown Eats',
+    bio: 'Finding the best food trucks, diners and late-night menus.',
+    avatar_url: 'https://picsum.photos/seed/feather-food/160/160',
+    verified: false,
+    is_owner: false,
+    is_following: true,
+    followers: 7602,
+    following: 288,
+    post_count: 604,
+  },
+  {
+    id: 8,
+    handle: 'vinewoodsocial',
+    display_name: 'Vinewood Social',
+    bio: 'Events, premieres and everything happening in Vinewood.',
+    avatar_url: 'https://picsum.photos/seed/feather-vinewood/160/160',
+    verified: true,
+    is_owner: false,
+    is_following: false,
+    followers: 18900,
+    following: 73,
+    post_count: 911,
+  },
+]
+let featherFollowingIds = [2, 4, 7]
+let featherFollowerIds = [3, 6, 8]
+let featherBlockedProfileIds = []
+const featherReports = []
+let featherPosts = [
+  {
+    id: 'feather-post-1',
+    profile_id: 2,
+    handle: 'lsdaily',
+    display_name: 'Los Santos Daily',
+    verified: true,
+    avatar_url: featherProfiles[1].avatar_url,
+    body: 'Golden hour over Downtown. Traffic is building near Legion Square — take the eastern route if you can.',
+    created_at: Date.now() - 12 * 60 * 1000,
+    reply_to_id: null,
+    quote_id: null,
+    is_owner: false,
+    is_following: true,
+    is_liked: true,
+    is_bookmarked: false,
+    like_count: 241,
+    reply_count: 18,
+    media: [
+      {
+        id: 901,
+        media_type: 'photo',
+        url: 'https://picsum.photos/seed/feather-city/900/600',
+      },
+    ],
+  },
+  {
+    id: 'feather-post-2',
+    profile_id: 3,
+    handle: 'miasantos',
+    display_name: 'Mia Santos',
+    verified: false,
+    avatar_url: featherProfiles[2].avatar_url,
+    body: 'Small reminder: the best corners of this city are the ones you find by accident. What is your favorite late-night spot?',
+    created_at: Date.now() - 48 * 60 * 1000,
+    reply_to_id: null,
+    quote_id: null,
+    is_owner: false,
+    is_following: false,
+    is_liked: false,
+    is_bookmarked: true,
+    like_count: 73,
+    reply_count: 9,
+    media: [],
+  },
+  {
+    id: 'feather-post-3',
+    profile_id: 1,
+    handle: 'alexmorgan',
+    display_name: 'Alex Morgan',
+    verified: false,
+    avatar_url: featherProfiles[0].avatar_url,
+    body: 'First feather. The city feels unusually calm tonight.',
+    created_at: Date.now() - 3 * 60 * 60 * 1000,
+    reply_to_id: null,
+    quote_id: null,
+    is_owner: true,
+    is_following: false,
+    is_liked: false,
+    is_bookmarked: false,
+    like_count: 12,
+    reply_count: 2,
+    media: [],
+  },
+  {
+    id: 'feather-post-4',
+    profile_id: 4,
+    handle: 'bennysmotorworks',
+    display_name: "Benny's Motor Works",
+    verified: true,
+    avatar_url: featherProfiles[3].avatar_url,
+    body: 'The Elegy is finally ready. New paint, cleaner fitment and a setup made for city nights. #Cars #Bennys',
+    created_at: Date.now() - 5 * 60 * 60 * 1000,
+    reply_to_id: null,
+    quote_id: null,
+    is_owner: false,
+    is_following: true,
+    is_liked: false,
+    is_bookmarked: false,
+    like_count: 812,
+    reply_count: 46,
+    media: [
+      {
+        id: 904,
+        media_type: 'photo',
+        url: 'https://picsum.photos/seed/feather-car/900/600',
+      },
+      {
+        id: 905,
+        media_type: 'photo',
+        url: 'https://picsum.photos/seed/feather-garage/900/600',
+      },
+    ],
+  },
+  {
+    id: 'feather-post-5',
+    profile_id: 5,
+    handle: 'lspd',
+    display_name: 'Los Santos Police Department',
+    verified: true,
+    avatar_url: featherProfiles[4].avatar_url,
+    body: 'Road closure: Power Street between Vespucci Boulevard and San Andreas Avenue. Please use an alternate route. #LosSantos #Traffic',
+    created_at: Date.now() - 7 * 60 * 60 * 1000,
+    reply_to_id: null,
+    quote_id: null,
+    is_owner: false,
+    is_following: false,
+    is_liked: false,
+    is_bookmarked: true,
+    like_count: 391,
+    reply_count: 61,
+    media: [],
+  },
+  {
+    id: 'feather-post-6',
+    profile_id: 6,
+    handle: 'nightshiftls',
+    display_name: 'Night Shift LS',
+    verified: false,
+    avatar_url: featherProfiles[5].avatar_url,
+    body: 'Three quiet frames from tonight. Downtown really changes after the rain. #Photography #NightLife',
+    created_at: Date.now() - 11 * 60 * 60 * 1000,
+    reply_to_id: null,
+    quote_id: null,
+    is_owner: false,
+    is_following: false,
+    is_liked: true,
+    is_bookmarked: true,
+    like_count: 1540,
+    reply_count: 83,
+    media: [
+      {
+        id: 906,
+        media_type: 'photo',
+        url: 'https://picsum.photos/seed/feather-neon/900/600',
+      },
+      {
+        id: 907,
+        media_type: 'photo',
+        url: 'https://picsum.photos/seed/feather-rain/900/600',
+      },
+      {
+        id: 908,
+        media_type: 'photo',
+        url: 'https://picsum.photos/seed/feather-downtown/900/600',
+      },
+    ],
+  },
+  {
+    id: 'feather-post-7',
+    profile_id: 7,
+    handle: 'downtowneats',
+    display_name: 'Downtown Eats',
+    verified: false,
+    avatar_url: featherProfiles[6].avatar_url,
+    body: 'New taco truck at Legion Square until 2 AM. The hot sauce is not joking around. #Food #LosSantos',
+    created_at: Date.now() - 16 * 60 * 60 * 1000,
+    reply_to_id: null,
+    quote_id: 'feather-post-2',
+    is_owner: false,
+    is_following: true,
+    is_liked: false,
+    is_bookmarked: false,
+    like_count: 628,
+    reply_count: 37,
+    media: [
+      {
+        id: 909,
+        media_type: 'photo',
+        url: 'https://picsum.photos/seed/feather-tacos/900/600',
+      },
+    ],
+  },
+  {
+    id: 'feather-post-8',
+    profile_id: 8,
+    handle: 'vinewoodsocial',
+    display_name: 'Vinewood Social',
+    verified: true,
+    avatar_url: featherProfiles[7].avatar_url,
+    body: 'Outdoor cinema returns to the Vinewood Bowl this weekend. Gates open at 8 PM. #Events #Vinewood',
+    created_at: Date.now() - 22 * 60 * 60 * 1000,
+    reply_to_id: null,
+    quote_id: null,
+    is_owner: false,
+    is_following: false,
+    is_liked: false,
+    is_bookmarked: false,
+    like_count: 2203,
+    reply_count: 104,
+    media: [
+      {
+        id: 910,
+        media_type: 'photo',
+        url: 'https://picsum.photos/seed/feather-cinema/900/600',
+      },
+    ],
+  },
+  {
+    id: 'feather-post-9',
+    profile_id: 1,
+    handle: 'alexmorgan',
+    display_name: 'Alex Morgan',
+    verified: false,
+    avatar_url: featherProfiles[0].avatar_url,
+    body: 'Traffic update for everyone heading downtown later. Drive safe.',
+    created_at: Date.now() - 26 * 60 * 60 * 1000,
+    reply_to_id: null,
+    quote_id: 'feather-post-5',
+    is_owner: true,
+    is_following: false,
+    is_liked: true,
+    is_bookmarked: false,
+    like_count: 34,
+    reply_count: 4,
+    media: [],
+  },
+  {
+    id: 'feather-reply-1',
+    profile_id: 1,
+    handle: 'alexmorgan',
+    display_name: 'Alex Morgan',
+    verified: false,
+    avatar_url: featherProfiles[0].avatar_url,
+    body: 'Thanks for the warning. The eastern route was much faster.',
+    created_at: Date.now() - 8 * 60 * 1000,
+    reply_to_id: 'feather-post-1',
+    quote_id: null,
+    is_owner: true,
+    is_following: false,
+    is_liked: false,
+    is_bookmarked: false,
+    like_count: 5,
+    reply_count: 0,
+    media: [],
+  },
+  {
+    id: 'feather-reply-2',
+    profile_id: 3,
+    handle: 'miasantos',
+    display_name: 'Mia Santos',
+    verified: false,
+    avatar_url: featherProfiles[2].avatar_url,
+    body: 'That skyline photo is perfect.',
+    created_at: Date.now() - 5 * 60 * 1000,
+    reply_to_id: 'feather-post-1',
+    quote_id: null,
+    is_owner: false,
+    is_following: false,
+    is_liked: true,
+    is_bookmarked: false,
+    like_count: 12,
+    reply_count: 1,
+    media: [],
+  },
+]
+const featherActivities = [
+  {
+    id: 'feather-activity-1',
+    kind: 'like',
+    post_id: 'feather-post-3',
+    profile_id: 3,
+    handle: 'miasantos',
+    display_name: 'Mia Santos',
+    verified: false,
+    avatar_url: featherProfiles[2].avatar_url,
+    read: false,
+    created_at: Date.now() - 15 * 60 * 1000,
+  },
+  {
+    id: 'feather-activity-2',
+    kind: 'follow',
+    post_id: null,
+    profile_id: 2,
+    handle: 'lsdaily',
+    display_name: 'Los Santos Daily',
+    verified: true,
+    avatar_url: featherProfiles[1].avatar_url,
+    read: true,
+    created_at: Date.now() - 90 * 60 * 1000,
+  },
+  {
+    id: 'feather-activity-3',
+    kind: 'reply',
+    post_id: 'feather-post-3',
+    profile_id: 4,
+    handle: 'bennysmotorworks',
+    display_name: "Benny's Motor Works",
+    verified: true,
+    avatar_url: featherProfiles[3].avatar_url,
+    read: false,
+    created_at: Date.now() - 2 * 60 * 60 * 1000,
+  },
+  {
+    id: 'feather-activity-5',
+    kind: 'quote',
+    post_id: 'feather-post-3',
+    profile_id: 6,
+    handle: 'nightshiftls',
+    display_name: 'Night Shift LS',
+    verified: false,
+    avatar_url: featherProfiles[5].avatar_url,
+    read: false,
+    created_at: Date.now() - 9 * 60 * 60 * 1000,
+  },
+]
+const featherTopics = [
+  { tag: '#LosSantos', count: 8421 },
+  { tag: '#Cars', count: 5398 },
+  { tag: '#News', count: 4127 },
+  { tag: '#NightLife', count: 2944 },
+  { tag: '#Food', count: 2186 },
+  { tag: '#Vinewood', count: 1773 },
+  { tag: '#Photography', count: 1328 },
+  { tag: '#Events', count: 986 },
+]
+let featherOnboarded = true
+
+app.post('/api/:endpoint', (request, response) => {
+  console.log(`[NUI] ${request.params.endpoint}`, request.body)
+  const endpoint = request.params.endpoint
+  const testScenario = String(request.body._testScenario ?? '')
+  if (endpoint === 'feather:bootstrap') {
+    const empty = testScenario === 'feather-empty'
+    const visibleProfiles = featherProfiles.filter(
+      (profile) => !featherBlockedProfileIds.includes(profile.id),
+    )
+    response.json({
+      success: true,
+      data: {
+        onboarded: featherOnboarded,
+        profile: featherProfiles[0],
+        feed: {
+          items: empty
+            ? []
+            : featherPosts.filter(
+                (post) =>
+                  !post.reply_to_id &&
+                  !featherBlockedProfileIds.includes(post.profile_id),
+              ),
+          offset: 0,
+          hasMore: false,
+        },
+        suggestions: empty
+          ? []
+          : visibleProfiles.filter((profile) => !profile.is_owner),
+        topics: empty ? [] : featherTopics,
+      },
+    })
+    return
+  }
+  if (endpoint === 'feather:create-profile') {
+    const displayName = String(request.body.displayName ?? '').trim()
+    const handle = String(request.body.handle ?? '')
+      .trim()
+      .toLowerCase()
+    const bio = String(request.body.bio ?? '').trim()
+    if (
+      !displayName ||
+      displayName.length > 50 ||
+      !/^[a-z0-9][a-z0-9_]{1,28}[a-z0-9]$/.test(handle) ||
+      bio.length > 160
+    ) {
+      response.json({ success: false, error: 'invalid_handle' })
+      return
+    }
+    if (
+      featherProfiles.some(
+        (profile) => profile.id !== 1 && profile.handle === handle,
+      )
+    ) {
+      response.json({ success: false, error: 'handle_taken' })
+      return
+    }
+    featherProfiles[0].display_name = displayName
+    featherProfiles[0].handle = handle
+    featherProfiles[0].bio = bio
+    featherOnboarded = true
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'feather:update-profile') {
+    const displayName = String(request.body.displayName ?? '').trim()
+    const bio = String(request.body.bio ?? '').trim()
+    if (!displayName || displayName.length > 50 || bio.length > 160) {
+      response.json({ success: false, error: 'invalid_request' })
+      return
+    }
+    featherProfiles[0].display_name = displayName
+    featherProfiles[0].bio = bio
+    featherPosts
+      .filter((post) => post.profile_id === featherProfiles[0].id)
+      .forEach((post) => {
+        post.display_name = displayName
+      })
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'feather:feed') {
+    const visiblePosts = featherPosts.filter(
+      (post) => !featherBlockedProfileIds.includes(post.profile_id),
+    )
+    const items =
+      request.body.mode === 'following'
+        ? visiblePosts.filter(
+            (post) => !post.reply_to_id && (post.is_following || post.is_owner),
+          )
+        : visiblePosts.filter((post) => !post.reply_to_id)
+    response.json({ success: true, data: { items, offset: 0, hasMore: false } })
+    return
+  }
+  if (endpoint === 'feather:explore') {
+    const search = String(request.body.search ?? '')
+      .trim()
+      .toLowerCase()
+    const normalizedSearch = search.replace(/^#/, '')
+    response.json({
+      success: true,
+      data: {
+        posts: featherPosts.filter((post) => {
+          if (post.reply_to_id) return false
+          if (featherBlockedProfileIds.includes(post.profile_id)) return false
+          if (!normalizedSearch) return true
+          return `${post.body} ${post.display_name} ${post.handle}`
+            .toLowerCase()
+            .includes(normalizedSearch)
+        }),
+        profiles: featherProfiles
+          .slice(1)
+          .filter((profile) => !featherBlockedProfileIds.includes(profile.id))
+          .filter((profile) =>
+            normalizedSearch
+              ? `${profile.display_name} ${profile.handle}`
+                  .toLowerCase()
+                  .includes(normalizedSearch)
+              : true,
+          ),
+        topics: featherTopics.filter((topic) =>
+          normalizedSearch
+            ? topic.tag.toLowerCase().includes(normalizedSearch)
+            : true,
+        ),
+      },
+    })
+    return
+  }
+  if (endpoint === 'feather:network') {
+    const search = String(request.body.search ?? '')
+      .trim()
+      .replace(/^@/, '')
+      .toLowerCase()
+    const profiles = featherProfiles.filter(
+      (profile) =>
+        !profile.is_owner && !featherBlockedProfileIds.includes(profile.id),
+    )
+    response.json({
+      success: true,
+      data: {
+        results: search
+          ? profiles.filter((profile) =>
+              `${profile.display_name} ${profile.handle}`
+                .toLowerCase()
+                .includes(search),
+            )
+          : [],
+        suggestions: profiles.filter((profile) => !profile.is_following),
+      },
+    })
+    return
+  }
+  if (endpoint === 'feather:create-post') {
+    const body = String(request.body.body ?? '').trim()
+    const mediaIds = Array.isArray(request.body.mediaIds)
+      ? request.body.mediaIds.slice(0, 4)
+      : []
+    const id = `feather-post-${Date.now()}`
+    const selectedMedia = mediaIds
+      .map((mediaId) => mockMedia.find((item) => item.id === Number(mediaId)))
+      .filter((item) => item?.mediaType === 'photo')
+      .map((item) => ({
+        id: item.id,
+        media_type: 'photo',
+        url: item.url,
+      }))
+    if ((!body && selectedMedia.length === 0) || body.length > 360) {
+      response.json({ success: false, error: 'invalid_post' })
+      return
+    }
+    const replyToId = request.body.replyToId
+      ? String(request.body.replyToId)
+      : null
+    const parent = replyToId
+      ? featherPosts.find((post) => post.id === replyToId)
+      : null
+    if (replyToId && !parent) {
+      response.json({ success: false, error: 'post_not_found' })
+      return
+    }
+    featherPosts.unshift({
+      id,
+      profile_id: 1,
+      handle: featherProfiles[0].handle,
+      display_name: featherProfiles[0].display_name,
+      verified: false,
+      avatar_url: featherProfiles[0].avatar_url,
+      body,
+      created_at: Date.now(),
+      reply_to_id: replyToId,
+      quote_id: request.body.quoteId ?? null,
+      is_owner: true,
+      is_following: false,
+      is_liked: false,
+      is_bookmarked: false,
+      like_count: 0,
+      reply_count: 0,
+      media: selectedMedia,
+    })
+    if (!replyToId) featherProfiles[0].post_count += 1
+    if (parent) parent.reply_count += 1
+    response.json({ success: true, data: { id } })
+    return
+  }
+  if (endpoint === 'feather:react') {
+    if (!['like', 'bookmark'].includes(request.body.kind)) {
+      response.json({ success: false, error: 'invalid_request' })
+      return
+    }
+    const post = featherPosts.find((item) => item.id === request.body.id)
+    if (!post) {
+      response.json({ success: false, error: 'post_not_found' })
+      return
+    }
+    const key = request.body.kind === 'like' ? 'is_liked' : 'is_bookmarked'
+    const active = request.body.active === true
+    if (request.body.kind === 'like' && post.is_liked !== active)
+      post.like_count = Math.max(0, post.like_count + (active ? 1 : -1))
+    post[key] = active
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'feather:follow') {
+    const profileId = Number(request.body.profileId)
+    const profile = featherProfiles.find((item) => item.id === profileId)
+    if (!profile || profile.is_owner) {
+      response.json({ success: false, error: 'profile_not_found' })
+      return
+    }
+    const wasFollowing = featherFollowingIds.includes(profileId)
+    const active = request.body.active === true
+    if (active) {
+      if (!wasFollowing) featherFollowingIds.push(profileId)
+    } else {
+      featherFollowingIds = featherFollowingIds.filter((id) => id !== profileId)
+    }
+    if (wasFollowing !== active) {
+      profile.followers = Math.max(0, profile.followers + (active ? 1 : -1))
+      featherProfiles[0].following = Math.max(
+        0,
+        featherProfiles[0].following + (active ? 1 : -1),
+      )
+    }
+    featherProfiles
+      .filter((item) => item.id === profileId)
+      .forEach((item) => {
+        item.is_following = active
+      })
+    featherPosts
+      .filter((item) => item.profile_id === profileId)
+      .forEach((item) => {
+        item.is_following = active
+      })
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'feather:connections') {
+    const profileId = Number(request.body.profileId ?? 1)
+    const mode = request.body.mode
+    let ids = []
+    if (profileId === 1) {
+      ids = mode === 'followers' ? featherFollowerIds : featherFollowingIds
+    } else {
+      ids = featherProfiles
+        .filter((profile) => profile.id !== profileId && !profile.is_owner)
+        .slice(0, 4)
+        .map((profile) => profile.id)
+    }
+    response.json({
+      success: true,
+      data: {
+        items: ids
+          .map((id) => featherProfiles.find((profile) => profile.id === id))
+          .filter(Boolean),
+      },
+    })
+    return
+  }
+  if (endpoint === 'feather:remove-connection') {
+    const targetId = Number(request.body.profileId)
+    if (request.body.mode === 'followers') {
+      featherFollowerIds = featherFollowerIds.filter((id) => id !== targetId)
+      featherProfiles[0].followers = Math.max(
+        0,
+        featherProfiles[0].followers - 1,
+      )
+    } else {
+      featherFollowingIds = featherFollowingIds.filter((id) => id !== targetId)
+      featherProfiles[0].following = Math.max(
+        0,
+        featherProfiles[0].following - 1,
+      )
+      const target = featherProfiles.find((profile) => profile.id === targetId)
+      if (target) target.is_following = false
+      featherPosts
+        .filter((post) => post.profile_id === targetId)
+        .forEach((post) => {
+          post.is_following = false
+        })
+    }
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'feather:profile') {
+    const profile =
+      featherProfiles.find(
+        (item) => item.id === Number(request.body.profileId),
+      ) ?? featherProfiles[0]
+    if (featherBlockedProfileIds.includes(profile.id)) {
+      response.json({ success: false, error: 'profile_not_found' })
+      return
+    }
+    response.json({
+      success: true,
+      data: {
+        profile,
+        posts: featherPosts.filter((post) => post.profile_id === profile.id),
+      },
+    })
+    return
+  }
+  if (endpoint === 'feather:thread') {
+    const post = featherPosts.find((item) => item.id === request.body.id)
+    response.json(
+      post
+        ? {
+            success: true,
+            data: {
+              post,
+              replies: featherPosts.filter(
+                (item) =>
+                  item.reply_to_id === post.id &&
+                  !featherBlockedProfileIds.includes(item.profile_id),
+              ),
+            },
+          }
+        : { success: false, error: 'post_not_found' },
+    )
+    return
+  }
+  if (endpoint === 'feather:activities') {
+    response.json({
+      success: true,
+      data: testScenario === 'feather-empty' ? [] : featherActivities,
+    })
+    return
+  }
+  if (endpoint === 'feather:mark-activities') {
+    featherActivities.forEach((item) => {
+      item.read = true
+    })
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'feather:delete') {
+    const post = featherPosts.find((item) => item.id === request.body.id)
+    if (!post || !post.is_owner) {
+      response.json({ success: false, error: 'post_not_found' })
+      return
+    }
+    if (post.reply_to_id) {
+      const parent = featherPosts.find((item) => item.id === post.reply_to_id)
+      if (parent) parent.reply_count = Math.max(0, parent.reply_count - 1)
+    }
+    const deletedIds = new Set(
+      featherPosts
+        .filter((item) => item.id === post.id || item.reply_to_id === post.id)
+        .map((item) => item.id),
+    )
+    featherPosts = featherPosts.filter((item) => !deletedIds.has(item.id))
+    if (!post.reply_to_id)
+      featherProfiles[0].post_count = Math.max(
+        0,
+        featherProfiles[0].post_count - 1,
+      )
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'feather:block') {
+    const profileId = Number(request.body.profileId)
+    const profile = featherProfiles.find((item) => item.id === profileId)
+    if (!profile || profile.is_owner) {
+      response.json({ success: false, error: 'profile_not_found' })
+      return
+    }
+    if (!featherBlockedProfileIds.includes(profileId))
+      featherBlockedProfileIds.push(profileId)
+    if (featherFollowingIds.includes(profileId)) {
+      featherFollowingIds = featherFollowingIds.filter((id) => id !== profileId)
+      featherProfiles[0].following = Math.max(
+        0,
+        featherProfiles[0].following - 1,
+      )
+    }
+    profile.is_following = false
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'feather:report') {
+    const post = featherPosts.find((item) => item.id === request.body.id)
+    const reason = String(request.body.reason ?? '')
+    if (
+      !post ||
+      !['spam', 'harassment', 'dangerous', 'illegal', 'other'].includes(reason)
+    ) {
+      response.json({ success: false, error: 'invalid_request' })
+      return
+    }
+    featherReports.push({
+      id: `feather-report-${Date.now()}`,
+      post_id: post.id,
+      reason,
+      details: String(request.body.details ?? '').slice(0, 500),
+      created_at: Date.now(),
+    })
+    response.json({ success: true })
     return
   }
   if (endpoint === 'radio:get') {
@@ -3519,10 +4386,12 @@ app.post('/api/:endpoint', async (request, response) => {
     return
   }
   if (endpoint === 'development:bootstrap') {
+    if (testScenario === 'feather-onboarding') featherOnboarded = false
+    else featherOnboarded = true
     response.json({
       success: true,
       data: {
-        account: linkedAccount,
+        account: testScenario === 'feather-login' ? null : linkedAccount,
         device: {
           data: deviceData,
           imei: '356938035643809',
