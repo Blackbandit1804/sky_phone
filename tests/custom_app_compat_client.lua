@@ -153,16 +153,21 @@ end
 assert(yseries_get_data_loaded(), "YSeries must see the compatibility provider as loaded")
 
 invoking_resource = "lb_app"
+local lifecycle_response_delivered = false
+local install_hook_after_response = false
+local open_hook_after_response = false
 local lb_success, lb_error = lb_add_custom_app({
     identifier = "dispatch",
     name = "Dispatch",
     description = "Dispatch terminal",
     ui = "ui/index.html",
     onInstall = make_cfx_function_reference("install-hook", function()
+        install_hook_after_response = lifecycle_response_delivered
         error("vendor install failure")
     end),
     onOpen = make_cfx_function_reference("open-hook", function()
-        error("vendor open failure")
+        open_hook_after_response = lifecycle_response_delivered
+        error(5)
     end),
 })
 assert(lb_success and lb_error == nil, "LB AddCustomApp must register through the shared export")
@@ -170,14 +175,20 @@ assert(lb_success and lb_error == nil, "LB AddCustomApp must register through th
 local lifecycle_callback = assert(registered_nui_callbacks["custom-app:lifecycle"])
 local lifecycle_response
 SkyPhoneApps.SetPhoneOpen(true)
+lifecycle_response_delivered = false
 lifecycle_callback({ appId = "dispatch", event = "install" }, function(response)
     lifecycle_response = response
+    lifecycle_response_delivered = true
 end)
 assert(lifecycle_response.success, "a vendor install hook failure must not fail installation")
+assert(install_hook_after_response, "a vendor install hook must run after the NUI response")
+lifecycle_response_delivered = false
 lifecycle_callback({ appId = "dispatch", event = "open" }, function(response)
     lifecycle_response = response
+    lifecycle_response_delivered = true
 end)
 assert(lifecycle_response.success, "a vendor open hook failure must not prevent opening the app")
+assert(open_hook_after_response, "a vendor open hook must run after the NUI response")
 lifecycle_callback({ appId = "dispatch", event = "ready" }, function(response)
     lifecycle_response = response
 end)

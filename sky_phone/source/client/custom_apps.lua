@@ -609,14 +609,40 @@ local function invoke_hook(app, hook_name, payload)
     return false
 end
 
-local function clear_active_app(invoke_close_hook)
+local function invoke_or_defer_hook(app, hook_name, payload, deferred_hooks)
+    if not app.catalog.compatibility then
+        return invoke_hook(app, hook_name, payload)
+    end
+
+    deferred_hooks[#deferred_hooks + 1] = {
+        app = app,
+        hookName = hook_name,
+        payload = payload,
+    }
+    return true
+end
+
+local function invoke_deferred_hooks(deferred_hooks)
+    for index = 1, #deferred_hooks do
+        local deferred_hook = deferred_hooks[index]
+        CreateThread(function()
+            invoke_hook(deferred_hook.app, deferred_hook.hookName, deferred_hook.payload)
+        end)
+    end
+end
+
+local function clear_active_app(invoke_close_hook, deferred_hooks)
     if not active_app_id then
         return
     end
 
     local app = apps_by_id[active_app_id]
     if app and invoke_close_hook then
-        invoke_hook(app, "onClose")
+        if deferred_hooks then
+            invoke_or_defer_hook(app, "onClose", nil, deferred_hooks)
+        else
+            invoke_hook(app, "onClose")
+        end
     end
     queued_messages[active_app_id] = nil
     active_app_id = nil
@@ -1383,17 +1409,18 @@ RegisterNUICallback("custom-app:lifecycle", function(data, cb)
         return
     end
 
+    local deferred_hooks = {}
     local hook_success = true
     if lifecycle_event == "install" then
-        hook_success = invoke_hook(app, "onInstall", lifecycle_payload)
+        hook_success = invoke_or_defer_hook(app, "onInstall", lifecycle_payload, deferred_hooks)
     elseif lifecycle_event == "open" then
         if active_app_id and active_app_id ~= data.appId then
-            clear_active_app(true)
+            clear_active_app(true, deferred_hooks)
         end
         active_app_id = data.appId
         active_app_ready = false
         queued_messages[data.appId] = {}
-        hook_success = invoke_hook(app, "onOpen", lifecycle_payload)
+        hook_success = invoke_or_defer_hook(app, "onOpen", lifecycle_payload, deferred_hooks)
     elseif active_app_id ~= data.appId then
         cb({ success = false, error = "app_not_active" })
         return
@@ -1408,17 +1435,18 @@ RegisterNUICallback("custom-app:lifecycle", function(data, cb)
         for index = 1, #pending do
             deliver_custom_app_message(data.appId, pending[index].payload)
         end
-        hook_success = invoke_hook(app, "onReady", lifecycle_payload)
+        hook_success = invoke_or_defer_hook(app, "onReady", lifecycle_payload, deferred_hooks)
     else
-        hook_success = invoke_hook(app, "onClose", lifecycle_payload)
+        hook_success = invoke_or_defer_hook(app, "onClose", lifecycle_payload, deferred_hooks)
         clear_active_app(false)
     end
 
-    if not hook_success and not app.catalog.compatibility then
+    if not hook_success then
         cb({ success = false, error = "hook_failed" })
         return
     end
     cb({ success = true })
+    invoke_deferred_hooks(deferred_hooks)
 end)
 
 AddEventHandler("onClientResourceStop", function(resource_name)
