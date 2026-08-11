@@ -56,6 +56,7 @@ export const useEasyShareStore = defineStore('easyshare', () => {
     chatDraft.value = {
       appId,
       body: [...new Set(parts)].join('\n'),
+      payload: { ...payload.value },
       targetId,
     }
     return Boolean(chatDraft.value.body)

@@ -85,6 +85,7 @@ describe('easyshare store', () => {
     expect(easyShare.consumeChatDraft('messages')).toEqual({
       appId: 'messages',
       body: 'Meet at Mission Row.\nhttps://notes.sky/note-1',
+      payload: { ...payload, link: 'https://notes.sky/note-1' },
       targetId: '5551234567',
     })
     expect(easyShare.consumeChatDraft('messages')).toBeNull()
@@ -98,6 +99,7 @@ describe('easyshare store', () => {
     expect(easyShare.consumeChatDraft('darkchat')).toEqual({
       appId: 'darkchat',
       body: 'Meet at Mission Row.',
+      payload,
       targetId: null,
     })
   })

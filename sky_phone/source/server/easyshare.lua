@@ -1,3 +1,5 @@
+SkyPhoneEasyShare = {}
+
 Bridge.Database.AfterMigration("sky_phone", function()
 local active_transfers = {}
 local valid_kinds = {
@@ -257,6 +259,14 @@ local function sanitize_payload(source, device, data)
         return nil, "payload_too_large"
     end
     return payload, nil, encoded
+end
+
+function SkyPhoneEasyShare.SanitizeChatPayload(source, data)
+    local device, error_response = current_device(source)
+    if not device then
+        return nil, error_response.error
+    end
+    return sanitize_payload(source, device, data)
 end
 
 local function transfer_for_source(transfer, source)

@@ -521,7 +521,7 @@ local schema = {
             { name = "recipient_sim_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "sender_number", type = "VARCHAR(24) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "recipient_number", type = "VARCHAR(24) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
-            { name = "message_type", type = "ENUM('text', 'voice', 'image', 'gif', 'video') NOT NULL DEFAULT 'text'" },
+            { name = "message_type", type = "ENUM('text', 'voice', 'image', 'gif', 'video', 'contact', 'share') NOT NULL DEFAULT 'text'" },
             { name = "body", type = "VARCHAR(2000) NOT NULL" },
             { name = "media_payload", type = "MEDIUMTEXT NULL" },
             { name = "media_mime", type = "VARCHAR(64) NULL", characterSet = "ascii", collation = "ascii_general_ci" },
@@ -1022,7 +1022,7 @@ local schema = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "conversation_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "sender_profile_id", type = "BIGINT UNSIGNED NULL" },
-            { name = "message_type", type = "ENUM('text', 'emoji', 'gif', 'voice', 'image', 'video', 'system') NOT NULL DEFAULT 'text'" },
+            { name = "message_type", type = "ENUM('text', 'emoji', 'gif', 'voice', 'image', 'video', 'share', 'system') NOT NULL DEFAULT 'text'" },
             { name = "body", type = "TEXT NOT NULL" },
             { name = "media_payload", type = "LONGTEXT NULL" },
             { name = "media_mime", type = "VARCHAR(80) NULL", characterSet = "ascii", collation = "ascii_bin" },
@@ -1680,8 +1680,9 @@ local schema = {
             { name = "match_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "sender_account_id", type = "BIGINT UNSIGNED NOT NULL" },
             { name = "body", type = "VARCHAR(1000) NOT NULL" },
-            { name = "message_type", type = "ENUM('text', 'image', 'gif', 'video') NOT NULL DEFAULT 'text'" },
+            { name = "message_type", type = "ENUM('text', 'image', 'gif', 'video', 'share') NOT NULL DEFAULT 'text'" },
             { name = "media_url", type = "VARCHAR(2048) NULL" },
+            { name = "share_payload", type = "LONGTEXT NULL" },
             { name = "media_duration_ms", type = "INT UNSIGNED NULL" },
             { name = "read_at", type = "DATETIME NULL" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
@@ -2173,15 +2174,15 @@ Bridge.Database.Query([[
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_flare_messages`
-    MODIFY COLUMN `message_type` ENUM('text', 'image', 'gif', 'video') NOT NULL DEFAULT 'text'
+    MODIFY COLUMN `message_type` ENUM('text', 'image', 'gif', 'video', 'share') NOT NULL DEFAULT 'text'
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_sms_messages`
-    MODIFY COLUMN `message_type` ENUM('text', 'voice', 'image', 'gif', 'video') NOT NULL DEFAULT 'text'
+    MODIFY COLUMN `message_type` ENUM('text', 'voice', 'image', 'gif', 'video', 'contact', 'share') NOT NULL DEFAULT 'text'
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_darkchat_messages`
-    MODIFY COLUMN `message_type` ENUM('text', 'emoji', 'gif', 'voice', 'image', 'video', 'system') NOT NULL DEFAULT 'text'
+    MODIFY COLUMN `message_type` ENUM('text', 'emoji', 'gif', 'voice', 'image', 'video', 'share', 'system') NOT NULL DEFAULT 'text'
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_marketplace_images`

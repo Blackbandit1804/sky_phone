@@ -19,6 +19,7 @@ export type EasyShareChatApp = 'darkchat' | 'flare' | 'messages'
 export type EasyShareChatDraft = {
   appId: EasyShareChatApp
   body: string
+  payload: EasySharePayload
   targetId: string | null
 }
 export type EasyShareStatus =

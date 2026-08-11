@@ -51,6 +51,7 @@ import { useRouter } from 'vue-router'
 
 import DarkChatVoiceMessage from '@/components/DarkChatVoiceMessage.vue'
 import FullEmojiPicker from '@/components/FullEmojiPicker.vue'
+import SharedContentCard from '@/components/SharedContentCard.vue'
 import { useAccountStore } from '@/stores/account'
 import { useDarkChatStore } from '@/stores/darkchat'
 import { useEasyShareStore } from '@/stores/easyshare'
@@ -63,6 +64,7 @@ import type {
   DarkChatNotificationMode,
 } from '@/types/darkchat'
 import type { GifSearchResult } from '@/types/messages'
+import type { EasySharePayload } from '@/types/easyshare'
 import type { MediaType, PhoneMedia } from '@/types/media'
 import { copyText } from '@/utils/clipboard'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
@@ -110,7 +112,8 @@ const identifier = ref('')
 const pendingIdentifier = ref('')
 const safetyOpen = ref(false)
 const draft = ref('')
-const queuedShareBody = ref('')
+const queuedSharePayload = ref<EasySharePayload | null>(null)
+const shareDraft = ref<EasySharePayload | null>(null)
 const aliasDraft = ref('')
 const contactAliasDraft = ref('')
 const notificationMode = ref<DarkChatNotificationMode>('private')
@@ -231,6 +234,7 @@ function preview(conversation: DarkChatConversationSummary): string {
   if (conversation.lastMessageType === 'gif') return `GIF · ${t('gif')}`
   if (conversation.lastMessageType === 'image') return `📷 ${t('photo')}`
   if (conversation.lastMessageType === 'video') return `▶ ${t('video')}`
+  if (conversation.lastMessageType === 'share') return `🔗 ${conversation.lastMessage}`
   if (conversation.lastMessageType === 'system') return t('securityUpdate')
   return conversation.lastMessage
 }
@@ -330,9 +334,9 @@ async function openConversation(conversationId: string): Promise<void> {
   }
   screen.value = 'thread'
   resetPanels()
-  if (queuedShareBody.value) {
-    draft.value = queuedShareBody.value
-    queuedShareBody.value = ''
+  if (queuedSharePayload.value) {
+    shareDraft.value = queuedSharePayload.value
+    queuedSharePayload.value = null
   }
   await scrollBottom(false)
 }
@@ -344,6 +348,7 @@ function back(): void {
   }
   if (screen.value === 'thread') darkchat.closeThread()
   screen.value = 'inbox'
+  shareDraft.value = null
   resetPanels()
 }
 
@@ -411,19 +416,26 @@ async function confirmStart(): Promise<void> {
 
 async function sendText(): Promise<void> {
   const body = draft.value.trim()
-  if (!body || sending.value) return
+  if ((!body && !shareDraft.value) || sending.value) return
+  const shared = shareDraft.value
   draft.value = ''
+  shareDraft.value = null
   const outgoingReply = replyTo.value?.id
   replyTo.value = null
   resetPanels()
   sending.value = true
   const response = await darkchat.send({
     body,
-    messageType: 'text',
+    messageType: shared ? 'share' : 'text',
     replyToId: outgoingReply,
+    sharePayload: shared ?? undefined,
   })
   sending.value = false
-  if (!response.success) showToast(errorText(response.error))
+  if (!response.success) {
+    draft.value = body
+    shareDraft.value = shared
+    showToast(errorText(response.error))
+  }
   await scrollBottom()
 }
 
@@ -513,7 +525,7 @@ async function openEasyShareDraft(): Promise<boolean> {
     darkchat.closeThread()
     screen.value = 'inbox'
     resetPanels()
-    queuedShareBody.value = shared.body
+    queuedSharePayload.value = shared.payload
     draft.value = ''
     return true
   }
@@ -523,8 +535,9 @@ async function openEasyShareDraft(): Promise<boolean> {
   }
   screen.value = 'thread'
   resetPanels()
-  queuedShareBody.value = ''
-  draft.value = shared.body
+  queuedSharePayload.value = null
+  shareDraft.value = shared.payload
+  draft.value = ''
   await scrollBottom(false)
   return true
 }
@@ -2450,6 +2463,11 @@ onBeforeUnmount(() => {
                 v-else-if="message.messageType === 'voice'"
                 :message="message"
               />
+              <SharedContentCard
+                v-else-if="message.messageType === 'share' && message.sharePayload"
+                :payload="message.sharePayload"
+                variant="darkchat"
+              />
               <span v-else class="dc-message-body">{{ message.body }}</span>
               <span
                 v-if="Object.keys(message.reactions).length"
@@ -2542,6 +2560,19 @@ onBeforeUnmount(() => {
           @close="emojiOpen = false"
           @pick="appendEmoji"
         />
+        <div
+          v-if="shareDraft"
+          class="shared-composer-preview shared-composer-preview--dark"
+        >
+          <SharedContentCard compact :payload="shareDraft" variant="darkchat" />
+          <button
+            type="button"
+            :aria-label="phone.t('Common.close')"
+            @click="shareDraft = null"
+          >
+            <X :size="15" />
+          </button>
+        </div>
         <div v-if="recording" class="dc-recorder">
           <k-link
             component="button"
@@ -2583,7 +2614,7 @@ onBeforeUnmount(() => {
           ></template>
           <template #right
             ><k-link
-              v-if="draft.trim()"
+              v-if="draft.trim() || shareDraft"
               component="button"
               type="button"
               icon-only

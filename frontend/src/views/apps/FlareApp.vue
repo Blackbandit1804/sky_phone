@@ -67,6 +67,7 @@ import { useRoute, useRouter } from 'vue-router'
 import profilesSprite from '@/assets/img/flare/profiles-source.png'
 import FullEmojiPicker from '@/components/FullEmojiPicker.vue'
 import MessageAttachmentBubble from '@/components/MessageAttachmentBubble.vue'
+import SharedContentCard from '@/components/SharedContentCard.vue'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { useFlareStore } from '@/stores/flare'
 import { useMessageMediaStore } from '@/stores/messageMedia'
@@ -81,6 +82,7 @@ import type {
   FlareProfileDraft,
 } from '@/types/flare'
 import type { PhoneMedia } from '@/types/media'
+import type { EasySharePayload } from '@/types/easyshare'
 import type { GifSearchResult, SmsAttachmentType } from '@/types/messages'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
 
@@ -109,6 +111,7 @@ const router = useRouter()
 const activeTab = ref<FlareTab>('discover')
 const activeMatch = ref<FlareMatch | null>(null)
 const draft = ref('')
+const shareDraft = ref<EasySharePayload | null>(null)
 const matchReveal = ref<FlareMatch | null>(null)
 const cardOffset = ref(0)
 const currentPhotoIndex = ref(0)
@@ -596,13 +599,17 @@ async function openEasyShareDraft(): Promise<boolean> {
     return true
   }
   await openMatch(match)
-  if (activeMatch.value?.id === match.id) draft.value = shared.body
+  if (activeMatch.value?.id === match.id) {
+    draft.value = ''
+    shareDraft.value = shared.payload
+  }
   return true
 }
 
 function closeMatch(): void {
   activeMatch.value = null
   draft.value = ''
+  shareDraft.value = null
   emojiOpen.value = false
   attachmentMenuOpen.value = false
   attachmentPicker.value = null
@@ -617,18 +624,23 @@ async function openRevealedMatch(): Promise<void> {
 
 async function sendMessage(): Promise<void> {
   const body = draft.value.trim()
-  if (!body || !activeMatch.value || flare.sending) return
+  if ((!body && !shareDraft.value) || !activeMatch.value || flare.sending) return
+  const shared = shareDraft.value
   draft.value = ''
+  shareDraft.value = null
   emojiOpen.value = false
   attachmentMenuOpen.value = false
   attachmentPicker.value = null
   if (
-    !(await flare.send(activeMatch.value.id, {
-      body,
-      messageType: 'text',
-    }))
+    !(await flare.send(
+      activeMatch.value.id,
+      shared
+        ? { body, messageType: 'share', sharePayload: shared }
+        : { body, messageType: 'text' },
+    ))
   ) {
     draft.value = body
+    shareDraft.value = shared
     showActionError()
   }
   await nextTick()
@@ -1027,7 +1039,12 @@ onBeforeUnmount(() => {
             :text-footer="messageTime(message.createdAt)"
           >
             <template v-if="message.messageType !== 'text'" #text>
-              <MessageAttachmentBubble :message="attachmentMessage(message)" />
+              <SharedContentCard
+                v-if="message.messageType === 'share' && message.sharePayload"
+                :payload="message.sharePayload"
+                variant="flare"
+              />
+              <MessageAttachmentBubble v-else :message="attachmentMessage(message)" />
             </template>
           </k-message>
         </k-messages>
@@ -1115,6 +1132,13 @@ onBeforeUnmount(() => {
         @pick="appendEmoji"
       />
 
+      <div v-if="shareDraft" class="shared-composer-preview">
+        <SharedContentCard compact :payload="shareDraft" variant="flare" />
+        <button type="button" :aria-label="phone.t('Common.close')" @click="shareDraft = null">
+          <X :size="15" />
+        </button>
+      </div>
+
       <k-messagebar
         class="flare-messagebar messages-messagebar"
         :placeholder="phone.t('Apps.flare.messagePlaceholder')"
@@ -1143,7 +1167,7 @@ onBeforeUnmount(() => {
             <k-link
               component="button"
               icon-only
-              :disabled="!draft.trim() || flare.sending"
+              :disabled="(!draft.trim() && !shareDraft) || flare.sending"
               @click="sendMessage"
             >
               <ArrowUpCircle :size="29" />

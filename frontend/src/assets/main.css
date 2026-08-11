@@ -4895,6 +4895,53 @@ button {
   gap: 7px;
   overflow-y: auto;
 }
+.shared-composer-preview {
+  position: fixed;
+  z-index: 43;
+  right: 12px;
+  bottom: 65px;
+  left: 12px;
+  padding: 7px;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 19px;
+  background: rgb(242 242 247 / 90%);
+  box-shadow: 0 10px 28px rgb(20 44 76 / 18%);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+}
+.shared-composer-preview > button {
+  position: absolute;
+  z-index: 2;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: rgb(60 60 67 / 78%);
+}
+.shared-composer-preview--dark {
+  position: relative;
+  inset: auto;
+  z-index: 2;
+  margin: 0 8px 7px;
+  flex: 0 0 auto;
+  border-color: rgb(255 255 255 / 10%);
+  background: rgb(20 18 27 / 94%);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 28%);
+}
+.phone-app.dark .shared-composer-preview {
+  border-color: rgb(255 255 255 / 10%);
+  background: rgb(36 36 40 / 92%);
+}
+.messages-media-picker__contacts {
+  height: 270px;
+  margin: 0;
+  padding: 8px 0 18px;
+  overflow-y: auto;
+}
 .messages-media-picker__gifs button {
   min-height: 83px;
   display: flex;
@@ -6105,6 +6152,18 @@ button {
 .messages-thread-page .messages-attachment-menu > button > span svg {
   display: block;
   margin: 0;
+}
+.messages-thread-page .messages-attachment-menu > button:nth-child(4) > span {
+  background: #e9f9ed;
+  color: #28a745;
+}
+.messages-thread-page .messages-attachment-menu > button:nth-child(5) > span {
+  background: #f6eefe;
+  color: #af52de;
+}
+.messages-thread-page .messages-attachment-menu > button:nth-child(6) > span {
+  background: #fff0ef;
+  color: #ff3b30;
 }
 .messages-thread-page
   .messages-messagebar

@@ -95,6 +95,8 @@ export const useDarkChatStore = defineStore('darkchat', () => {
       messageType: outgoing.messageType,
       reactions: {},
       replyToId: outgoing.replyToId,
+      sharePayload:
+        outgoing.messageType === 'share' ? outgoing.sharePayload : null,
     }
     messages.value.push(optimistic)
     if (outgoing.messageType === 'voice' && outgoing.mediaPayload) {

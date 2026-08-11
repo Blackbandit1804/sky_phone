@@ -1534,6 +1534,56 @@ const smsMessages = [
     recipient_number: '5551234567',
     sender_number: '5551110001',
   },
+  {
+    body: 'Samantha Cole',
+    contact: {
+      avatar_url: 'https://picsum.photos/seed/shared-samantha/240/240',
+      name: 'Samantha Cole',
+      organization: 'Downtown Cab Co.',
+      phone_number: '5553330044',
+    },
+    created_at: isoTime(-8 * 60_000),
+    direction: 'received',
+    id: 'sms-contact-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: {
+      avatar_url: 'https://picsum.photos/seed/shared-samantha/240/240',
+      name: 'Samantha Cole',
+      organization: 'Downtown Cab Co.',
+      phone_number: '5553330044',
+    },
+    media_waveform: null,
+    message_type: 'contact',
+    media_asset_id: null,
+    read_at: null,
+    recipient_number: '5551234567',
+    sender_number: '5551110001',
+  },
+  {
+    body: 'Neon nights in Vinewood',
+    created_at: isoTime(-4 * 60_000),
+    direction: 'received',
+    id: 'sms-share-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: {
+      appId: 'picstagram',
+      copyText: 'Die besten Lichter der Stadt – direkt aus Vinewood.',
+      id: 'picstagram-post-neon-nights',
+      imageUrl: 'https://picsum.photos/seed/easyshare-neon/720/720',
+      kind: 'post',
+      link: 'skyphone://picstagram/post/picstagram-post-neon-nights',
+      subtitle: '@morgan',
+      title: 'Neon nights in Vinewood',
+    },
+    media_waveform: null,
+    message_type: 'share',
+    media_asset_id: null,
+    read_at: null,
+    recipient_number: '5551234567',
+    sender_number: '5551110001',
+  },
 ]
 const darkChatProfile = {
   id: 1,
@@ -1611,6 +1661,27 @@ const darkChatMessages = [
     mediaPayload: 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif',
     reactions: {},
     createdAt: '2026-08-06 22:44:00',
+    readAt: null,
+  },
+  {
+    id: 'dc-message-00000000-0000-000000000004',
+    conversationId: darkChatConversations[0].id,
+    direction: 'received',
+    senderProfileId: 2,
+    messageType: 'share',
+    body: 'Downtown is awake',
+    reactions: {},
+    sharePayload: {
+      appId: 'feather',
+      copyText: 'Vinewood after midnight. No filters, just city light.',
+      id: 'feather-post-downtown-awake',
+      imageUrl: 'https://picsum.photos/seed/easyshare-downtown/900/600',
+      kind: 'post',
+      link: 'skyphone://feather/post/feather-post-downtown-awake',
+      subtitle: '@nightowl',
+      title: 'Downtown is awake',
+    },
+    createdAt: isoTime(-3 * 60_000),
     readAt: null,
   },
 ]
@@ -2478,9 +2549,9 @@ const flareMatches = [
       lookingFor: 'dates',
       photoUrls: [],
     },
-    lastMessage: 'That place sounds perfect. Friday?',
-    lastMessageAt: isoTime(-38 * 60 * 1000),
-    lastMessageType: 'text',
+    lastMessage: 'Friday night jazz',
+    lastMessageAt: isoTime(-18 * 60 * 1000),
+    lastMessageType: 'share',
     unread: 1,
   },
 ]
@@ -2505,6 +2576,25 @@ const flareMessages = {
       mediaDurationMs: null,
       mediaUrl: null,
       messageType: 'text',
+    },
+    {
+      id: 'flare-message-3',
+      direction: 'received',
+      body: 'Friday night jazz',
+      createdAt: isoTime(-18 * 60 * 1000),
+      mediaDurationMs: null,
+      mediaUrl: null,
+      messageType: 'share',
+      sharePayload: {
+        appId: 'music',
+        copyText: 'A late-night playlist for the drive to Vinewood.',
+        id: 'music-playlist-friday-jazz',
+        imageUrl: 'https://picsum.photos/seed/easyshare-jazz/720/720',
+        kind: 'playlist',
+        link: 'skyphone://music/playlist/music-playlist-friday-jazz',
+        subtitle: '12 tracks · 48 min',
+        title: 'Friday night jazz',
+      },
     },
   ],
 }
@@ -3076,8 +3166,149 @@ const featherTopics = [
 ]
 let featherOnboarded = true
 
-const easyShareHistory = []
+const easyShareTargets = [
+  { distance: 2.4, id: 41, name: 'Mia Santos' },
+  { distance: 7.8, id: 72, name: 'Noah Walker' },
+  { distance: 14.6, id: 105, name: 'Jamie Rivera' },
+]
+const easyShareHistory = [
+  {
+    createdAt: Date.now() - 2 * 60 * 1000,
+    direction: 'incoming',
+    id: 'easyshare-incoming-pending',
+    otherName: 'Mia Santos',
+    payload: {
+      appId: 'notes',
+      copyText: 'Meet at Mission Row at 20:30.',
+      id: 'note-easyshare-meeting',
+      kind: 'note',
+      title: 'Mission Row meeting',
+    },
+    progress: 0,
+    status: 'pending',
+  },
+  {
+    createdAt: Date.now() - 8 * 60 * 1000,
+    direction: 'outgoing',
+    id: 'easyshare-outgoing-transferring',
+    otherName: 'Noah Walker',
+    payload: {
+      appId: 'gallery',
+      copyText: 'Sunset over Los Santos.',
+      id: 3,
+      imageUrl:
+        'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=900',
+      kind: 'photo',
+      title: 'Los Santos sunset',
+    },
+    progress: 58,
+    status: 'transferring',
+  },
+  {
+    createdAt: Date.now() - 22 * 60 * 1000,
+    direction: 'incoming',
+    id: 'easyshare-completed',
+    otherName: 'Jamie Rivera',
+    payload: {
+      appId: 'map',
+      copyText: 'Legion Square',
+      kind: 'location',
+      link: 'https://maps.sky/legion-square',
+      title: 'Legion Square',
+    },
+    progress: 100,
+    status: 'completed',
+  },
+  {
+    createdAt: Date.now() - 48 * 60 * 1000,
+    direction: 'outgoing',
+    id: 'easyshare-accepted',
+    otherName: 'Mia Santos',
+    payload: {
+      appId: 'music',
+      copyText: 'Night Drive by Neon Coast',
+      kind: 'track',
+      title: 'Night Drive',
+    },
+    progress: 15,
+    status: 'accepted',
+  },
+  {
+    createdAt: Date.now() - 2 * 60 * 60 * 1000,
+    direction: 'outgoing',
+    id: 'easyshare-declined',
+    otherName: 'Noah Walker',
+    payload: {
+      appId: 'feather',
+      copyText: 'Road closure near Alta Street.',
+      id: 'feather-post-3',
+      kind: 'post',
+      title: 'Road closure',
+    },
+    progress: 0,
+    status: 'declined',
+  },
+  {
+    createdAt: Date.now() - 4 * 60 * 60 * 1000,
+    direction: 'outgoing',
+    id: 'easyshare-cancelled',
+    otherName: 'Jamie Rivera',
+    payload: {
+      appId: 'phone',
+      copyText: 'Mia Santos\n5550142',
+      kind: 'contact',
+      title: 'Mia Santos',
+    },
+    progress: 31,
+    status: 'cancelled',
+  },
+  {
+    createdAt: Date.now() - 7 * 60 * 60 * 1000,
+    direction: 'incoming',
+    id: 'easyshare-expired',
+    otherName: 'Mia Santos',
+    payload: {
+      appId: 'picstagram',
+      copyText: 'New post from @mia.santos',
+      id: 'picstagram-post-1',
+      kind: 'post',
+      title: 'Vespucci evening',
+    },
+    progress: 0,
+    status: 'expired',
+  },
+  {
+    createdAt: Date.now() - 24 * 60 * 60 * 1000,
+    direction: 'outgoing',
+    id: 'easyshare-failed',
+    otherName: 'Noah Walker',
+    payload: {
+      appId: 'gallery',
+      copyText: 'Vehicle walkaround video.',
+      id: 7,
+      kind: 'video',
+      title: 'Vehicle walkaround',
+    },
+    progress: 73,
+    status: 'failed',
+  },
+]
 let easyShareVisibility = 'everyone'
+
+function easyShareHistoryForScenario(testScenario) {
+  if (testScenario === 'easyshare-empty') return []
+  if (testScenario === 'easyshare-incoming') {
+    return easyShareHistory.filter(
+      (transfer) => transfer.id === 'easyshare-incoming-pending',
+    )
+  }
+  if (testScenario === 'easyshare-history') {
+    return easyShareHistory.filter(
+      (transfer) => !['pending', 'transferring'].includes(transfer.status),
+    )
+  }
+  return easyShareHistory
+}
 
 app.post('/api/:endpoint', (request, response) => {
   console.log(`[NUI] ${request.params.endpoint}`, request.body)
@@ -3996,7 +4227,9 @@ app.post('/api/:endpoint', (request, response) => {
       !match ||
       (messageType === 'text'
         ? !body
-        : !['image', 'gif', 'video'].includes(messageType) || !mediaUrl)
+        : messageType === 'share'
+          ? !request.body.sharePayload
+          : !['image', 'gif', 'video'].includes(messageType) || !mediaUrl)
     ) {
       response.json({ success: false, error: 'invalid_message' })
       return
@@ -4004,11 +4237,18 @@ app.post('/api/:endpoint', (request, response) => {
     const message = {
       id: `flare-message-${Date.now()}`,
       direction: 'sent',
-      body: messageType === 'text' ? body : '',
+      body:
+        messageType === 'share'
+          ? body || request.body.sharePayload.title
+          : messageType === 'text'
+            ? body
+            : '',
       createdAt: Date.now(),
       mediaDurationMs: request.body.mediaDurationMs ?? null,
       mediaUrl: messageType === 'text' ? null : mediaUrl,
       messageType,
+      sharePayload:
+        messageType === 'share' ? request.body.sharePayload : null,
     }
     flareMessages[match.id] ??= []
     flareMessages[match.id].push(message)
@@ -5330,7 +5570,10 @@ app.post('/api/:endpoint', (request, response) => {
     }
     const messageType = request.body.messageType ?? 'text'
     const body = String(request.body.body ?? '')
-    if ((messageType === 'text' || messageType === 'emoji') && !body.trim()) {
+    if (
+      ((messageType === 'text' || messageType === 'emoji') && !body.trim()) ||
+      (messageType === 'share' && !request.body.sharePayload)
+    ) {
       response.json({ success: false, error: 'invalid_message' })
       return
     }
@@ -5343,7 +5586,10 @@ app.post('/api/:endpoint', (request, response) => {
       direction: 'sent',
       senderProfileId: darkChatProfile.id,
       messageType,
-      body,
+      body:
+        messageType === 'share'
+          ? body.trim() || request.body.sharePayload.title
+          : body,
       mediaPayload:
         messageType === 'gif' ? request.body.mediaPayload : undefined,
       mediaSecret:
@@ -5354,6 +5600,8 @@ app.post('/api/:endpoint', (request, response) => {
       replyToId: request.body.replyToId,
       replyBody: reply?.body,
       reactions: {},
+      sharePayload:
+        messageType === 'share' ? request.body.sharePayload : null,
       createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
       readAt: null,
     }
@@ -5494,17 +5742,15 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'easyshare:bootstrap') {
+    const history = easyShareHistoryForScenario(testScenario)
     response.json({
       success: true,
       data: {
-        history: easyShareHistory,
-        pending: easyShareHistory.filter((item) =>
+        history,
+        pending: history.filter((item) =>
           ['pending', 'transferring'].includes(item.status),
         ),
-        targets: [
-          { distance: 2.4, id: 41, name: 'Mia Santos' },
-          { distance: 7.8, id: 72, name: 'Noah Walker' },
-        ],
+        targets: testScenario === 'easyshare-empty' ? [] : easyShareTargets,
         visibility: easyShareVisibility,
       },
     })
@@ -5516,21 +5762,26 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'easyshare:request') {
+    const target = easyShareTargets.find(
+      (candidate) => candidate.id === Number(request.body.targetId),
+    )
     const transfer = {
       createdAt: Date.now(),
       direction: 'outgoing',
       id: `easyshare-${Date.now()}`,
-      otherName: request.body.targetId === 72 ? 'Noah Walker' : 'Mia Santos',
+      otherName: target?.name ?? 'Unknown device',
       payload: request.body.payload,
-      progress: 0,
-      status: 'pending',
+      progress: target?.id === 72 ? 58 : 0,
+      status: target?.id === 72 ? 'transferring' : 'pending',
     }
     easyShareHistory.unshift(transfer)
     response.json({ success: true, data: transfer })
     return
   }
   if (endpoint === 'easyshare:respond' || endpoint === 'easyshare:cancel') {
-    const transfer = easyShareHistory.find((item) => item.id === request.body.id)
+    const transfer = easyShareHistory.find(
+      (item) => item.id === request.body.id,
+    )
     if (!transfer) {
       response.json({ success: false, error: 'transfer_not_found' })
       return
@@ -5541,7 +5792,8 @@ app.post('/api/:endpoint', (request, response) => {
         : request.body.accepted
           ? 'completed'
           : 'declined'
-    transfer.progress = transfer.status === 'completed' ? 100 : transfer.progress
+    transfer.progress =
+      transfer.status === 'completed' ? 100 : transfer.progress
     response.json({ success: true, data: transfer })
     return
   }
@@ -5608,6 +5860,8 @@ app.post('/api/:endpoint', (request, response) => {
       success: true,
       data: thread.map(({ media_payload, ...message }) => ({
         ...message,
+        contact: message.message_type === 'contact' ? media_payload : null,
+        share: message.message_type === 'share' ? media_payload : null,
         media_asset_id: ['image', 'gif', 'video'].includes(message.message_type)
           ? media_payload
           : null,
@@ -5637,6 +5891,10 @@ app.post('/api/:endpoint', (request, response) => {
     const phoneNumber = String(request.body.phoneNumber ?? '')
     const messageType = request.body.messageType ?? 'text'
     const isAttachment = ['image', 'gif', 'video'].includes(messageType)
+    const selectedContact =
+      messageType === 'contact'
+        ? contacts.find((contact) => contact.id === request.body.contactId)
+        : null
     const requestedAttachmentId = String(request.body.mediaAssetId ?? '')
     const selectedMedia = /^\d+$/.test(requestedAttachmentId)
       ? mockMedia.find((item) => String(item.id) === requestedAttachmentId)
@@ -5646,6 +5904,8 @@ app.post('/api/:endpoint', (request, response) => {
       !phoneNumber ||
       (messageType === 'text' && !body) ||
       (messageType === 'voice' && !request.body.mediaPayload) ||
+      (messageType === 'contact' && !selectedContact) ||
+      (messageType === 'share' && !request.body.sharePayload) ||
       (isAttachment &&
         !attachmentAssets[messageType].has(attachmentId) &&
         !attachmentId.startsWith('https://') &&
@@ -5655,7 +5915,19 @@ app.post('/api/:endpoint', (request, response) => {
       return
     }
     const message = {
-      body,
+      body:
+        selectedContact?.name ??
+        (messageType === 'share'
+          ? body || request.body.sharePayload.title
+          : body),
+      contact: selectedContact
+        ? {
+            avatar_url: selectedContact.avatar_url ?? null,
+            name: selectedContact.name,
+            organization: selectedContact.organization ?? null,
+            phone_number: selectedContact.phone_number,
+          }
+        : null,
       created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
       direction: 'sent',
       id: `sms-${Date.now()}`,
@@ -5675,6 +5947,15 @@ app.post('/api/:endpoint', (request, response) => {
       media_payload:
         messageType === 'voice'
           ? request.body.mediaPayload
+          : selectedContact
+            ? {
+                avatar_url: selectedContact.avatar_url ?? null,
+                name: selectedContact.name,
+                organization: selectedContact.organization ?? null,
+                phone_number: selectedContact.phone_number,
+              }
+          : messageType === 'share'
+            ? request.body.sharePayload
           : isAttachment
             ? attachmentId
             : null,
@@ -5685,6 +5966,7 @@ app.post('/api/:endpoint', (request, response) => {
       read_at: null,
       recipient_number: phoneNumber,
       sender_number: '5551234567',
+      share: messageType === 'share' ? request.body.sharePayload : null,
     }
     smsMessages.push(message)
     const { media_payload, ...publicMessage } = message
