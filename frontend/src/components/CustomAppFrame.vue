@@ -33,6 +33,7 @@ import {
   getLbPhoneCallbackResource,
   usesLbPhoneHostRuntime,
 } from '@/utils/lbPhoneAppBridge'
+import { cloneJsonData } from '@/utils/clone'
 import { nuiCall } from '@/utils/nui'
 
 const props = defineProps<{
@@ -150,7 +151,7 @@ function postToFrame(payload: unknown): boolean {
   if (!target) return false
 
   try {
-    target.postMessage(payload, postMessageOrigin.value)
+    target.postMessage(cloneJsonData(payload), postMessageOrigin.value)
     return true
   } catch (error) {
     console.error(`[Custom apps] Could not message ${props.app.id}.`, error)
