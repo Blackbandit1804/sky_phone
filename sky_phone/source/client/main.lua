@@ -168,7 +168,6 @@ local server_callbacks = {
     "crewlink:leave",
     "crewlink:create-ping",
     "crewlink:remove-ping",
-    "crewlink:live",
     "companies:list",
     "companies:get",
     "companies:my-requests",

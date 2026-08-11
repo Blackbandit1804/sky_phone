@@ -1089,49 +1089,37 @@ Bridge.Callbacks.Register("sky_phone:crewlink:live", function(source)
     if not profile then
         return error_response
     end
-    if not profile.active_group_id or not membership(profile.id, profile.active_group_id) then
-        return { success = true, data = { members = {}, pings = {} } }
+    if not profile.active_group_id then
+        return { success = true, data = { members = {}, overheadMembers = {}, pings = {} } }
+    end
+    local active_membership = membership(profile.id, profile.active_group_id)
+    if not active_membership then
+        return { success = true, data = { members = {}, overheadMembers = {}, pings = {} } }
+    end
+    local members = live_group(profile.active_group_id)
+    local overhead_members = {}
+    if tonumber(profile.overhead_visible) == 1
+        and tonumber(active_membership.overhead_allowed) == 1
+    then
+        for _, member in ipairs(members) do
+            if member.source and member.source ~= source and member.overheadVisible then
+                overhead_members[#overhead_members + 1] = {
+                    source = member.source,
+                    username = member.username,
+                    role = member.role,
+                    roleLabel = member.role:sub(1, 1):upper() .. member.role:sub(2),
+                }
+            end
+        end
     end
     return {
         success = true,
         data = {
-            members = live_group(profile.active_group_id),
+            members = members,
+            overheadMembers = overhead_members,
             pings = active_pings(profile.active_group_id),
         },
     }
-end)
-
-Bridge.Callbacks.Register("sky_phone:crewlink:overhead", function(source)
-    if not SkyPhone.AllowOperation(
-        source,
-        "crewlink:overhead",
-        Config.CrewLink.LiveRequestsPerMinute,
-        60
-    ) then
-        return { success = false, error = "rate_limited" }
-    end
-    local profile = require_profile(source)
-    if not profile or not profile.active_group_id or tonumber(profile.overhead_visible) ~= 1 then
-        return { success = true, data = { members = {} } }
-    end
-    local active_membership = membership(profile.id, profile.active_group_id)
-    if not active_membership or tonumber(active_membership.overhead_allowed) ~= 1 then
-        return { success = true, data = { members = {} } }
-    end
-    local live_sources = live_sources_by_account()
-    local members = {}
-    for _, member in ipairs(member_dtos(profile.active_group_id)) do
-        local member_source = live_sources[member.account_id]
-        if member_source and member_source ~= source and member.overheadVisible then
-            members[#members + 1] = {
-                source = member_source,
-                username = member.username,
-                role = member.role,
-                roleLabel = member.role:sub(1, 1):upper() .. member.role:sub(2),
-            }
-        end
-    end
-    return { success = true, data = { members = members } }
 end)
 
 exports("GetCrewLinkActiveGroup", function(source)

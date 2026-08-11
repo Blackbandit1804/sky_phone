@@ -492,6 +492,9 @@ local function bootstrap(source, security, security_loaded)
         error(("[sky_phone] Active IMEI %s has no device row."):format(session.imei))
     end
 
+    session.account_id = device.account_id and tonumber(device.account_id) or nil
+    session.account_email = session.account_id and device.email or nil
+
     return {
         token = session.token,
         security = security_status(device.imei, security, security_loaded),
@@ -747,14 +750,13 @@ function SkyPhone.RequireAccount(source)
     if not session then
         return nil, error_response
     end
-    local device = load_device(session.imei)
-    if not device or not device.account_id then
+    if not session.account_id then
         return nil, { success = false, error = "not_authenticated" }
     end
     return {
-        id = tonumber(device.account_id),
-        email = device.email,
-        imei = device.imei,
+        id = session.account_id,
+        email = session.account_email,
+        imei = session.imei,
     }
 end
 
