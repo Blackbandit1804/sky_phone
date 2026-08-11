@@ -84,6 +84,7 @@ const DEFAULT_APP_NOTIFICATIONS: Record<
   picstagram: { enabled: true, sounds: true },
   fliptok: { enabled: true, sounds: true },
   feather: { enabled: true, sounds: true },
+  crewlink: { enabled: true, sounds: true },
   camera: { enabled: true, sounds: true },
   clock: { enabled: true, sounds: true },
   calendar: { enabled: true, sounds: true },

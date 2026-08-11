@@ -850,3 +850,82 @@ CREATE TABLE IF NOT EXISTS `sky_phone_feather_reports` (
     FOREIGN KEY (`reporter_id`) REFERENCES `sky_phone_feather_profiles` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`post_id`) REFERENCES `sky_phone_feather_posts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_profiles` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `account_id` BIGINT UNSIGNED NOT NULL,
+    `username` VARCHAR(20) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    `active_group_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `map_visible` TINYINT(1) NOT NULL DEFAULT 1,
+    `overhead_visible` TINYINT(1) NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_crewlink_account` (`account_id`),
+    UNIQUE KEY `uniq_sky_phone_crewlink_username` (`username`),
+    KEY `idx_sky_phone_crewlink_active` (`active_group_id`),
+    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_groups` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `name` VARCHAR(32) NOT NULL,
+    `colour` ENUM('cyan','blue','violet','orange','green','rose') NOT NULL DEFAULT 'cyan',
+    `owner_profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `invite_code` VARCHAR(12) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `allow_member_pings` TINYINT(1) NOT NULL DEFAULT 1,
+    `overhead_allowed` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_crewlink_invite_code` (`invite_code`),
+    KEY `idx_sky_phone_crewlink_owner` (`owner_profile_id`),
+    FOREIGN KEY (`owner_profile_id`) REFERENCES `sky_phone_crewlink_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_memberships` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `group_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `role` ENUM('owner','coordinator','moderator','member','guest') NOT NULL DEFAULT 'member',
+    `joined_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_crewlink_membership` (`group_id`,`profile_id`),
+    KEY `idx_sky_phone_crewlink_profile_groups` (`profile_id`,`joined_at`),
+    FOREIGN KEY (`group_id`) REFERENCES `sky_phone_crewlink_groups` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_crewlink_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_invitations` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `group_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `inviter_profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `invitee_profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `status` ENUM('pending','accepted','declined','expired') NOT NULL DEFAULT 'pending',
+    `expires_at` DATETIME NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_crewlink_pending_invite` (`group_id`,`invitee_profile_id`),
+    KEY `idx_sky_phone_crewlink_invitee` (`invitee_profile_id`,`status`,`expires_at`),
+    FOREIGN KEY (`group_id`) REFERENCES `sky_phone_crewlink_groups` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`inviter_profile_id`) REFERENCES `sky_phone_crewlink_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`invitee_profile_id`) REFERENCES `sky_phone_crewlink_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_pings` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `group_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `creator_profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `source_resource` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+    `type` ENUM('meeting','danger','help','target','info') NOT NULL,
+    `label` VARCHAR(48) NOT NULL,
+    `position_x` DECIMAL(10,3) NOT NULL,
+    `position_y` DECIMAL(10,3) NOT NULL,
+    `position_z` DECIMAL(10,3) NOT NULL,
+    `expires_at` DATETIME NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_crewlink_pings` (`group_id`,`expires_at`),
+    FOREIGN KEY (`group_id`) REFERENCES `sky_phone_crewlink_groups` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`creator_profile_id`) REFERENCES `sky_phone_crewlink_profiles` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -4,10 +4,14 @@ import PhoneStatusIndicators from '@/components/PhoneStatusIndicators.vue'
 import { usePhoneStore } from '@/stores/phone'
 
 const phone = usePhoneStore()
-withDefaults(defineProps<{ controlCenterOpened?: boolean }>(), {
-  controlCenterOpened: false,
-})
-const emit = defineEmits<{ controlCenter: [] }>()
+withDefaults(
+  defineProps<{ controlCenterOpened?: boolean; lockable?: boolean }>(),
+  {
+    controlCenterOpened: false,
+    lockable: false,
+  },
+)
+const emit = defineEmits<{ controlCenter: []; lock: [] }>()
 const time = ref('')
 let intervalId: number | undefined
 
@@ -31,7 +35,16 @@ onBeforeUnmount(() => {
 
 <template>
   <header class="phone-status-bar" :aria-label="phone.t('Common.phoneStatus')">
-    <time class="phone-status-bar__time">{{ time }}</time>
+    <button
+      v-if="lockable"
+      class="phone-status-bar__time phone-status-bar__time-button"
+      type="button"
+      :aria-label="phone.t('LockScreen.label')"
+      @click.stop="emit('lock')"
+    >
+      <time>{{ time }}</time>
+    </button>
+    <time v-else class="phone-status-bar__time">{{ time }}</time>
     <button
       class="phone-status-bar__indicators"
       type="button"

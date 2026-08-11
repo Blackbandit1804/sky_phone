@@ -6,6 +6,7 @@ import {
   type PhoneNotificationDevice,
 } from '@/stores/notifications'
 import { usePhoneStore } from '@/stores/phone'
+import { nuiCall } from '@/utils/nui'
 import {
   DEFAULT_PHONE_PREFERENCES,
   type PhonePreferencesV1,
@@ -15,7 +16,7 @@ vi.mock('@/utils/tones', () => ({
   playPhoneTone: vi.fn(() => vi.fn()),
 }))
 vi.mock('@/utils/nui', () => ({
-  nuiCall: vi.fn(),
+  nuiCall: vi.fn(async () => ({ success: true, data: { revision: 1 } })),
 }))
 
 function device(
@@ -27,6 +28,17 @@ function device(
   return { imei, name: `Phone ${imei}`, preferences }
 }
 
+function openPhone(imei: string): void {
+  usePhoneStore().open({
+    device: {
+      data: {},
+      imei,
+      name: `Phone ${imei}`,
+      sim: null,
+    },
+  })
+}
+
 describe('notifications store', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -34,6 +46,7 @@ describe('notifications store', () => {
       matchMedia: vi.fn(() => ({ matches: false })),
     })
     setActivePinia(createPinia())
+    vi.mocked(nuiCall).mockClear()
   })
 
   afterEach(() => {
@@ -126,5 +139,122 @@ describe('notifications store', () => {
     expect(normalId).toBeNull()
     expect(criticalId).not.toBeNull()
     expect(notifications.current?.text).toBe('Timer finished')
+  })
+
+  it('persists a notification immediately while the phone is closed', async () => {
+    const notifications = useNotificationsStore()
+
+    notifications.show({
+      appId: 'mail',
+      device: device('111'),
+      text: 'Store while closed',
+      title: 'Mail',
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(nuiCall).toHaveBeenCalledWith('notifications:save', {
+      imei: '111',
+      payload: {
+        items: [
+          expect.objectContaining({
+            appId: 'mail',
+            text: 'Store while closed',
+            title: 'Mail',
+          }),
+        ],
+        version: 1,
+      },
+    })
+  })
+
+  it('keeps notifications on the lock screen after the banner expires', () => {
+    openPhone('111')
+    const notifications = useNotificationsStore()
+
+    notifications.show({
+      appId: 'mail',
+      text: 'Persistent lock screen message',
+      title: 'Mail',
+    })
+    vi.advanceTimersByTime(
+      DEFAULT_PHONE_PREFERENCES.settings.notificationDurationSeconds * 1000,
+    )
+
+    expect(notifications.current).toBeNull()
+    expect(notifications.lockScreenNotifications[0].text).toBe(
+      'Persistent lock screen message',
+    )
+  })
+
+  it('hides the matching device preview when that phone opens', () => {
+    const notifications = useNotificationsStore()
+    notifications.show({
+      appId: 'mail',
+      device: device('111'),
+      text: 'Move to lock screen',
+      title: 'Mail',
+    })
+
+    openPhone('111')
+    notifications.hideDevicePreview('111')
+
+    expect(notifications.devicePreviews).toEqual([])
+    expect(notifications.lockScreenNotifications[0].text).toBe(
+      'Move to lock screen',
+    )
+  })
+
+  it('dismisses a lock screen notification everywhere', () => {
+    openPhone('111')
+    const notifications = useNotificationsStore()
+    const id = notifications.show({
+      appId: 'mail',
+      text: 'Dismiss me',
+      title: 'Mail',
+    })
+
+    notifications.dismissFromLockScreen(id!)
+
+    expect(notifications.current).toBeNull()
+    expect(notifications.lockScreenNotifications).toEqual([])
+  })
+
+  it('hydrates persisted notifications and only removes them explicitly', () => {
+    const phone = usePhoneStore()
+    phone.open({
+      device: {
+        data: {
+          notifications: {
+            payload: {
+              items: [
+                {
+                  appId: 'mail',
+                  id: 'saved-notification',
+                  text: 'Saved message',
+                  title: 'Mail',
+                },
+              ],
+              version: 1,
+            },
+            revision: 3,
+          },
+        },
+        imei: '111',
+        name: 'Phone 111',
+        sim: null,
+      },
+    })
+    const notifications = useNotificationsStore()
+
+    notifications.hydrate(
+      phone.device?.data.notifications?.payload,
+      '111',
+    )
+    vi.advanceTimersByTime(60_000)
+
+    expect(notifications.lockScreenNotifications[0].text).toBe('Saved message')
+    notifications.clearLockScreen()
+    expect(notifications.lockScreenNotifications).toEqual([])
   })
 })

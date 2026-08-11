@@ -1947,6 +1947,128 @@ local schema = {
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
+    {
+        name = "sky_phone_crewlink_profiles",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "account_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "username", type = "VARCHAR(20) NOT NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "active_group_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "map_visible", type = "TINYINT(1) NOT NULL DEFAULT 1" },
+            { name = "overhead_visible", type = "TINYINT(1) NOT NULL DEFAULT 0" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_crewlink_account", columns = "(`account_id`)" },
+            { name = "uniq_sky_phone_crewlink_username", columns = "(`username`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_crewlink_active", columns = "(`active_group_id`)" },
+        },
+        foreignKeys = {
+            { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_crewlink_groups",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "name", type = "VARCHAR(32) NOT NULL" },
+            { name = "colour", type = "ENUM('cyan','blue','violet','orange','green','rose') NOT NULL DEFAULT 'cyan'" },
+            { name = "owner_profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "invite_code", type = "VARCHAR(12) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "allow_member_pings", type = "TINYINT(1) NOT NULL DEFAULT 1" },
+            { name = "overhead_allowed", type = "TINYINT(1) NOT NULL DEFAULT 1" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_crewlink_invite_code", columns = "(`invite_code`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_crewlink_owner", columns = "(`owner_profile_id`)" },
+        },
+        foreignKeys = {
+            { column = "owner_profile_id", references = "`sky_phone_crewlink_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_crewlink_memberships",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "group_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "role", type = "ENUM('owner','coordinator','moderator','member','guest') NOT NULL DEFAULT 'member'" },
+            { name = "joined_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_crewlink_membership", columns = "(`group_id`, `profile_id`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_crewlink_profile_groups", columns = "(`profile_id`, `joined_at`)" },
+        },
+        foreignKeys = {
+            { column = "group_id", references = "`sky_phone_crewlink_groups` (`id`) ON DELETE CASCADE" },
+            { column = "profile_id", references = "`sky_phone_crewlink_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_crewlink_invitations",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "group_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "inviter_profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "invitee_profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "status", type = "ENUM('pending','accepted','declined','expired') NOT NULL DEFAULT 'pending'" },
+            { name = "expires_at", type = "DATETIME NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_crewlink_pending_invite", columns = "(`group_id`, `invitee_profile_id`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_crewlink_invitee", columns = "(`invitee_profile_id`, `status`, `expires_at`)" },
+        },
+        foreignKeys = {
+            { column = "group_id", references = "`sky_phone_crewlink_groups` (`id`) ON DELETE CASCADE" },
+            { column = "inviter_profile_id", references = "`sky_phone_crewlink_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "invitee_profile_id", references = "`sky_phone_crewlink_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_crewlink_pings",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "group_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "creator_profile_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "source_resource", type = "VARCHAR(64) NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "type", type = "ENUM('meeting','danger','help','target','info') NOT NULL" },
+            { name = "label", type = "VARCHAR(48) NOT NULL" },
+            { name = "position_x", type = "DECIMAL(10,3) NOT NULL" },
+            { name = "position_y", type = "DECIMAL(10,3) NOT NULL" },
+            { name = "position_z", type = "DECIMAL(10,3) NOT NULL" },
+            { name = "expires_at", type = "DATETIME NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_crewlink_pings", columns = "(`group_id`, `expires_at`)" },
+        },
+        foreignKeys = {
+            { column = "group_id", references = "`sky_phone_crewlink_groups` (`id`) ON DELETE CASCADE" },
+            { column = "creator_profile_id", references = "`sky_phone_crewlink_profiles` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
 }
 
 Bridge.Database.Migrate("sky_phone", schema)

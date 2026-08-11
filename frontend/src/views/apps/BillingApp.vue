@@ -61,7 +61,7 @@ const tab = ref<BillingTab>('overview')
 const screen = ref<BillingScreen>('main')
 const direction = ref<BillingDirection>('inbox')
 const filter = ref<BillingFilter>('all')
-const filters: BillingFilter[] = ['all', 'open', 'overdue', 'paid']
+const filters: BillingFilter[] = ['all', 'open', 'paid']
 const search = ref('')
 const paymentOpen = ref(false)
 const toastOpen = ref(false)
@@ -1035,20 +1035,15 @@ onBeforeUnmount(() => {
   margin-bottom: 12px;
 }
 .billing-status-filter__scroll {
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-.billing-status-filter__scroll::-webkit-scrollbar {
-  display: none;
+  overflow: hidden;
 }
 .billing-filters {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
 }
 .billing-filters :deep(button) {
   display: flex;
-  min-width: 82px;
+  min-width: 0;
+  flex: 1;
   align-items: center;
   justify-content: center;
   gap: 5px;

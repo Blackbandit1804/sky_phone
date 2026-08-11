@@ -1,18 +1,29 @@
 <script setup lang="ts">
-import { kFab } from 'konsta/vue'
-import { Camera, Flashlight, LockKeyhole } from 'lucide-vue-next'
+import { kFab, kGlass } from 'konsta/vue'
+import { Camera, Flashlight, LockKeyhole, X } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import PhoneStatusIndicators from '@/components/PhoneStatusIndicators.vue'
+import { getPhoneApp } from '@/config/apps'
+import type { PhoneNotification } from '@/stores/notifications'
 import { usePhoneStore } from '@/stores/phone'
 import { nuiCall } from '@/utils/nui'
+import type { PhonePreferencesV1 } from '@/utils/preferences'
 
+const props = defineProps<{
+  notifications: PhoneNotification[]
+  preferences?: PhonePreferencesV1
+  preview?: boolean
+}>()
 const emit = defineEmits<{
   camera: []
+  clearNotifications: []
+  dismissNotification: [id: string]
   unlock: []
 }>()
 
 const phone = usePhoneStore()
+const preferences = computed(() => props.preferences ?? phone.preferences)
 const now = ref(new Date())
 const dragOffset = ref(0)
 const dragging = ref(false)
@@ -59,7 +70,13 @@ const flashlightShortcutColors = computed(() =>
 )
 
 function onPointerDown(event: PointerEvent): void {
-  if ((event.target as HTMLElement).closest('button')) return
+  if (props.preview) return
+  if (
+    (event.target as HTMLElement).closest(
+      'button, .lock-screen__notifications',
+    )
+  )
+    return
   pointerStart = event.clientY
   pointerStartedAt = Date.now()
   dragging.value = true
@@ -87,11 +104,18 @@ function finishPointer(event: PointerEvent): void {
 }
 
 function unlockWithKeyboard(event: KeyboardEvent): void {
+  if (props.preview) return
   if (event.key === 'Enter' || event.key === ' ') emit('unlock')
 }
 
 function unlockFromWallpaper(event: MouseEvent): void {
-  if ((event.target as HTMLElement).closest('button, [role="link"]')) return
+  if (props.preview) return
+  if (
+    (event.target as HTMLElement).closest(
+      'button, [role="link"], .lock-screen__notifications',
+    )
+  )
+    return
   emit('unlock')
 }
 
@@ -119,12 +143,15 @@ onBeforeUnmount(() => {
   <section
     class="lock-screen"
     :class="[
-      `wallpaper--${phone.preferences.settings.wallpaper}`,
-      { 'lock-screen--dragging': dragging },
+      `wallpaper--${preferences.settings.wallpaper}`,
+      {
+        'lock-screen--dragging': dragging,
+        'lock-screen--preview': preview,
+      },
     ]"
     :style="dragStyle"
     :aria-label="phone.t('LockScreen.label')"
-    tabindex="0"
+    :tabindex="preview ? -1 : 0"
     @keydown="unlockWithKeyboard"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
@@ -135,21 +162,66 @@ onBeforeUnmount(() => {
     <div class="lock-screen__shade" aria-hidden="true"></div>
 
     <header class="lock-screen__status">
+      <time class="lock-screen__status-time">{{ time }}</time>
       <PhoneStatusIndicators class="lock-screen__indicators" />
     </header>
+
     <LockKeyhole
       class="lock-screen__lock"
       :size="14"
       :stroke-width="1.8"
       aria-hidden="true"
     />
-
     <div class="lock-screen__content">
       <time class="lock-screen__date">{{ date }}</time>
       <time class="lock-screen__time">{{ time }}</time>
     </div>
 
-    <div class="lock-screen__footer">
+    <section
+      v-if="props.notifications.length"
+      class="lock-screen__notifications"
+      aria-live="polite"
+    >
+      <button
+        v-if="!preview && props.notifications.length > 1"
+        class="lock-screen__notifications-clear"
+        type="button"
+        @click.stop="emit('clearNotifications')"
+      >
+        {{ phone.t('Notifications.clearAll') }}
+      </button>
+      <k-glass
+        v-for="notification in props.notifications"
+        :key="notification.id"
+        class="lock-screen__notification"
+        :highlight="false"
+      >
+        <img
+          v-if="getPhoneApp(notification.appId)?.iconImage"
+          :src="getPhoneApp(notification.appId)?.iconImage"
+          alt=""
+          class="lock-screen__notification-icon"
+        />
+        <div class="lock-screen__notification-copy">
+          <div class="lock-screen__notification-heading">
+            <strong>{{ notification.title }}</strong>
+            <span>{{ phone.t('Notifications.now') }}</span>
+          </div>
+          <small v-if="notification.subtitle">{{ notification.subtitle }}</small>
+          <p>{{ notification.text }}</p>
+        </div>
+        <button
+          class="lock-screen__notification-close"
+          type="button"
+          :aria-label="phone.t('Common.close')"
+          @click.stop="emit('dismissNotification', notification.id)"
+        >
+          <X :size="14" aria-hidden="true" />
+        </button>
+      </k-glass>
+    </section>
+
+    <div v-if="!preview" class="lock-screen__footer">
       <nav class="lock-screen__shortcuts">
         <k-fab
           component="button"
