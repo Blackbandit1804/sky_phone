@@ -145,10 +145,11 @@ describe('notifications store', () => {
     const notifications = useNotificationsStore()
 
     notifications.show({
-      appId: 'mail',
+      appId: 'companies',
       device: device('111'),
+      route: '/apps/companies?requestId=request-1&area=customer',
       text: 'Store while closed',
-      title: 'Mail',
+      title: 'Companies',
     })
     await Promise.resolve()
     await Promise.resolve()
@@ -158,9 +159,10 @@ describe('notifications store', () => {
       payload: {
         items: [
           expect.objectContaining({
-            appId: 'mail',
+            appId: 'companies',
+            route: '/apps/companies?requestId=request-1&area=customer',
             text: 'Store while closed',
-            title: 'Mail',
+            title: 'Companies',
           }),
         ],
         version: 1,
@@ -247,10 +249,7 @@ describe('notifications store', () => {
     })
     const notifications = useNotificationsStore()
 
-    notifications.hydrate(
-      phone.device?.data.notifications?.payload,
-      '111',
-    )
+    notifications.hydrate(phone.device?.data.notifications?.payload, '111')
     vi.advanceTimersByTime(60_000)
 
     expect(notifications.lockScreenNotifications[0].text).toBe('Saved message')

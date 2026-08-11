@@ -78,6 +78,7 @@ import type {
   SkyRideRide,
   SkyRideRideStatus,
 } from '@/types/skyride'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type SkyRideTab = 'home' | 'rides' | 'activity' | 'messages' | 'profile'
 type LocationTarget = 'pickup' | 'destination'
@@ -677,6 +678,7 @@ function selectTab(tab: SkyRideTab): void {
 }
 
 function handleSkyRideMessage(event: MessageEvent<unknown>): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (typeof event.data !== 'object' || event.data === null) return
   const message = event.data as Partial<SkyRideChangedMessage>
   if (message.type !== 'skyride:changed' || !message.data) return

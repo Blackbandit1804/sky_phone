@@ -5,7 +5,10 @@ import { isPhoneAppId } from '@/config/apps'
 import { usePhoneStore } from '@/stores/phone'
 import type { LaunchablePhoneAppId } from '@/types/apps'
 import { nuiCall } from '@/utils/nui'
-import type { PhonePreferencesV1 } from '@/utils/preferences'
+import {
+  DEFAULT_APP_NOTIFICATION_PREFERENCES,
+  type PhonePreferencesV1,
+} from '@/utils/preferences'
 import { playPhoneTone, type PhoneToneId } from '@/utils/tones'
 
 export type PhoneNotificationDevice = {
@@ -19,6 +22,7 @@ export type PhoneNotificationInput = {
   critical?: boolean
   device?: PhoneNotificationDevice
   persistent?: boolean
+  route?: string
   sound?: PhoneToneId
   subtitle?: string
   text: string
@@ -31,7 +35,7 @@ export type PhoneNotification = PhoneNotificationInput & {
 
 type PersistedPhoneNotification = Pick<
   PhoneNotification,
-  'appId' | 'id' | 'subtitle' | 'text' | 'title'
+  'appId' | 'id' | 'route' | 'subtitle' | 'text' | 'title'
 >
 
 type PersistedNotificationsV1 = {
@@ -73,9 +77,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
   function persist(imei: string): void {
     const items = (lockScreenQueues.value[imei] ?? []).map(
-      ({ appId, id, subtitle, text, title }) => ({
+      ({ appId, id, route, subtitle, text, title }) => ({
         appId,
         id,
+        ...(route ? { route } : {}),
         ...(subtitle ? { subtitle } : {}),
         text,
         title,
@@ -108,7 +113,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
         (payload as Partial<PersistedNotificationsV1>).version !== 1 ||
         !Array.isArray((payload as Partial<PersistedNotificationsV1>).items)
       ) {
-        console.error('[Phone notifications] Invalid persisted notification data.')
+        console.error(
+          '[Phone notifications] Invalid persisted notification data.',
+        )
       } else {
         for (const item of (payload as PersistedNotificationsV1).items) {
           if (
@@ -117,14 +124,21 @@ export const useNotificationsStore = defineStore('notifications', () => {
             !isPhoneAppId(item.appId) ||
             typeof item?.text !== 'string' ||
             typeof item?.title !== 'string' ||
+            (item.route !== undefined &&
+              (typeof item.route !== 'string' ||
+                (item.route !== `/apps/${item.appId}` &&
+                  !item.route.startsWith(`/apps/${item.appId}?`)))) ||
             (item.subtitle !== undefined && typeof item.subtitle !== 'string')
           ) {
-            console.error('[Phone notifications] Ignored an invalid persisted notification.')
+            console.error(
+              '[Phone notifications] Ignored an invalid persisted notification.',
+            )
             continue
           }
           stored.push({
             appId: item.appId,
             id: item.id,
+            ...(item.route ? { route: item.route } : {}),
             ...(item.subtitle ? { subtitle: item.subtitle } : {}),
             text: item.text,
             title: item.title,
@@ -161,7 +175,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
   function activate(notification: PhoneNotification): void {
     const preferences = notification.device?.preferences ?? phone.preferences
     const appPreferences =
-      preferences.settings.notifications[notification.appId]
+      preferences.settings.notifications[notification.appId] ??
+      DEFAULT_APP_NOTIFICATION_PREFERENCES
     if (appPreferences.sounds || notification.critical) {
       const sound = notification.sound ?? preferences.settings.notificationSound
       const volume = notification.critical
@@ -218,15 +233,19 @@ export const useNotificationsStore = defineStore('notifications', () => {
     if (current.value) dismiss(current.value.id)
   }
 
-  function dismissFromLockScreen(id: string): void {
+  function dismissFromLockScreen(
+    id: string,
+    targetImei = phone.device?.imei,
+  ): void {
     dismiss(id)
-    const imei = phone.device?.imei
-    if (!imei) return
-    const notifications = lockScreenQueues.value[imei]
+    if (!targetImei) return
+    const notifications = lockScreenQueues.value[targetImei]
     if (!notifications) return
-    const index = notifications.findIndex((notification) => notification.id === id)
+    const index = notifications.findIndex(
+      (notification) => notification.id === id,
+    )
     if (index >= 0) notifications.splice(index, 1)
-    persist(imei)
+    persist(targetImei)
   }
 
   function clearLockScreen(): void {
@@ -248,12 +267,14 @@ export const useNotificationsStore = defineStore('notifications', () => {
   }
 
   function show(input: PhoneNotificationInput): string | null {
-    const preferences = input.device?.preferences ?? phone.preferences
-    const appPreferences = preferences.settings.notifications[input.appId]
-    if (!appPreferences) {
+    if (!isPhoneAppId(input.appId)) {
       console.error(`[Phone notifications] Unknown app: ${input.appId}`)
       return null
     }
+    const preferences = input.device?.preferences ?? phone.preferences
+    const appPreferences =
+      preferences.settings.notifications[input.appId] ??
+      DEFAULT_APP_NOTIFICATION_PREFERENCES
     if (!input.critical && preferences.settings.focusMode) return null
     if (!input.critical && !appPreferences.enabled) {
       return null

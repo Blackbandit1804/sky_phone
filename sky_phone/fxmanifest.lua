@@ -7,8 +7,15 @@ author 'Sky-Systems'
 description 'Sky Phone'
 version '0.1.0'
 
+provide 'lb-phone'
+provide '17mov_Phone'
+provide 'high-phone'
+provide 'qs-smartphone'
+provide 'yseries'
+
 escrow_ignore {
     'config/**',
+    'custom_apps/**',
     'source/bridge/**',
 }
 
@@ -17,6 +24,9 @@ shared_scripts {
     'source/bridge/shared.lua',
     'source/shared/imei.lua',
     'source/shared/sim_number.lua',
+    'source/shared/custom_apps.lua',
+    'source/shared/custom_app_compat.lua',
+    'custom_apps/**/manifest.lua',
 }
 
 client_scripts {
@@ -34,6 +44,9 @@ client_scripts {
     'source/client/crewlink.lua',
     'source/bridge/client/radio.lua',
     'source/client/payphones.lua',
+    'source/client/custom_apps.lua',
+    'source/client/custom_app_compat.lua',
+    'custom_apps/**/client.lua',
     'source/client/main.lua',
     'source/client/radio.lua',
 }
@@ -41,6 +54,7 @@ client_scripts {
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'config/config.lua',
+    'config/companies.lua',
     'config/media.lua',
     'config/music.lua',
     'config/locales/*.lua',
@@ -53,8 +67,12 @@ server_scripts {
     'source/bridge/server/housing/*.lua',
     'source/bridge/server/inventory.lua',
     'source/bridge/server/inventory/*.lua',
+    'source/server/custom_apps.lua',
+    'source/server/custom_app_compat.lua',
     'source/server/db_migrate.lua',
     'source/server/phone.lua',
+    'source/server/companies.lua',
+    'source/server/custom_app_storage.lua',
     'source/server/sim.lua',
     'source/server/calls.lua',
     'source/server/media.lua',
@@ -78,6 +96,7 @@ server_scripts {
     'source/server/calendar.lua',
     'source/server/music.lua',
     'source/server/radio.lua',
+    'custom_apps/**/server.lua',
 }
 
 files {
@@ -85,6 +104,8 @@ files {
     'source/html/assets/**',
     'source/html/img/**',
     'config/music/**',
+    'custom_apps/**/web/**',
+    'custom_apps/_sdk/**',
 }
 
 ui_page 'source/html/index.html'

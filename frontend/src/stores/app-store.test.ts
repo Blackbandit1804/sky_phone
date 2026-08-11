@@ -5,17 +5,23 @@ import { NON_REMOVABLE_PHONE_APP_IDS } from '@/config/apps'
 import { useAppStoreStore } from '@/stores/app-store'
 import { removeHomeApp } from '@/utils/homeLayout'
 
-const mocks = vi.hoisted(() => ({ saveDeviceNamespace: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  phone: {
+    device: { imei: 'phone-a' },
+    isOpen: true,
+    saveDeviceNamespace: vi.fn(),
+  },
+}))
 vi.mock('@/stores/phone', () => ({
-  usePhoneStore: () => ({
-    saveDeviceNamespace: mocks.saveDeviceNamespace,
-  }),
+  usePhoneStore: () => mocks.phone,
 }))
 
 describe('app store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    mocks.saveDeviceNamespace.mockReset()
+    mocks.phone.device.imei = 'phone-a'
+    mocks.phone.isOpen = true
+    mocks.phone.saveDeviceNamespace.mockReset()
   })
 
   afterEach(() => {
@@ -32,7 +38,7 @@ describe('app store', () => {
     apps.recordLaunch('mail')
 
     expect(apps.launchCounts).toEqual({ mail: 4 })
-    expect(mocks.saveDeviceNamespace).toHaveBeenCalledWith('apps', {
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledWith('apps', {
       claimedApps: ['snake'],
       homeLayout: apps.homeLayout,
       launchCounts: { mail: 4 },
@@ -54,7 +60,7 @@ describe('app store', () => {
     vi.advanceTimersByTime(1)
     expect(apps.installingApps.snake).toBeUndefined()
     expect(apps.claimedApps).toEqual(['snake'])
-    expect(mocks.saveDeviceNamespace).toHaveBeenCalledWith('apps', {
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledWith('apps', {
       claimedApps: ['snake'],
       homeLayout: apps.homeLayout,
       launchCounts: {},
@@ -71,7 +77,7 @@ describe('app store', () => {
     vi.advanceTimersByTime(3000)
 
     expect(apps.claimedApps).toEqual(['memory', 'snake'])
-    expect(mocks.saveDeviceNamespace).toHaveBeenCalledTimes(1)
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
   })
 
   it('reinstalls core and claimed apps removed from the Home Screen', () => {
@@ -81,7 +87,7 @@ describe('app store', () => {
     apps.hydrate({ claimedApps: ['memory'] })
     apps.removeHomeApp('notes')
     apps.removeHomeApp('memory')
-    mocks.saveDeviceNamespace.mockClear()
+    mocks.phone.saveDeviceNamespace.mockClear()
 
     apps.installApp('notes')
     apps.installApp('memory')
@@ -96,13 +102,13 @@ describe('app store', () => {
     expect(apps.homeLayout.grid).toContain('notes')
     expect(apps.homeLayout.grid).toContain('memory')
     expect(apps.claimedApps).toEqual(['memory'])
-    expect(mocks.saveDeviceNamespace).toHaveBeenCalledTimes(2)
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(2)
   })
 
   it('prevents protected apps from being removed from the Home Screen', () => {
     const apps = useAppStoreStore()
     apps.hydrate(null)
-    mocks.saveDeviceNamespace.mockClear()
+    mocks.phone.saveDeviceNamespace.mockClear()
 
     expect([...NON_REMOVABLE_PHONE_APP_IDS]).toEqual([
       'app-store',
@@ -118,7 +124,7 @@ describe('app store', () => {
       expect(apps.homeLayout.hidden).not.toContain(appId)
     }
 
-    expect(mocks.saveDeviceNamespace).not.toHaveBeenCalled()
+    expect(mocks.phone.saveDeviceNamespace).not.toHaveBeenCalled()
   })
 
   it('restores protected apps hidden by older persisted layouts', () => {
@@ -129,7 +135,7 @@ describe('app store', () => {
 
     expect(apps.homeLayout.hidden).not.toContain('mail')
     expect(apps.homeLayout.grid).toContain('mail')
-    expect(mocks.saveDeviceNamespace).toHaveBeenCalledWith('apps', {
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledWith('apps', {
       claimedApps: [],
       homeLayout: apps.homeLayout,
       launchCounts: {},
@@ -147,10 +153,54 @@ describe('app store', () => {
     apps.removeHomeApp('notes')
     expect(apps.homeLayout.grid).not.toContain('notes')
     expect(apps.homeLayout.hidden).toContain('notes')
-    expect(mocks.saveDeviceNamespace).toHaveBeenLastCalledWith('apps', {
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenLastCalledWith('apps', {
       claimedApps: [],
       homeLayout: apps.homeLayout,
       launchCounts: {},
     })
+  })
+
+  it('does not commit an installation to a different phone', () => {
+    vi.useFakeTimers()
+    const apps = useAppStoreStore()
+
+    apps.installApp('snake')
+    mocks.phone.device.imei = 'phone-b'
+    vi.advanceTimersByTime(3000)
+
+    expect(apps.installingApps).toEqual({})
+    expect(apps.claimedApps).toEqual([])
+    expect(mocks.phone.saveDeviceNamespace).not.toHaveBeenCalled()
+  })
+
+  it('cancels installation timers when hydration changes device scope', () => {
+    vi.useFakeTimers()
+    const apps = useAppStoreStore()
+
+    apps.installApp('snake')
+    expect(vi.getTimerCount()).toBe(1)
+
+    mocks.phone.device.imei = 'phone-b'
+    apps.hydrate(null)
+    expect(vi.getTimerCount()).toBe(0)
+
+    vi.advanceTimersByTime(3000)
+    expect(apps.claimedApps).toEqual([])
+    expect(mocks.phone.saveDeviceNamespace).not.toHaveBeenCalled()
+  })
+
+  it('cancels installation timers when the phone closes', () => {
+    vi.useFakeTimers()
+    const apps = useAppStoreStore()
+
+    apps.installApp('snake')
+    mocks.phone.isOpen = false
+    apps.cancelPendingInstalls()
+
+    expect(vi.getTimerCount()).toBe(0)
+    expect(apps.installingApps).toEqual({})
+    vi.advanceTimersByTime(3000)
+    expect(apps.claimedApps).toEqual([])
+    expect(mocks.phone.saveDeviceNamespace).not.toHaveBeenCalled()
   })
 })

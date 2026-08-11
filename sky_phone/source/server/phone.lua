@@ -701,6 +701,7 @@ function SkyPhone.RequireDeviceSession(source)
 
     local matches = find_device_slots(source, session.imei)
     if not matches[1] then
+        SkyPhoneCompanies.ClearCallAvailability(source)
         sessions[source] = nil
         TriggerClientEvent("sky_phone:device:invalidated", source)
         return nil, { success = false, error = "device_not_owned" }
@@ -880,6 +881,9 @@ local function open_phone(source, used_item)
     end
 
     local security = load_device_security(imei)
+    if sessions[source] and sessions[source].imei ~= imei then
+        SkyPhoneCompanies.ClearCallAvailability(source)
+    end
     sessions[source] = {
         imei = imei,
         slot = slot.slot,
@@ -908,6 +912,9 @@ function SkyPhone.OpenDeviceForCall(source, imei)
         return false
     end
     local security = load_device_security(imei)
+    if sessions[source] and sessions[source].imei ~= imei then
+        SkyPhoneCompanies.ClearCallAvailability(source)
+    end
     sessions[source] = {
         imei = imei,
         slot = matches[1].slot,
@@ -934,7 +941,20 @@ Bridge.Debug(
 )
 
 Bridge.Callbacks.Register("sky_phone:device:close", function(source)
+    SkyPhoneCompanies.ClearCallAvailability(source)
     sessions[source] = nil
+    return { success = true }
+end)
+
+Bridge.Callbacks.Register("sky_phone:device:notification-open", function(source, data)
+    if not SkyPhone.AllowOperation(source, "notification_open", 10, 60)
+        or type(data) ~= "table" or type(data.imei) ~= "string"
+    then
+        return { success = false, error = "invalid_request" }
+    end
+    if not SkyPhone.OpenDeviceForCall(source, data.imei) then
+        return { success = false, error = "device_not_owned" }
+    end
     return { success = true }
 end)
 
@@ -1246,6 +1266,10 @@ Bridge.Callbacks.Register("sky_phone:device:factory-reset", function(source)
             params = { session.imei },
         },
         {
+            query = "DELETE FROM `sky_phone_custom_app_data` WHERE `device_imei` = ?",
+            params = { session.imei },
+        },
+        {
             query = "DELETE FROM `sky_phone_notes` WHERE `device_imei` = ? AND `account_id` IS NULL",
             params = { session.imei },
         },
@@ -1287,6 +1311,7 @@ Bridge.Callbacks.Register("sky_phone:device:factory-reset", function(source)
 end)
 
 AddEventHandler("playerDropped", function()
+    SkyPhoneCompanies.ClearCallAvailability(source)
     sessions[source] = nil
     auth_attempts[source] = nil
     operation_attempts[source] = nil

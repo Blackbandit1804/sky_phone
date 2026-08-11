@@ -20,6 +20,7 @@ import type { MediaType, PhoneMedia, UploadResult } from '@/types/media'
 import { createGameView, type GameView } from '@/utils/gameView'
 import { formatRecordingDuration, mediaErrorKey } from '@/utils/media'
 import { nuiCall } from '@/utils/nui'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type CaptureItem = {
   error?: string
@@ -317,6 +318,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   const message = event.data as {
     data?: Record<string, unknown>
     type?: string

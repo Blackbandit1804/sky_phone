@@ -29,6 +29,9 @@ end
 local function reserve_sim(sim_type, is_virtual)
     local sim_id
     local number = SkyPhoneSimNumber.Reserve(uuid, function(candidate)
+        if SkyPhoneCompanies.IsServiceNumber(candidate) then
+            return false
+        end
         sim_id = uuid()
         local result = Bridge.Database.Query([[
             INSERT IGNORE INTO `sky_phone_sims` (`id`, `phone_number`, `sim_type`, `is_virtual`)
@@ -177,6 +180,15 @@ local function ensure_sim(source, slot, sim_type)
     ) then
         return nil, "invalid_sim"
     end
+    if sim and SkyPhoneCompanies.IsServiceNumber(sim.phone_number) then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] SIM %s uses reserved company service number %s.",
+            tostring(sim.id),
+            tostring(sim.phone_number)
+        )
+        return nil, "invalid_sim"
+    end
     if not sim then
         sim = reserve_sim(sim_type)
         if not Bridge.Inventory.SetSlotMetadata(source, slot.slot, sim_metadata(sim)) then
@@ -236,6 +248,16 @@ local function insert_sim(source, phone_imei, confirmed)
     if not pending or GetGameTimer() - pending.created_at > 60000 then
         pending_insertions[source] = nil
         return { success = false, error = "sim_request_expired" }
+    end
+    if SkyPhoneCompanies.IsServiceNumber(pending.sim.phone_number) then
+        pending_insertions[source] = nil
+        Bridge.Debug(
+            "error",
+            "[sky_phone] Refused to insert SIM %s with reserved company service number %s.",
+            tostring(pending.sim.id),
+            tostring(pending.sim.phone_number)
+        )
+        return { success = false, error = "invalid_sim" }
     end
     local sim_slot = Bridge.Inventory.GetSlot(source, pending.slot)
     if not sim_slot or sim_slot.name ~= pending.item_name or not sim_slot.metadata
@@ -311,6 +333,7 @@ local function insert_sim(source, phone_imei, confirmed)
     pending_insertions[source] = nil
     operation_locks[source] = nil
     if old_sim then
+        SkyPhoneCompanies.ClearCallAvailability(source)
         SkyPhoneCalls.EndForSim(old_sim.id, "sim_removed")
     end
     SkyPhone.RefreshDevice(phone_imei)
@@ -426,6 +449,7 @@ Bridge.Callbacks.Register("sky_phone:sim:eject", function(source)
         return { success = false, error = "request_failed" }
     end
     operation_locks[source] = nil
+    SkyPhoneCompanies.ClearCallAvailability(source)
     SkyPhoneCalls.EndForSim(sim.id, "sim_removed")
     SkyPhone.RefreshDevice(session.imei)
     return { success = true }

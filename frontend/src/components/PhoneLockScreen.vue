@@ -19,6 +19,7 @@ const emit = defineEmits<{
   camera: []
   clearNotifications: []
   dismissNotification: [id: string]
+  openNotification: [notification: PhoneNotification]
   unlock: []
 }>()
 
@@ -72,15 +73,17 @@ const flashlightShortcutColors = computed(() =>
 function onPointerDown(event: PointerEvent): void {
   if (props.preview) return
   if (
-    (event.target as HTMLElement).closest(
-      'button, .lock-screen__notifications',
-    )
+    (event.target as HTMLElement).closest('button, .lock-screen__notifications')
   )
     return
   pointerStart = event.clientY
   pointerStartedAt = Date.now()
   dragging.value = true
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+
+function openNotification(notification: PhoneNotification): void {
+  if (notification.route) emit('openNotification', notification)
 }
 
 function onPointerMove(event: PointerEvent): void {
@@ -194,7 +197,16 @@ onBeforeUnmount(() => {
         v-for="notification in props.notifications"
         :key="notification.id"
         class="lock-screen__notification"
+        :class="{ 'is-actionable': !!notification.route }"
         :highlight="false"
+        :role="notification.route ? 'button' : undefined"
+        :tabindex="notification.route ? 0 : undefined"
+        :aria-label="
+          notification.route ? phone.t('Notifications.open') : undefined
+        "
+        @click="openNotification(notification)"
+        @keydown.enter.prevent="openNotification(notification)"
+        @keydown.space.prevent="openNotification(notification)"
       >
         <img
           v-if="getPhoneApp(notification.appId)?.iconImage"
@@ -207,7 +219,9 @@ onBeforeUnmount(() => {
             <strong>{{ notification.title }}</strong>
             <span>{{ phone.t('Notifications.now') }}</span>
           </div>
-          <small v-if="notification.subtitle">{{ notification.subtitle }}</small>
+          <small v-if="notification.subtitle">{{
+            notification.subtitle
+          }}</small>
           <p>{{ notification.text }}</p>
         </div>
         <button

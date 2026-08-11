@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import payphoneFrame from '@/assets/img/payphone/american-payphone-frame.png'
 import { nuiCall } from '@/utils/nui'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type PayphoneState =
   | 'idle'
@@ -214,6 +215,7 @@ async function close(): Promise<void> {
 }
 
 function onMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (event.data?.type === 'payphone:open' && event.data.data) {
     const payload = event.data.data as PayphoneOpenPayload
     currency.value = payload.currency
