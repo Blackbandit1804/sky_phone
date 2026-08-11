@@ -1331,7 +1331,7 @@ onBeforeUnmount(() => {
             "
           />
           <k-list-item
-            v-if="phone.device?.sim"
+            v-if="phone.device?.sim?.removable"
             :title="phone.t('Apps.settings.simType')"
             :after="
               phone.t(
@@ -1342,7 +1342,7 @@ onBeforeUnmount(() => {
             "
           />
           <k-list-button
-            v-if="phone.device?.sim"
+            v-if="phone.device?.sim?.removable"
             @click="simEjectOpened = true"
           >
             {{ phone.t('Apps.settings.ejectSim') }}
@@ -1604,7 +1604,11 @@ onBeforeUnmount(() => {
     </template>
   </k-dialog>
 
-  <k-dialog :opened="simEjectOpened" @backdropclick="simEjectOpened = false">
+  <k-dialog
+    v-if="phone.device?.sim?.removable"
+    :opened="simEjectOpened"
+    @backdropclick="simEjectOpened = false"
+  >
     <template #title>{{ phone.t('Apps.settings.ejectSim') }}</template>
     <p>{{ phone.t('Apps.settings.ejectSimBody') }}</p>
     <template #buttons>

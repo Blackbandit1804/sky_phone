@@ -5106,6 +5106,7 @@ app.post('/api/:endpoint', (request, response) => {
           sim: {
             id: 'development-sim',
             number: '5551234567',
+            removable: true,
             registered: true,
             type: 'registered',
           },

@@ -3,6 +3,7 @@ export type SimType = 'registered' | 'anonymous'
 export type PhoneSim = {
   id: string
   number: string
+  removable: boolean
   registered: boolean
   type: SimType
 }

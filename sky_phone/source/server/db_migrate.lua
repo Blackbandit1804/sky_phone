@@ -122,6 +122,7 @@ local schema = {
             { name = "contact_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "phone_number", type = "VARCHAR(24) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "sim_type", type = "ENUM('registered', 'anonymous') NOT NULL" },
+            { name = "is_virtual", type = "TINYINT(1) NOT NULL DEFAULT 0" },
             { name = "owner_identifier", type = "VARCHAR(80) NULL" },
             { name = "owner_firstname", type = "VARCHAR(80) NULL" },
             { name = "owner_lastname", type = "VARCHAR(80) NULL" },
@@ -169,6 +170,39 @@ local schema = {
             {
                 column = "sim_id",
                 references = "`sky_phone_sims` (`id`) ON DELETE SET NULL",
+            },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_character_devices",
+        columns = {
+            {
+                name = "owner_identifier",
+                type = "VARCHAR(80) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            {
+                name = "device_imei",
+                type = "CHAR(15) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            {
+                name = "updated_at",
+                type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            },
+        },
+        primaryKey = "owner_identifier",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_character_devices_device", columns = "(`device_imei`)" },
+        },
+        foreignKeys = {
+            {
+                column = "device_imei",
+                references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE",
             },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
