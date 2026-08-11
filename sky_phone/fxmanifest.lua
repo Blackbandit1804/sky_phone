@@ -13,12 +13,6 @@ provide 'high-phone'
 provide 'qs-smartphone'
 provide 'yseries'
 
-escrow_ignore {
-    'config/**',
-    'custom_apps/**',
-    'source/bridge/**',
-}
-
 shared_scripts {
     'config/init.lua',
     'source/bridge/shared.lua',
@@ -26,7 +20,6 @@ shared_scripts {
     'source/shared/sim_number.lua',
     'source/shared/custom_apps.lua',
     'source/shared/custom_app_compat.lua',
-    'custom_apps/**/manifest.lua',
 }
 
 client_scripts {
@@ -46,7 +39,6 @@ client_scripts {
     'source/client/payphones.lua',
     'source/client/custom_apps.lua',
     'source/client/custom_app_compat.lua',
-    'custom_apps/**/client.lua',
     'source/client/main.lua',
     'source/client/radio.lua',
 }
@@ -96,7 +88,6 @@ server_scripts {
     'source/server/calendar.lua',
     'source/server/music.lua',
     'source/server/radio.lua',
-    'custom_apps/**/server.lua',
 }
 
 files {
@@ -104,8 +95,6 @@ files {
     'source/html/assets/**',
     'source/html/img/**',
     'config/music/**',
-    'custom_apps/**/web/**',
-    'custom_apps/_sdk/**',
 }
 
 ui_page 'source/html/index.html'
