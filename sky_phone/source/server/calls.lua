@@ -333,8 +333,8 @@ function SkyPhoneCalls.CopyCloudToDevice(account_id, imei)
         {
             query = [[
                 INSERT INTO `sky_phone_contacts`
-                    (`id`, `contact_id`, `device_imei`, `name`, `phone_number`, `created_at`, `updated_at`)
-                SELECT UUID(), `contact_id`, ?, `name`, `phone_number`, `created_at`, `updated_at`
+                    (`id`, `contact_id`, `device_imei`, `name`, `notes`, `organization`, `phone_number`, `avatar_media_id`, `favorite`, `created_at`, `updated_at`)
+                SELECT UUID(), `contact_id`, ?, `name`, `notes`, `organization`, `phone_number`, NULL, `favorite`, `created_at`, `updated_at`
                 FROM `sky_phone_contacts` WHERE `account_id` = ?
             ]],
             params = { imei, account_id },
@@ -358,7 +358,9 @@ Bridge.Callbacks.Register("sky_phone:contacts:list", function(source)
     end
     local condition, params = scope_condition(scope)
     local rows = Bridge.Database.Query(([[
-        SELECT `contact_id` AS `id`, `name`, `phone_number`, `created_at`, `updated_at`
+        SELECT `contact_id` AS `id`, `name`, `notes`, `organization`, `phone_number`, `avatar_media_id`, `favorite`,
+            (SELECT media.`url` FROM `sky_phone_media` media WHERE media.`id` = `avatar_media_id`) AS `avatar_url`,
+            `created_at`, `updated_at`
         FROM `sky_phone_contacts` WHERE %s ORDER BY LOWER(`name`), `phone_number`
     ]]):format(condition), params)
     local system_contacts = SkyPhoneCompanies.GetSystemContacts()
@@ -393,8 +395,11 @@ Bridge.Callbacks.Register("sky_phone:contacts:save", function(source, data)
         return error_response
     end
     local name = trim(data.name)
+    local notes = trim(data.notes) or ""
+    local organization = trim(data.organization) or ""
     local number = SkyPhoneSimNumber.Normalize(data.phoneNumber, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
-    if not name or name == "" or #name > Config.Calls.ContactNameMaxLength or not number then
+    local avatar_media_id = tonumber(data.avatarMediaId) or 0
+    if not name or name == "" or #name > Config.Calls.ContactNameMaxLength or #notes > Config.Calls.ContactNotesMaxLength or #organization > Config.Calls.ContactNameMaxLength or not number then
         return { success = false, error = "invalid_contact" }
     end
     if (type(data.id) == "string" and data.id:sub(1, 8) == "company:")
@@ -407,6 +412,17 @@ Bridge.Callbacks.Register("sky_phone:contacts:save", function(source, data)
         )
         return { success = false, error = "readonly_contact" }
     end
+    if avatar_media_id < 0 or avatar_media_id ~= math.floor(avatar_media_id) then
+        return { success = false, error = "invalid_contact" }
+    end
+    local avatar_url
+    if avatar_media_id > 0 then
+        local media_error
+        avatar_url, media_error = SkyPhoneMedia.ResolveOwnedMedia(source, tostring(avatar_media_id), "photo")
+        if not avatar_url then
+            return { success = false, error = media_error }
+        end
+    end
     local condition, condition_params = scope_condition(scope)
     local id = type(data.id) == "string" and data.id or uuid()
     if data.id then
@@ -418,24 +434,63 @@ Bridge.Callbacks.Register("sky_phone:contacts:save", function(source, data)
         if not owned[1] then
             return { success = false, error = "contact_not_found" }
         end
-        local params = { name, number, id }
+        local params = { name, notes, organization, number, avatar_media_id, id }
         for _, value in ipairs(condition_params) do
             params[#params + 1] = value
         end
         Bridge.Database.Query(([[
-            UPDATE `sky_phone_contacts` SET `name` = ?, `phone_number` = ?
+            UPDATE `sky_phone_contacts` SET `name` = ?, `notes` = NULLIF(?, ''), `organization` = NULLIF(?, ''), `phone_number` = ?, `avatar_media_id` = NULLIF(?, 0)
             WHERE `contact_id` = ? AND %s
         ]]):format(condition), params)
     else
         Bridge.Database.Query([[
-            INSERT INTO `sky_phone_contacts` (`id`, `contact_id`, `account_id`, `device_imei`, `name`, `phone_number`)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ]], { uuid(), id, scope.account_id, scope.device_imei, name, number })
+            INSERT INTO `sky_phone_contacts` (`id`, `contact_id`, `account_id`, `device_imei`, `name`, `notes`, `organization`, `phone_number`, `avatar_media_id`)
+            VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, NULLIF(?, 0))
+        ]], { uuid(), id, scope.account_id, scope.device_imei, name, notes, organization, number, avatar_media_id })
     end
     if scope.account_id then
         SkyPhone.NotifyAccount(scope.account_id, "sky_phone:contacts:changed", {})
     end
-    return { success = true, data = { id = id, name = name, phone_number = number } }
+    return {
+        success = true,
+        data = {
+            id = id,
+            name = name,
+            notes = notes ~= "" and notes or nil,
+            organization = organization ~= "" and organization or nil,
+            phone_number = number,
+            avatar_media_id = avatar_media_id > 0 and avatar_media_id or nil,
+            avatar_url = avatar_url,
+        },
+    }
+end)
+
+Bridge.Callbacks.Register("sky_phone:contacts:favorite", function(source, data)
+    if not SkyPhone.AllowOperation(source, "contact_favorite", 60, 60) or type(data) ~= "table" or type(data.id) ~= "string" or type(data.favorite) ~= "boolean" then
+        return { success = false, error = "invalid_request" }
+    end
+    local scope, error_response = current_scope(source)
+    if not scope then
+        return error_response
+    end
+    local condition, condition_params = scope_condition(scope)
+    local owned_params = { data.id }
+    for _, value in ipairs(condition_params) do
+        owned_params[#owned_params + 1] = value
+    end
+    local owned = Bridge.Database.Query(("SELECT `id` FROM `sky_phone_contacts` WHERE `contact_id` = ? AND %s LIMIT 1"):format(condition), owned_params)
+    if not owned[1] then
+        return { success = false, error = "contact_not_found" }
+    end
+    local params = { data.favorite and 1 or 0, data.id }
+    for _, value in ipairs(condition_params) do
+        params[#params + 1] = value
+    end
+    Bridge.Database.Query(("UPDATE `sky_phone_contacts` SET `favorite` = ? WHERE `contact_id` = ? AND %s"):format(condition), params)
+    if scope.account_id then
+        SkyPhone.NotifyAccount(scope.account_id, "sky_phone:contacts:changed", {})
+    end
+    return { success = true, data = { id = data.id, favorite = data.favorite } }
 end)
 
 Bridge.Callbacks.Register("sky_phone:contacts:delete", function(source, data)
@@ -728,9 +783,18 @@ handle_no_answer = function(call)
     end
 end
 
-local function lock_direct_target(caller_source, target)
+local function lock_direct_target(caller_source, target, caller_sim_id)
     if not target or not target.imei then
         return nil, "unavailable"
+    end
+    if caller_sim_id then
+        local blocks = Bridge.Database.Query([[
+            SELECT 1 FROM `sky_phone_call_blocks`
+            WHERE `blocker_sim_id` = ? AND `blocked_sim_id` = ? LIMIT 1
+        ]], { target.id, caller_sim_id })
+        if blocks[1] then
+            return nil, "declined"
+        end
     end
     local callee_source = find_device_holder(target.imei)
     if not callee_source or callee_source == caller_source then
@@ -805,7 +869,7 @@ function SkyPhoneCalls.StartCompanyCall(source, company_id, customer_number)
         WHERE s.`phone_number` = ? LIMIT 1
     ]], { number })
     local target = targets[1]
-    local callee_source, target_status = lock_direct_target(source, target)
+    local callee_source, target_status = lock_direct_target(source, target, scope.device.sim_id)
     if not callee_source then
         local terminal = create_terminal_call(scope, number, target, target_status, service_line.number)
         dialing_by_sim[scope.device.sim_id] = nil
@@ -928,7 +992,12 @@ Bridge.Callbacks.Register("sky_phone:calls:dial", function(source, data)
         WHERE s.`phone_number` = ? LIMIT 1
     ]], { number })
     local target = targets[1]
-    local callee_source, target_status = lock_direct_target(source, target)
+    if not target then
+        dialing_by_sim[scope.device.sim_id] = nil
+        dial_locks[source] = nil
+        return { success = false, error = "recipient_not_found" }
+    end
+    local callee_source, target_status = lock_direct_target(source, target, scope.device.sim_id)
     if not callee_source then
         local terminal = create_terminal_call(scope, number, target, target_status)
         dialing_by_sim[scope.device.sim_id] = nil
@@ -1166,6 +1235,51 @@ Bridge.Callbacks.Register("sky_phone:calls:hangup", function(source, data)
         return { success = true }
     end
     finish_call(call, call.answered_at and "completed" or "cancelled")
+    return { success = true }
+end)
+
+Bridge.Callbacks.Register("sky_phone:calls:block", function(source, data)
+    if not SkyPhone.AllowOperation(source, "call_block", 10, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local scope, error_response = current_scope(source)
+    if not scope then
+        return error_response
+    end
+    if not scope.device.sim_id then
+        return { success = false, error = "no_sim" }
+    end
+    local number = type(data) == "table" and SkyPhoneSimNumber.Normalize(
+        data.phoneNumber,
+        Config.Sim.NumberLength,
+        Config.Sim.NumberPrefix
+    ) or nil
+    if not number then
+        return { success = false, error = "invalid_number" }
+    end
+    if number == scope.device.phone_number then
+        return { success = false, error = "self_call" }
+    end
+    local rows = Bridge.Database.Query(
+        "SELECT `id` FROM `sky_phone_sims` WHERE `phone_number` = ? LIMIT 1",
+        { number }
+    )
+    if not rows[1] then
+        return { success = false, error = "recipient_not_found" }
+    end
+    Bridge.Database.Query([[
+        INSERT IGNORE INTO `sky_phone_call_blocks` (`blocker_sim_id`, `blocked_sim_id`)
+        VALUES (?, ?)
+    ]], { scope.device.sim_id, rows[1].id })
+
+    local call_id = active_by_source[source]
+    local call = call_id and calls[call_id] or nil
+    if call then
+        local other_number = source == call.caller_source and call.callee_number or call.caller_number
+        if other_number == number then
+            finish_call(call, call.answered_at and "completed" or "declined")
+        end
+    end
     return { success = true }
 end)
 

@@ -9,11 +9,26 @@ end
 local ESX = exports["es_extended"]:getSharedObject()
 local metadata_key = "sky_phone_inventory"
 
-ESX.AddItems({
+local inventory_items = {
     { name = Config.Phone.Item, label = Config.Phone.DeviceName, weight = 100, rare = false, canRemove = true },
-    { name = Config.Sim.RegisteredItem, label = "Registered SIM", weight = 5, rare = false, canRemove = true },
-    { name = Config.Sim.AnonymousItem, label = "Anonymous SIM", weight = 5, rare = false, canRemove = true },
-})
+}
+if Config.Sim.Enabled ~= false then
+    inventory_items[#inventory_items + 1] = {
+        name = Config.Sim.RegisteredItem,
+        label = "Registered SIM",
+        weight = 5,
+        rare = false,
+        canRemove = true,
+    }
+    inventory_items[#inventory_items + 1] = {
+        name = Config.Sim.AnonymousItem,
+        label = "Anonymous SIM",
+        weight = 5,
+        rare = false,
+        canRemove = true,
+    }
+end
+ESX.AddItems(inventory_items)
 
 local function get_player(source)
     return ESX.GetPlayerFromId(source)

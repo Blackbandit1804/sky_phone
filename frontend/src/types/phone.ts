@@ -3,18 +3,24 @@ export type SimType = 'registered' | 'anonymous'
 export type PhoneSim = {
   id: string
   number: string
+  removable: boolean
   registered: boolean
   type: SimType
 }
 
 export type PhoneContact = {
+  avatar_media_id?: number | null
+  avatar_url?: string | null
   canCall?: boolean
   canMessage?: boolean
   companyId?: string
   created_at?: string
+  favorite?: boolean | number
   id: string
   icon?: string
   name: string
+  notes?: string | null
+  organization?: string | null
   phone_number: string
   readonly?: boolean
   source?: 'personal' | 'company'

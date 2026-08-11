@@ -261,6 +261,9 @@ const notifications = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
 const isAppRoute = computed(() => route.name === 'app')
+const showActiveCallReturn = computed(
+  () => Boolean(calls.activeCall) && route.params.appId !== 'phone',
+)
 const appTransitionName = computed(() =>
   route.query.transition === 'app-switch' ? 'app-switch' : 'app-window',
 )
@@ -407,6 +410,7 @@ async function hydrateDevelopmentPhone(): Promise<void> {
       sim: {
         id: 'development-sim',
         number: '5551234567',
+        removable: true,
         registered: true,
         type: 'registered',
       },
@@ -974,6 +978,12 @@ function lockPhone(): void {
   isLocked.value = true
 }
 
+function returnToActiveCall(): void {
+  if (!calls.activeCall) return
+  controlCenterOpened.value = false
+  void router.push('/apps/phone')
+}
+
 function unlockCamera(): void {
   if (phone.security.enabled) {
     pendingUnlockRoute.value = '/apps/camera'
@@ -1205,8 +1215,10 @@ onBeforeUnmount(() => {
               >
                 <PhoneStatusBar
                   v-if="!isLocked"
+                  :active-call-return="showActiveCallReturn"
                   :control-center-opened="controlCenterOpened"
                   lockable
+                  @active-call="returnToActiveCall"
                   @control-center="toggleControlCenter"
                   @lock="lockPhone"
                 />

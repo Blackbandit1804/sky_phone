@@ -3,9 +3,12 @@ Bridge.Debug("debug", "[sky_phone] Server initialization started after database 
 
 SkyPhone = {}
 
+local unique_phones = Config.Phone.Unique ~= false
+local sim_cards_enabled = Config.Sim.Enabled ~= false
 local sessions = {}
 local auth_attempts = {}
 local operation_attempts = {}
+local character_device_cache = {}
 local max_device_data_bytes = 100000
 local passcode_pepper = GetConvar(Config.Security.PasscodePepperConvar, "")
 if passcode_pepper == "" then
@@ -64,9 +67,130 @@ local function reserve_imei()
     return imei
 end
 
+local function character_identifier(source)
+    local identifier = Bridge.Framework.GetIdentifier(source)
+    if identifier == nil then
+        return nil
+    end
+
+    identifier = tostring(identifier)
+    if identifier == "" or #identifier > 80 then
+        Bridge.Debug(
+            "warn",
+            "[sky_phone] Could not resolve a valid character identifier for source %s.",
+            tostring(source)
+        )
+        return nil
+    end
+    return identifier
+end
+
+local function load_character_device(source, identifier)
+    identifier = identifier or character_identifier(source)
+    if not identifier then
+        return nil, "player_unavailable"
+    end
+
+    local cached = character_device_cache[source]
+    if cached and cached.identifier == identifier then
+        return cached.imei, nil, identifier
+    end
+
+    local rows = Bridge.Database.Query([[
+        SELECT `device_imei`
+        FROM `sky_phone_character_devices`
+        WHERE `owner_identifier` = ?
+        LIMIT 1
+    ]], { identifier })
+    local imei = rows[1] and rows[1].device_imei or nil
+    if imei then
+        character_device_cache[source] = { identifier = identifier, imei = imei }
+    else
+        character_device_cache[source] = nil
+    end
+    return imei, nil, identifier
+end
+
+local function cache_character_device(source, identifier, imei)
+    character_device_cache[source] = { identifier = identifier, imei = imei }
+    return imei
+end
+
+local function map_character_device(source, slot)
+    local mapped_imei, error_code, identifier = load_character_device(source)
+    if error_code or mapped_imei then
+        return mapped_imei, error_code
+    end
+
+    -- On the first switch from unique to shared phones, adopt the currently used
+    -- legacy device when it has not already been claimed by another character.
+    local legacy_imei = slot.metadata and slot.metadata.imei or nil
+    if SkyPhoneImei.IsValid(legacy_imei) then
+        Bridge.Database.Query([[
+            INSERT IGNORE INTO `sky_phone_devices` (`imei`, `device_name`)
+            VALUES (?, ?)
+        ]], { legacy_imei, Config.Phone.DeviceName })
+        local result = Bridge.Database.Query([[
+            INSERT IGNORE INTO `sky_phone_character_devices` (`owner_identifier`, `device_imei`)
+            VALUES (?, ?)
+        ]], { identifier, legacy_imei })
+        if affected_rows(result) == 1 then
+            return cache_character_device(source, identifier, legacy_imei)
+        end
+
+        mapped_imei = load_character_device(source, identifier)
+        if mapped_imei then
+            return mapped_imei
+        end
+    end
+
+    local imei = reserve_imei()
+    local result = Bridge.Database.Query([[
+        INSERT IGNORE INTO `sky_phone_character_devices` (`owner_identifier`, `device_imei`)
+        VALUES (?, ?)
+    ]], { identifier, imei })
+    if affected_rows(result) == 1 then
+        return cache_character_device(source, identifier, imei)
+    end
+
+    -- Another simultaneous open may have created the mapping first. Keep its
+    -- winner and remove only the fresh, unmapped device reserved by this call.
+    mapped_imei = load_character_device(source, identifier)
+    Bridge.Database.Query([[
+        DELETE d FROM `sky_phone_devices` d
+        LEFT JOIN `sky_phone_character_devices` c ON c.`device_imei` = d.`imei`
+        WHERE d.`imei` = ? AND c.`device_imei` IS NULL
+    ]], { imei })
+    if mapped_imei then
+        return mapped_imei
+    end
+
+    Bridge.Debug(
+        "error",
+        "[sky_phone] Could not create a shared device mapping for source %s.",
+        tostring(source)
+    )
+    return nil, "request_failed"
+end
+
 local function find_device_slots(source, imei)
     local matches = {}
-    for _, item in ipairs(Bridge.Inventory.GetSlotsWithItem(source, Config.Phone.Item)) do
+    local slots = Bridge.Inventory.GetSlotsWithItem(source, Config.Phone.Item)
+    if not unique_phones then
+        if not slots[1] then
+            return matches
+        end
+        local mapped_imei = load_character_device(source)
+        if mapped_imei ~= imei then
+            return matches
+        end
+        for _, item in ipairs(slots) do
+            matches[#matches + 1] = item
+        end
+        return matches
+    end
+
+    for _, item in ipairs(slots) do
         if item.metadata and item.metadata.imei == imei then
             matches[#matches + 1] = item
         end
@@ -134,7 +258,7 @@ local function resolve_used_slot(source, used_item)
             { always = true }
         )
     end
-    if #slots == 1 then
+    if #slots == 1 or (not unique_phones and #slots > 0) then
         return slots[1]
     end
 
@@ -159,6 +283,13 @@ local function ensure_device(source, slot)
         tostring(Bridge.Inventory.GetResourceName()),
         { always = true }
     )
+    if not unique_phones then
+        if amount < 1 then
+            return nil, "phone_slot_missing"
+        end
+        return map_character_device(source, slot)
+    end
+
     if amount ~= 1 then
         Bridge.Debug("warn", "[sky_phone] Phone item in slot %s is stacked for source %s.", tostring(slot.slot), tostring(source))
         return nil, "phone_stacked"
@@ -217,7 +348,7 @@ end
 local function load_device(imei)
     local rows = Bridge.Database.Query([[
         SELECT d.`imei`, d.`device_name`, d.`account_id`, d.`sim_id`, d.`created_at`, d.`updated_at`,
-            a.`email`, s.`phone_number`, s.`sim_type`, s.`registered_at`
+            a.`email`, s.`phone_number`, s.`sim_type`, s.`registered_at`, s.`is_virtual` AS `sim_is_virtual`
         FROM `sky_phone_devices` d
         LEFT JOIN `sky_phone_accounts` a ON a.`id` = d.`account_id`
         LEFT JOIN `sky_phone_sims` s ON s.`id` = d.`sim_id`
@@ -370,6 +501,7 @@ local function bootstrap(source, security, security_loaded)
             sim = device.sim_id and {
                 id = device.sim_id,
                 number = device.phone_number,
+                removable = sim_cards_enabled and tonumber(device.sim_is_virtual) ~= 1,
                 type = device.sim_type,
                 registered = device.registered_at ~= nil,
             } or nil,
@@ -648,24 +780,38 @@ function SkyPhone.NotifyAccountDevices(account_id, event_name, data)
         devices[row.imei] = row
     end
 
+    local function notify_device(source, device)
+        local payload = {}
+        for key, value in pairs(data) do
+            payload[key] = value
+        end
+        payload.device = {
+            imei = device.imei,
+            name = device.device_name,
+            settings = device.settings,
+        }
+        TriggerClientEvent(event_name, source, payload)
+    end
+
     for _, player_source in ipairs(Bridge.Framework.GetPlayers()) do
         local source = tonumber(player_source) or player_source
-        local notified_devices = {}
-        for _, item in ipairs(Bridge.Inventory.GetSlotsWithItem(source, Config.Phone.Item)) do
-            local imei = item.metadata and item.metadata.imei
-            local device = imei and devices[imei]
-            if device and not notified_devices[imei] then
-                local payload = {}
-                for key, value in pairs(data) do
-                    payload[key] = value
+        if not unique_phones then
+            if Bridge.Inventory.GetSlotsWithItem(source, Config.Phone.Item)[1] then
+                local imei = load_character_device(source)
+                local device = imei and devices[imei] or nil
+                if device then
+                    notify_device(source, device)
                 end
-                payload.device = {
-                    imei = device.imei,
-                    name = device.device_name,
-                    settings = device.settings,
-                }
-                notified_devices[imei] = true
-                TriggerClientEvent(event_name, source, payload)
+            end
+        else
+            local notified_devices = {}
+            for _, item in ipairs(Bridge.Inventory.GetSlotsWithItem(source, Config.Phone.Item)) do
+                local imei = item.metadata and item.metadata.imei
+                local device = imei and devices[imei]
+                if device and not notified_devices[imei] then
+                    notified_devices[imei] = true
+                    notify_device(source, device)
+                end
             end
         end
     end
@@ -719,6 +865,18 @@ local function open_phone(source, used_item)
             { always = true }
         )
         TriggerClientEvent("sky_phone:device:error", source, error_code)
+        return false
+    end
+    local prepared, prepare_error = SkyPhoneSim.PrepareDevice(source, slot, imei)
+    if not prepared then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] Phone preparation failed for source %s IMEI %s: %s.",
+            tostring(source),
+            imei,
+            tostring(prepare_error)
+        )
+        TriggerClientEvent("sky_phone:device:error", source, prepare_error or "request_failed")
         return false
     end
 
@@ -1157,6 +1315,7 @@ AddEventHandler("playerDropped", function()
     sessions[source] = nil
     auth_attempts[source] = nil
     operation_attempts[source] = nil
+    character_device_cache[source] = nil
 end)
 
 AddEventHandler("onResourceStop", function(resource_name)
@@ -1164,6 +1323,7 @@ AddEventHandler("onResourceStop", function(resource_name)
         sessions = {}
         auth_attempts = {}
         operation_attempts = {}
+        character_device_cache = {}
     end
 end)
 end)
