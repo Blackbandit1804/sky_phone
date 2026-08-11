@@ -2,6 +2,11 @@ if Bridge.Framework.GetName() ~= "esx" then
     return
 end
 
+if GetResourceState("esx_property") ~= "started" then
+    print("[sky_phone] esx_property is not started; the housing provider is disabled.")
+    return
+end
+
 local ESX = exports["es_extended"]:getSharedObject()
 
 local callback_names = {
