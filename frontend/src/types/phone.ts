@@ -9,9 +9,14 @@ export type PhoneSim = {
 }
 
 export type PhoneContact = {
+  avatar_media_id?: number | null
+  avatar_url?: string | null
   created_at?: string
+  favorite?: boolean | number
   id: string
   name: string
+  notes?: string | null
+  organization?: string | null
   phone_number: string
   updated_at?: string
 }

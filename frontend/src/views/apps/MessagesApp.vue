@@ -390,6 +390,8 @@ async function saveContactDetails(): Promise<void> {
   const response = await calls.saveContact({
     id: activeContact.value?.id,
     name: contactNameDraft.value.trim(),
+    notes: activeContact.value?.notes ?? '',
+    organization: activeContact.value?.organization ?? '',
     phoneNumber: contactNumberDraft.value,
   })
   if (!response.success) {

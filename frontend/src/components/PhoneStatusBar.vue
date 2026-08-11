@@ -1,17 +1,23 @@
 <script setup lang="ts">
+import { PhoneCall } from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import PhoneStatusIndicators from '@/components/PhoneStatusIndicators.vue'
 import { usePhoneStore } from '@/stores/phone'
 
 const phone = usePhoneStore()
-withDefaults(
-  defineProps<{ controlCenterOpened?: boolean; lockable?: boolean }>(),
+const props = withDefaults(
+  defineProps<{
+    activeCallReturn?: boolean
+    controlCenterOpened?: boolean
+    lockable?: boolean
+  }>(),
   {
+    activeCallReturn: false,
     controlCenterOpened: false,
     lockable: false,
   },
 )
-const emit = defineEmits<{ controlCenter: []; lock: [] }>()
+const emit = defineEmits<{ activeCall: []; controlCenter: []; lock: [] }>()
 const time = ref('')
 let intervalId: number | undefined
 
@@ -21,6 +27,14 @@ function updateTime(): void {
     hourCycle: 'h23',
     minute: '2-digit',
   }).format(new Date())
+}
+
+function handleTimeClick(): void {
+  if (props.activeCallReturn) {
+    emit('activeCall')
+    return
+  }
+  emit('lock')
 }
 
 onMounted(() => {
@@ -38,10 +52,22 @@ onBeforeUnmount(() => {
     <button
       v-if="lockable"
       class="phone-status-bar__time phone-status-bar__time-button"
+      :class="{
+        'phone-status-bar__time-button--active-call': activeCallReturn,
+      }"
       type="button"
-      :aria-label="phone.t('LockScreen.label')"
-      @click.stop="emit('lock')"
+      :aria-label="
+        phone.t(
+          activeCallReturn ? 'Apps.phone.returnToCall' : 'LockScreen.label',
+        )
+      "
+      @click.stop="handleTimeClick"
     >
+      <PhoneCall
+        v-if="activeCallReturn"
+        class="phone-status-bar__active-call-icon"
+        aria-hidden="true"
+      />
       <time>{{ time }}</time>
     </button>
     <time v-else class="phone-status-bar__time">{{ time }}</time>

@@ -40,6 +40,7 @@ Config.Calls = {
     VoiceProvider = "pma",
     RingSeconds = 30,
     ContactNameMaxLength = 80,
+    ContactNotesMaxLength = 500,
     RecentPageSize = 100,
 }
 

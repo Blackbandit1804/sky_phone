@@ -117,14 +117,24 @@ function queueCapture(id: string, mediaType: MediaType): void {
   captures.value = captures.value.slice(0, 6)
 }
 
-function devMedia(id: string, mediaType: MediaType): PhoneMedia {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1600"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#19354f"/><stop offset="1" stop-color="#d78357"/></linearGradient></defs><rect width="900" height="1600" fill="url(#g)"/><circle cx="680" cy="380" r="210" fill="#ffffff22"/><path d="M0 1200 260 840l180 220 170-170 290 310v400H0z" fill="#102331aa"/></svg>`
-  return {
-    createdAt: Date.now(),
-    id: Number(Date.now()),
-    mediaType,
-    url: `data:image/svg+xml,${encodeURIComponent(svg)}#${id}`,
-  }
+async function completeDevelopmentCapture(
+  correlationId: string,
+  mediaType: MediaType,
+): Promise<void> {
+  const response = await nuiCall<PhoneMedia>('media:devCapture', { mediaType })
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        data: {
+          correlationId,
+          error: response.error,
+          media: response.data,
+          success: response.success,
+        },
+        type: 'media:uploadResult',
+      },
+    }),
+  )
 }
 
 async function requestPhoto(): Promise<void> {
@@ -137,20 +147,7 @@ async function requestPhoto(): Promise<void> {
     shutterActive.value = false
   }, 280)
   if (isDevelopment) {
-    window.setTimeout(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            data: {
-              correlationId: id,
-              media: devMedia(id, 'photo'),
-              success: true,
-            },
-            type: 'media:uploadResult',
-          },
-        }),
-      )
-    }, 700)
+    window.setTimeout(() => void completeDevelopmentCapture(id, 'photo'), 700)
     return
   }
   await nuiCall('media:requestUpload', {
@@ -195,20 +192,7 @@ function stopRecording(): void {
     savingVideo.value = true
     if (recordingTimer !== undefined) window.clearInterval(recordingTimer)
     recordingTimer = undefined
-    window.setTimeout(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            data: {
-              correlationId: id,
-              media: devMedia(id, 'video'),
-              success: true,
-            },
-            type: 'media:uploadResult',
-          },
-        }),
-      )
-    }, 900)
+    window.setTimeout(() => void completeDevelopmentCapture(id, 'video'), 900)
     return
   }
   window.postMessage(

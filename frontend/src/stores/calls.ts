@@ -35,8 +35,11 @@ export const useCallsStore = defineStore('calls', () => {
   }
 
   async function saveContact(contact: {
+    avatarMediaId?: number | null
     id?: string
     name: string
+    notes?: string
+    organization?: string
     phoneNumber: string
   }): Promise<NuiResponse<PhoneContact>> {
     const response = await nuiCall<PhoneContact>('contacts:save', contact)
@@ -58,17 +61,56 @@ export const useCallsStore = defineStore('calls', () => {
 
   async function answer(): Promise<NuiResponse> {
     if (!activeCall.value) return { success: false, error: 'call_not_found' }
-    return nuiCall('calls:answer', { id: activeCall.value.id })
+    const response = await nuiCall('calls:answer', { id: activeCall.value.id })
+    if (response.success && activeCall.value) {
+      activeCall.value = {
+        ...activeCall.value,
+        answeredAt: activeCall.value.answeredAt ?? Date.now(),
+        state: 'connected',
+      }
+    }
+    return response
   }
 
   async function decline(): Promise<boolean> {
     if (!activeCall.value) return false
-    return (await nuiCall('calls:decline', { id: activeCall.value.id })).success
+    const response = await nuiCall('calls:decline', { id: activeCall.value.id })
+    if (response.success) activeCall.value = null
+    return response.success
+  }
+
+  async function setContactFavorite(
+    id: string,
+    favorite: boolean,
+  ): Promise<NuiResponse<{ favorite: boolean; id: string }>> {
+    const response = await nuiCall<{ favorite: boolean; id: string }>(
+      'contacts:favorite',
+      { favorite, id },
+    )
+    if (response.success) await loadContacts()
+    return response
   }
 
   async function hangup(): Promise<boolean> {
     if (!activeCall.value) return false
-    return (await nuiCall('calls:hangup', { id: activeCall.value.id })).success
+    const response = await nuiCall('calls:hangup', { id: activeCall.value.id })
+    if (response.success) {
+      activeCall.value = null
+      await loadRecents()
+    }
+    return response.success
+  }
+
+  async function blockNumber(phoneNumber: string): Promise<NuiResponse> {
+    const response = await nuiCall('calls:block', { phoneNumber })
+    if (
+      response.success &&
+      activeCall.value?.otherNumber === phoneNumber
+    ) {
+      activeCall.value = null
+      await loadRecents()
+    }
+    return response
   }
 
   function applyCallState(call: PhoneCall): void {
@@ -95,6 +137,7 @@ export const useCallsStore = defineStore('calls', () => {
     answer,
     applyCallState,
     bootstrap,
+    blockNumber,
     contacts,
     decline,
     deleteContact,
@@ -104,5 +147,6 @@ export const useCallsStore = defineStore('calls', () => {
     loadRecents,
     recents,
     saveContact,
+    setContactFavorite,
   }
 })

@@ -286,6 +286,7 @@ onBeforeUnmount(() => {
       </div>
       <template v-else-if="billing.detail">
         <kGlass
+          :highlight="false"
           class="billing-detail__hero"
           :class="{
             'billing-detail__hero--paid': billing.detail.status === 'paid',
@@ -439,17 +440,26 @@ onBeforeUnmount(() => {
 
       <template v-else-if="tab === 'overview' && billing.overview">
         <div class="billing-summary">
-          <kGlass class="billing-summary__item billing-summary__item--open">
+          <kGlass
+            :highlight="false"
+            class="billing-summary__item billing-summary__item--open"
+          >
             <ReceiptText :size="19" />
             <span>{{ t('summary.open') }}</span>
             <strong>{{ billing.overview.openCount }}</strong>
           </kGlass>
-          <kGlass class="billing-summary__item billing-summary__item--due">
+          <kGlass
+            :highlight="false"
+            class="billing-summary__item billing-summary__item--due"
+          >
             <CalendarDays :size="19" />
             <span>{{ t('summary.due') }}</span>
             <strong>{{ formatMoney(billing.overview.openTotal) }}</strong>
           </kGlass>
-          <kGlass class="billing-summary__item billing-summary__item--overdue">
+          <kGlass
+            :highlight="false"
+            class="billing-summary__item billing-summary__item--overdue"
+          >
             <AlertTriangle :size="19" />
             <span>{{ t('summary.overdue') }}</span>
             <strong>{{ billing.overview.overdueCount }}</strong>
@@ -741,7 +751,7 @@ onBeforeUnmount(() => {
         /></span>
         <h2>{{ t('payment.title') }}</h2>
         <p>{{ t('payment.body', { issuer: billing.detail.issuerLabel }) }}</p>
-        <kGlass class="billing-payment-total">
+        <kGlass :highlight="false" class="billing-payment-total">
           <span>{{ billing.detail.title }}</span>
           <strong>{{
             formatMoney(billing.detail.amount, billing.detail.currency)

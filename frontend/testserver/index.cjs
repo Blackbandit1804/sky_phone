@@ -1045,14 +1045,245 @@ const mockHousingOverview = {
   ],
 }
 
-let contactSequence = 2
+let contactSequence = 40
 const contacts = [
+  {
+    avatar_media_id: 1,
+    avatar_url: 'https://picsum.photos/seed/sky-phone-1/600/800',
+    created_at: isoTime(-42 * 86_400_000),
+    favorite: true,
+    id: 'contact-alex',
+    name: 'Alex Rivera',
+    notes: 'Meeting on Friday at 18:00 near the bank.',
+    organization: 'Maze Bank',
+    phone_number: '5551110001',
+    updated_at: isoTime(-6 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-38 * 86_400_000),
+    id: 'contact-alexander',
+    name: 'Alexander Stone',
+    phone_number: '5551110002',
+    updated_at: isoTime(-8 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-21 * 86_400_000),
+    id: 'contact-andre',
+    name: 'Andre Heinicke',
+    phone_number: '5551110003',
+    updated_at: isoTime(-4 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-34 * 86_400_000),
+    favorite: true,
+    id: 'contact-benni',
+    name: 'Benni Parker',
+    notes: 'Call about the Sultan RS repair estimate.',
+    organization: "Benny's Motor Works",
+    phone_number: '5551110004',
+    updated_at: isoTime(-12 * 86_400_000),
+  },
+  {
+    avatar_media_id: 3,
+    avatar_url: 'https://picsum.photos/seed/sky-phone-3/800/600',
+    created_at: isoTime(-18 * 86_400_000),
+    id: 'contact-bryce',
+    name: 'Bryce Walker',
+    phone_number: '5551110005',
+    updated_at: isoTime(-7 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-27 * 86_400_000),
+    id: 'contact-charlie',
+    name: 'Charlie Davis',
+    phone_number: '5551110006',
+    updated_at: isoTime(-11 * 86_400_000),
+  },
   {
     created_at: '2026-08-04 12:00:00',
     id: 'contact-1',
     name: 'Jenica Chong',
     phone_number: '5558675309',
     updated_at: '2026-08-04 12:00:00',
+  },
+  {
+    created_at: isoTime(-14 * 86_400_000),
+    id: 'contact-morgan',
+    name: 'Morgan Reed',
+    phone_number: '5550192847',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-30 * 86_400_000),
+    id: 'contact-jamie',
+    name: 'Jamie Chen',
+    phone_number: '5559876543',
+    updated_at: isoTime(-30 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-5 * 86_400_000),
+    id: 'contact-mechanic',
+    name: 'Downtown Customs',
+    phone_number: '5550100101',
+    updated_at: isoTime(-5 * 86_400_000),
+  },
+  {
+    avatar_media_id: 4,
+    avatar_url: 'https://picsum.photos/seed/sky-phone-4/800/600',
+    created_at: isoTime(-3 * 86_400_000),
+    favorite: true,
+    id: 'contact-taxi',
+    name: 'Los Santos Taxi',
+    organization: 'Los Santos Taxi Co.',
+    phone_number: '5552222222',
+    updated_at: isoTime(-3 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-22 * 86_400_000),
+    id: 'contact-daniel',
+    name: 'Daniel Price',
+    phone_number: '5551110007',
+    updated_at: isoTime(-3 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-20 * 86_400_000),
+    id: 'contact-emily',
+    name: 'Emily Hart',
+    phone_number: '5551110008',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-31 * 86_400_000),
+    id: 'contact-franklin',
+    name: 'Franklin Miles',
+    phone_number: '5551110009',
+    updated_at: isoTime(-9 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-25 * 86_400_000),
+    id: 'contact-grace',
+    name: 'Grace Carter',
+    phone_number: '5551110010',
+    updated_at: isoTime(-4 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-19 * 86_400_000),
+    id: 'contact-hannah',
+    name: 'Hannah Brooks',
+    phone_number: '5551110011',
+    updated_at: isoTime(-5 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-17 * 86_400_000),
+    id: 'contact-ivan',
+    name: 'Ivan Petrov',
+    phone_number: '5551110012',
+    updated_at: isoTime(-6 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-16 * 86_400_000),
+    id: 'contact-kevin',
+    name: 'Kevin Adams',
+    phone_number: '5551110013',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-15 * 86_400_000),
+    id: 'contact-naomi',
+    name: 'Naomi King',
+    phone_number: '5551110014',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-13 * 86_400_000),
+    id: 'contact-olivia',
+    name: 'Olivia Moore',
+    phone_number: '5551110015',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-12 * 86_400_000),
+    id: 'contact-paul',
+    name: 'Paul Walker',
+    phone_number: '5551110016',
+    updated_at: isoTime(-4 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-11 * 86_400_000),
+    id: 'contact-quinn',
+    name: 'Quinn Bailey',
+    phone_number: '5551110017',
+    updated_at: isoTime(-3 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-10 * 86_400_000),
+    id: 'contact-riley',
+    name: 'Riley Cooper',
+    phone_number: '5551110018',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-9 * 86_400_000),
+    id: 'contact-sofia',
+    name: 'Sofia Bennett',
+    phone_number: '5551110019',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-8 * 86_400_000),
+    id: 'contact-thomas',
+    name: 'Thomas Reed',
+    phone_number: '5551110020',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-7 * 86_400_000),
+    id: 'contact-ursula',
+    name: 'Ursula Grant',
+    phone_number: '5551110021',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-6 * 86_400_000),
+    id: 'contact-victor',
+    name: 'Victor Young',
+    phone_number: '5551110022',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-5 * 86_400_000),
+    id: 'contact-wendy',
+    name: 'Wendy Clark',
+    phone_number: '5551110023',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-4 * 86_400_000),
+    id: 'contact-xavier',
+    name: 'Xavier Cole',
+    phone_number: '5551110024',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-3 * 86_400_000),
+    id: 'contact-yakup',
+    name: 'Yakup Broooooo',
+    phone_number: '5551110025',
+    updated_at: isoTime(-86_400_000),
+  },
+  {
+    created_at: isoTime(-2 * 86_400_000),
+    id: 'contact-zoe',
+    name: 'Zoe Martinez',
+    phone_number: '5551110026',
+    updated_at: isoTime(-86_400_000),
+  },
+  {
+    created_at: isoTime(-86_400_000),
+    id: 'contact-market',
+    name: '24/7 Supermarket',
+    phone_number: '5552470000',
+    updated_at: isoTime(-3_600_000),
   },
 ]
 const attachmentAssets = {
@@ -1182,6 +1413,126 @@ const smsMessages = [
     read_at: null,
     recipient_number: '5558675309',
     sender_number: '5551234567',
+  },
+  {
+    body: 'Das Fahrzeug ist fertig. Du kannst es jederzeit abholen.',
+    created_at: isoTime(-26 * 60 * 60_000),
+    direction: 'received',
+    id: 'sms-customs-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: isoTime(-25 * 60 * 60_000),
+    recipient_number: '5551234567',
+    sender_number: '5550100101',
+  },
+  {
+    body: 'Perfekt, ich komme heute Abend vorbei.',
+    created_at: isoTime(-25 * 60 * 60_000),
+    direction: 'sent',
+    id: 'sms-customs-2',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: isoTime(-25 * 60 * 60_000),
+    recipient_number: '5550100101',
+    sender_number: '5551234567',
+  },
+  {
+    body: 'Treffen wir uns um 20 Uhr am Casino?',
+    created_at: isoTime(-7 * 60 * 60_000),
+    direction: 'received',
+    id: 'sms-morgan-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: isoTime(-6 * 60 * 60_000),
+    recipient_number: '5551234567',
+    sender_number: '5550192847',
+  },
+  {
+    body: 'Ja, passt. Ich bin puenktlich da.',
+    created_at: isoTime(-6 * 60 * 60_000),
+    direction: 'sent',
+    id: 'sms-morgan-2',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: isoTime(-6 * 60 * 60_000),
+    recipient_number: '5550192847',
+    sender_number: '5551234567',
+  },
+  {
+    body: 'Bin in zehn Minuten bei dir.',
+    created_at: isoTime(-95 * 60_000),
+    direction: 'received',
+    id: 'sms-jamie-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: null,
+    recipient_number: '5551234567',
+    sender_number: '5559876543',
+  },
+  {
+    body: 'Dein Taxi wartet vor dem Haupteingang.',
+    created_at: isoTime(-38 * 60_000),
+    direction: 'received',
+    id: 'sms-taxi-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: null,
+    recipient_number: '5551234567',
+    sender_number: '5552222222',
+  },
+  {
+    body: 'Danke, ich komme sofort raus.',
+    created_at: isoTime(-36 * 60_000),
+    direction: 'sent',
+    id: 'sms-taxi-2',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: isoTime(-35 * 60_000),
+    recipient_number: '5552222222',
+    sender_number: '5551234567',
+  },
+  {
+    body: 'Denk bitte an die Unterlagen fuer morgen.',
+    created_at: isoTime(-12 * 60_000),
+    direction: 'received',
+    id: 'sms-alex-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: null,
+    recipient_number: '5551234567',
+    sender_number: '5551110001',
   },
 ]
 const darkChatProfile = {
@@ -1627,44 +1978,33 @@ const deviceData = {
 }
 let mockPasscode = ''
 let mockSecurity = { enabled: false, length: null, lockedUntil: 0 }
-let mockContacts = [
-  {
-    created_at: isoTime(-14 * 86_400_000),
-    id: 'contact-morgan',
-    name: 'Morgan Reed',
-    phone_number: '5550192847',
-    updated_at: isoTime(-2 * 86_400_000),
-  },
-  {
-    created_at: isoTime(-30 * 86_400_000),
-    id: 'contact-jamie',
-    name: 'Jamie Chen',
-    phone_number: '5559876543',
-    updated_at: isoTime(-30 * 86_400_000),
-  },
-  {
-    created_at: isoTime(-5 * 86_400_000),
-    id: 'contact-mechanic',
-    name: 'Downtown Customs',
-    phone_number: '5550100101',
-    updated_at: isoTime(-5 * 86_400_000),
-  },
-  {
-    created_at: isoTime(-3 * 86_400_000),
-    id: 'contact-taxi',
-    name: 'Los Santos Taxi',
-    phone_number: '5552222222',
-    updated_at: isoTime(-3 * 86_400_000),
-  },
-]
+const blockedCallNumbers = new Set()
 let recentCalls = [
+  {
+    call_id: 'call-alex-incoming',
+    created_at: isoTime(-8 * 60_000),
+    direction: 'incoming',
+    duration_seconds: 184,
+    id: 1,
+    other_number: '5551110001',
+    status: 'completed',
+  },
   {
     call_id: 'call-morgan-incoming',
     created_at: isoTime(-18 * 60_000),
     direction: 'incoming',
     duration_seconds: 246,
-    id: 1,
+    id: 2,
     other_number: '5550192847',
+    status: 'completed',
+  },
+  {
+    call_id: 'call-taxi-outgoing',
+    created_at: isoTime(-42 * 60_000),
+    direction: 'outgoing',
+    duration_seconds: 39,
+    id: 3,
+    other_number: '5552222222',
     status: 'completed',
   },
   {
@@ -1672,27 +2012,108 @@ let recentCalls = [
     created_at: isoTime(-95 * 60_000),
     direction: 'incoming',
     duration_seconds: 0,
-    id: 2,
+    id: 4,
     other_number: '5559876543',
     status: 'missed',
+  },
+  {
+    call_id: 'call-emily-no-answer',
+    created_at: isoTime(-4 * 60 * 60_000),
+    direction: 'outgoing',
+    duration_seconds: 0,
+    id: 5,
+    other_number: '5551110008',
+    status: 'no_answer',
+  },
+  {
+    call_id: 'call-yakup-incoming',
+    created_at: isoTime(-8 * 60 * 60_000),
+    direction: 'incoming',
+    duration_seconds: 521,
+    id: 6,
+    other_number: '5551110025',
+    status: 'completed',
   },
   {
     call_id: 'call-customs-outgoing',
     created_at: isoTime(-25 * 60 * 60_000),
     direction: 'outgoing',
     duration_seconds: 83,
-    id: 3,
+    id: 7,
     other_number: '5550100101',
     status: 'completed',
   },
   {
     call_id: 'call-unknown-declined',
-    created_at: isoTime(-2 * 86_400_000),
+    created_at: isoTime(-27 * 60 * 60_000),
     direction: 'incoming',
     duration_seconds: 0,
-    id: 4,
+    id: 8,
     other_number: '5554040404',
     status: 'declined',
+  },
+  {
+    call_id: 'call-morgan-outgoing',
+    created_at: isoTime(-2 * 86_400_000),
+    direction: 'outgoing',
+    duration_seconds: 72,
+    id: 9,
+    other_number: '5550192847',
+    status: 'completed',
+  },
+  {
+    call_id: 'call-alex-missed',
+    created_at: isoTime(-3 * 86_400_000),
+    direction: 'incoming',
+    duration_seconds: 0,
+    id: 10,
+    other_number: '5551110001',
+    status: 'missed',
+  },
+  {
+    call_id: 'call-benni-busy',
+    created_at: isoTime(-4 * 86_400_000),
+    direction: 'outgoing',
+    duration_seconds: 0,
+    id: 11,
+    other_number: '5551110004',
+    status: 'busy',
+  },
+  {
+    call_id: 'call-sofia-incoming',
+    created_at: isoTime(-5 * 86_400_000),
+    direction: 'incoming',
+    duration_seconds: 116,
+    id: 12,
+    other_number: '5551110019',
+    status: 'completed',
+  },
+  {
+    call_id: 'call-xavier-unavailable',
+    created_at: isoTime(-6 * 86_400_000),
+    direction: 'outgoing',
+    duration_seconds: 0,
+    id: 13,
+    other_number: '5551110024',
+    status: 'unavailable',
+  },
+  {
+    call_id: 'call-market-outgoing',
+    created_at: isoTime(-7 * 86_400_000),
+    direction: 'outgoing',
+    duration_seconds: 51,
+    id: 14,
+    other_number: '5552470000',
+    status: 'completed',
+  },
+  {
+    call_id: 'call-unknown-missed',
+    created_at: isoTime(-8 * 86_400_000),
+    direction: 'incoming',
+    duration_seconds: 0,
+    id: 15,
+    other_number: '5559090909',
+    status: 'missed',
   },
 ]
 let mockMedia = [
@@ -5238,15 +5659,27 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'contacts:save') {
     const name = String(request.body.name ?? '').trim()
+    const notes = String(request.body.notes ?? '').trim().slice(0, 500)
+    const organization = String(request.body.organization ?? '').trim().slice(0, 80)
     const phoneNumber = String(request.body.phoneNumber ?? '').trim()
-    if (!name || !phoneNumber) {
+    const avatarMediaId = Number(request.body.avatarMediaId) || 0
+    const avatarMedia = avatarMediaId
+      ? mockMedia.find(
+          (item) => item.id === avatarMediaId && item.mediaType === 'photo',
+        )
+      : null
+    if (!name || !phoneNumber || (avatarMediaId && !avatarMedia)) {
       response.json({ success: false, error: 'invalid_contact' })
       return
     }
     let contact = contacts.find((item) => item.id === request.body.id)
     if (contact) {
       contact.name = name
+      contact.notes = notes || null
+      contact.organization = organization || null
       contact.phone_number = phoneNumber
+      contact.avatar_media_id = avatarMedia?.id ?? null
+      contact.avatar_url = avatarMedia?.url ?? null
       contact.updated_at = new Date()
         .toISOString()
         .slice(0, 19)
@@ -5255,14 +5688,33 @@ app.post('/api/:endpoint', (request, response) => {
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
       contact = {
         created_at: now,
+        favorite: false,
         id: `contact-${contactSequence++}`,
         name,
+        notes: notes || null,
+        organization: organization || null,
         phone_number: phoneNumber,
+        avatar_media_id: avatarMedia?.id ?? null,
+        avatar_url: avatarMedia?.url ?? null,
         updated_at: now,
       }
       contacts.push(contact)
     }
     response.json({ success: true, data: contact })
+    return
+  }
+  if (endpoint === 'contacts:favorite') {
+    const contact = contacts.find((item) => item.id === request.body.id)
+    if (!contact || typeof request.body.favorite !== 'boolean') {
+      response.json({ success: false, error: 'contact_not_found' })
+      return
+    }
+    contact.favorite = request.body.favorite
+    contact.updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    response.json({
+      success: true,
+      data: { favorite: contact.favorite, id: contact.id },
+    })
     return
   }
   if (endpoint === 'contacts:delete') {
@@ -5273,6 +5725,27 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'media:config') {
     response.json({ success: true, data: { videoBitrateKbps: 1500 } })
+    return
+  }
+  if (endpoint === 'media:devCapture') {
+    const mediaType = request.body.mediaType === 'video' ? 'video' : 'photo'
+    const id = Math.max(0, ...mockMedia.map((item) => Number(item.id) || 0)) + 1
+    const fallbackVideo = mockMedia.find((item) => item.mediaType === 'video')
+    const media = {
+      createdAt: Date.now(),
+      id,
+      mediaType,
+      url:
+        mediaType === 'photo'
+          ? `https://picsum.photos/seed/sky-camera-${id}/900/1600`
+          : fallbackVideo?.url,
+    }
+    if (!media.url) {
+      response.json({ success: false, error: 'unsupported' })
+      return
+    }
+    mockMedia.unshift(media)
+    response.json({ success: true, data: media })
     return
   }
   if (endpoint === 'gallery:list') {
@@ -5399,55 +5872,29 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true })
     return
   }
-  if (endpoint === 'contacts:list') {
-    response.json({ success: true, data: mockContacts })
-    return
-  }
-  if (endpoint === 'contacts:save') {
-    const now = new Date().toISOString()
-    const existing = mockContacts.find(
-      (contact) => contact.id === request.body.id,
-    )
-    if (existing) {
-      Object.assign(existing, {
-        name: request.body.name,
-        phone_number: request.body.phoneNumber,
-        updated_at: now,
-      })
-      response.json({ success: true, data: existing })
-      return
-    }
-    const contact = {
-      created_at: now,
-      id: `contact-${Date.now()}`,
-      name: request.body.name,
-      phone_number: request.body.phoneNumber,
-      updated_at: now,
-    }
-    mockContacts.push(contact)
-    response.json({ success: true, data: contact })
-    return
-  }
-  if (endpoint === 'contacts:delete') {
-    mockContacts = mockContacts.filter(
-      (contact) => contact.id !== request.body.id,
-    )
-    response.json({ success: true })
-    return
-  }
   if (endpoint === 'calls:recents') {
     response.json({ success: true, data: recentCalls })
     return
   }
   if (endpoint === 'calls:dial') {
+    const phoneNumber = String(request.body.phoneNumber ?? '').replace(/\D/g, '')
+    if (phoneNumber.length !== 10) {
+      response.json({ success: false, error: 'invalid_number' })
+      return
+    }
+    if (!contacts.some((contact) => contact.phone_number === phoneNumber)) {
+      response.json({ success: false, error: 'recipient_not_found' })
+      return
+    }
     const id = `call-${Date.now()}`
+    const startedAt = Date.now()
     recentCalls.unshift({
       call_id: id,
       created_at: Date.now(),
       direction: 'outgoing',
       duration_seconds: 0,
       id: recentCalls.length + 1,
-      other_number: request.body.phoneNumber,
+      other_number: phoneNumber,
       status: 'completed',
     })
     response.json({
@@ -5455,11 +5902,21 @@ app.post('/api/:endpoint', (request, response) => {
       data: {
         direction: 'outgoing',
         id,
-        otherNumber: request.body.phoneNumber,
-        startedAt: Date.now(),
+        otherNumber: phoneNumber,
+        startedAt,
         state: 'ringing',
       },
     })
+    return
+  }
+  if (endpoint === 'calls:block') {
+    const phoneNumber = String(request.body.phoneNumber ?? '').replace(/\D/g, '')
+    if (!phoneNumber) {
+      response.json({ success: false, error: 'invalid_number' })
+      return
+    }
+    blockedCallNumbers.add(phoneNumber)
+    response.json({ success: true, data: { blocked: true, phoneNumber } })
     return
   }
   if (
