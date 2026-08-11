@@ -162,7 +162,7 @@ invoking_resource = "lb_app"
 local lifecycle_response_delivered = false
 local install_hook_after_response = false
 local open_hook_after_response = false
-local lb_success, lb_error = lb_add_custom_app({
+local lb_definition = {
     identifier = "dispatch",
     name = "Dispatch",
     description = "Dispatch terminal",
@@ -175,12 +175,25 @@ local lb_success, lb_error = lb_add_custom_app({
         open_hook_after_response = lifecycle_response_delivered
         error(5)
     end),
-})
+}
+local lb_success, lb_error = lb_add_custom_app(lb_definition)
 assert(lb_success and lb_error == nil, "LB AddCustomApp must register through the shared export")
+lb_definition.name = "Dispatch Updated"
+local retry_success, retry_error = lb_add_custom_app(lb_definition)
+assert(retry_success and retry_error == nil, "same-owner LB registration retries must update in place")
 
 local lifecycle_callback = assert(registered_nui_callbacks["custom-app:lifecycle"])
 local lifecycle_response
 SkyPhoneApps.SetPhoneOpen(true)
+local retry_catalog = nui_messages[#nui_messages]
+local retried_app
+for index = 1, #retry_catalog.data.apps do
+    if retry_catalog.data.apps[index].id == "dispatch" then
+        retried_app = retry_catalog.data.apps[index]
+        break
+    end
+end
+assert(retried_app and retried_app.name == "Dispatch Updated", "same-owner retry must publish the updated app")
 lifecycle_response_delivered = false
 lifecycle_callback({ appId = "dispatch", event = "install" }, function(response)
     lifecycle_response = response

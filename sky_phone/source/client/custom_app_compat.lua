@@ -30,7 +30,7 @@ local function copy_record_data(value)
     return copied
 end
 
-local function register_provider_app(provider, owner_resource, definition, vendor_data, update_existing)
+local function register_provider_app(provider, owner_resource, definition, vendor_data)
     local app_id = definition.id
     local existing = provider_apps[app_id]
     if existing and (existing.owner_resource ~= owner_resource or existing.provider ~= provider) then
@@ -38,7 +38,7 @@ local function register_provider_app(provider, owner_resource, definition, vendo
     end
 
     local success, error_message
-    if existing and update_existing then
+    if existing then
         success, error_message = core.Update(owner_resource, definition)
     else
         success, error_message = core.Add(owner_resource, definition)
@@ -104,7 +104,7 @@ function SkyPhoneApps.RegisterCompatibilityExport(owner_resource, app_data)
         ))
         return false, definition_error
     end
-    return register_provider_app(provider, owner_resource, definition, copy_record_data(app_data), false)
+    return register_provider_app(provider, owner_resource, definition, copy_record_data(app_data))
 end
 
 SkyPhoneApps.OnCompatibilityAppRemoved = function(owner_resource, app_id)
@@ -133,8 +133,7 @@ local function add_17mov_application(app_data)
         providers.seventeen,
         owner_resource,
         definition,
-        copy_record_data(app_data),
-        false
+        copy_record_data(app_data)
     )
 end
 
@@ -206,8 +205,7 @@ local function add_high_application(app_name, data, locales)
         providers.high,
         owner_resource,
         definition,
-        copy_record_data(data),
-        provider_apps[app_name] ~= nil
+        copy_record_data(data)
     )
 end
 
@@ -241,8 +239,7 @@ local function add_quasar_app_for_owner(owner_resource, app_data)
         providers.quasar,
         owner_resource,
         definition,
-        SkyPhoneCompatibility.CopyQuasarData(app_data),
-        false
+        SkyPhoneCompatibility.CopyQuasarData(app_data)
     )
 end
 
@@ -473,8 +470,7 @@ local function remove_high_server_app(owner_resource, app_id)
             providers.high,
             client_record.owner_resource,
             client_record.definition,
-            nil,
-            false
+            nil
         )
         if not success then
             print(("[%s] Could not restore High Phone client application %s: %s."):format(
