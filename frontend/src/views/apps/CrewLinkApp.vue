@@ -41,6 +41,7 @@ import {
   RefreshCw,
   Route,
   Settings2,
+  Share2,
   Shield,
   ShieldCheck,
   Sparkles,
@@ -69,6 +70,7 @@ import {
   type MapPoint,
 } from '@/features/map/defaultMapGeometry'
 import { useCrewLinkStore } from '@/stores/crewlink'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type {
   CrewLinkColour,
@@ -238,6 +240,20 @@ function showToast(message: string): void {
   toastTimer = window.setTimeout(() => {
     toastText.value = ''
   }, 2400)
+}
+
+function shareProfile(): void {
+  const profile = crew.profile
+  if (!profile) return
+  useEasyShareStore().open({
+    appId: 'crewlink',
+    copyText: `@${profile.username}`,
+    id: profile.id,
+    kind: 'profile',
+    link: `skyphone://crewlink/profile/${profile.id}`,
+    subtitle: activeGroup.value?.name,
+    title: `@${profile.username}`,
+  })
 }
 
 function updateValue(
@@ -899,6 +915,17 @@ onBeforeUnmount(() => {
               <span>{{ crew.profile.username.slice(0, 2).toUpperCase() }}</span>
               <div><small>{{ t('yourCrewLinkId') }}</small><h1>@{{ crew.profile.username }}</h1><p>{{ activeGroup.name }} · {{ roleLabel(activeGroup.role) }}</p></div>
             </div>
+
+            <k-list inset strong>
+              <k-list-item
+                link
+                link-component="button"
+                :title="phone.t('Apps.easyShare.shareProfile')"
+                @click="shareProfile"
+              >
+                <template #media><Share2 :size="20" /></template>
+              </k-list-item>
+            </k-list>
 
             <k-block-title>{{ t('privacyVisibility') }}</k-block-title>
             <k-list inset strong>

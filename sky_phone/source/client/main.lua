@@ -192,6 +192,11 @@ local server_callbacks = {
     "messages:media",
     "messages:delete",
     "messages:gifs",
+    "easyshare:bootstrap",
+    "easyshare:set-visibility",
+    "easyshare:request",
+    "easyshare:respond",
+    "easyshare:cancel",
     "darkchat:bootstrap",
     "darkchat:update-profile",
     "darkchat:start",
@@ -506,6 +511,14 @@ end)
 
 RegisterNetEvent("sky_phone:mail:changed", function(data)
     SendNUIMessage({ type = "mail:changed", data = data })
+end)
+
+RegisterNetEvent("sky_phone:easyshare:changed", function(data)
+    SendNUIMessage({ type = "easyshare:changed", data = data })
+end)
+
+RegisterNetEvent("sky_phone:gallery:changed", function()
+    SendNUIMessage({ type = "gallery:changed" })
 end)
 
 RegisterNetEvent("sky_phone:mail:new", function(data)

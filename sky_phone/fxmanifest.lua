@@ -59,6 +59,7 @@ server_scripts {
     'source/server/calls.lua',
     'source/server/media.lua',
     'source/server/messages.lua',
+    'source/server/easyshare.lua',
     'source/server/darkchat.lua',
     'source/server/flare.lua',
     'source/server/notes.lua',

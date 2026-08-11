@@ -45,6 +45,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useCallsStore } from '@/stores/calls'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { useMessagesStore } from '@/stores/messages'
 import { usePhoneStore } from '@/stores/phone'
@@ -67,6 +68,7 @@ type ContactPhotoContext = {
 
 const phone = usePhoneStore()
 const calls = useCallsStore()
+const easyShare = useEasyShareStore()
 const mediaPicker = useMessageMediaStore()
 const messages = useMessagesStore()
 const router = useRouter()
@@ -487,6 +489,33 @@ function openCallContact(): void {
   if (!call) return
   callMoreOpened.value = false
   openContact(activeCallContact.value ?? undefined, call.otherNumber)
+}
+
+function shareSelectedContact(): void {
+  const contact = selectedContact.value
+  if (!contact) return
+  easyShare.open({
+    appId: 'phone',
+    copyText: `${contact.name}\n${contact.phone_number}`,
+    id: contact.id,
+    imageUrl: contact.avatar_url,
+    kind: 'contact',
+    subtitle: formatPhoneNumber(contact.phone_number),
+    title: contact.name,
+  })
+}
+
+function shareOwnProfile(): void {
+  const number = phone.device?.sim?.number
+  if (!number) return
+  easyShare.open({
+    appId: 'phone',
+    copyText: `${phone.t('Apps.phone.myCard')}\n${number}`,
+    kind: 'profile',
+    link: `skyphone://phone/${number}`,
+    subtitle: formatPhoneNumber(number),
+    title: phone.t('Apps.phone.myCard'),
+  })
 }
 
 function messageActiveCaller(): void {
@@ -954,6 +983,11 @@ onBeforeUnmount(() => {
                   </p>
                 </div>
               </k-glass>
+              <k-glass class="phone-profile-card phone-profile-single-option">
+                <button type="button" @click="shareOwnProfile">
+                  <span>{{ phone.t('Apps.easyShare.shareProfile') }}</span>
+                </button>
+              </k-glass>
             </section>
 
             <section v-else class="phone-profile-content">
@@ -984,7 +1018,11 @@ onBeforeUnmount(() => {
                 <button type="button" @click="openMessage(selectedNumber)">
                   <span>{{ phone.t('Apps.phone.sendMessage') }}</span>
                 </button>
-                <button type="button" disabled>
+                <button
+                  type="button"
+                  :disabled="!selectedContact"
+                  @click="shareSelectedContact"
+                >
                   <span>{{ phone.t('Apps.phone.shareContact') }}</span>
                 </button>
                 <button

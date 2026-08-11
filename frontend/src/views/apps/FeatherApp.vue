@@ -61,6 +61,7 @@ import { useRoute, useRouter } from 'vue-router'
 import FeatherPostCard from '@/components/feather/FeatherPostCard.vue'
 import { useAccountStore } from '@/stores/account'
 import { useFeatherStore } from '@/stores/feather'
+import { useEasyShareStore } from '@/stores/easyshare'
 import type { FeatherConnectionMode } from '@/stores/feather'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
@@ -417,25 +418,32 @@ async function selectTopic(topic: string): Promise<void> {
   await runSearch()
 }
 
-async function shareProfile(): Promise<void> {
-  if (!activeProfile.value) return
-  try {
-    await navigator.clipboard.writeText(`@${activeProfile.value.handle}`)
-    toast('profileCopied')
-  } catch (error) {
-    console.error('[Feather] Could not copy the profile handle.', error)
-    toast('errors.generic')
-  }
+function shareProfile(): void {
+  const profile = activeProfile.value
+  if (!profile) return
+  useEasyShareStore().open({
+    appId: 'feather',
+    copyText: `@${profile.handle}`,
+    id: profile.id,
+    imageUrl: profile.avatar_url,
+    kind: 'profile',
+    link: `skyphone://feather/profile/${profile.id}`,
+    subtitle: `@${profile.handle}`,
+    title: profile.display_name,
+  })
 }
 
-async function sharePost(post: FeatherPost): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(`@${post.handle}: ${post.body}`)
-    toast('postCopied')
-  } catch (error) {
-    console.error('[Feather] Could not copy the post.', error)
-    toast('errors.generic')
-  }
+function sharePost(post: FeatherPost): void {
+  useEasyShareStore().open({
+    appId: 'feather',
+    copyText: `@${post.handle}: ${post.body}`,
+    id: post.id,
+    imageUrl: post.media[0]?.url,
+    kind: 'post',
+    link: `skyphone://feather/post/${post.id}`,
+    subtitle: `@${post.handle}`,
+    title: post.body,
+  })
 }
 
 function openComposer(post?: FeatherPost): void {

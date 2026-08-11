@@ -17,6 +17,7 @@ import {
   Plus,
   Search,
   Send,
+  Share2,
   ShieldAlert,
   Trash2,
   UserRound,
@@ -58,6 +59,7 @@ import { useRouter } from 'vue-router'
 
 import picstagramIcon from '@/assets/img/app-icons/picstagram.webp'
 import { useMessageMediaStore } from '@/stores/messageMedia'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import { usePicstagramStore } from '@/stores/picstagram'
 import type { PhoneMedia } from '@/types/media'
@@ -451,6 +453,35 @@ async function saveProfile(): Promise<void> {
 function showPostActions(post: PicstagramPost): void {
   selectedPost.value = post
   actionsOpen.value = true
+}
+
+function sharePost(post: PicstagramPost): void {
+  useEasyShareStore().open({
+    appId: 'picstagram',
+    copyText: `@${post.handle}: ${post.caption}`,
+    id: post.id,
+    imageUrl: post.media[0]?.url,
+    kind: 'post',
+    link: `skyphone://picstagram/post/${post.id}`,
+    subtitle: `@${post.handle}`,
+    title: post.caption || post.display_name,
+  })
+}
+
+function shareCurrentProfile(): void {
+  const profile = currentProfile.value
+  if (!profile) return
+  actionsOpen.value = false
+  useEasyShareStore().open({
+    appId: 'picstagram',
+    copyText: `@${profile.handle}`,
+    id: profile.id,
+    imageUrl: profile.avatar_url,
+    kind: 'profile',
+    link: `skyphone://picstagram/profile/${profile.id}`,
+    subtitle: `@${profile.handle}`,
+    title: profile.display_name,
+  })
 }
 
 function startReport(
@@ -871,6 +902,9 @@ onBeforeUnmount(() => {
                 @click="openComments(selectedPost)"
                 ><MessageCircle
               /></k-link>
+              <k-link component="button" icon-only :aria-label="phone.t('Apps.easyShare.name')" @click="sharePost(selectedPost)">
+                <Share2 />
+              </k-link>
             </span>
             <k-link
               component="button"
@@ -1022,6 +1056,9 @@ onBeforeUnmount(() => {
                 @click="openComments(post)"
                 ><MessageCircle
               /></k-link>
+              <k-link component="button" icon-only :aria-label="phone.t('Apps.easyShare.name')" @click="sharePost(post)">
+                <Share2 />
+              </k-link>
             </span>
             <k-link
               component="button"
@@ -1811,6 +1848,7 @@ onBeforeUnmount(() => {
         </template>
       </k-actions-group>
       <k-actions-group v-else-if="currentProfile && !currentProfile.is_owner">
+        <k-actions-button @click="shareCurrentProfile">{{ phone.t('Apps.easyShare.name') }}</k-actions-button>
         <k-actions-button @click="reportCurrentProfile">{{
           t('report')
         }}</k-actions-button>
@@ -1819,6 +1857,7 @@ onBeforeUnmount(() => {
         }}</k-actions-button>
       </k-actions-group>
       <k-actions-group v-else-if="currentProfile?.is_owner">
+        <k-actions-button @click="shareCurrentProfile">{{ phone.t('Apps.easyShare.name') }}</k-actions-button>
         <k-actions-button @click="editProfileFromActions">{{
           t('editProfile')
         }}</k-actions-button>

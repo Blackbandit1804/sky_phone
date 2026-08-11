@@ -2109,6 +2109,51 @@ local schema = {
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
+    {
+        name = "sky_phone_easyshare_preferences",
+        columns = {
+            {
+                name = "device_imei",
+                type = "CHAR(15) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            { name = "visibility", type = "ENUM('everyone','contacts','hidden') NOT NULL DEFAULT 'everyone'" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "device_imei",
+        foreignKeys = {
+            { column = "device_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_easyshare_transfers",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "sender_imei", type = "CHAR(15) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "recipient_imei", type = "CHAR(15) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "sender_name", type = "VARCHAR(160) NOT NULL" },
+            { name = "recipient_name", type = "VARCHAR(160) NOT NULL" },
+            { name = "content_type", type = "VARCHAR(24) NOT NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "payload", type = "LONGTEXT NOT NULL" },
+            { name = "status", type = "ENUM('pending','transferring','completed','declined','cancelled','expired','failed') NOT NULL DEFAULT 'pending'" },
+            { name = "progress", type = "TINYINT UNSIGNED NOT NULL DEFAULT 0" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+            { name = "completed_at", type = "DATETIME NULL" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_easyshare_sender", columns = "(`sender_imei`, `created_at`)" },
+            { name = "idx_sky_phone_easyshare_recipient", columns = "(`recipient_imei`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "sender_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
+            { column = "recipient_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
 }
 
 Bridge.Database.Migrate("sky_phone", schema)

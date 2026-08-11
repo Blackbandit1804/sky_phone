@@ -36,6 +36,7 @@ import {
   Play,
   Plus,
   Search,
+  Share2,
   SkipBack,
   SkipForward,
   Trash2,
@@ -47,6 +48,7 @@ import type { CSSProperties } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useMusicStore } from '@/stores/music'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type { MusicPlaylist, MusicTrack } from '@/types/music'
 
@@ -65,6 +67,7 @@ const MUSIC_POPOVER_GAP = 7
 const MUSIC_SHEET_TRANSITION_MS = 420
 
 const music = useMusicStore()
+const easyShare = useEasyShareStore()
 const phone = usePhoneStore()
 const activeTab = ref<MusicTab>('library')
 const activePlaylist = ref<MusicPlaylist | null>(null)
@@ -189,7 +192,7 @@ function positionPopover(target: HTMLElement, itemCount: number): boolean {
 
 function openAddMenu(event: MouseEvent): void {
   const target = event.currentTarget as HTMLElement
-  if (!positionPopover(target, activePlaylist.value ? 3 : 2)) return
+  if (!positionPopover(target, activePlaylist.value ? 4 : 2)) return
   actionTrack.value = null
   actionMenuOpened.value = false
   addMenuOpened.value = true
@@ -264,10 +267,42 @@ function openTrackMenu(event: MouseEvent, track: MusicTrack): void {
   event.stopPropagation()
   actionTrack.value = track
   const itemCount =
-    1 + (activePlaylist.value ? 1 : 0) + (track.source === 'youtube' ? 1 : 0)
+    2 + (activePlaylist.value ? 1 : 0) + (track.source === 'youtube' ? 1 : 0)
   if (!positionPopover(event.currentTarget as HTMLElement, itemCount)) return
   addMenuOpened.value = false
   actionMenuOpened.value = true
+}
+
+function shareTrack(): void {
+  const track = actionTrack.value
+  if (!track) return
+  closeMenus()
+  easyShare.open({
+    appId: 'music',
+    copyText: `${track.title} — ${track.artist}`,
+    id: track.id,
+    imageUrl: track.artwork,
+    kind: 'track',
+    link: `skyphone://music/${track.source}/${track.id}`,
+    meta: { source: track.source },
+    subtitle: track.artist,
+    title: track.title,
+  })
+}
+
+function shareActivePlaylist(): void {
+  const playlist = activePlaylist.value
+  if (!playlist) return
+  closeMenus()
+  easyShare.open({
+    appId: 'music',
+    copyText: `${playlist.name} · ${playlist.entries.length}`,
+    id: playlist.id,
+    kind: 'playlist',
+    link: `skyphone://music/playlist/${playlist.id}`,
+    subtitle: phone.t('Apps.music.songCount', { count: String(playlist.entries.length) }),
+    title: playlist.name,
+  })
 }
 
 function openPlaylist(playlist: MusicPlaylist): void {
@@ -934,6 +969,9 @@ onBeforeUnmount(() => {
     >
       <k-list nested>
         <template v-if="activePlaylist">
+          <k-list-button link-component="button" @click="shareActivePlaylist">
+            <Share2 :size="18" /> {{ phone.t('Apps.easyShare.name') }}
+          </k-list-button>
           <k-list-button
             link-component="button"
             @click="openActivePlaylistTrackPicker"
@@ -975,6 +1013,9 @@ onBeforeUnmount(() => {
       :aria-label="phone.t('Apps.music.songActions')"
     >
       <k-list nested>
+        <k-list-button link-component="button" @click="shareTrack">
+          <Share2 :size="18" /> {{ phone.t('Apps.easyShare.name') }}
+        </k-list-button>
         <k-list-button
           link-component="button"
           @click="openPlaylistPicker(actionTrack)"

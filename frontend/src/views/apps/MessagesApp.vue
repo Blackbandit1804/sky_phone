@@ -39,13 +39,14 @@ import {
   Video,
   X,
 } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import MessageAttachmentBubble from '@/components/MessageAttachmentBubble.vue'
 import FullEmojiPicker from '@/components/FullEmojiPicker.vue'
 import VoiceMessageBubble from '@/components/VoiceMessageBubble.vue'
 import { useCallsStore } from '@/stores/calls'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { useMessagesStore } from '@/stores/messages'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
@@ -63,6 +64,7 @@ const WAVEFORM_SAMPLES = 48
 
 const phone = usePhoneStore()
 const calls = useCallsStore()
+const easyShare = useEasyShareStore()
 const messages = useMessagesStore()
 const messageMedia = useMessageMediaStore()
 const router = useRouter()
@@ -72,6 +74,7 @@ const editingList = ref(false)
 const selectedNumbers = ref<string[]>([])
 const composerNumber = ref('')
 const draft = ref('')
+const queuedShareBody = ref('')
 const composing = ref(false)
 const sending = ref(false)
 const toastOpened = ref(false)
@@ -119,6 +122,14 @@ const filteredConversations = computed(() => {
 const knownContactNumbers = computed(
   () => new Set(calls.contacts.map((contact) => contact.phone_number)),
 )
+const contactAvatarUrls = computed(
+  () =>
+    new Map(
+      calls.contacts
+        .filter((contact) => Boolean(contact.avatar_url))
+        .map((contact) => [contact.phone_number, contact.avatar_url as string]),
+    ),
+)
 const contactSuggestions = computed(() => {
   const query = composerNumber.value.trim().toLocaleLowerCase(phone.lang)
   if (!query) return calls.contacts.slice(0, 8)
@@ -163,21 +174,17 @@ function conversationPreview(conversation: SmsConversation): string {
     : conversation.lastMessage
 }
 
-function avatarStyle(number: string): { background: string } {
-  let hash = 0
-  for (const character of number) {
-    hash = (hash * 31 + character.charCodeAt(0)) % 360
-  }
-  return {
-    background: `linear-gradient(145deg, hsl(${hash} 72% 62%), hsl(${(hash + 35) % 360} 68% 48%))`,
-  }
-}
-
-function avatarGlyph(number: string): string {
-  const glyphs = ['👩🏻', '🧔🏻', '👩🏽', '👨🏼', '👩🏼', '🧑🏾', '👨🏽', '👩🏾']
-  let hash = 0
-  for (const character of number) hash += character.charCodeAt(0)
-  return glyphs[hash % glyphs.length]
+function contactInitials(number: string): string {
+  const contact = calls.contacts.find(
+    (entry) => entry.phone_number === number,
+  )
+  if (!contact) return ''
+  return contact.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
 }
 
 function formatConversationDate(value: DatabaseDateValue): string {
@@ -319,7 +326,28 @@ async function openConversation(conversation: SmsConversation): Promise<void> {
     return
   }
   composing.value = false
-  draft.value = ''
+  draft.value = queuedShareBody.value
+  queuedShareBody.value = ''
+  await scrollToBottom(false)
+}
+
+async function openEasyShareDraft(): Promise<void> {
+  const shared = easyShare.consumeChatDraft('messages')
+  if (!shared) return
+  if (!shared.targetId) {
+    messages.closeThread()
+    composing.value = false
+    queuedShareBody.value = shared.body
+    draft.value = ''
+    return
+  }
+  if (!(await messages.openThread(shared.targetId))) {
+    showToast(errorText('invalid_number'))
+    return
+  }
+  composing.value = false
+  queuedShareBody.value = ''
+  draft.value = shared.body
   await scrollToBottom(false)
 }
 
@@ -682,9 +710,9 @@ async function finishVoiceRecording(): Promise<void> {
   await scrollToBottom()
 }
 
-onMounted(() => {
-  void messages.loadConversations()
-  void calls.loadContacts()
+onMounted(async () => {
+  await Promise.all([messages.loadConversations(), calls.loadContacts()])
+  await openEasyShareDraft()
   if (messages.activeNumber) {
     const media = messageMedia.consume(messages.activeNumber)
     if (media) {
@@ -695,6 +723,13 @@ onMounted(() => {
     }
   }
 })
+
+watch(
+  () => easyShare.chatDraft,
+  (shared) => {
+    if (shared?.appId === 'messages') void openEasyShareDraft()
+  },
+)
 
 onBeforeUnmount(() => {
   discardRecording = true
@@ -797,14 +832,19 @@ onBeforeUnmount(() => {
               conversation.phoneNumber,
             ),
           }"
-          :style="avatarStyle(conversation.phoneNumber)"
           aria-hidden="true"
         >
+          <img
+            v-if="contactAvatarUrls.get(conversation.phoneNumber)"
+            class="messages-avatar__image"
+            :src="contactAvatarUrls.get(conversation.phoneNumber)"
+            alt=""
+          />
           <span
-            v-if="knownContactNumbers.has(conversation.phoneNumber)"
-            class="messages-avatar__glyph"
+            v-else-if="knownContactNumbers.has(conversation.phoneNumber)"
+            class="messages-avatar__initials"
           >
-            {{ avatarGlyph(conversation.phoneNumber) }}
+            {{ contactInitials(conversation.phoneNumber) }}
           </span>
           <span v-else class="messages-avatar__placeholder">
             <i />
@@ -937,10 +977,15 @@ onBeforeUnmount(() => {
         <template #media>
           <span
             class="messages-avatar messages-avatar--small"
-            :style="avatarStyle(contact.phone_number)"
           >
-            <span class="messages-avatar__glyph">{{
-              avatarGlyph(contact.phone_number)
+            <img
+              v-if="contact.avatar_url"
+              class="messages-avatar__image"
+              :src="contact.avatar_url"
+              alt=""
+            />
+            <span v-else class="messages-avatar__initials">{{
+              contactInitials(contact.phone_number)
             }}</span>
           </span>
         </template>
@@ -979,10 +1024,15 @@ onBeforeUnmount(() => {
         <span
           class="messages-avatar messages-avatar--header"
           :class="{ 'messages-avatar--unknown': !activeContact }"
-          :style="avatarStyle(messages.activeNumber ?? '')"
         >
-          <span v-if="activeContact" class="messages-avatar__glyph">{{
-            avatarGlyph(messages.activeNumber ?? '')
+          <img
+            v-if="activeContact?.avatar_url"
+            class="messages-avatar__image"
+            :src="activeContact.avatar_url"
+            alt=""
+          />
+          <span v-else-if="activeContact" class="messages-avatar__initials">{{
+            contactInitials(messages.activeNumber ?? '')
           }}</span>
           <span v-else class="messages-avatar__placeholder" aria-hidden="true">
             <i />
@@ -1026,10 +1076,15 @@ onBeforeUnmount(() => {
         <span
           class="messages-avatar messages-avatar--contact"
           :class="{ 'messages-avatar--unknown': !activeContact }"
-          :style="avatarStyle(messages.activeNumber ?? '')"
         >
-          <span v-if="activeContact" class="messages-avatar__glyph">{{
-            avatarGlyph(messages.activeNumber ?? '')
+          <img
+            v-if="activeContact?.avatar_url"
+            class="messages-avatar__image"
+            :src="activeContact.avatar_url"
+            alt=""
+          />
+          <span v-else-if="activeContact" class="messages-avatar__initials">{{
+            contactInitials(messages.activeNumber ?? '')
           }}</span>
           <span v-else class="messages-avatar__placeholder" aria-hidden="true">
             <i />

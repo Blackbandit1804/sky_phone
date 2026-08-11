@@ -169,6 +169,17 @@ Config.Messages = {
     DeleteBatchSize = 20,
 }
 
+Config.EasyShare = {
+    Enabled = true,
+    DefaultVisibility = "everyone", -- everyone, contacts or hidden
+    MaximumDistance = 15.0,
+    HistoryLimit = 50,
+    PendingSeconds = 30,
+    TransferDurationMs = 3000,
+    RequestsPerMinute = 12,
+    PayloadMaxBytes = 24000,
+}
+
 Config.DarkChat = {
     AliasMaxLength = 32,
     BodyMaxLength = 2000,

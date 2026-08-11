@@ -18,6 +18,7 @@ import PhonePasscode from '@/components/PhonePasscode.vue'
 import PhoneNotifications from '@/components/PhoneNotifications.vue'
 import NotificationPhonePreview from '@/components/NotificationPhonePreview.vue'
 import PhoneStatusBar from '@/components/PhoneStatusBar.vue'
+import EasyShareSheet from '@/components/EasyShareSheet.vue'
 import PayphoneOverlay from '@/components/PayphoneOverlay.vue'
 import RadioHud from '@/components/RadioHud.vue'
 import SimPhonePicker, {
@@ -44,6 +45,7 @@ import { useWidgetsStore } from '@/stores/widgets'
 import { isPhoneAppId } from '@/config/apps'
 import { useNotesStore } from '@/stores/notes'
 import { useWeatherStore } from '@/stores/weather'
+import { useEasyShareStore } from '@/stores/easyshare'
 import {
   useNotificationsStore,
   type PhoneNotificationInput,
@@ -53,6 +55,7 @@ import type { PhoneNotificationDevicePayload } from '@/types/device'
 import type { MailCounts } from '@/types/mail'
 import type { MarketplaceCounts } from '@/types/marketplace'
 import type { PhoneCall } from '@/types/phone'
+import type { EasyShareEvent } from '@/types/easyshare'
 import { nuiCall } from '@/utils/nui'
 import { formatTimer } from '@/utils/clock'
 import { parsePhonePreferences } from '@/utils/preferences'
@@ -73,6 +76,7 @@ type AppMessage = {
     | PicstagramNotificationData
     | FeatherNotificationData
     | BillingNotificationData
+    | EasyShareEvent
     | PhoneCall
     | PhoneNotificationInput
     | PhoneOpenPayload
@@ -222,6 +226,7 @@ const appStore = useAppStoreStore()
 const widgets = useWidgetsStore()
 const notes = useNotesStore()
 const weather = useWeatherStore()
+const easyShare = useEasyShareStore()
 const notifications = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
@@ -537,6 +542,8 @@ function onMessage(event: MessageEvent<AppMessage>): void {
     notifications.show(notification)
   } else if (event.data?.type === 'contacts:changed') {
     void calls.loadContacts()
+  } else if (event.data?.type === 'easyshare:changed' && event.data.data) {
+    easyShare.applyEvent(event.data.data as EasyShareEvent)
   } else if (event.data?.type === 'messages:changed') {
     void messages.loadConversations()
     if (messages.activeNumber) void messages.openThread(messages.activeNumber)
@@ -872,8 +879,9 @@ onMounted(() => {
     }
   }, 1000)
   if (isDevelopment) {
+    const developmentParameters = new URLSearchParams(window.location.search)
     void hydrateDevelopmentPhone()
-    if (new URLSearchParams(window.location.search).has('simPickerPreview')) {
+    if (developmentParameters.has('simPickerPreview')) {
       simPicker.value = {
         choices: [
           {
@@ -1109,6 +1117,7 @@ onBeforeUnmount(() => {
                   :notification="phone.isOpen ? null : notifications.current"
                   @close="notifications.dismissCurrent()"
                 />
+                <EasyShareSheet />
                 <div class="phone-display-dimmer" aria-hidden="true"></div>
               </k-app>
             </div>

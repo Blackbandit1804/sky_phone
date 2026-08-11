@@ -3076,6 +3076,9 @@ const featherTopics = [
 ]
 let featherOnboarded = true
 
+const easyShareHistory = []
+let easyShareVisibility = 'everyone'
+
 app.post('/api/:endpoint', (request, response) => {
   console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
@@ -5488,6 +5491,58 @@ app.post('/api/:endpoint', (request, response) => {
       })
     }
     response.json({ success: true, data: [...grouped.values()] })
+    return
+  }
+  if (endpoint === 'easyshare:bootstrap') {
+    response.json({
+      success: true,
+      data: {
+        history: easyShareHistory,
+        pending: easyShareHistory.filter((item) =>
+          ['pending', 'transferring'].includes(item.status),
+        ),
+        targets: [
+          { distance: 2.4, id: 41, name: 'Mia Santos' },
+          { distance: 7.8, id: 72, name: 'Noah Walker' },
+        ],
+        visibility: easyShareVisibility,
+      },
+    })
+    return
+  }
+  if (endpoint === 'easyshare:set-visibility') {
+    easyShareVisibility = request.body.visibility
+    response.json({ success: true, data: { visibility: easyShareVisibility } })
+    return
+  }
+  if (endpoint === 'easyshare:request') {
+    const transfer = {
+      createdAt: Date.now(),
+      direction: 'outgoing',
+      id: `easyshare-${Date.now()}`,
+      otherName: request.body.targetId === 72 ? 'Noah Walker' : 'Mia Santos',
+      payload: request.body.payload,
+      progress: 0,
+      status: 'pending',
+    }
+    easyShareHistory.unshift(transfer)
+    response.json({ success: true, data: transfer })
+    return
+  }
+  if (endpoint === 'easyshare:respond' || endpoint === 'easyshare:cancel') {
+    const transfer = easyShareHistory.find((item) => item.id === request.body.id)
+    if (!transfer) {
+      response.json({ success: false, error: 'transfer_not_found' })
+      return
+    }
+    transfer.status =
+      endpoint === 'easyshare:cancel'
+        ? 'cancelled'
+        : request.body.accepted
+          ? 'completed'
+          : 'declined'
+    transfer.progress = transfer.status === 'completed' ? 100 : transfer.progress
+    response.json({ success: true, data: transfer })
     return
   }
   if (endpoint === 'messages:gifs') {

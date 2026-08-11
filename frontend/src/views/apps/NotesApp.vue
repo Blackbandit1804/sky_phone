@@ -13,7 +13,7 @@ import {
   kPopover,
   kSearchbar,
 } from 'konsta/vue'
-import { Ellipsis, Pin, PinOff, SquarePen, Trash2 } from 'lucide-vue-next'
+import { Ellipsis, Pin, PinOff, Share2, SquarePen, Trash2 } from 'lucide-vue-next'
 import {
   computed,
   type ComponentPublicInstance,
@@ -23,11 +23,13 @@ import {
 } from 'vue'
 
 import { useNotesStore } from '@/stores/notes'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type { Note } from '@/utils/notes'
 
 const phone = usePhoneStore()
 const notes = useNotesStore()
+const easyShare = useEasyShareStore()
 const searchQuery = ref('')
 const editorId = ref<string | null>(null)
 const editorOpened = ref(false)
@@ -179,6 +181,20 @@ function togglePinned(): void {
   menuOpened.value = false
 }
 
+function shareNote(): void {
+  const note = persistDraft()
+  if (!note) return
+  menuOpened.value = false
+  easyShare.open({
+    appId: 'notes',
+    copyText: note.body || note.title,
+    id: note.id,
+    kind: 'note',
+    subtitle: notePreview(note),
+    title: noteTitle(note),
+  })
+}
+
 </script>
 
 <template>
@@ -304,6 +320,10 @@ function togglePinned(): void {
         @backdropclick="menuOpened = false"
       >
         <k-list nested>
+          <k-list-button link-component="button" :colors="pinActionColors" @click="shareNote">
+            <Share2 :size="18" />
+            {{ phone.t('Apps.easyShare.name') }}
+          </k-list-button>
           <k-list-button
             link-component="button"
             :colors="pinActionColors"
