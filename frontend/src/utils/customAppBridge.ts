@@ -294,6 +294,15 @@ export function shouldReportCustomAppReady(
     : signal === 'frame-load'
 }
 
+export function getCustomAppFrameBootstrapMessages(
+  compatibility: Readonly<Record<string, unknown>>,
+): readonly unknown[] {
+  if (compatibility.provider === 'lb_phone') {
+    return ['componentsLoaded']
+  }
+  return []
+}
+
 export function createCustomAppBridgeRequestHandler(
   dependencies: CustomAppBridgeDependencies,
 ): {

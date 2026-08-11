@@ -17,6 +17,7 @@ import type {
 } from '@/types/apps'
 import {
   createCustomAppBridgeRequestHandler,
+  getCustomAppFrameBootstrapMessages,
   getSkyPhoneAppCapabilities,
   shouldReportCustomAppReady,
 } from '@/utils/customAppBridge'
@@ -266,6 +267,11 @@ function onFrameLoad(): void {
     loadTimeout = undefined
   }
   frameLoaded.value = true
+  for (const message of getCustomAppFrameBootstrapMessages(
+    props.app.compatibility,
+  )) {
+    postToFrame(message)
+  }
   if (props.app.bridgeMode === 'legacy' || skyBridgeReady.value) {
     frameUnavailable.value = false
   }
@@ -331,7 +337,6 @@ watch(() => catalog.openRequests[props.app.id], flushOpenRequest, {
       :class="{
         'custom-app-frame--fix-blur': app.compatibility.fixBlur === true,
       }"
-      :name="app.ownerResource"
       :sandbox="sandbox"
       :src="frameUrl"
       :title="app.name"

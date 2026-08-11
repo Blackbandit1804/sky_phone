@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createCustomAppBridgeRequestHandler,
+  getCustomAppFrameBootstrapMessages,
   getSkyPhoneAppCapabilities,
   shouldReportCustomAppReady,
   type CustomAppBridgeNotification,
@@ -58,6 +59,15 @@ describe('custom app bridge', () => {
     expect(shouldReportCustomAppReady('legacy', 'bridge-ready')).toBe(false)
     expect(shouldReportCustomAppReady('sky', 'frame-load')).toBe(false)
     expect(shouldReportCustomAppReady('sky', 'bridge-ready')).toBe(true)
+  })
+
+  it('boots LB Phone frames with their documented ready signal', () => {
+    expect(
+      getCustomAppFrameBootstrapMessages({ provider: 'lb_phone' }),
+    ).toEqual(['componentsLoaded'])
+    expect(
+      getCustomAppFrameBootstrapMessages({ provider: '17mov' }),
+    ).toEqual([])
   })
 
   it('passes validated storage data and server response data through', async () => {
