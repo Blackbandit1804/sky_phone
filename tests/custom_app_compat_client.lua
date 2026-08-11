@@ -24,10 +24,16 @@ Config = {
 }
 
 json = {
-    decode = function()
+    decode = function(encoded)
+        if encoded == "null" then
+            return nil, 5
+        end
         return {}
     end,
-    encode = function()
+    encode = function(value)
+        if value == nil then
+            return "null"
+        end
         return "{}"
     end,
 }

@@ -280,7 +280,8 @@ local function normalize_json_payload(payload, maximum_bytes)
         return nil, "payload_too_large"
     end
 
-    return json.decode(encoded)
+    local decoded = json.decode(encoded)
+    return decoded
 end
 
 local function validate_optional_text(value, error_code, maximum_length)
