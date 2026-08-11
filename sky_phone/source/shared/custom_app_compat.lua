@@ -137,6 +137,7 @@ function SkyPhoneCompatibility.BuildLbDefinition(owner_resource, app_data)
         compatibility = {
             provider = SkyPhoneCompatibility.Providers.lb,
             apiVersion = 1,
+            resourceName = type(app_data.resource) == "string" and app_data.resource or owner_resource,
         },
     }
 end

@@ -27,6 +27,12 @@ import {
   customAppLifecycleScheduler,
   getCustomAppSafeArea,
 } from '@/utils/customAppLifecycle'
+import {
+  createLbPhoneFrameDocument,
+  createLbPhoneHostSettings,
+  getLbPhoneCallbackResource,
+  usesLbPhoneHostRuntime,
+} from '@/utils/lbPhoneAppBridge'
 import { nuiCall } from '@/utils/nui'
 
 const props = defineProps<{
@@ -43,7 +49,9 @@ const frame = ref<HTMLIFrameElement | null>(null)
 const frameLoaded = ref(false)
 const frameUnavailable = ref(false)
 const skyBridgeReady = ref(false)
+const lbFrameDocument = ref<string | null>(null)
 let loadTimeout: ReturnType<typeof setTimeout> | undefined
+let frameDocumentController: AbortController | undefined
 const lifecycleAppId = props.app.id
 const initialOpenRequest: CustomAppOpenRequest | undefined =
   catalog.openRequests[lifecycleAppId]
@@ -94,11 +102,18 @@ const frameUrl = computed(() => {
   return url.href
 })
 const frameOrigin = computed(() => new URL(frameUrl.value).origin)
+const lbHostRuntime = computed(() => usesLbPhoneHostRuntime(props.app))
+const frameMountable = computed(
+  () => !lbHostRuntime.value || lbFrameDocument.value !== null,
+)
+const frameSource = computed(() =>
+  lbHostRuntime.value ? undefined : frameUrl.value,
+)
 const postMessageOrigin = computed(() =>
-  props.app.bundled ? '*' : frameOrigin.value,
+  props.app.bundled || lbHostRuntime.value ? '*' : frameOrigin.value,
 )
 const sandbox = computed(() =>
-  props.app.bundled
+  props.app.bundled || lbHostRuntime.value
     ? 'allow-downloads allow-forms allow-modals allow-scripts'
     : 'allow-downloads allow-forms allow-modals allow-same-origin allow-scripts',
 )
@@ -120,6 +135,15 @@ const context = computed<SkyPhoneAppContextV1>(() => ({
   protocolVersion: PROTOCOL_VERSION,
   safeArea: getCustomAppSafeArea(props.app.orientation),
 }))
+const lbSettings = computed(() =>
+  createLbPhoneHostSettings({
+    deviceName: phone.device?.name ?? '',
+    isDarkMode: phone.isDarkMode,
+    language: phone.lang,
+    preferences: phone.preferences,
+    securityEnabled: phone.security.enabled,
+  }),
+)
 
 function postToFrame(payload: unknown): boolean {
   const target = frame.value?.contentWindow
@@ -147,6 +171,44 @@ function sendContext(): void {
     protocolVersion: PROTOCOL_VERSION,
     type: 'sky-phone-app:context',
   })
+}
+
+function sendLbSettings(): void {
+  if (!lbHostRuntime.value || !frameLoaded.value) return
+  postToFrame({
+    settings: lbSettings.value,
+    type: 'sky-phone:lb-settings',
+  })
+}
+
+async function prepareLbFrameDocument(): Promise<void> {
+  const controller = new AbortController()
+  frameDocumentController = controller
+  try {
+    const response = await fetch(frameUrl.value, {
+      credentials: 'omit',
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`)
+    }
+    const html = await response.text()
+    lbFrameDocument.value = createLbPhoneFrameDocument(html, {
+      appName: props.app.id,
+      resourceName: getLbPhoneCallbackResource(props.app),
+      settings: lbSettings.value,
+      ui: props.app.ui,
+    })
+  } catch (error) {
+    if (controller.signal.aborted) return
+    if (loadTimeout !== undefined) clearTimeout(loadTimeout)
+    loadTimeout = undefined
+    frameUnavailable.value = true
+    console.error(
+      `[Custom apps] Could not prepare LB Phone frame ${props.app.id}.`,
+      error,
+    )
+  }
 }
 
 function flushOpenRequest(): void {
@@ -216,7 +278,7 @@ async function handleBridgeRequest(
 
 function isTrustedFrameMessage(event: MessageEvent): boolean {
   if (event.source !== frame.value?.contentWindow) return false
-  if (props.app.bundled) {
+  if (props.app.bundled || lbHostRuntime.value) {
     return event.origin === 'null' || event.origin === frameOrigin.value
   }
   return event.origin === frameOrigin.value
@@ -272,6 +334,7 @@ function onFrameLoad(): void {
   )) {
     postToFrame(message)
   }
+  sendLbSettings()
   if (props.app.bridgeMode === 'legacy' || skyBridgeReady.value) {
     frameUnavailable.value = false
   }
@@ -300,16 +363,19 @@ onBeforeMount(() => {
       `[Custom apps] Frame readiness timed out for ${props.app.id}.`,
     )
   }, props.app.readyTimeoutMs)
+  if (lbHostRuntime.value) void prepareLbFrameDocument()
 })
 
 onBeforeUnmount(() => {
   if (loadTimeout !== undefined) clearTimeout(loadTimeout)
+  frameDocumentController?.abort()
   window.removeEventListener('message', onFrameMessage)
   orientation.release()
   void lifecycle.report('close')
 })
 
 watch(context, sendContext, { deep: true })
+watch(lbSettings, sendLbSettings, { deep: true })
 watch(
   () => props.app.orientation,
   (nextOrientation) => orientation.apply(nextOrientation),
@@ -331,6 +397,7 @@ watch(() => catalog.openRequests[props.app.id], flushOpenRequest, {
     }"
   >
     <iframe
+      v-if="frameMountable"
       ref="frame"
       v-show="frameReady && !frameUnavailable"
       class="custom-app-frame"
@@ -338,7 +405,8 @@ watch(() => catalog.openRequests[props.app.id], flushOpenRequest, {
         'custom-app-frame--fix-blur': app.compatibility.fixBlur === true,
       }"
       :sandbox="sandbox"
-      :src="frameUrl"
+      :src="frameSource"
+      :srcdoc="lbFrameDocument ?? undefined"
       :title="app.name"
       referrerpolicy="no-referrer"
       @load="onFrameLoad"

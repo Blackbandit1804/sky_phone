@@ -13,6 +13,18 @@ assert(lb_definition.id == "dispatch", "LB identifier must map to the Sky app ID
 assert(lb_definition.ui == "ui/index.html", "LB relative UI must remain owner-relative")
 assert(lb_definition.orientation == "landscape", "LB landscape flag must be preserved")
 assert(type(lb_definition.onOpen) == "function", "LB onUse must map to the open lifecycle")
+assert(lb_definition.compatibility.resourceName == "lb_app", "LB callbacks must target the registering resource")
+
+local bridged_lb_definition = assert(SkyPhoneCompatibility.BuildLbDefinition("phone_adapter", {
+    identifier = "bridged",
+    name = "Bridged",
+    ui = "manufacturer_app/ui/index.html",
+    resource = "manufacturer_app",
+}))
+assert(
+    bridged_lb_definition.compatibility.resourceName == "manufacturer_app",
+    "LB adapter callbacks must target the declared app resource"
+)
 
 local invalid_lb, invalid_lb_error = SkyPhoneCompatibility.BuildLbDefinition("lb_app", {
     identifier = "dispatch",
