@@ -11,6 +11,7 @@ import {
   kChip,
   kDialog,
   kDialogButton,
+  kGlass,
   kIcon,
   kLink,
   kList,
@@ -41,7 +42,6 @@ import {
   BriefcaseBusiness,
   Building2,
   Check,
-  CheckCircle2,
   CircleAlert,
   ClipboardList,
   Clock3,
@@ -62,7 +62,15 @@ import {
   UsersRound,
   X,
 } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useCallsStore } from '@/stores/calls'
@@ -82,7 +90,6 @@ import type {
   CompanyRequestSummary,
   CompanyService,
   CompanySummary,
-  CompanyWorkFilter,
 } from '@/types/companies'
 import type { PhoneMedia } from '@/types/media'
 import { nuiCall } from '@/utils/nui'
@@ -132,14 +139,9 @@ const screen = ref<CompaniesScreen>('root')
 const requestOrigin = ref<RequestOrigin>('customer')
 const search = ref('')
 const selectedCategory = ref<string | null>(null)
-const onlyAvailable = ref(false)
-const onlyWithLocation = ref(false)
-const onlyAcceptingRequests = ref(false)
-const directorySort = ref<CompanyDirectoryFilters['sort']>('relevance')
 const requestList = ref<CompanyRequestList>('open')
-const workFilter = ref<CompanyWorkFilter>('new')
 const requestSheetOpened = ref(false)
-const requestConfirmOpened = ref(false)
+const requestSheetContent = ref<HTMLElement | null>(null)
 const requestServiceId = ref('')
 const requestSubject = ref('')
 const requestDescription = ref('')
@@ -170,23 +172,18 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 const directoryFilters = computed<CompanyDirectoryFilters>(() => ({
-  acceptsRequests: onlyAcceptingRequests.value,
-  availability: onlyAvailable.value ? 'available' : null,
+  acceptsRequests: false,
+  availability: null,
   categoryId: selectedCategory.value,
-  hasLocation: onlyWithLocation.value,
+  hasLocation: false,
   search: search.value.trim(),
-  sort: directorySort.value,
+  sort: 'relevance',
 }))
 const availableCompanies = computed(() =>
   companies.directory.filter((company) => company.availability === 'available'),
 )
 const filtersActive = computed(
-  () =>
-    Boolean(search.value.trim()) ||
-    Boolean(selectedCategory.value) ||
-    onlyAvailable.value ||
-    onlyWithLocation.value ||
-    onlyAcceptingRequests.value,
+  () => Boolean(search.value.trim()) || Boolean(selectedCategory.value),
 )
 const activeCompany = computed(() => companies.company)
 const workCompany = computed(() => companies.workContext?.company ?? null)
@@ -195,11 +192,6 @@ const managerLogoUrl = computed(
 )
 const managerCoverUrl = computed(
   () => selectedCoverMedia.value?.url ?? workCompany.value?.coverUrl ?? null,
-)
-const selectedService = computed(() =>
-  activeCompany.value?.services.find(
-    (service) => service.id === requestServiceId.value,
-  ),
 )
 const requestProgress = computed(() => {
   if (!requestServiceId.value) return 0.25
@@ -236,13 +228,6 @@ const availabilityValues: CompanyAvailability[] = [
   'available',
   'busy',
   'closed',
-]
-const workFilters: CompanyWorkFilter[] = [
-  'new',
-  'assigned',
-  'in_progress',
-  'waiting_customer',
-  'completed',
 ]
 const weekdayKeys = [
   'monday',
@@ -384,14 +369,6 @@ function requestSubtitle(request: CompanyRequestSummary): string {
   return parts.join(' · ')
 }
 
-function assignmentLabel(
-  value: CompanyRequestSummary['assignedLabel'],
-): string {
-  return value
-    ? phone.t(`Apps.companies.assignmentLabels.${value}`)
-    : phone.t('Apps.companies.work.unassigned')
-}
-
 function messageAuthorLabel(value: 'company' | 'customer' | 'you'): string {
   return phone.t(`Apps.companies.messageAuthors.${value}`)
 }
@@ -416,10 +393,6 @@ function eventLabel(event: CompanyRequestEvent): string {
 function resetDirectoryFilters(): void {
   search.value = ''
   selectedCategory.value = null
-  onlyAvailable.value = false
-  onlyWithLocation.value = false
-  onlyAcceptingRequests.value = false
-  directorySort.value = 'relevance'
   void companies.loadCompanies(directoryFilters.value)
 }
 
@@ -442,12 +415,7 @@ async function selectTab(tab: CompaniesTab): Promise<void> {
     await companies.loadCompanies(directoryFilters.value)
   }
   if (tab === 'requests') await companies.loadMyRequests(requestList.value)
-  if (tab === 'work') {
-    const loaded = await companies.loadWorkContext()
-    if (loaded && companies.workContext?.authorized) {
-      await companies.loadWorkQueue(workFilter.value)
-    }
-  }
+  if (tab === 'work') await companies.loadWorkContext()
 }
 
 async function openCompany(companyId: string): Promise<void> {
@@ -576,7 +544,6 @@ async function submitRequest(): Promise<void> {
     serviceId: requestServiceId.value,
     subject: requestSubject.value.trim(),
   })
-  requestConfirmOpened.value = false
   if (!response.success || !response.data?.request) {
     if (response.error === 'revision_conflict')
       conflictDialogOpened.value = true
@@ -933,24 +900,15 @@ async function reloadConflict(): Promise<void> {
 }
 
 watch(search, queueDirectoryLoad)
-watch(
-  [
-    selectedCategory,
-    onlyAvailable,
-    onlyWithLocation,
-    onlyAcceptingRequests,
-    directorySort,
-  ],
-  () => void companies.loadCompanies(directoryFilters.value),
-)
+watch(selectedCategory, () => companies.loadCompanies(directoryFilters.value))
 watch(requestList, () => {
   if (activeTab.value === 'requests')
     void companies.loadMyRequests(requestList.value)
 })
-watch(workFilter, () => {
-  if (activeTab.value === 'work' && companies.workContext?.authorized) {
-    void companies.loadWorkQueue(workFilter.value)
-  }
+watch(requestSheetOpened, async (opened) => {
+  if (!opened) return
+  await nextTick()
+  requestSheetContent.value?.scrollTo({ top: 0 })
 })
 watch(
   () => route.query.requestId,
@@ -1098,50 +1056,21 @@ onBeforeUnmount(() => {
         </k-chip>
       </div>
 
-      <k-card class="companies-filter-card" :content-wrap="false">
-        <k-list nested>
-          <k-list-item
-            :title="phone.t('Apps.companies.directory.availableNow')"
-            :subtitle="phone.t('Apps.companies.directory.availableNowHint')"
-          >
-            <template #after>
-              <k-toggle
-                :checked="onlyAvailable"
-                :aria-label="phone.t('Apps.companies.directory.availableNow')"
-                @change="onlyAvailable = !onlyAvailable"
-              />
-            </template>
-          </k-list-item>
-          <k-list-item :title="phone.t('Apps.companies.directory.moreFilters')">
-            <template #after>
-              <div class="companies-inline-chips">
-                <k-chip
-                  component="button"
-                  type="button"
-                  :class="{ 'is-selected': onlyWithLocation }"
-                  @click="onlyWithLocation = !onlyWithLocation"
-                >
-                  {{ phone.t('Apps.companies.directory.hasLocation') }}
-                </k-chip>
-                <k-chip
-                  component="button"
-                  type="button"
-                  :class="{ 'is-selected': onlyAcceptingRequests }"
-                  @click="onlyAcceptingRequests = !onlyAcceptingRequests"
-                >
-                  {{ phone.t('Apps.companies.directory.acceptsRequests') }}
-                </k-chip>
-              </div>
-            </template>
-          </k-list-item>
-        </k-list>
-      </k-card>
-
-      <div v-if="companies.directoryLoading" class="companies-state">
+      <k-block
+        v-if="companies.directoryLoading"
+        inset
+        strong
+        class="companies-state"
+      >
         <k-preloader />
         <span>{{ phone.t('Apps.companies.loading.directory') }}</span>
-      </div>
-      <div v-else-if="companies.directoryError" class="companies-state">
+      </k-block>
+      <k-block
+        v-else-if="companies.directoryError"
+        inset
+        strong
+        class="companies-state"
+      >
         <CircleAlert :size="34" />
         <strong>{{ phone.t('Apps.companies.states.directoryError') }}</strong>
         <p>{{ errorText(companies.directoryError) }}</p>
@@ -1149,8 +1078,13 @@ onBeforeUnmount(() => {
           <RefreshCw :size="16" />
           {{ phone.t('Apps.companies.tryAgain') }}
         </k-button>
-      </div>
-      <div v-else-if="!companies.directory.length" class="companies-state">
+      </k-block>
+      <k-block
+        v-else-if="!companies.directory.length"
+        inset
+        strong
+        class="companies-state"
+      >
         <Building2 :size="36" />
         <strong>
           {{
@@ -1173,9 +1107,9 @@ onBeforeUnmount(() => {
         <k-button v-if="filtersActive" rounded @click="resetDirectoryFilters">
           {{ phone.t('Apps.companies.directory.resetFilters') }}
         </k-button>
-      </div>
+      </k-block>
       <template v-else>
-        <template v-if="availableCompanies.length && !onlyAvailable">
+        <template v-if="availableCompanies.length">
           <k-block-title>{{
             phone.t('Apps.companies.directory.availableSection')
           }}</k-block-title>
@@ -1286,19 +1220,34 @@ onBeforeUnmount(() => {
         </k-segmented>
       </div>
 
-      <div v-if="companies.myRequestsLoading" class="companies-state">
+      <k-block
+        v-if="companies.myRequestsLoading"
+        inset
+        strong
+        class="companies-state"
+      >
         <k-preloader />
         <span>{{ phone.t('Apps.companies.loading.requests') }}</span>
-      </div>
-      <div v-else-if="companies.myRequestsError" class="companies-state">
+      </k-block>
+      <k-block
+        v-else-if="companies.myRequestsError"
+        inset
+        strong
+        class="companies-state"
+      >
         <CircleAlert :size="34" />
         <strong>{{ phone.t('Apps.companies.states.requestsError') }}</strong>
         <p>{{ errorText(companies.myRequestsError) }}</p>
         <k-button rounded @click="companies.loadMyRequests(requestList)">
           {{ phone.t('Apps.companies.tryAgain') }}
         </k-button>
-      </div>
-      <div v-else-if="!companies.myRequests.length" class="companies-state">
+      </k-block>
+      <k-block
+        v-else-if="!companies.myRequests.length"
+        inset
+        strong
+        class="companies-state"
+      >
         <ClipboardList :size="36" />
         <strong>{{
           phone.t(
@@ -1313,7 +1262,7 @@ onBeforeUnmount(() => {
         >
           {{ phone.t('Apps.companies.requests.findCompany') }}
         </k-button>
-      </div>
+      </k-block>
       <k-list v-else inset strong class="company-request-list">
         <k-list-item
           v-for="item in companies.myRequests"
@@ -1359,26 +1308,38 @@ onBeforeUnmount(() => {
       v-else-if="screen === 'root' && activeTab === 'work'"
       class="companies-content companies-work"
     >
-      <div v-if="companies.workContextLoading" class="companies-state">
+      <k-block
+        v-if="companies.workContextLoading"
+        inset
+        strong
+        class="companies-state"
+      >
         <k-preloader />
         <span>{{ phone.t('Apps.companies.loading.work') }}</span>
-      </div>
-      <div v-else-if="companies.workContextError" class="companies-state">
+      </k-block>
+      <k-block
+        v-else-if="companies.workContextError"
+        inset
+        strong
+        class="companies-state"
+      >
         <CircleAlert :size="34" />
         <strong>{{ phone.t('Apps.companies.states.workError') }}</strong>
         <p>{{ errorText(companies.workContextError) }}</p>
         <k-button rounded @click="selectTab('work')">
           {{ phone.t('Apps.companies.tryAgain') }}
         </k-button>
-      </div>
-      <div
+      </k-block>
+      <k-block
         v-else-if="!companies.workContext?.authorized"
+        inset
+        strong
         class="companies-state"
       >
         <BriefcaseBusiness :size="38" />
         <strong>{{ phone.t('Apps.companies.work.notAuthorized') }}</strong>
         <p>{{ phone.t('Apps.companies.work.notAuthorizedBody') }}</p>
-      </div>
+      </k-block>
       <template v-else-if="companies.workContext && workCompany">
         <k-card class="work-identity-card">
           <span class="company-logo company-logo--large">
@@ -1454,98 +1415,25 @@ onBeforeUnmount(() => {
           phone.t('Apps.companies.work.overview')
         }}</k-block-title>
         <div class="work-metrics">
-          <k-card>
+          <k-glass :highlight="false" class="work-metric">
             <strong>{{ companies.workContext.metrics.new }}</strong>
             <span>{{ phone.t('Apps.companies.work.metrics.new') }}</span>
-          </k-card>
-          <k-card>
+          </k-glass>
+          <k-glass :highlight="false" class="work-metric">
             <strong>{{ companies.workContext.metrics.assigned }}</strong>
             <span>{{ phone.t('Apps.companies.work.metrics.assigned') }}</span>
-          </k-card>
-          <k-card>
+          </k-glass>
+          <k-glass :highlight="false" class="work-metric">
             <strong>{{ companies.workContext.metrics.waiting }}</strong>
             <span>{{ phone.t('Apps.companies.work.metrics.waiting') }}</span>
-          </k-card>
-          <k-card>
+          </k-glass>
+          <k-glass :highlight="false" class="work-metric">
             <strong>{{ companies.workContext.metrics.completedToday }}</strong>
             <span>{{
               phone.t('Apps.companies.work.metrics.completedToday')
             }}</span>
-          </k-card>
+          </k-glass>
         </div>
-
-        <k-block-title>{{
-          phone.t('Apps.companies.work.queue')
-        }}</k-block-title>
-        <div class="companies-chip-row work-filter-row">
-          <k-chip
-            v-for="filter in workFilters"
-            :key="filter"
-            component="button"
-            type="button"
-            :class="{ 'is-selected': workFilter === filter }"
-            @click="workFilter = filter"
-          >
-            {{ phone.t(`Apps.companies.work.filters.${filter}`) }}
-          </k-chip>
-        </div>
-        <div
-          v-if="companies.workQueueLoading"
-          class="companies-state companies-state--compact"
-        >
-          <k-preloader />
-        </div>
-        <div
-          v-else-if="companies.workQueueError"
-          class="companies-state companies-state--compact"
-        >
-          <CircleAlert :size="28" />
-          <p>{{ errorText(companies.workQueueError) }}</p>
-          <k-button small rounded @click="companies.loadWorkQueue(workFilter)">
-            {{ phone.t('Apps.companies.tryAgain') }}
-          </k-button>
-        </div>
-        <div
-          v-else-if="!companies.workQueue.length"
-          class="companies-state companies-state--compact"
-        >
-          <CheckCircle2 :size="31" />
-          <strong>{{ phone.t('Apps.companies.work.emptyQueue') }}</strong>
-          <p>{{ phone.t('Apps.companies.work.emptyQueueBody') }}</p>
-        </div>
-        <k-list v-else inset strong class="company-request-list">
-          <k-list-item
-            v-for="item in companies.workQueue"
-            :key="item.id"
-            link
-            link-component="button"
-            :link-props="{ type: 'button' }"
-            :title="item.subject"
-            :subtitle="requestSubtitle(item)"
-            :header="assignmentLabel(item.assignedLabel)"
-            @click="openRequest(item.id, 'work')"
-          >
-            <template #media
-              ><span class="company-request-icon"
-                ><BriefcaseBusiness :size="19" /></span
-            ></template>
-            <template #after>
-              <k-badge :class="statusClass(item.status)">
-                {{ phone.t(`Apps.companies.requestStatuses.${item.status}`) }}
-              </k-badge>
-            </template>
-          </k-list-item>
-        </k-list>
-        <k-button
-          v-if="companies.workQueueNextCursor"
-          outline
-          rounded
-          class="companies-load-more"
-          :disabled="companies.workQueueLoadingMore"
-          @click="companies.loadWorkQueue(workFilter, true)"
-        >
-          {{ phone.t('Apps.companies.loadMore') }}
-        </k-button>
       </template>
     </section>
 
@@ -1553,15 +1441,19 @@ onBeforeUnmount(() => {
       v-else-if="screen === 'company'"
       class="companies-content company-profile"
     >
-      <div
+      <k-block
         v-if="companies.directoryLoading && !activeCompany"
+        inset
+        strong
         class="companies-state"
       >
         <k-preloader />
         <span>{{ phone.t('Apps.companies.loading.profile') }}</span>
-      </div>
-      <div
+      </k-block>
+      <k-block
         v-else-if="companies.directoryError || !activeCompany"
+        inset
+        strong
         class="companies-state"
       >
         <CircleAlert :size="34" />
@@ -1570,7 +1462,7 @@ onBeforeUnmount(() => {
         <k-button rounded @click="goBack">{{
           phone.t('Apps.companies.back')
         }}</k-button>
-      </div>
+      </k-block>
       <template v-else>
         <div
           class="company-cover"
@@ -1691,7 +1583,7 @@ onBeforeUnmount(() => {
           />
         </k-list>
 
-        <div class="company-profile-actions">
+        <k-glass :highlight="false" class="company-profile-actions">
           <k-button
             rounded
             :disabled="!activeCompany.canCall || !activeCompany.phoneNumber"
@@ -1726,7 +1618,7 @@ onBeforeUnmount(() => {
               phone.t('Apps.companies.profile.request')
             }}
           </k-button>
-        </div>
+        </k-glass>
       </template>
     </section>
 
@@ -1734,12 +1626,19 @@ onBeforeUnmount(() => {
       v-else-if="screen === 'request'"
       class="companies-content request-thread"
     >
-      <div v-if="companies.requestLoading" class="companies-state">
+      <k-block
+        v-if="companies.requestLoading"
+        inset
+        strong
+        class="companies-state"
+      >
         <k-preloader />
         <span>{{ phone.t('Apps.companies.loading.request') }}</span>
-      </div>
-      <div
+      </k-block>
+      <k-block
         v-else-if="companies.requestError || !companies.request"
+        inset
+        strong
         class="companies-state"
       >
         <CircleAlert :size="34" />
@@ -1748,7 +1647,7 @@ onBeforeUnmount(() => {
         <k-button rounded @click="goBack">{{
           phone.t('Apps.companies.back')
         }}</k-button>
-      </div>
+      </k-block>
       <template v-else>
         <div class="request-thread-scroll">
           <k-card class="request-summary-card">
@@ -1905,7 +1804,13 @@ onBeforeUnmount(() => {
           phone.t('Apps.companies.manager.profile')
         }}</k-block-title>
         <div class="manager-media-grid">
-          <button type="button" @click="chooseManagerMedia('cover')">
+          <k-button
+            tonal
+            rounded
+            large
+            class="manager-media-button"
+            @click="chooseManagerMedia('cover')"
+          >
             <img
               v-if="managerCoverUrl"
               :src="managerCoverUrl"
@@ -1914,8 +1819,14 @@ onBeforeUnmount(() => {
             />
             <span v-else><ImagePlus :size="22" /></span>
             <small>{{ phone.t('Apps.companies.manager.chooseCover') }}</small>
-          </button>
-          <button type="button" @click="chooseManagerMedia('logo')">
+          </k-button>
+          <k-button
+            tonal
+            rounded
+            large
+            class="manager-media-button"
+            @click="chooseManagerMedia('logo')"
+          >
             <img
               v-if="managerLogoUrl"
               :src="managerLogoUrl"
@@ -1924,7 +1835,7 @@ onBeforeUnmount(() => {
             />
             <span v-else><ImagePlus :size="22" /></span>
             <small>{{ phone.t('Apps.companies.manager.chooseLogo') }}</small>
-          </button>
+          </k-button>
         </div>
         <k-list inset strong class="manager-form-list">
           <k-list-input
@@ -2243,6 +2154,7 @@ onBeforeUnmount(() => {
     >
       <section
         v-if="requestSheetOpened && activeCompany"
+        ref="requestSheetContent"
         class="companies-sheet__content"
         role="dialog"
         aria-modal="true"
@@ -2264,10 +2176,10 @@ onBeforeUnmount(() => {
           </k-link>
         </header>
         <k-progressbar :progress="requestProgress" />
-        <k-block-title>{{
+        <k-block-title class="composer-service-title">{{
           phone.t('Apps.companies.composer.chooseService')
         }}</k-block-title>
-        <k-list inset strong>
+        <k-list inset strong class="composer-service-list">
           <k-list-item
             v-for="service in activeCompany.services.filter(
               (item) => item.active && item.acceptsRequests,
@@ -2276,7 +2188,11 @@ onBeforeUnmount(() => {
             label
             :title="service.title"
             :subtitle="service.description"
-            :after="service.priceText ?? undefined"
+            title-font-size-ios="text-[15px]"
+            title-font-size-material="text-[15px]"
+            media-class="!py-2.5 !me-3"
+            inner-class="!py-2.5 !pe-safe-3"
+            title-wrap-class="!min-h-5"
           >
             <template #media>
               <k-radio
@@ -2285,6 +2201,11 @@ onBeforeUnmount(() => {
                 :checked="requestServiceId === service.id"
                 @change="requestServiceId = service.id"
               />
+            </template>
+            <template v-if="service.priceText" #after>
+              <span class="composer-service-price">{{
+                service.priceText
+              }}</span>
             </template>
           </k-list-item>
         </k-list>
@@ -2295,6 +2216,7 @@ onBeforeUnmount(() => {
             :label="phone.t('Apps.companies.composer.subject')"
             :placeholder="phone.t('Apps.companies.composer.subjectPlaceholder')"
             :value="requestSubject"
+            :input-style="{ height: '38px' }"
             @input="requestSubject = eventValue($event)"
           />
           <k-list-input
@@ -2306,6 +2228,13 @@ onBeforeUnmount(() => {
               phone.t('Apps.companies.composer.descriptionPlaceholder')
             "
             :value="requestDescription"
+            :input-style="{
+              height: '72px',
+              lineHeight: '20px',
+              paddingBottom: '8px',
+              paddingTop: '8px',
+              resize: 'none',
+            }"
             @input="requestDescription = eventValue($event)"
           />
         </k-list>
@@ -2356,10 +2285,11 @@ onBeforeUnmount(() => {
         <k-button
           large
           rounded
-          :disabled="!canSubmitRequest"
-          @click="requestConfirmOpened = true"
+          :disabled="!canSubmitRequest || companies.mutating"
+          @click="submitRequest"
         >
-          {{ phone.t('Apps.companies.composer.review') }}
+          <k-preloader v-if="companies.mutating" />
+          <span v-else>{{ phone.t('Apps.companies.composer.send') }}</span>
         </k-button>
       </section>
     </k-sheet>
@@ -2433,12 +2363,14 @@ onBeforeUnmount(() => {
             <X :size="19" />
           </k-link>
         </header>
-        <div
+        <k-block
           v-if="companies.membersLoading"
+          inset
+          strong
           class="companies-state companies-state--compact"
         >
           <k-preloader />
-        </div>
+        </k-block>
         <k-list v-else inset strong>
           <k-list-item
             v-for="member in companies.members"
@@ -2471,31 +2403,6 @@ onBeforeUnmount(() => {
         </k-button>
       </section>
     </k-sheet>
-
-    <k-dialog
-      :opened="requestConfirmOpened"
-      :title="phone.t('Apps.companies.composer.confirmTitle')"
-      :content="
-        phone.t('Apps.companies.composer.confirmBody', {
-          company: activeCompany?.name ?? '',
-          service: selectedService?.title ?? '',
-        })
-      "
-      @backdropclick="requestConfirmOpened = false"
-    >
-      <template #buttons>
-        <k-dialog-button @click="requestConfirmOpened = false">
-          {{ phone.t('Apps.companies.composer.edit') }}
-        </k-dialog-button>
-        <k-dialog-button
-          strong
-          :disabled="companies.mutating"
-          @click="submitRequest"
-        >
-          {{ phone.t('Apps.companies.composer.send') }}
-        </k-dialog-button>
-      </template>
-    </k-dialog>
 
     <k-dialog
       :opened="cancelDialogOpened"
@@ -2554,6 +2461,8 @@ onBeforeUnmount(() => {
   --k-safe-area-bottom: 25px;
   position: relative;
   height: 100%;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   color: #111827;
 }
@@ -2582,14 +2491,17 @@ onBeforeUnmount(() => {
 .companies-content {
   position: relative;
   z-index: 1;
-}
-
-.companies-content {
-  height: calc(100% - 44px);
-  padding: 10px 10px 92px;
+  min-height: 0;
+  padding: 10px 10px calc(var(--k-safe-area-bottom) + 88px);
+  flex: 1;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
+}
+
+.companies-navbar {
+  flex: none;
 }
 
 .companies-content::-webkit-scrollbar,
@@ -2615,13 +2527,11 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.companies-chip-row :deep(.is-selected),
-.companies-inline-chips :deep(.is-selected) {
+.companies-chip-row :deep(.is-selected) {
   color: white;
   background: linear-gradient(135deg, var(--company-blue), var(--company-cyan));
 }
 
-.companies-filter-card,
 .work-identity-card,
 .manager-intro,
 .request-summary-card,
@@ -2636,7 +2546,6 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
-.companies-app--dark .companies-filter-card,
 .companies-app--dark .work-identity-card,
 .companies-app--dark .manager-intro,
 .companies-app--dark .request-summary-card,
@@ -2646,20 +2555,9 @@ onBeforeUnmount(() => {
   background: rgb(20 30 46 / 70%);
 }
 
-.companies-inline-chips {
-  display: flex;
-  max-width: 144px;
-  gap: 4px;
-  overflow-x: auto;
-}
-
-.companies-inline-chips :deep(.k-chip) {
-  flex: none;
-  font-size: 9px;
-}
-
 .companies-state {
   min-height: 260px;
+  margin: 14px 6px;
   padding: 36px 22px;
   display: flex;
   flex-direction: column;
@@ -2723,6 +2621,16 @@ onBeforeUnmount(() => {
 .company-list,
 .company-request-list {
   margin-top: 6px;
+}
+
+.company-list :deep(.k-list-item > button),
+.company-request-list :deep(.k-list-item > button) {
+  width: 100%;
+  text-align: left;
+}
+
+.companies-content :deep(.k-block-title) {
+  margin-bottom: 10px;
 }
 
 .company-logo {
@@ -2872,15 +2780,13 @@ onBeforeUnmount(() => {
   margin: 0 5px 14px;
 }
 
-.work-metrics :deep(.k-card) {
+.work-metric {
   margin: 0;
-  border-radius: 16px;
-}
-
-.work-metrics :deep(> *) {
+  padding: 15px 16px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  border-radius: 16px;
 }
 
 .work-metrics strong {
@@ -2891,10 +2797,6 @@ onBeforeUnmount(() => {
 .work-metrics span {
   color: #64748b;
   font-size: 10px;
-}
-
-.work-filter-row {
-  padding-inline: 5px;
 }
 
 .company-cover {
@@ -2916,10 +2818,6 @@ onBeforeUnmount(() => {
   border: 3px solid rgb(255 255 255 / 88%);
   border-radius: 20px;
   font-size: 18px;
-}
-
-.company-profile {
-  padding-bottom: 116px;
 }
 
 .company-profile-heading {
@@ -2956,7 +2854,17 @@ onBeforeUnmount(() => {
 }
 
 .company-profile {
-  padding-bottom: 145px;
+  padding-bottom: calc(var(--k-safe-area-bottom) + 24px);
+}
+
+.company-profile > :deep(.k-block-title) {
+  margin-top: 18px;
+  margin-bottom: 6px;
+}
+
+.company-profile > :deep(.k-list) {
+  margin-top: 8px;
+  margin-bottom: 10px;
 }
 
 .companies-app--dark .company-profile-heading p,
@@ -2973,26 +2881,19 @@ onBeforeUnmount(() => {
 }
 
 .company-profile-actions {
-  position: absolute;
+  position: relative;
   z-index: 4;
-  right: 8px;
-  bottom: 28px;
-  left: 8px;
+  margin: 18px 0 0;
   padding: 8px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 7px;
   border: 1px solid rgb(255 255 255 / 45%);
   border-radius: 20px;
-  background: rgb(255 255 255 / 76%);
-  box-shadow: 0 18px 35px rgb(15 23 42 / 18%);
-  backdrop-filter: blur(22px) saturate(150%);
-  -webkit-backdrop-filter: blur(22px) saturate(150%);
 }
 
 .companies-app--dark .company-profile-actions {
   border-color: rgb(255 255 255 / 8%);
-  background: rgb(15 23 42 / 80%);
 }
 
 .request-thread {
@@ -3149,7 +3050,7 @@ onBeforeUnmount(() => {
   margin: 0 10px 12px;
 }
 
-.manager-media-grid button {
+.manager-media-button {
   min-width: 0;
   min-height: 86px;
   overflow: hidden;
@@ -3157,10 +3058,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border: 1px solid rgb(148 163 184 / 30%);
-  border-radius: 16px;
   padding: 0;
-  color: var(--company-blue);
-  background: rgb(255 255 255 / 62%);
 }
 
 .manager-media-grid img {
@@ -3183,10 +3081,6 @@ onBeforeUnmount(() => {
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.companies-app--dark .manager-media-grid button {
-  background: rgb(30 41 59 / 66%);
 }
 
 .manager-location {
@@ -3274,8 +3168,47 @@ onBeforeUnmount(() => {
   font-size: 9px;
 }
 
+.composer-service-title {
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+
+.composer-service-list {
+  margin-top: 0;
+  margin-right: 8px;
+  margin-bottom: 10px;
+  margin-left: 8px;
+}
+
+.composer-service-list :deep(.k-list-item .text-sm) {
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-service-list :deep(.k-radio > i) {
+  width: 20px;
+  height: 20px;
+}
+
+.composer-service-price {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .composer-form-list {
-  margin-top: 12px;
+  margin-top: 10px;
+  margin-right: 8px;
+  margin-bottom: 10px;
+  margin-left: 8px;
+}
+
+.composer-form-list :deep(.k-list-input) {
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .composer-contact-card {
