@@ -1,5 +1,15 @@
 SkyPhoneCompatibility = {}
 
+function SkyPhoneCompatibility.RegisterExportAlias(resource_name, export_name, handler)
+    assert(type(resource_name) == "string" and resource_name ~= "", "Export alias resource must be a non-empty string")
+    assert(type(export_name) == "string" and export_name ~= "", "Export alias name must be a non-empty string")
+    assert(type(handler) == "function", "Export alias handler must be a function")
+
+    AddEventHandler(("__cfx_export_%s_%s"):format(resource_name, export_name), function(set_callback)
+        set_callback(handler)
+    end)
+end
+
 SkyPhoneCompatibility.Providers = {
     lb = "lb_phone",
     seventeen = "17mov",
@@ -24,6 +34,34 @@ local function normalize_at_resource_url(owner_resource, url, error_prefix)
         return nil, error_prefix .. "_owner_mismatch"
     end
     return owner_resource .. "/" .. url_path
+end
+
+local function resolve_lb_asset_resource(owner_resource, app_data)
+    local ui = app_data.ui
+    if type(ui) ~= "string" then
+        return nil
+    end
+
+    local explicit_ui_resource = ui:match("^https://cfx%-nui%-([^/]+)/")
+        or ui:match("^nui://([^/]+)/")
+    local asset_resource = explicit_ui_resource or ui:match("^([%w][%w._-]*)/")
+    if not asset_resource or asset_resource == owner_resource then
+        return nil
+    end
+
+    if explicit_ui_resource or app_data.resource == asset_resource then
+        return asset_resource
+    end
+
+    local icon = app_data.icon
+    local icon_resource = type(icon) == "string" and (
+        icon:match("^https://cfx%-nui%-([^/]+)/") or icon:match("^nui://([^/]+)/")
+    ) or nil
+    if icon_resource == asset_resource then
+        return asset_resource
+    end
+
+    return nil
 end
 
 local function build_locale_maps(app_name, locales)
@@ -87,6 +125,7 @@ function SkyPhoneCompatibility.BuildLbDefinition(owner_resource, app_data)
         developer = app_data.developer,
         category = app_data.game and "games" or "utilities",
         ui = ui,
+        assetResource = resolve_lb_asset_resource(owner_resource, app_data),
         bridgeMode = "legacy",
         icon = app_data.icon,
         defaultInstalled = app_data.defaultApp or false,

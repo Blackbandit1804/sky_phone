@@ -26,10 +26,22 @@ local active_app_id = nil
 local active_app_ready = false
 local phone_open = false
 local queued_messages = {}
-local default_icon_url = ("https://cfx-nui-%s/custom_apps/_sdk/default-icon.svg"):format(current_resource)
+local default_icon_url = ("https://cfx-nui-%s/img/custom-app.svg"):format(current_resource)
 
 local function trim(value)
     return value:match("^%s*(.-)%s*$")
+end
+
+local function is_callable(value)
+    if type(value) == "function" then
+        return true
+    end
+    if type(value) ~= "table" then
+        return false
+    end
+
+    local value_metatable = getmetatable(value)
+    return type(value_metatable) == "table" and type(value_metatable.__call) == "function"
 end
 
 local function validate_owner_resource(owner_resource, allow_stopping)
@@ -118,7 +130,7 @@ local function validate_asset_path(path)
     return true
 end
 
-local function normalize_asset_url(value, original_owner, adapter_resource, required)
+local function normalize_asset_url(value, original_owner, adapter_resource, asset_resource, required)
     if value == nil and not required then
         return nil
     end
@@ -136,6 +148,9 @@ local function normalize_asset_url(value, original_owner, adapter_resource, requ
     }
     if adapter_resource then
         allowed_owners[adapter_resource] = true
+    end
+    if asset_resource then
+        allowed_owners[asset_resource] = true
     end
 
     local cfx_owner = url:match("^https://cfx%-nui%-([^/]+)/")
@@ -175,6 +190,13 @@ local function normalize_asset_url(value, original_owner, adapter_resource, requ
         if url:sub(1, #adapter_prefix) == adapter_prefix then
             asset_owner = adapter_resource
             asset_path = url:sub(#adapter_prefix + 1)
+        end
+    end
+    if asset_resource then
+        local asset_prefix = asset_resource .. "/"
+        if url:sub(1, #asset_prefix) == asset_prefix then
+            asset_owner = asset_resource
+            asset_path = url:sub(#asset_prefix + 1)
         end
     end
 
@@ -326,14 +348,42 @@ local function normalize_external_definition(owner_resource, adapter_resource, d
         return nil, "invalid_category"
     end
 
-    local ui, ui_error = normalize_asset_url(definition.ui, owner_resource, adapter_resource, true)
+    local asset_resource = definition.assetResource
+    if asset_resource ~= nil then
+        if definition.compatibility == nil then
+            return nil, "asset_resource_not_allowed"
+        end
+        local valid_asset_resource, asset_resource_error = validate_owner_resource(asset_resource, false)
+        if not valid_asset_resource then
+            return nil, asset_resource_error
+        end
+    end
+
+    local ui, ui_error = normalize_asset_url(
+        definition.ui,
+        owner_resource,
+        adapter_resource,
+        asset_resource,
+        true
+    )
     if not ui then
         return nil, ui_error
     end
 
-    local icon, icon_error = normalize_asset_url(definition.icon, owner_resource, adapter_resource, false)
+    local icon, icon_error = normalize_asset_url(
+        definition.icon,
+        owner_resource,
+        adapter_resource,
+        asset_resource,
+        false
+    )
     if definition.icon ~= nil and not icon then
-        return nil, icon_error
+        if definition.compatibility == nil then
+            return nil, icon_error
+        end
+        print((
+            "[sky_phone] Custom app '%s' from '%s' uses an unavailable icon (%s); using the default icon."
+        ):format(definition.id, owner_resource, icon_error))
     end
 
     local permissions, permissions_error = SkyPhoneApps.ValidatePermissions(definition.permissions)
@@ -387,7 +437,7 @@ local function normalize_external_definition(owner_resource, adapter_resource, d
     local hooks = {}
     for hook_name in pairs(HOOK_NAMES) do
         local hook = definition[hook_name]
-        if hook ~= nil and type(hook) ~= "function" then
+        if hook ~= nil and not is_callable(hook) then
             return nil, "invalid_" .. hook_name
         end
         hooks[hook_name] = hook
@@ -1280,6 +1330,12 @@ exports("SendCustomAppNotificationFromAdapter", send_custom_app_notification_fro
 exports("UpdateCustomApp", update_custom_app)
 exports("UpdateCustomAppFromAdapter", update_custom_app_from_adapter)
 
+SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "AddCustomApp", add_custom_app_export)
+SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "RemoveCustomApp", remove_custom_app)
+SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "SendCustomAppMessage", send_custom_app_message)
+SkyPhoneCompatibility.RegisterExportAlias("yseries", "AddCustomApp", add_custom_app_export)
+SkyPhoneCompatibility.RegisterExportAlias("yseries", "RemoveCustomApp", remove_custom_app)
+
 RegisterNUICallback("custom-app:lifecycle", function(data, cb)
     if type(data) ~= "table" then
         cb({ success = false, error = "invalid_lifecycle_request" })
@@ -1358,11 +1414,11 @@ RegisterNUICallback("custom-app:lifecycle", function(data, cb)
         clear_active_app(false)
     end
 
-    local hook_error = nil
-    if not hook_success then
-        hook_error = "hook_failed"
+    if not hook_success and not app.catalog.compatibility then
+        cb({ success = false, error = "hook_failed" })
+        return
     end
-    cb({ success = hook_success, error = hook_error })
+    cb({ success = true })
 end)
 
 AddEventHandler("onClientResourceStop", function(resource_name)

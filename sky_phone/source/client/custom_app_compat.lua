@@ -561,11 +561,6 @@ AddEventHandler("onClientResourceStop", function(resource_name)
     end
 end)
 
-CreateThread(function()
-    TriggerServerEvent("sky_phone:compat:high:server:requestSnapshot")
-    TriggerEvent("17mov_Phone:Client:Ready")
-end)
-
 exports("AddApplication", add_17mov_application)
 exports("RemoveApplication", remove_17mov_application)
 exports("SendAppMessage", send_app_message)
@@ -579,3 +574,42 @@ exports("getCustomApps", get_quasar_apps)
 exports("OpenPhoneApp", open_quasar_app)
 exports("OpenApp", open_phone_app)
 exports("CloseApp", close_phone_app)
+
+SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "OpenApp", open_phone_app)
+SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "CloseApp", close_phone_app)
+
+SkyPhoneCompatibility.RegisterExportAlias("17mov_Phone", "AddApplication", add_17mov_application)
+SkyPhoneCompatibility.RegisterExportAlias("17mov_Phone", "RemoveApplication", remove_17mov_application)
+SkyPhoneCompatibility.RegisterExportAlias("17mov_Phone", "SendAppMessage", send_app_message)
+
+SkyPhoneCompatibility.RegisterExportAlias("high-phone", "addApplication", add_high_application)
+SkyPhoneCompatibility.RegisterExportAlias("high-phone", "sendAppNui", send_high_app_nui)
+
+SkyPhoneCompatibility.RegisterExportAlias("qs-smartphone", "addCustomApp", add_quasar_app)
+SkyPhoneCompatibility.RegisterExportAlias("qs-smartphone", "addCustomAppsBatch", add_quasar_apps_batch)
+SkyPhoneCompatibility.RegisterExportAlias("qs-smartphone", "updateCustomApp", update_quasar_app)
+SkyPhoneCompatibility.RegisterExportAlias("qs-smartphone", "removeCustomApp", remove_quasar_app)
+SkyPhoneCompatibility.RegisterExportAlias("qs-smartphone", "getCustomApps", get_quasar_apps)
+SkyPhoneCompatibility.RegisterExportAlias("qs-smartphone", "OpenPhoneApp", open_quasar_app)
+
+SkyPhoneCompatibility.RegisterExportAlias("yseries", "SendAppMessage", send_app_message)
+SkyPhoneCompatibility.RegisterExportAlias("yseries", "CloseApp", close_phone_app)
+SkyPhoneCompatibility.RegisterExportAlias("yseries", "GetDataLoaded", function()
+    return true
+end)
+
+CreateThread(function()
+    TriggerServerEvent("sky_phone:compat:high:server:requestSnapshot")
+    TriggerEvent("17mov_Phone:Client:Ready")
+
+    local provider_resources = {
+        "lb-phone",
+        "17mov_Phone",
+        "high-phone",
+        "qs-smartphone",
+        "yseries",
+    }
+    for index = 1, #provider_resources do
+        TriggerEvent("onResourceStart", provider_resources[index])
+    end
+end)

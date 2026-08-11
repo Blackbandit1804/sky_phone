@@ -1,4 +1,8 @@
 local registered_exports = {}
+local registered_event_handlers = {}
+local registered_nui_callbacks = {}
+local triggered_events = {}
+local nui_messages = {}
 local invoking_resource = nil
 
 Config = {
@@ -43,18 +47,31 @@ function GetInvokingResource()
 end
 
 function GetResourceState(resource_name)
-    if resource_name == "missing_resource" then
+    if resource_name == "missing_resource" or resource_name == "ui" then
         return "missing"
     end
     return "started"
 end
 
-function RegisterNUICallback() end
+function RegisterNUICallback(callback_name, handler)
+    registered_nui_callbacks[callback_name] = handler
+end
 function RegisterNetEvent() end
-function AddEventHandler() end
-function SendNUIMessage() end
+function AddEventHandler(event_name, handler)
+    local handlers = registered_event_handlers[event_name] or {}
+    handlers[#handlers + 1] = handler
+    registered_event_handlers[event_name] = handlers
+end
+function SendNUIMessage(message)
+    nui_messages[#nui_messages + 1] = message
+end
 function TriggerServerEvent() end
-function TriggerEvent() end
+function TriggerEvent(event_name, ...)
+    triggered_events[#triggered_events + 1] = {
+        event_name = event_name,
+        arguments = { ... },
+    }
+end
 
 function CreateThread(handler)
     handler()
@@ -65,17 +82,110 @@ dofile("sky_phone/source/shared/custom_app_compat.lua")
 dofile("sky_phone/source/client/custom_apps.lua")
 dofile("sky_phone/source/client/custom_app_compat.lua")
 
+local function get_alias_export(resource_name, export_name)
+    local event_name = ("__cfx_export_%s_%s"):format(resource_name, export_name)
+    local handlers = registered_event_handlers[event_name]
+    assert(handlers and #handlers == 1, ("Missing %s:%s export alias"):format(resource_name, export_name))
+
+    local alias_handler
+    local export_callback = setmetatable({
+        __cfx_functionReference = "test-export-callback",
+    }, {
+        __call = function(_, handler)
+            alias_handler = handler
+        end,
+    })
+    handlers[1](export_callback)
+    assert(type(alias_handler) == "function", ("Invalid %s:%s export alias"):format(resource_name, export_name))
+    return alias_handler
+end
+
+local function make_cfx_function_reference(reference, handler)
+    return setmetatable({
+        __cfx_functionReference = reference,
+    }, {
+        __call = function(_, ...)
+            return handler(...)
+        end,
+    })
+end
+
+local lb_add_custom_app = get_alias_export("lb-phone", "AddCustomApp")
+local lb_remove_custom_app = get_alias_export("lb-phone", "RemoveCustomApp")
+local lb_send_custom_app_message = get_alias_export("lb-phone", "SendCustomAppMessage")
+local lb_open_app = get_alias_export("lb-phone", "OpenApp")
+local lb_close_app = get_alias_export("lb-phone", "CloseApp")
+local mov_add_application = get_alias_export("17mov_Phone", "AddApplication")
+local mov_remove_application = get_alias_export("17mov_Phone", "RemoveApplication")
+local mov_send_app_message = get_alias_export("17mov_Phone", "SendAppMessage")
+local high_add_application = get_alias_export("high-phone", "addApplication")
+local high_send_app_nui = get_alias_export("high-phone", "sendAppNui")
+local quasar_add_custom_app = get_alias_export("qs-smartphone", "addCustomApp")
+local quasar_add_custom_apps_batch = get_alias_export("qs-smartphone", "addCustomAppsBatch")
+local quasar_update_custom_app = get_alias_export("qs-smartphone", "updateCustomApp")
+local quasar_remove_custom_app = get_alias_export("qs-smartphone", "removeCustomApp")
+local quasar_get_custom_apps = get_alias_export("qs-smartphone", "getCustomApps")
+local quasar_open_phone_app = get_alias_export("qs-smartphone", "OpenPhoneApp")
+local yseries_add_custom_app = get_alias_export("yseries", "AddCustomApp")
+local yseries_remove_custom_app = get_alias_export("yseries", "RemoveCustomApp")
+local yseries_send_app_message = get_alias_export("yseries", "SendAppMessage")
+local yseries_close_app = get_alias_export("yseries", "CloseApp")
+local yseries_get_data_loaded = get_alias_export("yseries", "GetDataLoaded")
+
+local expected_provider_resources = {
+    ["lb-phone"] = true,
+    ["17mov_Phone"] = true,
+    ["high-phone"] = true,
+    ["qs-smartphone"] = true,
+    ["yseries"] = true,
+}
+local resource_start_events = {}
+for index = 1, #triggered_events do
+    local event = triggered_events[index]
+    local resource_name = event.arguments[1]
+    if event.event_name == "onResourceStart" then
+        resource_start_events[resource_name] = true
+    end
+end
+for resource_name in pairs(expected_provider_resources) do
+    assert(resource_start_events[resource_name], ("Missing %s provider start signal"):format(resource_name))
+end
+assert(yseries_get_data_loaded(), "YSeries must see the compatibility provider as loaded")
+
 invoking_resource = "lb_app"
-local lb_success, lb_error = registered_exports.AddCustomApp({
+local lb_success, lb_error = lb_add_custom_app({
     identifier = "dispatch",
     name = "Dispatch",
     description = "Dispatch terminal",
     ui = "ui/index.html",
+    onInstall = make_cfx_function_reference("install-hook", function()
+        error("vendor install failure")
+    end),
+    onOpen = make_cfx_function_reference("open-hook", function()
+        error("vendor open failure")
+    end),
 })
 assert(lb_success and lb_error == nil, "LB AddCustomApp must register through the shared export")
 
+local lifecycle_callback = assert(registered_nui_callbacks["custom-app:lifecycle"])
+local lifecycle_response
+SkyPhoneApps.SetPhoneOpen(true)
+lifecycle_callback({ appId = "dispatch", event = "install" }, function(response)
+    lifecycle_response = response
+end)
+assert(lifecycle_response.success, "a vendor install hook failure must not fail installation")
+lifecycle_callback({ appId = "dispatch", event = "open" }, function(response)
+    lifecycle_response = response
+end)
+assert(lifecycle_response.success, "a vendor open hook failure must not prevent opening the app")
+lifecycle_callback({ appId = "dispatch", event = "ready" }, function(response)
+    lifecycle_response = response
+end)
+assert(lifecycle_response.success, "ready must complete after a failed vendor open hook")
+SkyPhoneApps.SetPhoneOpen(false)
+
 invoking_resource = "another_app"
-local duplicate_success, duplicate_error = registered_exports.AddCustomApp({
+local duplicate_success, duplicate_error = lb_add_custom_app({
     identifier = "dispatch",
     name = "Hijack",
     description = "Hijack",
@@ -83,18 +193,61 @@ local duplicate_success, duplicate_error = registered_exports.AddCustomApp({
 })
 assert(not duplicate_success and duplicate_error == "duplicate_app_id", "cross-owner IDs must be rejected")
 
-local remove_success, remove_error = registered_exports.RemoveCustomApp("dispatch")
+local remove_success, remove_error = lb_remove_custom_app("dispatch")
 assert(not remove_success and remove_error == "app_owner_mismatch", "cross-owner removal must be rejected")
 
 invoking_resource = "lb_app"
-assert(registered_exports.RemoveCustomApp("dispatch"), "the LB owner must be able to remove its app")
+local inactive_message_success, inactive_message_error = lb_send_custom_app_message("dispatch", { type = "ping" })
+assert(not inactive_message_success and inactive_message_error == "app_not_active", "LB message alias must preserve app state checks")
+local closed_open_success, closed_open_error = lb_open_app("dispatch")
+assert(not closed_open_success and closed_open_error == "phone_closed", "LB open alias must preserve phone state checks")
+local inactive_close_success, inactive_close_error = lb_close_app({ app = "dispatch" })
+assert(not inactive_close_success and inactive_close_error == "app_not_active", "LB close alias must preserve app state checks")
+assert(lb_remove_custom_app("dispatch"), "the LB owner must be able to remove its app")
+
+invoking_resource = "phone_adapter"
+assert(lb_add_custom_app({
+    identifier = "manufacturer-app",
+    name = "Manufacturer App",
+    description = "Manufacturer-owned UI assets",
+    ui = "manufacturer_app/ui/index.html",
+    icon = "nui://manufacturer_app/ui/icon.png",
+}), "LB resource-prefixed assets must register through an adapter")
+SkyPhoneApps.SetPhoneOpen(true)
+SkyPhoneApps.SendCatalog()
+local catalog_message = nui_messages[#nui_messages]
+local manufacturer_app
+for index = 1, #catalog_message.data.apps do
+    if catalog_message.data.apps[index].id == "manufacturer-app" then
+        manufacturer_app = catalog_message.data.apps[index]
+        break
+    end
+end
+assert(manufacturer_app, "manufacturer app must be present in the catalog")
+assert(
+    manufacturer_app.ui == "https://cfx-nui-manufacturer_app/ui/index.html",
+    "LB resource-prefixed UI must preserve its asset resource"
+)
+assert(
+    manufacturer_app.icon == "https://cfx-nui-manufacturer_app/ui/icon.png",
+    "LB resource-prefixed icon must preserve its asset resource"
+)
+SkyPhoneApps.SetPhoneOpen(false)
 
 invoking_resource = "yseries_app"
-assert(registered_exports.AddCustomApp({
+assert(yseries_add_custom_app({
     key = "slots",
     name = "Slots",
     ui = "https://cfx-nui-yseries_app/ui/index.html",
+    icon = {
+        yos = "https://cdn.example.com/slots.png",
+    },
 }), "YSeries AddCustomApp must be selected from the key field")
+local yseries_message_success, yseries_message_error = yseries_send_app_message("slots", { type = "ping" })
+assert(not yseries_message_success and yseries_message_error == "app_not_active", "YSeries message alias must preserve app state checks")
+local yseries_close_success, yseries_close_error = yseries_close_app({ app = "slots" })
+assert(not yseries_close_success and yseries_close_error == "app_not_active", "YSeries close alias must preserve app state checks")
+assert(yseries_remove_custom_app("slots"), "YSeries RemoveCustomApp must use the provider alias")
 
 local ambiguous_success, ambiguous_error = registered_exports.AddCustomApp({
     id = "ambiguous",
@@ -105,14 +258,17 @@ local ambiguous_success, ambiguous_error = registered_exports.AddCustomApp({
 assert(not ambiguous_success and ambiguous_error == "ambiguous_app_provider", "ambiguous schemas must fail")
 
 invoking_resource = "mov_app"
-assert(registered_exports.AddApplication({
+assert(mov_add_application({
     name = "market",
     label = "Market",
     ui = "https://cfx-nui-mov_app/ui/index.html",
 }), "17mov AddApplication must register")
+local mov_message_success, mov_message_error = mov_send_app_message("market", { type = "ping" })
+assert(not mov_message_success and mov_message_error == "app_not_active", "17mov message alias must preserve app state checks")
+assert(mov_remove_application("market"), "17mov RemoveApplication must use the provider alias")
 
 invoking_resource = "high_app"
-assert(registered_exports.addApplication("bankingv2", {
+assert(high_add_application("bankingv2", {
     externalUrl = "@high_app/ui/index.html",
 }, {
     en = {
@@ -120,9 +276,11 @@ assert(registered_exports.addApplication("bankingv2", {
         description = "Banking app",
     },
 }), "High addApplication must register")
+local high_message_success, high_message_error = high_send_app_nui("bankingv2", { type = "ping" })
+assert(not high_message_success and high_message_error == "app_not_active", "High message alias must preserve app state checks")
 
 invoking_resource = "quasar_app"
-assert(registered_exports.addCustomApp({
+assert(quasar_add_custom_app({
     id = "services",
     label = "Services",
     iframe = {
@@ -130,11 +288,14 @@ assert(registered_exports.addCustomApp({
     },
 }), "Quasar addCustomApp must register")
 
-local quasar_apps = registered_exports.getCustomApps()
+local quasar_apps = quasar_get_custom_apps()
 assert(#quasar_apps == 1 and quasar_apps[1].id == "services", "Quasar getCustomApps must expose the registry")
-assert(registered_exports.updateCustomApp("services", {
+assert(quasar_update_custom_app("services", {
     label = "City Services",
 }), "Quasar updateCustomApp must update an owned app")
-assert(registered_exports.removeCustomApp("services"), "Quasar removeCustomApp must remove an owned app")
+local quasar_open_success, quasar_open_error = quasar_open_phone_app("services")
+assert(not quasar_open_success and quasar_open_error == "phone_closed", "Quasar open alias must preserve phone state checks")
+assert(quasar_remove_custom_app("services"), "Quasar removeCustomApp must remove an owned app")
+assert(quasar_add_custom_apps_batch({}), "Quasar batch alias must accept an empty batch")
 
 print("Custom app compatibility client tests passed")

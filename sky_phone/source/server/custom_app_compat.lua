@@ -136,3 +136,4 @@ AddEventHandler("onResourceStop", function(resource_name)
 end)
 
 exports("addApplication", add_high_application)
+SkyPhoneCompatibility.RegisterExportAlias("high-phone", "addApplication", add_high_application)

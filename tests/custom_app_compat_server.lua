@@ -1,4 +1,5 @@
 local event_handlers = {}
+local registered_event_handlers = {}
 local registered_exports = {}
 local sent_events = {}
 local invoking_resource = nil
@@ -25,7 +26,11 @@ function RegisterNetEvent(event_name, handler)
     event_handlers[event_name] = handler
 end
 
-function AddEventHandler() end
+function AddEventHandler(event_name, handler)
+    local handlers = registered_event_handlers[event_name] or {}
+    handlers[#handlers + 1] = handler
+    registered_event_handlers[event_name] = handlers
+end
 
 function TriggerClientEvent(event_name, target, ...)
     sent_events[#sent_events + 1] = {
@@ -38,8 +43,21 @@ end
 dofile("sky_phone/source/shared/custom_app_compat.lua")
 dofile("sky_phone/source/server/custom_app_compat.lua")
 
+local alias_handlers = registered_event_handlers["__cfx_export_high-phone_addApplication"]
+assert(alias_handlers and #alias_handlers == 1, "Missing high-phone:addApplication export alias")
+local high_add_application
+local export_callback = setmetatable({
+    __cfx_functionReference = "test-export-callback",
+}, {
+    __call = function(_, handler)
+        high_add_application = handler
+    end,
+})
+alias_handlers[1](export_callback)
+assert(type(high_add_application) == "function", "Invalid high-phone:addApplication export alias")
+
 invoking_resource = "high_server_app"
-local add_success, add_error = registered_exports.addApplication("bankingv2", {
+local add_success, add_error = high_add_application("bankingv2", {
     externalUrl = "@high_server_app/ui/index.html",
 }, {
     en = {
@@ -53,7 +71,7 @@ assert(sent_events[1].event_name == "sky_phone:compat:high:client:syncApplicatio
 assert(sent_events[1].arguments[1] == "high_server_app", "High sync must preserve the owner")
 
 invoking_resource = "other_server_app"
-local duplicate_success, duplicate_error = registered_exports.addApplication("bankingv2", {
+local duplicate_success, duplicate_error = high_add_application("bankingv2", {
     externalUrl = "@other_server_app/ui/index.html",
 })
 assert(not duplicate_success and duplicate_error == "duplicate_app_id", "High cross-owner replacement must fail")
