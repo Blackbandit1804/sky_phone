@@ -78,16 +78,68 @@ set sky_phone_fliptok_password_pepper "replace-with-a-long-random-secret"
 Passwords are stored as salted hashes. The pepper is read server-side from the convar and is never
 included in the NUI bundle.
 
-Standalone FiveM phone built with Vue 3, TypeScript, Pinia, Vue Router, Konsta UI 5, and Tailwind CSS 4. Each non-stackable `phone` item receives a unique 15-digit IMEI and owns its server-persisted device state. The phone opens through the usable item; `/phone` is disabled unless `Config.Phone.DevelopmentCommand` is enabled explicitly.
+Standalone FiveM phone built with Vue 3, TypeScript, Pinia, Vue Router, Konsta UI 5, and Tailwind CSS 4. The phone opens through the usable item; `/phone` is disabled unless `Config.Phone.DevelopmentCommand` is enabled explicitly. Phone identity and SIM-card behavior are selected independently through `Config.Phone.Unique` and `Config.Sim.Enabled`.
 
 An iFruit account is optional. Unlinked devices retain local settings, alarms, media, apps, notes, contacts, and recent calls. Linking from Mail or Settings moves local data into an empty cloud account; an existing cloud dataset wins over local contacts and recents. Signing out keeps an editable local snapshot without deleting cloud data.
+
+## Phone identity and SIM modes
+
+Both compatibility switches default to the physical, unique-item behavior:
+
+```lua
+Config.Phone.Unique = true
+Config.Sim.Enabled = true
+```
+
+For backwards compatibility, an omitted switch is also treated as `true`.
+
+With `Config.Phone.Unique = true`, every phone item is one transferable physical Device. Its unique
+15-digit IMEI is stored in item metadata, so its settings, PIN, local app data, linked iFruit
+account, and installed SIM travel with that item. The item must be non-stackable.
+
+With `Config.Phone.Unique = false`, the server assigns each framework character one persistent
+virtual Device. Possessing any configured phone item grants access to that Device, but the item does
+not own its IMEI or data. Losing a handset therefore removes access only until the character obtains
+another one; the replacement opens the same data, PIN, account session, and number. Phone items may
+be stackable in this mode, although at least one phone item is still required to use or receive the
+phone. The character mapping is server-authoritative and uses the framework character identifier,
+never a client-supplied owner value.
+
+With `Config.Sim.Enabled = true`, a physical registered or anonymous SIM item must be inserted before
+the Device has cellular service. SIM items remain unique and non-stackable. With
+`Config.Sim.Enabled = false`, SIM inventory items are not required. The first time a Device without
+an attached SIM is resolved, the server creates an anonymous virtual SIM with a random unique phone
+number using `Config.Sim.NumberPrefix` and `NumberLength`; `NumberGroups` controls its display
+format. Physical SIM insertion and ejection are disabled in this mode. An already attached physical
+SIM and its number are preserved when SIM requirements are disabled.
+
+The switches are independent. An automatic number follows a physical handset when unique phones are
+enabled and follows the character's persistent virtual Device when unique phones are disabled.
+Likewise, a physical SIM inserted while unique phones are disabled belongs to the character's
+virtual Device and remains available after replacing the handset.
+
+### Existing installations and first use
+
+After changing an existing installation to `Config.Phone.Unique = false`, the first phone item a
+character uses establishes the persistent mapping. If that item has a valid legacy IMEI which is not
+already mapped to another character, the complete existing Device is adopted. This preserves its
+local content, PIN, linked account, and attached SIM. If the legacy IMEI cannot be adopted, the
+server creates a fresh virtual Device instead. Historic unique Devices did not record an owner, so
+the character carrying a handset on its first use after the change is the character that claims it.
+
+When `Config.Sim.Enabled = false`, an existing attached physical SIM is kept; only Devices without a
+SIM receive a random virtual one. If SIM cards are enabled again, automatically created virtual SIMs
+are detached during resource startup so those Devices once again require a physical SIM. Stored
+character-to-Device mappings remain available, but changing back to unique phones does not copy a
+virtual Device's data onto an arbitrary inventory item. Treat production mode changes as migrations
+and restart the resource after updating the configuration.
 
 ## Requirements
 
 - ESX Legacy (`es_extended`), Qbox (`qbx_core`), or QBCore (`qb-core`). The bridge selects a running supported framework when `Config.Bridge.Framework` is set to `"auto"`.
 - A supported inventory: `ox_inventory`, `qb-inventory`, `lj-inventory`, `qs-inventory`, `codem-inventory`, `core_inventory`, `mf-inventory`, or `smx-inventory`. The bridge auto-detects a running provider and normalizes metadata, slots, counts, item mutations, and usable-item callbacks. `mf-inventory` and `smx-inventory` require ESX. Because SMX stores standard ESX items as stacks, its adapter persists one active Phone/SIM metadata record per player and item type in ESX player metadata.
-- A non-stackable inventory item named `phone`.
-- Two unique, non-stackable inventory items named `sky_phone_sim_registered` and `sky_phone_sim_anonymous`. Their metadata is initialized automatically on first use, so shops and crafting recipes add plain items without supplying a number.
+- An inventory item named `phone`. It must be non-stackable when `Config.Phone.Unique = true` and may be stackable when it is `false`.
+- When `Config.Sim.Enabled = true`, two unique, non-stackable inventory items named `sky_phone_sim_registered` and `sky_phone_sim_anonymous`. Their metadata is initialized automatically on first use, so shops and crafting recipes add plain items without supplying a number. These item definitions are not required when SIM cards are disabled.
 - `oxmysql` with MySQL/MariaDB.
 - `pma-voice` when `Config.Calls.VoiceProvider` is set to `"pma"`.
 - A FiveManage V3 Media API token for Camera photo/video uploads and Gallery deletion. Set the
@@ -108,7 +160,7 @@ GIPHY provides trending and searched GIFs through a paginated server-side proxy.
 only the server uses the GIPHY key. Photo and video actions in Messages are intentionally inactive
 until their dedicated implementation is available.
 
-Database migrations run automatically. Existing `sky_phone_mail_accounts` installations are renamed to `sky_phone_accounts` while preserving account IDs and mail foreign keys. iFruit passwords are intentional in-character credentials and remain plaintext `VARCHAR(64)` values; registration screens warn players never to reuse a real password.
+Database migrations run automatically. Existing `sky_phone_mail_accounts` installations are renamed to `sky_phone_accounts` while preserving account IDs and mail foreign keys. The migration also creates `sky_phone_character_devices` for persistent non-unique phone mappings and marks automatic SIMs through `sky_phone_sims.is_virtual`. iFruit passwords are intentional in-character credentials and remain plaintext `VARCHAR(64)` values; registration screens warn players never to reuse a real password.
 
 Camera and Gallery media is stored in `sky_phone_media`. Signed-out captures belong to the current
 IMEI; linking an iFruit account moves those rows into the account gallery so every linked phone sees
@@ -127,13 +179,13 @@ Configure frequency bounds and precision, restricted channel ranges and allowed 
 
 Radio profiles are stored in `sky_phone_radio_profiles`. Runtime migration creates the table automatically; fresh installations receive it through `sky_phone/sql/install.sql`.
 
-Inventory metadata has no framework-wide standard: providers differ in export names, callback payloads, slot handling, and whether metadata is called `metadata` or `info`. For that reason, `sky_phone` uses explicit provider adapters instead of guessing exports at runtime. Every supported adapter implements slot lookup, item lookup, metadata replacement, capacity handling, add/remove operations, and usable-item registration. Providers without a separate capacity export use their authoritative add operation as the final capacity gate.
+Inventory metadata has no framework-wide standard: providers differ in export names, callback payloads, slot handling, and whether metadata is called `metadata` or `info`. For that reason, `sky_phone` uses explicit provider adapters instead of guessing exports at runtime. Every supported adapter implements slot lookup, item lookup, metadata replacement, capacity handling, add/remove operations, and usable-item registration. Providers without a separate capacity export use their authoritative add operation as the final capacity gate. Phone item metadata is authoritative only when `Config.Phone.Unique = true`; in non-unique mode the persistent character mapping is authoritative instead.
 
-When a SIM is ejected or replaced, the returned inventory item is rebuilt from the authoritative `sky_phone_sims` row. Its metadata contains `sim_metadata_version`, `sim_id`, `phone_number`, `formatted_number`, and `sim_type`. Registered SIMs additionally contain `firstname`, `lastname`, `birthdate`, and `registered_at`. The internal framework owner identifier remains database-only. Inserting the item again resolves the SIM by `sim_id`; contacts and device/cloud data remain attached to their existing phone-owned persistence instead of being copied into inventory metadata.
+When physical SIMs are enabled and a SIM is ejected or replaced, the returned inventory item is rebuilt from the authoritative `sky_phone_sims` row. Its metadata contains `sim_metadata_version`, `sim_id`, `phone_number`, `formatted_number`, and `sim_type`. Registered SIMs additionally contain `firstname`, `lastname`, `birthdate`, and `registered_at`. The internal framework owner identifier remains database-only. Inserting the item again resolves the SIM by `sim_id`; contacts and device/cloud data remain attached to their existing Device or cloud persistence instead of being copied into inventory metadata. Automatically created virtual SIMs remain database-only and never become inventory items.
 
-For `ox_inventory`, configure all three items with `stack = false` and `consume = 0`. Do not configure a client event or export. Ox then completes its normal server-authoritative use flow and emits `ox_inventory:usedItem`; the bridge resolves the authoritative slot again and only opens the matching device or SIM. A client export would return before Ox calls `useItem` and therefore prevent `ox_inventory:usedItem` from being emitted.
+For `ox_inventory`, configure the phone with `stack = false` when `Config.Phone.Unique = true`; it may use `stack = true` in non-unique mode. Physical SIM items always use `stack = false` and are only needed when `Config.Sim.Enabled = true`. Every usable item should use `consume = 0`. Do not configure a client event or export. Ox then completes its normal server-authoritative use flow and emits `ox_inventory:usedItem`; the bridge resolves the authoritative slot again and only opens the matching Device or SIM. A client export would return before Ox calls `useItem` and therefore prevent `ox_inventory:usedItem` from being emitted.
 
-Example `ox_inventory/data/items.lua` entries:
+Example `ox_inventory/data/items.lua` entries for the default unique-phone, physical-SIM modes:
 
 ```lua
 ["phone"] = {
@@ -159,7 +211,7 @@ Example `ox_inventory/data/items.lua` entries:
 },
 ```
 
-For QBCore-style item tables, define the same names with `unique = true`, `useable = true`, and `shouldClose = true`. The provider adapter registers the server-side usable callbacks; no `lb-phone` event or export is used.
+For QBCore-style item tables, set the phone's `unique` value to match `Config.Phone.Unique`, and use `useable = true` and `shouldClose = true`. When physical SIMs are enabled, define both SIM items with `unique = true`, `useable = true`, and `shouldClose = true`; omit them when SIMs are disabled. The provider adapter registers the server-side usable callbacks; no `lb-phone` event or export is used.
 
 The homescreen is an original implementation inspired by the interaction and layout concepts in [lukejacksonn/homescreen](https://github.com/lukejacksonn/homescreen), inspected at commit [`98a812f`](https://github.com/lukejacksonn/homescreen/tree/98a812f4f7c33594e791d65092f73b8f54b3c598). No source code or image assets from that project are included.
 

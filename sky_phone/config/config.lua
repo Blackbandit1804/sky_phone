@@ -15,6 +15,7 @@ Config.Command = "phone"
 
 Config.Phone = {
     Item = "phone",
+    Unique = true, -- true: data follows each phone item; false: one persistent phone per character
     DevelopmentCommand = true,
     DeviceName = "iFruit Phone",
 }
@@ -27,6 +28,7 @@ Config.Security = {
 }
 
 Config.Sim = {
+    Enabled = true, -- false: devices without a SIM receive a persistent random number automatically
     RegisteredItem = "sky_phone_sim_registered",
     AnonymousItem = "sky_phone_sim_anonymous",
     NumberLength = 10,

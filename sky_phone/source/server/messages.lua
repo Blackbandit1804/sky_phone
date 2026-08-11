@@ -433,10 +433,14 @@ Bridge.Callbacks.Register("sky_phone:messages:send", function(source, data)
     else
         return { success = false, error = "invalid_request" }
     end
-    local recipients = Bridge.Database.Query(
-        "SELECT `id`, `phone_number` FROM `sky_phone_sims` WHERE `phone_number` = ? LIMIT 1",
-        { number }
-    )
+    local recipients = Bridge.Database.Query([[
+        SELECT s.`id`, s.`phone_number`
+        FROM `sky_phone_sims` s
+        LEFT JOIN `sky_phone_devices` d ON d.`sim_id` = s.`id`
+        WHERE s.`phone_number` = ?
+            AND (s.`is_virtual` = 0 OR d.`imei` IS NOT NULL)
+        LIMIT 1
+    ]], { number })
     local recipient = recipients[1]
     if not recipient then
         return { success = false, error = "recipient_not_found" }

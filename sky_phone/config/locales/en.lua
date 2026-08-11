@@ -21,6 +21,7 @@ Locales["en"] = {
         phone_stacked = "Phones cannot be stacked.",
         invalid_imei = "This phone has invalid IMEI metadata.",
         metadata_unsupported = "The configured inventory cannot store unique phone metadata.",
+        player_unavailable = "Your character identity is not available.",
         sim_slot_missing = "The used SIM card could not be identified.",
         sim_stacked = "SIM cards cannot be stacked.",
         invalid_sim = "This SIM card has invalid metadata.",
