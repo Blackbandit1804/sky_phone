@@ -56,11 +56,18 @@ const phone = usePhoneStore()
 const calls = useCallsStore()
 const messages = useMessagesStore()
 const router = useRouter()
-const clock = useClockService()
+const usesClock = computed(() =>
+  ['clock', 'date'].includes(props.instance.kind),
+)
+const usesBank = computed(() =>
+  ['transactions', 'wallet'].includes(props.instance.kind),
+)
+const usesContacts = computed(() => props.instance.kind === 'contacts')
+const clock = useClockService(usesClock)
 const weather = useWeatherService()
 const music = useMusicService()
-const bank = useBankService()
-const contactsService = useContactsService()
+const bank = useBankService(usesBank)
+const contactsService = useContactsService(usesContacts)
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
 const suppressClick = ref(false)

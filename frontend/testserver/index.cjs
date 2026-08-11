@@ -4765,17 +4765,40 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'weather:get') {
+    const rainyWeather = testScenario === 'weather-rain'
     response.json({
       success: true,
       data: {
         clock: { year: 2026, month: 8, day: 5, hour: 17, minute: 20 },
-        condition: 'partly_cloudy',
+        condition: rainyWeather ? 'rain' : 'partly_cloudy',
         nextCondition: 'rain',
-        rainLevel: 0.08,
+        rainLevel: rainyWeather ? 0.82 : 0.08,
         region: 'los_santos',
-        windSpeed: 3.2,
+        windSpeed: rainyWeather ? 0 : 3.2,
       },
     })
+    return
+  }
+  if (endpoint === 'weather:cameras') {
+    response.json({
+      success: true,
+      data: {
+        cameras: [
+          { id: 'legion_square', region: 'los_santos' },
+          { id: 'sandy_shores', region: 'blaine_county' },
+          { id: 'cayo_airstrip', region: 'cayo_perico' },
+        ],
+      },
+    })
+    return
+  }
+  if (endpoint === 'weather:camera-open') {
+    const ids = ['legion_square', 'sandy_shores', 'cayo_airstrip']
+    response.json(
+      ids.includes(request.body?.id)
+        ? { success: true }
+        : { success: false, error: 'camera_not_found' },
+    )
     return
   }
   if (endpoint === 'map:getPlayerCoords') {

@@ -1,4 +1,12 @@
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  toValue,
+  watch,
+  type MaybeRefOrGetter,
+} from 'vue'
 
 import { useBankingStore } from '@/stores/banking'
 import { useCallsStore } from '@/stores/calls'
@@ -9,23 +17,43 @@ import { useWeatherStore } from '@/stores/weather'
 const now = ref(new Date())
 let clockConsumers = 0
 let clockInterval: number | undefined
+let contactsRequest: Promise<void> | undefined
 
-export function useClockService() {
+export function useClockService(enabled: MaybeRefOrGetter<boolean> = true) {
   const phone = usePhoneStore()
-  onMounted(() => {
+  let active = false
+  let mounted = false
+
+  function syncClock(): void {
+    const shouldBeActive = mounted && toValue(enabled)
+    if (shouldBeActive === active) return
+
+    active = shouldBeActive
+    if (!active) {
+      clockConsumers -= 1
+      if (clockConsumers === 0 && clockInterval !== undefined) {
+        window.clearInterval(clockInterval)
+        clockInterval = undefined
+      }
+      return
+    }
+
     clockConsumers += 1
     if (clockInterval === undefined) {
       clockInterval = window.setInterval(() => {
         now.value = new Date()
       }, 1000)
     }
+  }
+
+  watch(() => toValue(enabled), syncClock)
+  onMounted(() => {
+    mounted = true
+    syncClock()
   })
   onBeforeUnmount(() => {
-    clockConsumers -= 1
-    if (clockConsumers === 0 && clockInterval !== undefined) {
-      window.clearInterval(clockInterval)
-      clockInterval = undefined
-    }
+    mounted = false
+    syncClock()
   })
   return {
     date: computed(() =>
@@ -92,7 +120,7 @@ export function useMusicService() {
   }
 }
 
-export function useBankService() {
+export function useBankService(enabled: MaybeRefOrGetter<boolean> = true) {
   const banking = useBankingStore()
   const overview = computed(
     () =>
@@ -130,13 +158,18 @@ export function useBankService() {
         ],
       },
   )
-  onMounted(() => {
-    if (!banking.overview && !banking.isLoading) void banking.load()
-  })
+  function loadIfNeeded(): void {
+    if (toValue(enabled) && !banking.overview && !banking.isLoading) {
+      void banking.load()
+    }
+  }
+
+  watch(() => toValue(enabled), loadIfNeeded)
+  onMounted(loadIfNeeded)
   return { overview }
 }
 
-export function useContactsService() {
+export function useContactsService(enabled: MaybeRefOrGetter<boolean> = true) {
   const calls = useCallsStore()
   const contacts = computed(() =>
     calls.contacts.length
@@ -148,8 +181,15 @@ export function useContactsService() {
           { id: 'mock-liam', name: 'Liam', phone_number: '555-0177' },
         ],
   )
-  onMounted(() => {
-    if (!calls.contacts.length) void calls.loadContacts()
-  })
+  function loadIfNeeded(): void {
+    if (!toValue(enabled) || calls.contacts.length || contactsRequest) return
+
+    contactsRequest = calls.loadContacts().finally(() => {
+      contactsRequest = undefined
+    })
+  }
+
+  watch(() => toValue(enabled), loadIfNeeded)
+  onMounted(loadIfNeeded)
   return { contacts }
 }

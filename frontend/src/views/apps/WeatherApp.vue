@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { kCard, kLink, kNavbar, kPage, kPreloader } from 'konsta/vue'
+import { kButton, kCard, kLink, kNavbar, kPage, kPreloader } from 'konsta/vue'
 import {
   CloudSun,
   Droplets,
@@ -8,6 +8,7 @@ import {
   RefreshCw,
   ThermometerSun,
   Umbrella,
+  Video,
   Wind,
 } from 'lucide-vue-next'
 import { computed } from 'vue'
@@ -20,6 +21,38 @@ import type { WeatherConditionId } from '@/types/weather'
 const phone = usePhoneStore()
 const weather = useWeatherStore()
 const forecast = computed(() => weather.forecast)
+const selectedCamera = computed(
+  () =>
+    weather.cameras.find((camera) => camera.region === forecast.value?.region) ??
+    weather.cameras[0],
+)
+const rainy = computed(
+  () =>
+    forecast.value?.condition === 'rain' ||
+    forecast.value?.condition === 'thunder',
+)
+const rainDrops = [
+  ['4%', '17px', '1.35s', '-0.3s', '0.32'],
+  ['11%', '11px', '1.7s', '-1.1s', '0.2'],
+  ['18%', '21px', '1.45s', '-0.8s', '0.38'],
+  ['25%', '13px', '1.9s', '-1.6s', '0.24'],
+  ['33%', '18px', '1.55s', '-0.2s', '0.3'],
+  ['40%', '10px', '1.75s', '-1.35s', '0.18'],
+  ['47%', '22px', '1.4s', '-0.65s', '0.36'],
+  ['54%', '14px', '2s', '-1.8s', '0.22'],
+  ['61%', '19px', '1.6s', '-0.45s', '0.34'],
+  ['68%', '12px', '1.8s', '-1.2s', '0.2'],
+  ['75%', '20px', '1.5s', '-0.9s', '0.37'],
+  ['82%', '11px', '1.95s', '-1.55s', '0.2'],
+  ['89%', '17px', '1.45s', '-0.15s', '0.31'],
+  ['96%', '13px', '1.7s', '-1.05s', '0.24'],
+].map(([left, height, duration, delay, opacity]) => ({
+  '--rain-delay': delay,
+  '--rain-duration': duration,
+  '--rain-height': height,
+  '--rain-left': left,
+  '--rain-opacity': opacity,
+}))
 const cardColors = {
   bgIos: 'bg-transparent',
   textIos: 'text-white',
@@ -37,6 +70,12 @@ function formatHour(timestamp: number, index: number): string {
     timeZone: 'UTC',
   }).format(timestamp)
 }
+
+function cameraErrorLabel(): string {
+  return phone.t(
+    `Apps.weather.webcam.errors.${weather.cameraError ?? 'request_failed'}`,
+  )
+}
 </script>
 
 <template>
@@ -47,6 +86,9 @@ function formatHour(timestamp: number, index: number): string {
     :colors="{ bgIos: 'bg-transparent' }"
   >
     <div class="weather-app__backdrop" aria-hidden="true"></div>
+    <div v-if="rainy" class="weather-app__rain" aria-hidden="true">
+      <i v-for="(drop, index) in rainDrops" :key="index" :style="drop"></i>
+    </div>
     <k-navbar class="weather-navbar" :title="phone.t('Apps.weather.name')">
       <template #after>
         <k-link
@@ -125,6 +167,46 @@ function formatHour(timestamp: number, index: number): string {
           <strong>{{ forecast.rainChance }}%</strong>
         </k-card>
       </section>
+
+      <k-card
+        v-if="selectedCamera"
+        :colors="cardColors"
+        :content-wrap="false"
+        class="weather-panel weather-camera-card"
+      >
+        <div class="weather-camera-preview" :class="`weather-camera-preview--${forecast.condition}`">
+          <div class="weather-camera-skyline" aria-hidden="true"></div>
+          <div class="weather-camera-meta">
+            <span class="weather-camera-live"><i></i>{{ phone.t('Apps.weather.webcam.live') }}</span>
+            <span>{{ phone.t(`Apps.weather.webcam.locations.${selectedCamera.id}`) }}</span>
+          </div>
+          <div class="weather-camera-copy">
+            <strong>{{ phone.t('Apps.weather.webcam.title') }}</strong>
+            <span>{{ phone.t('Apps.weather.webcam.subtitle') }}</span>
+          </div>
+        </div>
+        <div class="weather-camera-action">
+          <k-button
+            large
+            rounded
+            :disabled="weather.isOpeningCamera"
+            @click="weather.openCamera(selectedCamera.id)"
+          >
+            <Video :size="17" />
+            {{ phone.t('Apps.weather.webcam.view') }}
+          </k-button>
+          <p v-if="weather.cameraError">{{ cameraErrorLabel() }}</p>
+        </div>
+      </k-card>
+
+      <k-card
+        v-else-if="weather.camerasLoaded"
+        :colors="cardColors"
+        :content-wrap="false"
+        class="weather-panel weather-camera-unavailable"
+      >
+        {{ phone.t('Apps.weather.webcam.unavailable') }}
+      </k-card>
 
       <k-card
         :colors="cardColors"

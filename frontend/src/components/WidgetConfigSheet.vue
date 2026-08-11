@@ -11,7 +11,7 @@ import {
   kSheet,
   kToggle,
 } from 'konsta/vue'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import SpringboardWidget from '@/components/SpringboardWidget.vue'
 import { WIDGET_REGISTRY_BY_KIND } from '@/config/widgets'
@@ -32,7 +32,9 @@ const emit = defineEmits<{
   save: [size: WidgetSize, settings: WidgetSettings]
 }>()
 const phone = usePhoneStore()
-const contactsService = useContactsService()
+const contactsService = useContactsService(
+  computed(() => props.opened && props.instance?.kind === 'contacts'),
+)
 const size = ref<WidgetSize>('small')
 const showDate = ref(true)
 const balanceSource = ref<'bank' | 'cash'>('bank')

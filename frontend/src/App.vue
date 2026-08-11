@@ -269,7 +269,7 @@ const phoneFrameImage = computed(
 let clockTicker: ReturnType<typeof setInterval> | undefined
 let unlockTimer: number | undefined
 let passcodeLockTimer: number | undefined
-let unlockedServicesFrame: number | undefined
+let unlockedServicesIdle: number | undefined
 
 function getViewportScale(): number {
   const heightScale = window.innerHeight / REFERENCE_VIEWPORT_HEIGHT
@@ -296,27 +296,62 @@ function hydratePhone(payload: PhoneOpenPayload): void {
   widgets.hydrate(payload.device?.data.widgets?.payload)
 }
 
-function loadUnlockedPhoneData(): void {
-  if (unlockedServicesLoaded.value) return
-  unlockedServicesLoaded.value = true
+function cancelUnlockedPhoneDataLoad(): void {
+  if (unlockedServicesIdle === undefined) return
+  if (typeof window.cancelIdleCallback === 'function') {
+    window.cancelIdleCallback(unlockedServicesIdle)
+  } else {
+    window.clearTimeout(unlockedServicesIdle)
+  }
+  unlockedServicesIdle = undefined
+}
 
-  // Let the lock screen/home screen paint before background app requests compete
-  // with the first visible NUI frame.
-  unlockedServicesFrame = window.requestAnimationFrame(() => {
-    unlockedServicesFrame = undefined
+async function bootstrapUnlockedPhoneData(): Promise<void> {
+  const tasks: Array<() => Promise<unknown> | void> = [
+    () => calls.bootstrap(),
+    () => messages.loadConversations(),
+    () => billing.loadOverview(),
+    () => mail.bootstrap(account.email),
+    () => {
+      if (account.email) return marketplace.loadCounts()
+      marketplace.setCounts({ active: 0, unread: 0 })
+    },
+    () => (account.email ? darkchat.bootstrap() : undefined),
+  ]
+
+  for (const task of tasks) {
     if (!phone.isOpen || isLocked.value) {
       unlockedServicesLoaded.value = false
       return
     }
+    try {
+      await task()
+    } catch (error) {
+      console.error('[sky_phone] Failed to bootstrap unlocked phone data.', error)
+    }
+  }
+}
 
-    void mail.bootstrap(account.email)
-    if (account.email) void marketplace.loadCounts()
-    else marketplace.setCounts({ active: 0, unread: 0 })
-    void calls.bootstrap()
-    void messages.loadConversations()
-    void billing.loadOverview()
-    if (account.email) void darkchat.bootstrap()
-  })
+function loadUnlockedPhoneData(): void {
+  if (unlockedServicesLoaded.value) return
+  unlockedServicesLoaded.value = true
+
+  const startBootstrap = () => {
+    unlockedServicesIdle = undefined
+    if (!phone.isOpen || isLocked.value) {
+      unlockedServicesLoaded.value = false
+      return
+    }
+    void bootstrapUnlockedPhoneData()
+  }
+
+  if (typeof window.requestIdleCallback === 'function') {
+    unlockedServicesIdle = window.requestIdleCallback(startBootstrap, {
+      timeout: 1500,
+    })
+  } else {
+    unlockedServicesIdle = window.setTimeout(startBootstrap, 0)
+  }
 }
 
 async function hydrateDevelopmentPhone(): Promise<void> {
@@ -727,6 +762,16 @@ function updateViewportScale(): void {
   viewportScale.value = getViewportScale()
 }
 
+function completeUnlock(): void {
+  if (!isUnlocking.value) return
+  if (unlockTimer !== undefined) {
+    window.clearTimeout(unlockTimer)
+    unlockTimer = undefined
+  }
+  isUnlocking.value = false
+  loadUnlockedPhoneData()
+}
+
 function finishUnlock(): void {
   if (!isLocked.value) return
   isUnlocking.value = true
@@ -735,7 +780,8 @@ function finishUnlock(): void {
   passcodeError.value = ''
 
   unlockTimer = window.setTimeout(() => {
-    isUnlocking.value = false
+    unlockTimer = undefined
+    completeUnlock()
   }, 720)
 
   if (pendingUnlockRoute.value) {
@@ -743,7 +789,6 @@ function finishUnlock(): void {
     pendingUnlockRoute.value = null
     window.setTimeout(() => void router.push(routePath), 0)
   }
-  loadUnlockedPhoneData()
 }
 
 function unlockPhone(): void {
@@ -907,10 +952,7 @@ watch(
   (isOpen) => {
     if (unlockTimer !== undefined) window.clearTimeout(unlockTimer)
     if (!isOpen) {
-      if (unlockedServicesFrame !== undefined) {
-        window.cancelAnimationFrame(unlockedServicesFrame)
-        unlockedServicesFrame = undefined
-      }
+      cancelUnlockedPhoneDataLoad()
       activitySuspended.value = false
       weather.stop()
       controlCenterOpened.value = false
@@ -956,9 +998,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  if (unlockedServicesFrame !== undefined) {
-    window.cancelAnimationFrame(unlockedServicesFrame)
-  }
+  cancelUnlockedPhoneDataLoad()
   weather.stop()
   if (clockTicker) clearInterval(clockTicker)
   if (unlockTimer !== undefined) window.clearTimeout(unlockTimer)
@@ -1063,7 +1103,7 @@ onBeforeUnmount(() => {
                   :opened="controlCenterOpened"
                   @close="controlCenterOpened = false"
                 />
-                <Transition name="lock-screen">
+                <Transition name="lock-screen" @after-leave="completeUnlock">
                   <PhoneLockScreen
                     v-if="isLocked"
                     :notifications="notifications.lockScreenNotifications"
