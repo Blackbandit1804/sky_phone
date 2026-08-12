@@ -20,6 +20,7 @@ import {
   MapPin,
   MessageCircle,
   MoreHorizontal,
+  Pencil,
   Rows3,
   Search,
   Send,
@@ -66,16 +67,14 @@ import type {
   MarketplaceMessage,
   MarketplaceOffer,
   MarketplacePriceType,
+  MarketplaceProfileDraft,
 } from '@/types/marketplace'
+import type { PhoneMedia } from '@/types/media'
 
 const glassActionColors = {
   bgIos: 'bg-ios-light-glass/75 dark:bg-ios-dark-glass/75',
   activeBgIos: 'active:bg-white/90 dark:active:bg-white/20',
   textIos: 'text-black/80 dark:text-white/80',
-}
-const yellowGlassActionColors = {
-  ...glassActionColors,
-  textIos: 'text-primary',
 }
 
 type Tab = 'discover' | 'search' | 'sell' | 'inbox' | 'profile'
@@ -111,6 +110,7 @@ type MediaContext = {
   photos: SelectedPhoto[]
   sellStep: number
 }
+type ProfileMediaContext = { draft: MarketplaceProfileDraft }
 
 const phone = usePhoneStore()
 const route = useRoute()
@@ -130,6 +130,11 @@ const category = ref<MarketplaceCategory | 'all'>('all')
 const district = ref('all')
 const sort = ref('newest')
 const profileMode = ref<'own' | 'favorites'>('own')
+const onboardingReady = ref(false)
+const profileEditing = ref(false)
+const profilePending = ref(false)
+const profileDraft = ref<MarketplaceProfileDraft>({ avatarMediaId: 0, bio: '', displayName: '' })
+const selectedProfilePhoto = ref<PhoneMedia | null>(null)
 const message = ref('')
 const firstMessage = ref('')
 const offerAmount = ref('')
@@ -236,6 +241,10 @@ const tabs = [
 ] as const
 
 const isAuthenticated = computed(() => account.email !== '')
+const canSaveProfile = computed(() => {
+  const nameLength = profileDraft.value.displayName.trim().length
+  return nameLength >= 2 && nameLength <= 40 && profileDraft.value.bio.trim().length <= 160
+})
 const displayItems = computed(() => {
   if (tab.value === 'profile') {
     return profileMode.value === 'own'
@@ -366,11 +375,17 @@ async function shareToLocalPages(listingId?: string): Promise<void> {
   pagesSharePendingId.value = id
   const response = await pages.shareCityMarkt(id)
   pagesSharePendingId.value = null
-  setFeedback(
-    response.success
-      ? 'Apps.localPages.cityMarktShared'
-      : `Apps.localPages.errors.${response.error ?? 'default'}`,
-  )
+  if (response.success && response.data?.id) {
+    await router.push({
+      path: '/apps/local-pages',
+      query: {
+        easyShareId: response.data.id,
+        easyShareKind: 'post',
+      },
+    })
+    return
+  }
+  setFeedback(`Apps.localPages.errors.${response.error ?? 'default'}`)
 }
 
 function shareListing(): void {
@@ -456,6 +471,9 @@ async function selectTab(next: Tab): Promise<void> {
   if (next === 'inbox' && isAuthenticated.value)
     await marketplace.loadInquiries()
   if (next === 'profile' && isAuthenticated.value) {
+    await marketplace.loadProfile()
+    syncProfileDraft()
+    profileEditing.value = !marketplace.profile?.exists
     await Promise.all([
       marketplace.loadOwn(),
       marketplace.load({ favorites: true }),
@@ -476,12 +494,74 @@ async function openListing(
   screen.value = 'detail'
 }
 
-async function toggleFavorite(): Promise<void> {
-  if (!selectedListing.value || !isAuthenticated.value) return
-  const next = !Boolean(selectedListing.value.is_favorite)
-  if (await marketplace.favorite(selectedListing.value.id, next)) {
-    selectedListing.value.is_favorite = next
+async function toggleListingFavorite(
+  item: MarketplaceListingSummary,
+): Promise<void> {
+  if (!isAuthenticated.value) return
+  const next = !Boolean(item.is_favorite)
+  if (await marketplace.favorite(item.id, next)) {
+    item.is_favorite = next
   }
+}
+
+function syncProfileDraft(): void {
+  profileDraft.value = {
+    avatarMediaId: marketplace.profile?.avatar_media_id ?? 0,
+    bio: marketplace.profile?.bio ?? '',
+    displayName: marketplace.profile?.display_name ?? account.email.split('@')[0] ?? '',
+  }
+  selectedProfilePhoto.value = null
+}
+
+function editProfile(): void {
+  syncProfileDraft()
+  profileEditing.value = true
+}
+
+function cancelProfileEdit(): void {
+  if (!marketplace.profile?.exists) return
+  syncProfileDraft()
+  profileEditing.value = false
+}
+
+function openProfileMedia(app: 'camera' | 'photos'): void {
+  messageMedia.begin(
+    'citymarkt:profile-avatar',
+    'photo',
+    '/apps/citymarkt?profileEdit=1',
+    1,
+    { draft: { ...profileDraft.value } } satisfies ProfileMediaContext,
+  )
+  void router.push(app === 'photos' ? '/apps/photos?picker=1' : '/apps/camera?picker=1')
+}
+
+function removeProfilePhoto(): void {
+  selectedProfilePhoto.value = null
+  profileDraft.value.avatarMediaId = 0
+}
+
+async function saveProfile(): Promise<void> {
+  if (!canSaveProfile.value || profilePending.value) {
+    setFeedback('Apps.citymarkt.errors.invalid_profile')
+    return
+  }
+  profilePending.value = true
+  const response = await marketplace.saveProfile({
+    avatarMediaId: selectedProfilePhoto.value?.id ?? profileDraft.value.avatarMediaId,
+    bio: profileDraft.value.bio.trim(),
+    displayName: profileDraft.value.displayName.trim(),
+  })
+  profilePending.value = false
+  if (!response.success) {
+    setFeedback(`Apps.citymarkt.errors.${response.error ?? 'default'}`)
+    return
+  }
+  syncProfileDraft()
+  profileEditing.value = false
+  tab.value = 'profile'
+  screen.value = 'main'
+  await Promise.all([marketplace.loadOwn(), marketplace.loadCounts()])
+  setFeedback('Apps.citymarkt.profileSaved')
 }
 
 function togglePhoto(id: string): void {
@@ -752,6 +832,7 @@ async function blockSeller(): Promise<void> {
 
 onMounted(async () => {
   const selection = messageMedia.consumeMany<MediaContext>('citymarkt:sell')
+  const profileSelection = messageMedia.consumeMany<ProfileMediaContext>('citymarkt:profile-avatar')
   if (selection) {
     if (selection.context) {
       draft.value = selection.context.draft
@@ -774,13 +855,37 @@ onMounted(async () => {
       })
     }
   }
+  if (profileSelection?.context) {
+    profileDraft.value = profileSelection.context.draft
+    if (profileSelection.media[0]) {
+      selectedProfilePhoto.value = profileSelection.media[0]
+      profileDraft.value.avatarMediaId = profileSelection.media[0].id
+    }
+    profileEditing.value = true
+    tab.value = 'profile'
+    screen.value = 'main'
+  }
   if (route.query.sell === '1') {
     tab.value = 'sell'
     screen.value = 'sell'
   }
-  await loadFeed()
-  if (isAuthenticated.value) await marketplace.loadCounts()
-  if (typeof route.query.listingId === 'string') {
+  if (isAuthenticated.value) {
+    await marketplace.loadProfile()
+    if (!marketplace.profile?.exists) {
+      if (!profileSelection) syncProfileDraft()
+      profileEditing.value = true
+      tab.value = 'profile'
+      screen.value = 'main'
+    } else if (!profileSelection) {
+      await loadFeed()
+    }
+    await marketplace.loadCounts()
+  } else {
+    tab.value = 'profile'
+    screen.value = 'main'
+  }
+  onboardingReady.value = true
+  if (marketplace.profile?.exists && typeof route.query.listingId === 'string') {
     await openListing({ id: route.query.listingId })
   }
 })
@@ -794,7 +899,7 @@ onMounted(async () => {
     :colors="{ bgIos: 'bg-transparent' }"
   >
     <k-navbar
-      v-if="screen === 'main'"
+      v-if="screen === 'main' && onboardingReady"
       class="citymarkt-navbar"
       :subtitle="
         phone.t(
@@ -810,7 +915,8 @@ onMounted(async () => {
       "
     />
 
-    <section v-if="screen === 'main'" class="citymarkt__content">
+    <div v-if="!onboardingReady" class="citymarkt__gate-loading">{{ phone.t('Common.loading') }}</div>
+    <section v-if="screen === 'main' && onboardingReady" class="citymarkt__content">
       <template v-if="tab === 'discover' || tab === 'search'">
         <k-searchbar
           component="form"
@@ -910,7 +1016,11 @@ onMounted(async () => {
             :key="item.id"
             class="citymarkt-listing-card"
           >
-            <button type="button" @click="openListing(item)">
+            <button
+              type="button"
+              class="citymarkt-listing-card__open"
+              @click="openListing(item)"
+            >
               <span
                 class="citymarkt__card-image"
               :class="{ 'citymarkt__card-image--empty': !item.image }"
@@ -924,7 +1034,6 @@ onMounted(async () => {
               <i v-if="item.status === 'reserved'">{{
                 phone.t('Apps.citymarkt.status.reserved')
               }}</i>
-              <Heart v-if="item.is_favorite" :size="15" fill="currentColor" />
               </span>
               <span class="citymarkt-listing-card__body">
                 <strong>{{ formatPrice(item) }}</strong>
@@ -939,6 +1048,24 @@ onMounted(async () => {
               · {{ relativeDate(item.created_at) }}</small
                 >
               </span>
+            </button>
+            <button
+              type="button"
+              class="citymarkt-listing-card__favorite"
+              :class="{ active: Boolean(item.is_favorite) }"
+              :aria-label="
+                phone.t(
+                  item.is_favorite
+                    ? 'Apps.citymarkt.removeFavorite'
+                    : 'Apps.citymarkt.addFavorite',
+                )
+              "
+              @click.stop="toggleListingFavorite(item)"
+            >
+              <Heart
+                :size="15"
+                :fill="item.is_favorite ? 'currentColor' : 'none'"
+              />
             </button>
           </k-glass>
         </div>
@@ -983,13 +1110,46 @@ onMounted(async () => {
           <p>{{ phone.t('Apps.citymarkt.signInBody') }}</p>
         </div>
         <template v-else>
-          <k-glass class="citymarkt__glass-profile"
-            ><span>{{ account.email.charAt(0).toUpperCase() }}</span>
+          <section v-if="profileEditing || !marketplace.profile?.exists" class="citymarkt__profile-editor">
+            <header>
+              <div><UserRound :size="21" /></div>
+              <span>
+                <strong>{{ phone.t(marketplace.profile?.exists ? 'Apps.citymarkt.editProfile' : 'Apps.citymarkt.createProfile') }}</strong>
+                <small>{{ phone.t('Apps.citymarkt.profileIntro') }}</small>
+              </span>
+            </header>
+            <div class="citymarkt__profile-photo">
+              <span>
+                <img v-if="selectedProfilePhoto?.url || marketplace.profile?.avatar_url" :src="selectedProfilePhoto?.url ?? marketplace.profile?.avatar_url ?? ''" alt="" />
+                <template v-else>{{ profileDraft.displayName.charAt(0).toUpperCase() || account.email.charAt(0).toUpperCase() }}</template>
+              </span>
+              <div>
+                <button type="button" @click="openProfileMedia('photos')"><Images :size="15" />{{ phone.t('Apps.citymarkt.chooseGallery') }}</button>
+                <button type="button" @click="openProfileMedia('camera')"><Camera :size="15" />{{ phone.t('Apps.citymarkt.takePhoto') }}</button>
+                <button v-if="profileDraft.avatarMediaId" type="button" class="danger" @click="removeProfilePhoto">{{ phone.t('Apps.citymarkt.removeProfilePhoto') }}</button>
+              </div>
+            </div>
+            <label>{{ phone.t('Apps.citymarkt.profileEmail') }}<k-glass><input :value="account.email" readonly /></k-glass></label>
+            <label>{{ phone.t('Apps.citymarkt.displayName') }}<k-glass><input v-model="profileDraft.displayName" maxlength="40" /></k-glass></label>
+            <label>{{ phone.t('Apps.citymarkt.profileBio') }}<k-glass><textarea v-model="profileDraft.bio" maxlength="160" /></k-glass></label>
+            <div class="citymarkt__profile-actions">
+              <button v-if="marketplace.profile?.exists" type="button" @click="cancelProfileEdit">{{ phone.t('Apps.citymarkt.cancel') }}</button>
+              <button type="button" :disabled="!canSaveProfile || profilePending" @click="saveProfile">{{ phone.t('Apps.citymarkt.saveProfile') }}</button>
+            </div>
+          </section>
+          <template v-else>
+          <k-glass class="citymarkt__glass-profile">
+            <span>
+              <img v-if="marketplace.profile?.avatar_url" :src="marketplace.profile.avatar_url" alt="" />
+              <template v-else>{{ marketplace.profile?.display_name.charAt(0).toUpperCase() }}</template>
+            </span>
             <div>
-              <strong>{{ account.email.split('@')[0] }}</strong
-              ><small>{{ account.email }}</small>
-            </div></k-glass
-          >
+              <strong>{{ marketplace.profile?.display_name }}</strong>
+              <small>{{ account.email }}</small>
+              <p v-if="marketplace.profile?.bio">{{ marketplace.profile.bio }}</p>
+            </div>
+            <button type="button" :aria-label="phone.t('Apps.citymarkt.editProfile')" @click="editProfile"><Pencil :size="16" /></button>
+          </k-glass>
           <k-glass class="citymarkt__glass-segmented">
             <button
               type="button"
@@ -1041,6 +1201,7 @@ onMounted(async () => {
               ><Share2 :size="15" />{{ phone.t('Apps.localPages.cityMarktShare') }}</button
             ></k-glass>
           </div>
+          </template>
         </template>
       </template>
     </section>
@@ -1053,7 +1214,8 @@ onMounted(async () => {
         <k-fab
           component="button"
           type="button"
-          :colors="yellowGlassActionColors"
+          :colors="glassActionColors"
+          class="citymarkt-detail-action"
           :aria-label="phone.t('Common.back')"
           @click="screen = 'main'"
           ><template #icon><ArrowLeft :size="19" /></template
@@ -1064,7 +1226,8 @@ onMounted(async () => {
             component="button"
             type="button"
             :colors="glassActionColors"
-            @click="toggleFavorite"
+            class="citymarkt-detail-action"
+            @click="toggleListingFavorite(selectedListing)"
             ><template #icon
               ><Heart
                 :size="19"
@@ -1077,6 +1240,7 @@ onMounted(async () => {
             component="button"
             type="button"
             :colors="glassActionColors"
+            class="citymarkt-detail-action"
             @click="screen = 'report'"
             ><template #icon><MoreHorizontal :size="20" /></template
           ></k-fab>
@@ -1113,7 +1277,7 @@ onMounted(async () => {
         </p>
         <p class="citymarkt__description">{{ selectedListing.description }}</p>
         <div class="citymarkt__seller">
-          <span>{{ selectedListing.seller_name.charAt(0).toUpperCase() }}</span>
+          <span><img v-if="selectedListing.seller_avatar" :src="selectedListing.seller_avatar" alt="" /><template v-else>{{ selectedListing.seller_name.charAt(0).toUpperCase() }}</template></span>
           <div>
             <strong>{{ selectedListing.seller_name }}</strong
             ><small
@@ -1593,7 +1757,7 @@ onMounted(async () => {
     </section>
 
     <k-tabbar
-      v-if="screen === 'main'"
+      v-if="screen === 'main' && onboardingReady && isAuthenticated && marketplace.profile?.exists && !profileEditing"
       component="nav"
       icons
     labels
@@ -1730,8 +1894,8 @@ onMounted(async () => {
     transform 0.18s ease;
 }
 .citymarkt__categories button:hover .citymarkt__category-icon {
-  filter: brightness(1.15);
-  transform: translateY(-2px);
+  filter: brightness(1.04);
+  transform: translateY(-1px);
 }
 .citymarkt__categories button.active {
   color: #fff;
@@ -1756,6 +1920,12 @@ onMounted(async () => {
 .citymarkt__glass-actions > div {
   display: flex;
   gap: 6px;
+}
+.citymarkt-detail-action {
+  box-shadow:
+    inset 0 0 0 0.5px #ffffff26,
+    inset 0 1px 0 #ffffff1a,
+    0 6px 16px #0007 !important;
 }
 .citymarkt__glass-list > .k-glass {
   width: 100%;
@@ -1813,10 +1983,10 @@ onMounted(async () => {
     transform 0.18s ease;
 }
 .citymarkt-listing-card:hover {
-  filter: brightness(1.08);
-  transform: translateY(-2px);
+  filter: brightness(1.025);
+  transform: translateY(-1px);
 }
-.citymarkt-listing-card > button {
+.citymarkt-listing-card > .citymarkt-listing-card__open {
   width: 100%;
   min-width: 0;
   padding: 0;
@@ -1825,6 +1995,36 @@ onMounted(async () => {
   overflow: hidden;
   background: transparent;
   text-align: left;
+}
+.citymarkt-listing-card__favorite {
+  position: absolute;
+  z-index: 2;
+  top: 7px;
+  right: 7px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #ffffff12;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #161714d9;
+  color: #d0d1cb;
+  box-shadow: 0 3px 10px #0005;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease,
+    transform 0.16s ease;
+}
+.citymarkt-listing-card__favorite:hover {
+  background: #242520e6;
+  color: #f5f5ef;
+}
+.citymarkt-listing-card__favorite:active {
+  transform: scale(0.94);
+}
+.citymarkt-listing-card__favorite.active {
+  color: var(--yellow);
 }
 .citymarkt-listing-card .citymarkt__card-image {
   height: 108px;
@@ -1871,7 +2071,9 @@ onMounted(async () => {
 .citymarkt__grid--wide {
   grid-template-columns: minmax(0, 1fr);
 }
-.citymarkt__grid--wide .citymarkt-listing-card > button {
+.citymarkt__grid--wide
+  .citymarkt-listing-card
+  > .citymarkt-listing-card__open {
   display: grid;
   grid-template-columns: 116px minmax(0, 1fr);
 }
@@ -1957,6 +2159,36 @@ onMounted(async () => {
   color: #171816;
   font-size: 19px;
   font-weight: 900;
+  overflow: hidden;
+}
+.citymarkt__glass-profile > span img,
+.citymarkt__seller > span img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.citymarkt__seller > span {
+  overflow: hidden;
+}
+.citymarkt__glass-profile > div {
+  min-width: 0;
+  flex: 1;
+}
+.citymarkt__glass-profile > div p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.citymarkt__glass-profile > button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #ffffff0d;
+  color: var(--yellow);
 }
 .citymarkt__glass-profile strong,
 .citymarkt__glass-profile small {
@@ -2060,14 +2292,148 @@ onMounted(async () => {
   right: 0;
   left: 0;
 }
-.citymarkt-create-action {
+.citymarkt-create-navbar :deep(.citymarkt-create-action) {
   height: 44px;
+  flex: none;
   border-radius: 9999px;
 }
-.citymarkt-create-action--close {
-  width: 44px;
+.citymarkt__gate-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
 }
-.citymarkt-create-action--next {
+.citymarkt__profile-editor {
+  padding: 14px;
+  border: 1px solid #ffffff14;
+  border-radius: 18px;
+  background: var(--panel);
+}
+.citymarkt__profile-editor > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.citymarkt__profile-editor > header > div {
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: var(--yellow);
+  color: #171816;
+}
+.citymarkt__profile-editor > header strong,
+.citymarkt__profile-editor > header small {
+  display: block;
+}
+.citymarkt__profile-editor > header small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.citymarkt__profile-photo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.citymarkt__profile-photo > span {
+  width: 68px;
+  height: 68px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--yellow);
+  color: #171816;
+  font-size: 25px;
+  font-weight: 900;
+}
+.citymarkt__profile-photo > span img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.citymarkt__profile-photo > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.citymarkt__profile-photo button {
+  padding: 7px 9px;
+  border: 1px solid #ffffff14;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #ffffff0a;
+  font-size: 10px;
+}
+.citymarkt__profile-photo button.danger {
+  color: #ff796f;
+}
+.citymarkt__profile-editor > label {
+  margin-top: 12px;
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.citymarkt__profile-editor > label > .k-glass {
+  margin-top: 5px;
+  border-radius: 11px;
+}
+.citymarkt__profile-editor input,
+.citymarkt__profile-editor textarea {
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+}
+.citymarkt__profile-editor input[readonly] {
+  color: var(--muted);
+}
+.citymarkt__profile-editor textarea {
+  min-height: 72px;
+}
+.citymarkt__profile-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+}
+.citymarkt__profile-actions button {
+  flex: 1;
+  padding: 10px;
+  border: 0;
+  border-radius: 11px;
+  background: #ffffff0d;
+  font-size: 11px;
+  font-weight: 800;
+}
+.citymarkt__profile-actions button:last-child {
+  background: var(--yellow);
+  color: #171816;
+}
+.citymarkt__profile-actions button:disabled {
+  opacity: .4;
+}
+:global(.citymarkt--light) .citymarkt__profile-editor {
+  border-color: #00000012;
+}
+.citymarkt-create-navbar :deep(.citymarkt-create-action--close) {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+}
+.citymarkt-create-navbar :deep(.citymarkt-create-action--next) {
   min-width: 58px;
 }
 .citymarkt-create-close,

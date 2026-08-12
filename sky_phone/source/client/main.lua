@@ -43,6 +43,8 @@ local server_callbacks = {
     "mail:delete-forever",
     "mail:empty-trash",
     "marketplace:list",
+    "marketplace:profile",
+    "marketplace:profile-save",
     "marketplace:get",
     "marketplace:list-own",
     "marketplace:create",
