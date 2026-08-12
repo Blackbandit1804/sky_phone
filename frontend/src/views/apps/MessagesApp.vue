@@ -103,6 +103,7 @@ const gifNextOffset = ref(0)
 const recording = ref(false)
 const recordingElapsedMs = ref(0)
 const recordingLevels = ref<number[]>(Array(32).fill(0.16))
+const threadBottom = ref<HTMLElement | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let gifSearchTimer: ReturnType<typeof setTimeout> | undefined
 let recordingTimer: ReturnType<typeof setInterval> | undefined
@@ -329,11 +330,12 @@ function errorText(error?: string): string {
 
 async function scrollToBottom(animate = true): Promise<void> {
   await nextTick()
-  const page = document.querySelector<HTMLElement>('.messages-thread-page')
-  if (!page) return
-  page.scrollTo({
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve())
+  })
+  threadBottom.value?.scrollIntoView({
+    block: 'end',
     behavior: animate ? 'smooth' : 'auto',
-    top: page.scrollHeight,
   })
 }
 
@@ -827,11 +829,12 @@ onMounted(async () => {
   if (messages.activeNumber) {
     const media = messageMedia.consume(messages.activeNumber)
     if (media) {
-      void sendAttachment(
+      await sendAttachment(
         media.mediaType === 'photo' ? 'image' : 'video',
         import.meta.env.DEV ? media.url : String(media.id),
       )
     }
+    await scrollToBottom(false)
   }
 })
 
@@ -1315,6 +1318,7 @@ onBeforeUnmount(() => {
         </k-message>
       </template>
     </k-messages>
+    <span ref="threadBottom" class="messages-thread-bottom" aria-hidden="true" />
 
     <section
       v-if="activeCanMessage && attachmentMenuOpen"

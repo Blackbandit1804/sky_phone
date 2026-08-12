@@ -4666,6 +4666,11 @@ button {
   min-height: calc(100% - 12px);
   padding: 10px 12px 20px;
 }
+.messages-thread-bottom {
+  display: block;
+  width: 100%;
+  height: 1px;
+}
 .messages-bubbles [class*='message-bubble'] {
   max-width: 248px;
   border-radius: 21px;
