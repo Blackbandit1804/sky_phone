@@ -139,8 +139,11 @@ const contactAvatarUrls = computed(
 )
 const contactSuggestions = computed(() => {
   const query = composerNumber.value.trim().toLocaleLowerCase(phone.lang)
-  if (!query) return calls.contacts.slice(0, 8)
-  return calls.contacts
+  const contacts = calls.contacts.filter(
+    (contact) => contact.canMessage !== false,
+  )
+  if (!query) return contacts.slice(0, 8)
+  return contacts
     .filter((contact) =>
       `${contact.name} ${contact.phone_number}`
         .toLocaleLowerCase(phone.lang)
@@ -155,6 +158,9 @@ const activeContact = computed(() =>
   calls.contacts.find(
     (contact) => contact.phone_number === messages.activeNumber,
   ),
+)
+const activeCanMessage = computed(
+  () => activeContact.value?.canMessage !== false,
 )
 const attachmentPanelOpen = computed(
   () => emojiOpen.value || attachmentPicker.value !== null,
@@ -392,6 +398,13 @@ function beginCompose(): void {
 }
 
 async function chooseRecipient(number: string): Promise<void> {
+  const contact = calls.contacts.find(
+    (candidate) => candidate.phone_number === number,
+  )
+  if (contact?.canMessage === false) {
+    showToast(phone.t('Apps.messages.messagingUnavailable'))
+    return
+  }
   composerNumber.value = number
   if (!(await messages.openThread(number))) {
     showToast(errorText('invalid_number'))
@@ -433,6 +446,10 @@ function openContactDetails(): void {
 }
 
 async function saveContactDetails(): Promise<void> {
+  if (activeContact.value?.readonly) {
+    showToast(phone.t('Apps.phone.errors.readonly_contact'))
+    return
+  }
   if (!contactNameDraft.value.trim() || !contactNumberDraft.value.trim()) return
   const response = await calls.saveContact({
     id: activeContact.value?.id,
@@ -452,6 +469,10 @@ async function saveContactDetails(): Promise<void> {
 
 async function deleteActiveContact(): Promise<void> {
   if (!activeContact.value) return
+  if (activeContact.value.readonly) {
+    showToast(phone.t('Apps.phone.errors.readonly_contact'))
+    return
+  }
   if (!(await calls.deleteContact(activeContact.value.id))) {
     showToast(phone.t('Apps.messages.contactDeleteFailed'))
     return
@@ -461,7 +482,7 @@ async function deleteActiveContact(): Promise<void> {
 }
 
 async function callActiveContact(): Promise<void> {
-  if (!messages.activeNumber) return
+  if (!messages.activeNumber || activeContact.value?.canCall === false) return
   const response = await calls.dial(messages.activeNumber)
   if (!response.success) showToast(phone.t('Apps.messages.callFailed'))
 }
@@ -509,7 +530,7 @@ async function sendAttachment(
   mediaAssetId: string,
   mediaDurationMs?: number,
 ): Promise<void> {
-  if (!messages.activeNumber || sending.value) return
+  if (!messages.activeNumber || !activeCanMessage.value || sending.value) return
   attachmentMenuOpen.value = false
   attachmentPicker.value = null
   sending.value = true
@@ -606,9 +627,12 @@ function queueGifSearch(): void {
 async function sendTextMessage(): Promise<void> {
   if (
     !messages.activeNumber ||
+    !activeCanMessage.value ||
     (!draft.value.trim() && !shareDraft.value) ||
     sending.value
-  ) return
+  ) {
+    return
+  }
   const body = draft.value
   const shared = shareDraft.value
   draft.value = ''
@@ -656,6 +680,7 @@ function sampleMicrophone(): void {
 }
 
 async function startVoiceRecording(): Promise<void> {
+  if (!activeCanMessage.value) return
   emojiOpen.value = false
   if (
     !navigator.mediaDevices?.getUserMedia ||
@@ -774,7 +799,7 @@ async function finishVoiceRecording(): Promise<void> {
   const waveform = compressedWaveform()
   const shouldDiscard = discardRecording
   cleanupRecorder()
-  if (shouldDiscard) return
+  if (shouldDiscard || !activeCanMessage.value) return
   const blob = new Blob(chunks, { type: mime })
   if (!blob.size || blob.size > VOICE_MAX_BYTES) {
     showToast(phone.t('Apps.messages.recordingTooLarge'))
@@ -1147,6 +1172,7 @@ onBeforeUnmount(() => {
         </button>
         <strong>{{ phone.t('Apps.messages.contactDetails') }}</strong>
         <button
+          v-if="!activeContact?.readonly"
           type="button"
           @click="
             contactEditing ? saveContactDetails() : (contactEditing = true)
@@ -1176,14 +1202,27 @@ onBeforeUnmount(() => {
           </span>
         </span>
         <h2>{{ activeTitle }}</h2>
-        <small>{{ messages.activeNumber }}</small>
+        <small>
+          {{ messages.activeNumber }}
+          <template v-if="activeContact?.readonly">
+            · {{ phone.t('Apps.phone.officialContact') }}
+          </template>
+        </small>
       </div>
       <div class="messages-contact-details__actions">
-        <button type="button" @click="callActiveContact">
+        <button
+          v-if="activeContact?.canCall !== false"
+          type="button"
+          @click="callActiveContact"
+        >
           <PhoneIcon :size="20" />
           <span>{{ phone.t('Apps.messages.call') }}</span>
         </button>
-        <button type="button" @click="contactDetailsOpen = false">
+        <button
+          v-if="activeCanMessage"
+          type="button"
+          @click="contactDetailsOpen = false"
+        >
           <MessageCircle :size="20" />
           <span>{{ phone.t('Apps.messages.messageAction') }}</span>
         </button>
@@ -1193,7 +1232,7 @@ onBeforeUnmount(() => {
           <span>{{ phone.t('Apps.messages.contactName') }}</span>
           <input
             v-model="contactNameDraft"
-            :readonly="!contactEditing"
+            :readonly="!contactEditing || activeContact?.readonly"
             :placeholder="phone.t('Apps.messages.contactName')"
           />
         </label>
@@ -1201,7 +1240,7 @@ onBeforeUnmount(() => {
           <span>{{ phone.t('Apps.messages.phoneNumber') }}</span>
           <input
             v-model="contactNumberDraft"
-            :readonly="!contactEditing"
+            :readonly="!contactEditing || activeContact?.readonly"
             inputmode="tel"
           />
         </label>
@@ -1216,7 +1255,7 @@ onBeforeUnmount(() => {
         {{ phone.t('Apps.messages.addContact') }}
       </button>
       <button
-        v-else
+        v-else-if="!activeContact.readonly"
         type="button"
         class="messages-contact-details__delete"
         @click="deleteActiveContact"
@@ -1275,7 +1314,10 @@ onBeforeUnmount(() => {
       </template>
     </k-messages>
 
-    <section v-if="attachmentMenuOpen" class="messages-attachment-menu">
+    <section
+      v-if="activeCanMessage && attachmentMenuOpen"
+      class="messages-attachment-menu"
+    >
       <button type="button" @click="openMediaApp('photos', 'photo')">
         <span><Images :size="20" /></span>
         {{ phone.t('Apps.messages.attachPhoto') }}
@@ -1302,7 +1344,10 @@ onBeforeUnmount(() => {
       </button>
     </section>
 
-    <section v-if="attachmentPicker" class="messages-media-picker">
+    <section
+      v-if="activeCanMessage && attachmentPicker"
+      class="messages-media-picker"
+    >
       <header>
         <strong>
           {{
@@ -1388,12 +1433,15 @@ onBeforeUnmount(() => {
     </section>
 
     <FullEmojiPicker
-      v-if="emojiOpen"
+      v-if="activeCanMessage && emojiOpen"
       @close="emojiOpen = false"
       @pick="appendEmoji"
     />
 
-    <div v-if="shareDraft && !recording" class="shared-composer-preview">
+    <div
+      v-if="activeCanMessage && shareDraft && !recording"
+      class="shared-composer-preview"
+    >
       <SharedContentCard compact :payload="shareDraft" variant="messages" />
       <button
         type="button"
@@ -1404,7 +1452,7 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <section v-if="recording" class="messages-recorder">
+    <section v-if="activeCanMessage && recording" class="messages-recorder">
       <button
         type="button"
         class="messages-recorder__cancel"
@@ -1433,7 +1481,7 @@ onBeforeUnmount(() => {
     </section>
 
     <k-messagebar
-      v-else
+      v-else-if="activeCanMessage"
       class="messages-messagebar"
       :placeholder="phone.t('Apps.messages.message')"
       :value="draft"
@@ -1479,6 +1527,9 @@ onBeforeUnmount(() => {
         </k-toolbar-pane>
       </template>
     </k-messagebar>
+    <k-block v-else class="text-center text-sm text-[#8e8e93]">
+      {{ phone.t('Apps.messages.messagingUnavailable') }}
+    </k-block>
   </k-page>
 
   <k-toast :opened="toastOpened" position="center" @click="toastOpened = false">

@@ -1,4 +1,5 @@
 local overhead_members = {}
+local overhead_expires_at = 0
 
 local function draw_overhead_label(coords, username, role)
     SetDrawOrigin(coords.x, coords.y, coords.z + 1.05, 0)
@@ -14,17 +15,25 @@ local function draw_overhead_label(coords, username, role)
     ClearDrawOrigin()
 end
 
-CreateThread(function()
-    while true do
-        local result = Bridge.Callbacks.Trigger("sky_phone:crewlink:overhead", {})
-        overhead_members = result and result.success and result.data and result.data.members or {}
-        Wait(Config.CrewLink.OverheadRefreshMilliseconds)
-    end
+RegisterNUICallback("crewlink:live", function(data, cb)
+    local result = Bridge.Callbacks.Trigger("sky_phone:crewlink:live", data)
+    overhead_members = result and result.success and result.data and result.data.overheadMembers or {}
+    overhead_expires_at = GetGameTimer() + Config.CrewLink.OverheadRefreshMilliseconds * 2
+    cb(result or { success = false, error = "request_failed" })
+end)
+
+AddEventHandler("sky_phone:nuiClosed", function()
+    overhead_members = {}
+    overhead_expires_at = 0
 end)
 
 CreateThread(function()
     while true do
         local sleep = 1000
+        if overhead_expires_at > 0 and GetGameTimer() >= overhead_expires_at then
+            overhead_members = {}
+            overhead_expires_at = 0
+        end
         if #overhead_members > 0 then
             sleep = 0
             local player_coords = GetEntityCoords(PlayerPedId())

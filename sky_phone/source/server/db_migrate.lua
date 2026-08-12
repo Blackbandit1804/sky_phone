@@ -243,6 +243,56 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_custom_app_data",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            {
+                name = "device_imei",
+                type = "CHAR(15) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            {
+                name = "app_id",
+                type = "VARCHAR(64) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            {
+                name = "data_key",
+                type = "VARCHAR(64) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            { name = "payload", type = "LONGTEXT NOT NULL" },
+            { name = "revision", type = "INT UNSIGNED NOT NULL DEFAULT 1" },
+            {
+                name = "updated_at",
+                type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            {
+                name = "uniq_sky_phone_custom_app_data",
+                columns = "(`device_imei`, `app_id`, `data_key`)",
+            },
+        },
+        indexes = {
+            {
+                name = "idx_sky_phone_custom_app_storage",
+                columns = "(`device_imei`, `app_id`, `updated_at`)",
+            },
+        },
+        foreignKeys = {
+            {
+                column = "device_imei",
+                references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE",
+            },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_device_security",
         columns = {
             {
@@ -2129,6 +2179,39 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_company_profiles",
+        columns = {
+            { name = "company_id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "description", type = "VARCHAR(1000) NOT NULL DEFAULT ''" },
+            { name = "district", type = "VARCHAR(80) NOT NULL DEFAULT ''" },
+            { name = "location_label", type = "VARCHAR(80) NOT NULL DEFAULT ''" },
+            { name = "address", type = "VARCHAR(160) NOT NULL DEFAULT ''" },
+            { name = "location_x", type = "DECIMAL(10,3) NULL" },
+            { name = "location_y", type = "DECIMAL(10,3) NULL" },
+            { name = "location_z", type = "DECIMAL(10,3) NULL" },
+            { name = "logo_media_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "cover_media_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "availability", type = "ENUM('available','busy','closed') NOT NULL DEFAULT 'closed'" },
+            { name = "availability_updated_by", type = "VARCHAR(80) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "availability_updated_at", type = "DATETIME NULL" },
+            { name = "availability_expires_at", type = "DATETIME NULL" },
+            { name = "accepts_requests", type = "TINYINT(1) NOT NULL DEFAULT 1" },
+            { name = "revision", type = "INT UNSIGNED NOT NULL DEFAULT 1" },
+            { name = "mutation_token", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "company_id",
+        indexes = {
+            { name = "idx_sky_phone_company_profiles_public", columns = "(`availability`, `updated_at`)" },
+        },
+        foreignKeys = {
+            { column = "logo_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
+            { column = "cover_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_easyshare_transfers",
         columns = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
@@ -2152,6 +2235,209 @@ local schema = {
         foreignKeys = {
             { column = "sender_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
             { column = "recipient_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_company_hours",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "company_id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "weekday", type = "TINYINT UNSIGNED NOT NULL" },
+            { name = "is_closed", type = "TINYINT(1) NOT NULL DEFAULT 0" },
+            { name = "opens_at", type = "CHAR(5) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "closes_at", type = "CHAR(5) NULL", characterSet = "ascii", collation = "ascii_bin" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_company_hours_day", columns = "(`company_id`, `weekday`)" },
+        },
+        foreignKeys = {
+            { column = "company_id", references = "`sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_company_services",
+        columns = {
+            { name = "id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "company_id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "title", type = "VARCHAR(80) NOT NULL" },
+            { name = "description", type = "VARCHAR(500) NOT NULL DEFAULT ''" },
+            { name = "price_text", type = "VARCHAR(80) NOT NULL DEFAULT ''" },
+            { name = "requests_enabled", type = "TINYINT(1) NOT NULL DEFAULT 1" },
+            { name = "active", type = "TINYINT(1) NOT NULL DEFAULT 1" },
+            { name = "archived", type = "TINYINT(1) NOT NULL DEFAULT 0" },
+            { name = "sort_order", type = "TINYINT UNSIGNED NOT NULL DEFAULT 0" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_company_services_list", columns = "(`company_id`, `archived`, `active`, `sort_order`)" },
+        },
+        foreignKeys = {
+            { column = "company_id", references = "`sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_company_announcements",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "company_id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "title", type = "VARCHAR(120) NOT NULL" },
+            { name = "body", type = "VARCHAR(1000) NOT NULL" },
+            { name = "created_by", type = "VARCHAR(80) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "active", type = "TINYINT(1) NOT NULL DEFAULT 1" },
+            { name = "expires_at", type = "DATETIME NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_company_announcements_active", columns = "(`company_id`, `active`, `expires_at`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "company_id", references = "`sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_company_requests",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "company_id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "service_id", type = "VARCHAR(64) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "customer_sim_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "subject", type = "VARCHAR(120) NOT NULL" },
+            { name = "description", type = "VARCHAR(2000) NOT NULL" },
+            { name = "status", type = "ENUM('new','assigned','in_progress','waiting_customer','completed','cancelled') NOT NULL DEFAULT 'new'" },
+            { name = "assigned_identifier", type = "VARCHAR(80) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "customer_unread", type = "INT UNSIGNED NOT NULL DEFAULT 0" },
+            { name = "company_activity_revision", type = "INT UNSIGNED NOT NULL DEFAULT 1" },
+            { name = "revision", type = "INT UNSIGNED NOT NULL DEFAULT 1" },
+            { name = "mutation_token", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+            { name = "completed_at", type = "DATETIME NULL" },
+            { name = "cancelled_at", type = "DATETIME NULL" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_company_requests_customer", columns = "(`customer_sim_id`, `updated_at`, `id`)" },
+            { name = "idx_sky_phone_company_requests_queue", columns = "(`company_id`, `status`, `updated_at`, `id`)" },
+            { name = "idx_sky_phone_company_requests_assignee", columns = "(`company_id`, `assigned_identifier`, `status`)" },
+        },
+        foreignKeys = {
+            { column = "company_id", references = "`sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE" },
+            { column = "service_id", references = "`sky_phone_company_services` (`id`) ON DELETE SET NULL" },
+            { column = "customer_sim_id", references = "`sky_phone_sims` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_company_request_reads",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "request_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "reader_identifier", type = "VARCHAR(80) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "read_revision", type = "INT UNSIGNED NOT NULL DEFAULT 0" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_company_request_reads_reader", columns = "(`request_id`, `reader_identifier`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_company_request_reads_identifier", columns = "(`reader_identifier`, `updated_at`)" },
+        },
+        foreignKeys = {
+            { column = "request_id", references = "`sky_phone_company_requests` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_company_request_media",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "request_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "media_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "sort_order", type = "TINYINT UNSIGNED NOT NULL DEFAULT 0" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_company_request_media", columns = "(`request_id`, `media_id`)" },
+            { name = "uniq_sky_phone_company_request_media_order", columns = "(`request_id`, `sort_order`)" },
+        },
+        foreignKeys = {
+            { column = "request_id", references = "`sky_phone_company_requests` (`id`) ON DELETE CASCADE" },
+            { column = "media_id", references = "`sky_phone_media` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_company_request_messages",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "request_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "sender_type", type = "ENUM('customer','company') NOT NULL" },
+            { name = "sender_identifier", type = "VARCHAR(80) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "sender_sim_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "body", type = "VARCHAR(2000) NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_company_request_messages", columns = "(`request_id`, `created_at`, `id`)" },
+        },
+        foreignKeys = {
+            { column = "request_id", references = "`sky_phone_company_requests` (`id`) ON DELETE CASCADE" },
+            { column = "sender_sim_id", references = "`sky_phone_sims` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_company_request_events",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "request_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "event_type", type = "ENUM('created','assigned','status','cancelled') NOT NULL" },
+            { name = "actor_type", type = "ENUM('customer','company','system') NOT NULL" },
+            { name = "actor_identifier", type = "VARCHAR(80) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "from_status", type = "VARCHAR(32) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "to_status", type = "VARCHAR(32) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "detail", type = "VARCHAR(255) NOT NULL DEFAULT ''" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_company_request_events", columns = "(`request_id`, `created_at`, `id`)" },
+        },
+        foreignKeys = {
+            { column = "request_id", references = "`sky_phone_company_requests` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_company_audit",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "company_id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "actor_identifier", type = "VARCHAR(80) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "action", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "target_type", type = "VARCHAR(32) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "target_id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "metadata", type = "LONGTEXT NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_company_audit", columns = "(`company_id`, `created_at`, `id`)" },
+        },
+        foreignKeys = {
+            { column = "company_id", references = "`sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE" },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },

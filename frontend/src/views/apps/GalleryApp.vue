@@ -27,6 +27,7 @@ import {
   mergeMedia,
 } from '@/utils/media'
 import { nuiCall } from '@/utils/nui'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 const isDevelopment = import.meta.env.DEV
 const developmentGalleryState = isDevelopment
@@ -348,6 +349,7 @@ async function deleteSelected(): Promise<void> {
 }
 
 function onMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   const message = event.data as { data?: DeleteResult; type?: string }
   if (message.type === 'gallery:changed') {
     void loadGallery()

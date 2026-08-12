@@ -13,7 +13,7 @@ import {
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { getPhoneApp } from '@/config/apps'
+import { getPhoneApp, getPhoneAppLabel } from '@/config/apps'
 import { useAppStoreStore } from '@/stores/app-store'
 import { useCallsStore } from '@/stores/calls'
 import { useDarkChatStore } from '@/stores/darkchat'
@@ -22,7 +22,6 @@ import { useFlareStore } from '@/stores/flare'
 import { useMessagesStore } from '@/stores/messages'
 import { useNotesStore } from '@/stores/notes'
 import { usePhoneStore } from '@/stores/phone'
-import type { LaunchablePhoneAppId } from '@/types/apps'
 import type {
   EasyShareChatApp,
   EasyShareTransfer,
@@ -45,6 +44,7 @@ let dragPointerId: number | null = null
 let dragStartTime = 0
 let dragStartY = 0
 const visibilityOptions: EasyShareVisibility[] = ['everyone', 'contacts', 'hidden']
+type EasyShareDestinationAppId = 'darkchat' | 'messages' | 'notes'
 const app = computed(() =>
   easyShare.payload ? getPhoneApp(easyShare.payload.appId) : undefined,
 )
@@ -104,12 +104,18 @@ const sharePeople = computed(() => {
 
   return people
 })
-const shareAppIds: LaunchablePhoneAppId[] = ['messages', 'darkchat', 'notes']
+const shareAppIds: EasyShareDestinationAppId[] = [
+  'messages',
+  'darkchat',
+  'notes',
+]
 const shareApps = computed(() =>
   shareAppIds
     .filter((id) => !appStore.homeLayout.hidden.includes(id))
-    .map((id) => getPhoneApp(id))
-    .filter((entry) => entry !== undefined),
+    .flatMap((id) => {
+      const app = getPhoneApp(id)
+      return app ? [{ app, id }] : []
+    }),
 )
 const sheetStyle = computed(() => ({
   transform: easyShare.opened
@@ -193,7 +199,7 @@ function openChatApp(kind: 'darkchat' | 'messages'): void {
   void router.push(`/apps/${kind}`)
 }
 
-function openShareApp(appId: LaunchablePhoneAppId): void {
+function openShareApp(appId: EasyShareDestinationAppId): void {
   if (appId === 'messages' || appId === 'darkchat') {
     openChatApp(appId)
     return
@@ -257,7 +263,7 @@ async function cancelTransfer(transfer: EasyShareTransfer): Promise<void> {
         <img v-if="app?.iconImage" :src="app.iconImage" alt="" />
         <span v-else class="easyshare-header__fallback"><Share2 /></span>
         <div>
-          <small>{{ app ? phone.t(app.labelKey) : label('name') }}</small>
+          <small>{{ app ? getPhoneAppLabel(app, phone.t) : label('name') }}</small>
           <strong>{{ easyShare.payload?.title ?? label('incoming') }}</strong>
           <p>{{ easyShare.payload?.subtitle || easyShare.payload?.copyText }}</p>
         </div>
@@ -305,8 +311,10 @@ async function cancelTransfer(transfer: EasyShareTransfer): Promise<void> {
             class="easyshare-action"
             @click="openShareApp(destination.id)"
           >
-            <span class="easyshare-action__app"><img :src="destination.iconImage" alt="" /></span>
-            <small>{{ phone.t(destination.labelKey) }}</small>
+            <span class="easyshare-action__app"
+              ><img :src="destination.app.iconImage" alt=""
+            /></span>
+            <small>{{ getPhoneAppLabel(destination.app, phone.t) }}</small>
           </button>
           <button type="button" class="easyshare-action" @click="easyShare.showHistory">
             <span class="easyshare-action__icon"><History /></span>

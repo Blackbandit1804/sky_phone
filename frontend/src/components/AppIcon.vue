@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { kBadge } from 'konsta/vue'
 import { Minus } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { NON_REMOVABLE_PHONE_APP_IDS } from '@/config/apps'
+import { getPhoneAppLabel, isPhoneAppRemovable } from '@/config/apps'
 import { useMailStore } from '@/stores/mail'
 import { useBillingStore } from '@/stores/billing'
+import { useCompaniesStore } from '@/stores/companies'
 import { useMarketplaceStore } from '@/stores/marketplace'
 import { useDarkChatStore } from '@/stores/darkchat'
 import { usePhoneStore } from '@/stores/phone'
@@ -37,6 +38,7 @@ const emit = defineEmits<{
 const phone = usePhoneStore()
 const mail = useMailStore()
 const billing = useBillingStore()
+const companies = useCompaniesStore()
 const marketplace = useMarketplaceStore()
 const darkchat = useDarkChatStore()
 const router = useRouter()
@@ -54,15 +56,29 @@ const dragStyle = computed(() =>
       }
     : undefined,
 )
+const iconStyle = computed(() =>
+  props.app.kind === 'external' && props.app.iconBackground
+    ? { backgroundColor: props.app.iconBackground }
+    : undefined,
+)
 const suppressClick = ref(false)
 let holdTimer: number | undefined
 let calendarTimer: number | undefined
 let pointerStart = { x: 0, y: 0 }
+
+watch(
+  () => props.app.iconImage,
+  () => {
+    iconFailed.value = false
+  },
+)
+
 const unreadCount = computed(() => {
   if (props.app.id === 'mail') return mail.counts.unread
   if (props.app.id === 'citymarkt') return marketplace.counts.unread
   if (props.app.id === 'darkchat') return darkchat.unreadCount
   if (props.app.id === 'billing') return billing.overview?.unreadCount ?? 0
+  if (props.app.id === 'companies') return companies.unreadCount
   return 0
 })
 const notificationBadgeColors = {
@@ -216,7 +232,7 @@ onBeforeUnmount(() => {
       class="app-icon-button"
       :class="{ 'app-icon-button--compact': compact }"
       type="button"
-      :aria-label="phone.t(app.labelKey)"
+      :aria-label="getPhoneAppLabel(app, phone.t)"
       :aria-disabled="!app.route"
       @click="launch"
       @contextmenu.prevent
@@ -233,6 +249,7 @@ onBeforeUnmount(() => {
             app.iconClass,
             { 'app-icon--image': !iconFailed && app.id !== 'calendar' },
           ]"
+          :style="iconStyle"
         >
           <span v-if="app.id === 'calendar'" class="app-icon-calendar">
             <strong>{{ calendarWeekday }}</strong>
@@ -262,14 +279,18 @@ onBeforeUnmount(() => {
         </k-badge>
       </span>
       <span v-if="showLabel" class="app-icon-label">{{
-        phone.t(app.labelKey)
+        getPhoneAppLabel(app, phone.t)
       }}</span>
     </button>
     <button
-      v-if="editMode && !NON_REMOVABLE_PHONE_APP_IDS.has(app.id)"
+      v-if="editMode && isPhoneAppRemovable(app)"
       class="app-icon-remove"
       type="button"
-      :aria-label="phone.t('Home.removeApp', { app: phone.t(app.labelKey) })"
+      :aria-label="
+        phone.t('Home.removeApp', {
+          app: getPhoneAppLabel(app, phone.t),
+        })
+      "
       @click.stop="emit('remove')"
       @pointerdown.stop
     >

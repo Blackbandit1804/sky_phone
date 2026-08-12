@@ -278,28 +278,22 @@ function openContact(contact?: PhoneContact, number = ''): void {
   contactNotes.value = contact?.notes ?? ''
   contactNumber.value = contact?.phone_number ?? number
   contactAvatarMediaId.value = contact?.avatar_media_id ?? null
-  contactAvatarUrl.value = contact?.avatar_url ?? ''
+  contactAvatarUrl.value = contact?.avatar_url ?? contact?.icon ?? ''
   error.value = ''
   editorOpened.value = true
 }
 
 function openContactPhotoPicker(source: 'camera' | 'photos'): void {
-  mediaPicker.begin(
-    'phone:contact-photo',
-    'photo',
-    '/apps/phone',
-    1,
-    {
-      avatarMediaId: contactAvatarMediaId.value,
-      avatarUrl: contactAvatarUrl.value,
-      contactId: editingContact.value?.id,
-      firstName: contactFirstName.value,
-      lastName: contactLastName.value,
-      notes: contactNotes.value,
-      organization: contactOrganization.value,
-      phoneNumber: contactNumber.value,
-    } satisfies ContactPhotoContext,
-  )
+  mediaPicker.begin('phone:contact-photo', 'photo', '/apps/phone', 1, {
+    avatarMediaId: contactAvatarMediaId.value,
+    avatarUrl: contactAvatarUrl.value,
+    contactId: editingContact.value?.id,
+    firstName: contactFirstName.value,
+    lastName: contactLastName.value,
+    notes: contactNotes.value,
+    organization: contactOrganization.value,
+    phoneNumber: contactNumber.value,
+  } satisfies ContactPhotoContext)
   editorOpened.value = false
   void router.push({
     path: `/apps/${source}`,
@@ -409,6 +403,10 @@ async function toggleSelectedFavorite(): Promise<void> {
 }
 
 async function saveContact(): Promise<void> {
+  if (editingContact.value?.readonly) {
+    error.value = phone.t('Apps.phone.errors.readonly_contact')
+    return
+  }
   const number = normalizePhoneNumber(contactNumber.value)
   const name = [contactFirstName.value, contactLastName.value]
     .map((part) => part.trim())
@@ -448,10 +446,13 @@ async function openMessage(number: string): Promise<void> {
 
 function triggerContactAction(action: ContactProfileAction): void {
   if (action === 'call') {
+    if (selectedContact.value?.canCall === false) return
     void startCall(selectedNumber.value)
     return
   }
-  if (action === 'message') void openMessage(selectedNumber.value)
+  if (action === 'message' && selectedContact.value?.canMessage !== false) {
+    void openMessage(selectedNumber.value)
+  }
 }
 
 async function startCall(number: string): Promise<void> {
@@ -562,6 +563,10 @@ function addInCallDigit(digit: string): void {
 
 async function deleteEditedContact(): Promise<void> {
   if (!editingContact.value) return
+  if (editingContact.value.readonly) {
+    error.value = phone.t('Apps.phone.errors.readonly_contact')
+    return
+  }
   if (await calls.deleteContact(editingContact.value.id)) {
     editorOpened.value = false
   }
@@ -895,7 +900,12 @@ onBeforeUnmount(() => {
                     rounded
                     class="phone-profile-action phone-profile-action--compact"
                     :disabled="
-                      viewingOwnCard || ['video', 'mail'].includes(action.id)
+                      viewingOwnCard ||
+                      ['video', 'mail'].includes(action.id) ||
+                      (action.id === 'call' &&
+                        selectedContact?.canCall === false) ||
+                      (action.id === 'message' &&
+                        selectedContact?.canMessage === false)
                     "
                     :aria-label="phone.t(`Apps.phone.${action.id}`)"
                     @click="triggerContactAction(action.id)"
@@ -929,8 +939,8 @@ onBeforeUnmount(() => {
             <div class="phone-contact-hero">
               <div class="phone-contact-avatar phone-contact-avatar--large">
                 <img
-                  v-if="selectedContact?.avatar_url"
-                  :src="selectedContact.avatar_url"
+                  v-if="selectedContact?.avatar_url || selectedContact?.icon"
+                  :src="selectedContact.avatar_url ?? selectedContact.icon"
                   alt=""
                 />
                 <span v-else-if="contactInitials(selectedNumber)">{{
@@ -956,7 +966,12 @@ onBeforeUnmount(() => {
                   rounded
                   class="phone-profile-action"
                   :disabled="
-                    viewingOwnCard || ['video', 'mail'].includes(action.id)
+                    viewingOwnCard ||
+                    ['video', 'mail'].includes(action.id) ||
+                    (action.id === 'call' &&
+                      selectedContact?.canCall === false) ||
+                    (action.id === 'message' &&
+                      selectedContact?.canMessage === false)
                   "
                   :aria-label="phone.t(`Apps.phone.${action.id}`)"
                   @click="triggerContactAction(action.id)"
@@ -992,14 +1007,22 @@ onBeforeUnmount(() => {
 
             <section v-else class="phone-profile-content">
               <k-glass class="phone-profile-card phone-profile-info-card">
-                <button type="button" @click="startCall(selectedNumber)">
+                <button
+                  type="button"
+                  :disabled="selectedContact?.canCall === false"
+                  @click="startCall(selectedNumber)"
+                >
                   <span>
                     <small>{{ phone.t('Apps.phone.mobile') }}</small>
                     <strong>{{ formatPhoneNumber(selectedNumber) }}</strong>
                   </span>
                   <Phone :size="21" fill="currentColor" />
                 </button>
-                <button type="button" @click="openMessage(selectedNumber)">
+                <button
+                  type="button"
+                  :disabled="selectedContact?.canMessage === false"
+                  @click="openMessage(selectedNumber)"
+                >
                   <span>
                     <small>{{ phone.t('Apps.phone.messagesProfile') }}</small>
                     <strong>{{ selectedDisplayName }}</strong>
@@ -1015,7 +1038,11 @@ onBeforeUnmount(() => {
               </k-glass>
 
               <k-glass class="phone-profile-card phone-profile-options-card">
-                <button type="button" @click="openMessage(selectedNumber)">
+                <button
+                  type="button"
+                  :disabled="selectedContact?.canMessage === false"
+                  @click="openMessage(selectedNumber)"
+                >
                   <span>{{ phone.t('Apps.phone.sendMessage') }}</span>
                 </button>
                 <button
@@ -1125,7 +1152,10 @@ onBeforeUnmount(() => {
                 <div class="phone-contact-avatar">
                   <img
                     v-if="contactsByNumber.get(recent.other_number)?.avatar_url"
-                    :src="contactsByNumber.get(recent.other_number)?.avatar_url ?? ''"
+                    :src="
+                      contactsByNumber.get(recent.other_number)?.avatar_url ??
+                      ''
+                    "
                     alt=""
                   />
                   <span v-else-if="contactInitials(recent.other_number)">{{
@@ -1234,10 +1264,21 @@ onBeforeUnmount(() => {
                   @click="openRecentDetail(contact.phone_number)"
                 >
                   <span class="phone-contact-avatar">
-                    <img v-if="contact.avatar_url" :src="contact.avatar_url" alt="" />
-                    <template v-else>{{ contactInitials(contact.phone_number) }}</template>
+                    <img
+                      v-if="contact.avatar_url || contact.icon"
+                      :src="contact.avatar_url ?? contact.icon"
+                      alt=""
+                    />
+                    <template v-else>{{
+                      contactInitials(contact.phone_number)
+                    }}</template>
                   </span>
-                  <span class="phone-contact-name">{{ contact.name }}</span>
+                  <span class="phone-contact-name">
+                    {{ contact.name }}
+                    <small v-if="contact.readonly">{{
+                      phone.t('Apps.phone.officialContact')
+                    }}</small>
+                  </span>
                 </button>
               </section>
               <section
@@ -1257,10 +1298,21 @@ onBeforeUnmount(() => {
                   @click="openRecentDetail(contact.phone_number)"
                 >
                   <span class="phone-contact-avatar">
-                    <img v-if="contact.avatar_url" :src="contact.avatar_url" alt="" />
-                    <template v-else>{{ contactInitials(contact.phone_number) }}</template>
+                    <img
+                      v-if="contact.avatar_url || contact.icon"
+                      :src="contact.avatar_url ?? contact.icon"
+                      alt=""
+                    />
+                    <template v-else>{{
+                      contactInitials(contact.phone_number)
+                    }}</template>
                   </span>
-                  <span class="phone-contact-name">{{ contact.name }}</span>
+                  <span class="phone-contact-name">
+                    {{ contact.name }}
+                    <small v-if="contact.readonly">{{
+                      phone.t('Apps.phone.officialContact')
+                    }}</small>
+                  </span>
                 </button>
               </section>
             </div>
@@ -1310,8 +1362,8 @@ onBeforeUnmount(() => {
                 >
                   <span class="phone-keypad-suggestion__avatar">
                     <img
-                      v-if="contact.avatar_url"
-                      :src="contact.avatar_url"
+                      v-if="contact.avatar_url || contact.icon"
+                      :src="contact.avatar_url ?? contact.icon"
                       alt=""
                     />
                     <template v-else>{{
@@ -1416,7 +1468,11 @@ onBeforeUnmount(() => {
       aria-modal="true"
       :aria-label="
         phone.t(
-          editingContact ? 'Apps.phone.editContact' : 'Apps.phone.addContact',
+          editingContact?.readonly
+            ? 'Apps.phone.officialContact'
+            : editingContact
+              ? 'Apps.phone.editContact'
+              : 'Apps.phone.addContact',
         )
       "
     >
@@ -1432,13 +1488,16 @@ onBeforeUnmount(() => {
         <h2>
           {{
             phone.t(
-              editingContact
-                ? 'Apps.phone.editContact'
-                : 'Apps.phone.newContact',
+              editingContact?.readonly
+                ? 'Apps.phone.officialContact'
+                : editingContact
+                  ? 'Apps.phone.editContact'
+                  : 'Apps.phone.newContact',
             )
           }}
         </h2>
         <k-button
+          v-if="!editingContact?.readonly"
           rounded
           class="phone-contact-editor__header-button"
           :aria-label="phone.t('Common.save')"
@@ -1460,6 +1519,7 @@ onBeforeUnmount(() => {
               class="phone-contact-editor__avatar"
               type="button"
               :aria-label="phone.t('Apps.phone.choosePhoto')"
+              :disabled="editingContact?.readonly"
               @click="openContactPhotoPicker('photos')"
             >
               <img v-if="contactAvatarUrl" :src="contactAvatarUrl" alt="" />
@@ -1469,7 +1529,7 @@ onBeforeUnmount(() => {
               <UserRound v-else :size="72" :stroke-width="1.35" />
             </button>
             <k-button
-              v-if="contactAvatarUrl"
+              v-if="contactAvatarUrl && !editingContact?.readonly"
               rounded
               class="phone-contact-editor__remove-photo"
               :aria-label="phone.t('Apps.phone.removePhoto')"
@@ -1479,7 +1539,10 @@ onBeforeUnmount(() => {
               <span>{{ phone.t('Apps.phone.removePhoto') }}</span>
             </k-button>
           </div>
-          <div class="phone-contact-editor__photo-actions">
+          <div
+            v-if="!editingContact?.readonly"
+            class="phone-contact-editor__photo-actions"
+          >
             <k-button
               small
               rounded
@@ -1506,18 +1569,21 @@ onBeforeUnmount(() => {
             :value="contactFirstName"
             :placeholder="phone.t('Apps.phone.firstName')"
             autocomplete="given-name"
+            :readonly="editingContact?.readonly"
             @input="contactFirstName = eventValue($event)"
           />
           <k-list-input
             :value="contactLastName"
             :placeholder="phone.t('Apps.phone.lastName')"
             autocomplete="family-name"
+            :readonly="editingContact?.readonly"
             @input="contactLastName = eventValue($event)"
           />
           <k-list-input
             :value="contactOrganization"
             :placeholder="phone.t('Apps.phone.companyOrGroup')"
             autocomplete="organization"
+            :readonly="editingContact?.readonly"
             @input="contactOrganization = eventValue($event)"
           />
         </k-list>
@@ -1529,6 +1595,7 @@ onBeforeUnmount(() => {
             :placeholder="phone.t('Apps.phone.phoneNumber')"
             inputmode="tel"
             autocomplete="tel"
+            :readonly="editingContact?.readonly"
             @input="contactNumber = eventValue($event)"
           >
             <template #media>
@@ -1546,6 +1613,7 @@ onBeforeUnmount(() => {
             :placeholder="phone.t('Apps.phone.notes')"
             :maxlength="500"
             autocapitalize="sentences"
+            :readonly="editingContact?.readonly"
             @input="contactNotes = eventValue($event)"
           />
         </k-list>
@@ -1553,7 +1621,7 @@ onBeforeUnmount(() => {
         <p v-if="error" class="phone-contact-editor__error">{{ error }}</p>
 
         <k-button
-          v-if="editingContact"
+          v-if="editingContact && !editingContact.readonly"
           class="phone-contact-editor__delete"
           @click="deleteEditedContact"
         >
@@ -2205,12 +2273,21 @@ onBeforeUnmount(() => {
   display: flex;
   min-width: 0;
   min-height: 68px;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
   overflow: hidden;
   font-size: 16px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.phone-contact-name small {
+  color: #8e8e93;
+  font-size: 10px;
+  font-weight: 500;
 }
 
 .phone-contact-index {
@@ -3387,7 +3464,8 @@ onBeforeUnmount(() => {
 }
 
 .phone-contact-editor__avatar-wrap--has-photo:hover
-  .phone-contact-editor__avatar img {
+  .phone-contact-editor__avatar
+  img {
   filter: brightness(0.58);
   transform: scale(1.015);
 }
@@ -3752,7 +3830,6 @@ onBeforeUnmount(() => {
     background: rgba(118, 118, 128, 0.14);
     transform: translateY(-1px);
   }
-
 }
 
 @media (hover: none) {

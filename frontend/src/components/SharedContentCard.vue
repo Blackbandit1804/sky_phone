@@ -2,7 +2,7 @@
 import { Image, MapPin, Music2, Play, UserRound } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
-import { getPhoneApp } from '@/config/apps'
+import { getPhoneApp, getPhoneAppLabel } from '@/config/apps'
 import { usePhoneStore } from '@/stores/phone'
 import type { EasySharePayload } from '@/types/easyshare'
 
@@ -51,7 +51,9 @@ watch(
     <div class="shared-content-card__source">
       <img v-if="sourceApp?.iconImage" :src="sourceApp.iconImage" alt="" />
       <span>
-        <b>{{ sourceApp ? phone.t(sourceApp.labelKey) : payload.appId }}</b>
+        <b>{{
+          sourceApp ? getPhoneAppLabel(sourceApp, phone.t) : payload.appId
+        }}</b>
         <small>{{ phone.t(`Apps.easyShare.kinds.${payload.kind}`) }}</small>
       </span>
     </div>

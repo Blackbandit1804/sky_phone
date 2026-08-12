@@ -82,6 +82,7 @@ import type {
 } from '@/types/crewlink'
 import { copyText } from '@/utils/clipboard'
 import { nuiCall } from '@/utils/nui'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type CrewLinkTab = 'map' | 'group' | 'pings' | 'profile'
 type CrewLinkSheet =
@@ -660,6 +661,7 @@ function onWheel(event: WheelEvent): void {
 }
 
 function onCrewLinkMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (event.data?.type === 'crewlink:changed') void crew.bootstrap()
 }
 

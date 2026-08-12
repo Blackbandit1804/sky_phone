@@ -7,7 +7,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import SpringboardWidgetGrid from '@/components/SpringboardWidgetGrid.vue'
 import WidgetConfigSheet from '@/components/WidgetConfigSheet.vue'
 import WidgetPickerSheet from '@/components/WidgetPickerSheet.vue'
-import { PHONE_APPS } from '@/config/apps'
+import { getPhoneAppLabel, PHONE_APPS } from '@/config/apps'
 import { useAppStoreStore } from '@/stores/app-store'
 import { usePhoneStore } from '@/stores/phone'
 import { useWidgetsStore } from '@/stores/widgets'
@@ -74,9 +74,7 @@ let edgePageDirection = 0
 let edgePageLocked = false
 
 const installedApps = computed(() =>
-  PHONE_APPS.filter(
-    (app) => app.category !== 'games' || appStore.claimedApps.includes(app.id),
-  ),
+  PHONE_APPS.filter((app) => appStore.isInstalled(app.id)),
 )
 const installedAppsById = computed(
   () => new Map(installedApps.value.map((app) => [app.id, app])),
@@ -190,7 +188,9 @@ const filteredApps = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase(phone.lang)
   if (!query) return installedApps.value
   return installedApps.value.filter((app) =>
-    phone.t(app.labelKey).toLocaleLowerCase(phone.lang).includes(query),
+    getPhoneAppLabel(app, phone.t)
+      .toLocaleLowerCase(phone.lang)
+      .includes(query),
   )
 })
 const appGroups = computed(() => {
@@ -223,9 +223,14 @@ const appGroups = computed(() => {
 const alphabeticalGroups = computed(() => {
   const groups: Array<{ apps: PhoneAppDefinition[]; letter: string }> = []
   for (const app of [...filteredApps.value].sort((a, b) =>
-    phone.t(a.labelKey).localeCompare(phone.t(b.labelKey), phone.lang),
+    getPhoneAppLabel(a, phone.t).localeCompare(
+      getPhoneAppLabel(b, phone.t),
+      phone.lang,
+    ),
   )) {
-    const letter = phone.t(app.labelKey).charAt(0).toLocaleUpperCase(phone.lang)
+    const letter = getPhoneAppLabel(app, phone.t)
+      .charAt(0)
+      .toLocaleUpperCase(phone.lang)
     const group = groups.find((candidate) => candidate.letter === letter)
     if (group) group.apps.push(app)
     else groups.push({ apps: [app], letter })
@@ -803,7 +808,9 @@ watch(isEditablePage, (visible) => {
                   rounded
                   class="app-library-restore-button"
                   :aria-label="
-                    phone.t('Home.addToHome', { app: phone.t(app.labelKey) })
+                    phone.t('Home.addToHome', {
+                      app: getPhoneAppLabel(app, phone.t),
+                    })
                   "
                   @click.stop="restoreHomeApp(app.id)"
                 >
@@ -864,14 +871,16 @@ watch(isEditablePage, (visible) => {
                 class="app-library-row"
               >
                 <AppIcon :app="app" compact :show-label="false" />
-                <span>{{ phone.t(app.labelKey) }}</span>
+                <span>{{ getPhoneAppLabel(app, phone.t) }}</span>
                 <k-button
                   v-if="appStore.homeLayout.hidden.includes(app.id)"
                   small
                   rounded
                   class="app-library-row-restore"
                   :aria-label="
-                    phone.t('Home.addToHome', { app: phone.t(app.labelKey) })
+                    phone.t('Home.addToHome', {
+                      app: getPhoneAppLabel(app, phone.t),
+                    })
                   "
                   @click.stop="restoreHomeApp(app.id)"
                 >

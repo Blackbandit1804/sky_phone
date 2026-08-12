@@ -49,7 +49,11 @@ import {
 } from 'vue'
 
 import { PHONE_FRAME_COLORS } from '@/config/appearance'
-import { isLaunchablePhoneApp, PHONE_APPS } from '@/config/apps'
+import {
+  getPhoneAppLabel,
+  isLaunchablePhoneApp,
+  PHONE_APPS,
+} from '@/config/apps'
 import { usePhoneStore } from '@/stores/phone'
 import PhonePasscode from '@/components/PhonePasscode.vue'
 import { useAccountStore } from '@/stores/account'
@@ -281,7 +285,7 @@ const activeTitle = computed(() => {
   }
   if (activeView.value === 'notification-detail') {
     return selectedNotificationApp.value
-      ? phone.t(selectedNotificationApp.value.labelKey)
+      ? getPhoneAppLabel(selectedNotificationApp.value, phone.t)
       : phone.t('Apps.settings.notifications')
   }
   return phone.t(`Apps.settings.${activeView.value}`)
@@ -1030,7 +1034,7 @@ onBeforeUnmount(() => {
             v-for="app in notificationApps"
             :key="app.id"
             link
-            :title="phone.t(app.labelKey)"
+            :title="getPhoneAppLabel(app, phone.t)"
             :after="
               phone.t(
                 phone.preferences.settings.notifications[app.id].enabled
@@ -1058,7 +1062,9 @@ onBeforeUnmount(() => {
         "
       >
         <k-list strong inset>
-          <k-list-item :title="phone.t(selectedNotificationApp.labelKey)">
+          <k-list-item
+            :title="getPhoneAppLabel(selectedNotificationApp, phone.t)"
+          >
             <template #media>
               <img
                 class="w-12 h-12 object-contain"
@@ -1080,7 +1086,7 @@ onBeforeUnmount(() => {
                 "
                 :aria-label="
                   phone.t('Apps.settings.toggle.notifications', {
-                    app: phone.t(selectedNotificationApp.labelKey),
+                    app: getPhoneAppLabel(selectedNotificationApp, phone.t),
                   })
                 "
                 @change="
@@ -1110,7 +1116,7 @@ onBeforeUnmount(() => {
                 "
                 :aria-label="
                   phone.t('Apps.settings.toggle.notificationSounds', {
-                    app: phone.t(selectedNotificationApp.labelKey),
+                    app: getPhoneAppLabel(selectedNotificationApp, phone.t),
                   })
                 "
                 @change="

@@ -2,6 +2,10 @@ if Bridge.Framework.Name ~= "esx" then
     return
 end
 
+if GetResourceState("es_extended") ~= "started" then
+    error("[sky_phone] ESX is configured, but es_extended is not started.")
+end
+
 local ESX = exports["es_extended"]:getSharedObject()
 
 local function get_player(source)

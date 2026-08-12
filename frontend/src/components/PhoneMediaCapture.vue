@@ -5,6 +5,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { UploadReady } from '@/types/media'
 import { createGameView, type GameView } from '@/utils/gameView'
 import { nuiCall } from '@/utils/nui'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type RecordingChunk = { blob: Blob; durationMs: number }
 type PendingVideo = { blob: Blob; fileName: string }
@@ -341,6 +342,7 @@ async function uploadReady(ready: UploadReady): Promise<void> {
 }
 
 function onMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   const message = event.data as {
     data?: Record<string, unknown>
     type?: string

@@ -720,6 +720,16 @@ button {
   background-color: rgb(28 28 32 / 72%);
   text-shadow: 0 1px 3px #0009;
 }
+.phone-notification.is-actionable {
+  cursor: pointer;
+}
+.lock-screen__notification.is-actionable {
+  cursor: pointer;
+}
+.lock-screen__notification.is-actionable:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
 .lock-screen__notification-icon {
   width: 42px;
   height: 42px;
