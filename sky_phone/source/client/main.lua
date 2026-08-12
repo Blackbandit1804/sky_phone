@@ -328,6 +328,15 @@ if Config.Phone.DevelopmentCommand then
     end, false)
 end
 
+RegisterNetEvent("sky_phone:testdata:feedback", function(success, detail)
+    local locale = get_locale().TestData
+    local message = success and locale.Success or locale.Failed
+    if success and type(detail) == "string" and detail ~= "" then
+        message = message:gsub("{email}", detail)
+    end
+    Bridge.Framework.Notify("iFruit", message, success and "success" or "error", 7000)
+end)
+
 RegisterNUICallback("ui:ready", function(_, cb)
     Bridge.Debug("debug", "[sky_phone] NUI reported ready.", { always = true })
     TriggerEvent("sky_phone:client:nuiReady")
@@ -765,6 +774,9 @@ CreateThread(function()
     if Config.Phone.DevelopmentCommand then
         TriggerEvent("chat:addSuggestion", "/" .. Config.Command, get_locale().CommandDescription)
     end
+    if Config.TestData.Enabled then
+        TriggerEvent("chat:addSuggestion", "/" .. Config.TestData.Command, get_locale().TestData.CommandDescription)
+    end
 end)
 
 AddEventHandler("onResourceStop", function(resource_name)
@@ -781,5 +793,8 @@ AddEventHandler("onResourceStop", function(resource_name)
 
     if Config.Phone.DevelopmentCommand then
         TriggerEvent("chat:removeSuggestion", "/" .. Config.Command)
+    end
+    if Config.TestData.Enabled then
+        TriggerEvent("chat:removeSuggestion", "/" .. Config.TestData.Command)
     end
 end)

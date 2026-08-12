@@ -425,6 +425,50 @@ async function hydrateDevelopmentPhone(): Promise<void> {
   })
 }
 
+function openDevelopmentPayphonePreview(): void {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        data: {
+          currency: '$',
+          locales: {
+            busy: 'LINE BUSY',
+            call: 'CALL',
+            callEnded: 'CALL ENDED',
+            clear: 'Clear number',
+            close: 'Close payphone',
+            connected: 'CONNECTED',
+            cost: 'COST',
+            declined: 'CALL DECLINED',
+            delete: 'Delete digit',
+            dialing: 'DIALING',
+            disconnected: 'DISCONNECTED',
+            elapsed: 'TIME',
+            hangup: 'HANG UP',
+            insufficientFunds: 'OUT OF MONEY',
+            invalidNumber: 'ENTER A VALID NUMBER',
+            keypad: 'Dial pad',
+            noAnswer: 'NO ANSWER',
+            numberLabel: 'NUMBER TO CALL',
+            numberPlaceholder: 'Enter a phone number',
+            rate: '{currency}{price} / SEC',
+            ready: 'READY',
+            requestFailed: 'CALL COULD NOT BE STARTED',
+            ringing: 'RINGING',
+            subtitle: 'PUBLIC TELEPHONE',
+            title: 'PAYPHONE',
+            unavailable: 'NUMBER UNAVAILABLE',
+            voiceUnavailable: 'VOICE SERVICE UNAVAILABLE',
+          },
+          maxNumberLength: 10,
+          pricePerSecond: 2,
+        },
+        type: 'payphone:open',
+      },
+    }),
+  )
+}
+
 function onMessage(event: MessageEvent<AppMessage>): void {
   if (!isTrustedRootMessageSource(event.source, window)) return
 
@@ -1055,6 +1099,9 @@ onMounted(() => {
         ],
         number: '5551234567',
       }
+    }
+    if (developmentParameters.has('payphonePreview')) {
+      openDevelopmentPayphonePreview()
     }
   }
 })

@@ -91,6 +91,20 @@ included in the NUI bundle.
 
 Standalone FiveM phone built with Vue 3, TypeScript, Pinia, Vue Router, Konsta UI 5, and Tailwind CSS 4. The phone opens through the usable item; `/phone` is disabled unless `Config.Phone.DevelopmentCommand` is enabled explicitly. Phone identity and SIM-card behavior are selected independently through `Config.Phone.Unique` and `Config.Sim.Enabled`.
 
+### Ingame test data
+
+On development servers, enable `Config.TestData.Enabled` and run `/phonetestdata` as the player who
+owns the phone. The command creates or refreshes idempotent, player-scoped fixtures for contacts,
+calls, messages, mail, notes, gallery, banking history, billing, calendar, map markers, music, radio,
+EasyShare, CityMarkt, Local Pages, Picstagram, FlipTok, Feather, Flare, DarkChat, CrewLink, SkyRide,
+and company requests. It also creates a linked iFruit account and a registered SIM when the selected
+phone does not have them yet. Reopen the phone after the command completes.
+
+Garage and Housing intentionally continue to use the real configured provider data. Apps without
+persistent content, such as Calculator, Camera, Clock, Weather, Settings, and Payphone, do not need
+database fixtures. Set `Config.TestData.AdminOnly = true` to restrict the command to the configured
+framework admin groups, and disable the feature outside development environments.
+
 An iFruit account is optional. Unlinked devices retain local settings, alarms, media, apps, notes, contacts, and recent calls. Linking from Mail or Settings moves local data into an empty cloud account; an existing cloud dataset wins over local contacts and recents. Signing out keeps an editable local snapshot without deleting cloud data.
 
 ## Phone identity and SIM modes
@@ -228,7 +242,24 @@ The homescreen is an original implementation inspired by the interaction and lay
 
 ## Development
 
-From `frontend/`, run `pnpm dev` for browser development. The phone opens automatically and NUI callbacks are mocked. Feather can be opened directly with the following browser scenarios:
+From `frontend/`, run `pnpm dev` for browser development. The phone opens automatically and NUI callbacks are mocked with stateful data. Every built-in app can be opened directly by appending its id to `http://localhost:5174/?apiPort=3002#/apps/`:
+
+| Area                | App ids                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Communication       | `phone`, `messages`, `mail`, `darkchat`, `radio`                                                              |
+| Social              | `feather`, `fliptok`, `picstagram`, `flare`, `crewlink`                                                       |
+| Services            | `companies`, `citymarkt`, `local-pages`, `banking`, `billing`, `garage`, `house`, `map`, `skyride`, `weather` |
+| Media and utilities | `camera`, `photos`, `music`, `calendar`, `notes`, `calculator`, `clock`, `app-store`, `settings`              |
+| Games               | `snake`, `memory`, `number-merge`, `minesweeper`, `tower-stack`, `sky-flappy`, `neon-drop`                    |
+
+The browser bootstrap includes contacts, calls, messages, mail, invoices, transactions, vehicles, properties, companies, marketplace profiles and listings, social feeds, media, calendar entries, notes, alarms, game high scores, app settings, and persisted notifications. Mutating callbacks update the in-memory mock state until the mock server restarts. Unknown callbacks fail with `mock_endpoint_missing` instead of silently succeeding.
+
+System overlays are available through dedicated preview parameters:
+
+- SIM picker: `http://localhost:5174/?apiPort=3002&simPickerPreview=1`
+- Payphone: `http://localhost:5174/?apiPort=3002&payphonePreview=1` (dial `5551110001` for a connected call or `5550000000` for a busy line)
+
+Feather can be opened directly with the following browser scenarios:
 
 - Full data: `http://localhost:5174/?apiPort=3002#/apps/feather`
 - Login and registration: `http://localhost:5174/?apiPort=3002&testScenario=feather-login#/apps/feather`

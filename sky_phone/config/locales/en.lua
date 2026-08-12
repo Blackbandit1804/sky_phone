@@ -1,5 +1,10 @@
 Locales["en"] = {
     CommandDescription = "Open your phone.",
+    TestData = {
+        CommandDescription = "Create or refresh test content in every data-driven phone app.",
+        Success = "Test content is ready. Your iFruit login is {email}. Reopen the phone to refresh every app.",
+        Failed = "Test content could not be created. Check the server console for details.",
+    },
     FlipTokCommand = {
         usage = "Usage: /{command} <@handle> [on|off]",
         noPermission = "You do not have permission to manage FlipTok verification.",

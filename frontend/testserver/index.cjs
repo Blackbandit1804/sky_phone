@@ -7,6 +7,22 @@ const port = Number(process.argv[2]) || 3001
 app.use(cors())
 app.use(express.json())
 
+const lifecycleEndpoints = new Set([
+  'camera:setActive',
+  'camera:setFacing',
+  'camera:setFlash',
+  'camera:setFocus',
+  'camera:setOrientation',
+  'camera:setZoom',
+  'close',
+  'custom-app:lifecycle',
+  'device:notification-open',
+  'notification:focus',
+  'sim:picker-close',
+  'ui:opened',
+  'ui:ready',
+])
+
 function calendarTime(dayOffset, hour, minute = 0) {
   const value = new Date()
   value.setDate(value.getDate() + dayOffset)
@@ -1878,6 +1894,17 @@ const marketplaceListings = [
     ],
   },
 ]
+let marketplaceProfile = {
+  avatar_media_id: 1,
+  avatar_url: 'https://picsum.photos/seed/citymarkt-demo-avatar/240/240',
+  bio: 'Fair prices, quick replies, and meetups anywhere in Los Santos.',
+  display_name: 'Skyline Deals',
+  email: 'demo@ifruit.com',
+  exists: true,
+  listing_count: marketplaceListings.filter(
+    (listing) => listing.seller_account_id === 1,
+  ).length,
+}
 let linkedAccount = {
   devices: accountDevices,
   email: 'demo@ifruit.com',
@@ -2063,6 +2090,38 @@ const deviceData = {
     },
     revision: 2,
   },
+  notifications: {
+    payload: {
+      items: [
+        {
+          appId: 'messages',
+          id: 'demo-notification-message',
+          route: '/apps/messages?phoneNumber=5551110001',
+          subtitle: 'Alex Rivera',
+          text: 'Meet us at the observatory after sunset.',
+          title: 'Messages',
+        },
+        {
+          appId: 'companies',
+          id: 'demo-notification-company',
+          route: '/apps/companies?area=requests',
+          subtitle: 'Los Santos Customs',
+          text: 'Your repair request has been accepted.',
+          title: 'Companies',
+        },
+        {
+          appId: 'billing',
+          id: 'demo-notification-billing',
+          route: '/apps/billing',
+          subtitle: 'Los Santos Customs',
+          text: 'A new invoice for $1,850 is ready.',
+          title: 'Billing',
+        },
+      ],
+      version: 1,
+    },
+    revision: 1,
+  },
   settings: {
     payload: {
       settings: {
@@ -2085,6 +2144,14 @@ const deviceData = {
 }
 let mockPasscode = ''
 let mockSecurity = { enabled: false, length: null, lockedUntil: 0 }
+let mockSim = {
+  id: 'development-sim',
+  number: '5551234567',
+  removable: true,
+  registered: true,
+  type: 'registered',
+}
+let mockPayphoneCall = null
 const blockedCallNumbers = new Set()
 let recentCalls = [
   {
@@ -3844,7 +3911,8 @@ const easyShareCatalog = [
     appId: 'citymarkt',
     copyText: 'Comet Retro Custom in excellent condition.',
     id: 'listing-easyshare-comet',
-    imageUrl: 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=900',
+    imageUrl:
+      'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=900',
     kind: 'link',
     link: 'skyphone://citymarkt/listing/listing-easyshare-comet',
     subtitle: '$84,000',
@@ -3868,7 +3936,8 @@ const easyShareCatalog = [
     appId: 'photos',
     copyText: 'Sunset over Los Santos.',
     id: 3,
-    imageUrl: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=900',
+    imageUrl:
+      'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=900',
     kind: 'photo',
     link: 'skyphone://media/3',
     title: 'Los Santos sunset',
@@ -3923,7 +3992,8 @@ const easyShareCatalog = [
     appId: 'photos',
     copyText: 'Vehicle walkaround video.',
     id: 7,
-    imageUrl: 'https://videos.pexels.com/video-files/3130284/3130284-hd_1920_1080_30fps.mp4',
+    imageUrl:
+      'https://videos.pexels.com/video-files/3130284/3130284-hd_1920_1080_30fps.mp4',
     kind: 'video',
     link: 'skyphone://media/7',
     title: 'Vehicle walkaround',
@@ -3998,6 +4068,10 @@ app.post('/api/:endpoint', (request, response) => {
   console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
   const testScenario = String(request.body._testScenario ?? '')
+  if (lifecycleEndpoints.has(endpoint)) {
+    response.json({ success: true })
+    return
+  }
   if (endpoint.startsWith('companies:') && testScenario === 'companies-error') {
     response.json({ success: false, error: 'service_unavailable' })
     return
@@ -5351,8 +5425,7 @@ app.post('/api/:endpoint', (request, response) => {
       mediaDurationMs: request.body.mediaDurationMs ?? null,
       mediaUrl: messageType === 'text' ? null : mediaUrl,
       messageType,
-      sharePayload:
-        messageType === 'share' ? request.body.sharePayload : null,
+      sharePayload: messageType === 'share' ? request.body.sharePayload : null,
     }
     flareMessages[match.id] ??= []
     flareMessages[match.id].push(message)
@@ -5830,6 +5903,47 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'fliptok:activities') {
     response.json({ success: true, data: flipTokActivities })
+    return
+  }
+  if (endpoint === 'fliptok:mark-activities') {
+    const readAt = new Date().toISOString()
+    flipTokActivities = flipTokActivities.map((activity) => ({
+      ...activity,
+      read_at: activity.read_at ?? readAt,
+    }))
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'fliptok:view') {
+    const video = flipTokVideos.find((item) => item.id === request.body.id)
+    if (!video) {
+      response.json({ success: false, error: 'video_not_found' })
+      return
+    }
+    video.view_count += 1
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'fliptok:report') {
+    const video = flipTokVideos.find((item) => item.id === request.body.id)
+    if (!video) {
+      response.json({ success: false, error: 'video_not_found' })
+      return
+    }
+    flipTokReports.push({
+      caption: video.caption,
+      created_at: Date.now(),
+      creator_display_name: video.display_name,
+      creator_handle: video.handle,
+      details: String(request.body.details ?? ''),
+      id: `report-${Date.now()}`,
+      reason: request.body.reason,
+      reporter_display_name: flipTokProfile.display_name,
+      reporter_handle: flipTokProfile.handle,
+      url: video.url,
+      video_id: video.id,
+    })
+    response.json({ success: true })
     return
   }
   if (endpoint === 'fliptok:profile') {
@@ -6722,8 +6836,7 @@ app.post('/api/:endpoint', (request, response) => {
       replyToId: request.body.replyToId,
       replyBody: reply?.body,
       reactions: {},
-      sharePayload:
-        messageType === 'share' ? request.body.sharePayload : null,
+      sharePayload: messageType === 'share' ? request.body.sharePayload : null,
       createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
       readAt: null,
     }
@@ -6968,13 +7081,7 @@ app.post('/api/:endpoint', (request, response) => {
           data: deviceData,
           imei: '356938035643809',
           name: 'Personal iFruit Phone',
-          sim: {
-            id: 'development-sim',
-            number: '5551234567',
-            removable: true,
-            registered: true,
-            type: 'registered',
-          },
+          sim: mockSim,
         },
         notes: mockNotes,
         security: mockSecurity,
@@ -7091,11 +7198,11 @@ app.post('/api/:endpoint', (request, response) => {
                 organization: selectedContact.organization ?? null,
                 phone_number: selectedContact.phone_number,
               }
-          : messageType === 'share'
-            ? request.body.sharePayload
-          : isAttachment
-            ? attachmentId
-            : null,
+            : messageType === 'share'
+              ? request.body.sharePayload
+              : isAttachment
+                ? attachmentId
+                : null,
       media_waveform:
         messageType === 'voice' ? request.body.mediaWaveform : null,
       message_type: messageType,
@@ -7298,6 +7405,15 @@ app.post('/api/:endpoint', (request, response) => {
     const current = deviceData[request.body.namespace]
     const revision = (current?.revision ?? 0) + 1
     deviceData[request.body.namespace] = {
+      payload: request.body.payload,
+      revision,
+    }
+    response.json({ success: true, data: { revision } })
+    return
+  }
+  if (endpoint === 'notifications:save') {
+    const revision = (deviceData.notifications?.revision ?? 0) + 1
+    deviceData.notifications = {
       payload: request.body.payload,
       revision,
     }
@@ -7531,9 +7647,12 @@ app.post('/api/:endpoint', (request, response) => {
   if (endpoint === 'pages:profile-save') {
     pagesOnboardingCompleted = true
     const avatarMediaId = Number(request.body.avatarMediaId) || 0
-    const avatarMedia = avatarMediaId > 0
-      ? mockMedia.find((item) => item.id === avatarMediaId && item.mediaType === 'photo')
-      : null
+    const avatarMedia =
+      avatarMediaId > 0
+        ? mockMedia.find(
+            (item) => item.id === avatarMediaId && item.mediaType === 'photo',
+          )
+        : null
     if (avatarMediaId > 0 && !avatarMedia) {
       response.json({ success: false, error: 'invalid_profile_image' })
       return
@@ -7544,7 +7663,9 @@ app.post('/api/:endpoint', (request, response) => {
       bio: String(request.body.bio ?? '').trim(),
       email: linkedAccount?.email ?? pagesProfile.email,
       exists: true,
-      handle: String(request.body.handle ?? '').trim().toLowerCase(),
+      handle: String(request.body.handle ?? '')
+        .trim()
+        .toLowerCase(),
     }
     pagesPosts.forEach((post) => {
       if (post.account_id === 1) post.author_name = pagesProfile.handle
@@ -7707,6 +7828,42 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint.startsWith('marketplace:') && !authenticated) {
     response.json({ success: false, error: 'not_authenticated' })
+    return
+  }
+  if (endpoint === 'marketplace:profile') {
+    marketplaceProfile.listing_count = marketplaceListings.filter(
+      (listing) => listing.seller_account_id === 1,
+    ).length
+    response.json({ success: true, data: marketplaceProfile })
+    return
+  }
+  if (endpoint === 'marketplace:profile-save') {
+    const displayName = String(request.body.displayName ?? '').trim()
+    const bio = String(request.body.bio ?? '').trim()
+    const avatarMediaId = Number(request.body.avatarMediaId)
+    const avatar = mockMedia.find(
+      (item) => item.id === avatarMediaId && item.mediaType === 'photo',
+    )
+    if (
+      displayName.length < 2 ||
+      displayName.length > 40 ||
+      bio.length > 160 ||
+      !Number.isInteger(avatarMediaId) ||
+      avatarMediaId < 0 ||
+      (avatarMediaId > 0 && !avatar)
+    ) {
+      response.json({ success: false, error: 'invalid_profile' })
+      return
+    }
+    marketplaceProfile = {
+      ...marketplaceProfile,
+      avatar_media_id: avatarMediaId || null,
+      avatar_url: avatar?.url ?? null,
+      bio,
+      display_name: displayName,
+      exists: true,
+    }
+    response.json({ success: true, data: marketplaceProfile })
     return
   }
   if (endpoint === 'marketplace:counts') {
@@ -8010,6 +8167,61 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: false, error: 'confirmation_required' })
     return
   }
+  if (endpoint === 'sim:insert') {
+    mockSim = {
+      id: `development-sim-${request.body.imei}`,
+      number:
+        request.body.imei === '356938035643810' ? '5559876543' : '5551234567',
+      removable: true,
+      registered: true,
+      type: 'registered',
+    }
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'sim:eject') {
+    if (!mockSim) {
+      response.json({ success: false, error: 'no_sim' })
+      return
+    }
+    mockSim = null
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'payphone:dial') {
+    const phoneNumber = String(request.body.phoneNumber ?? '').replace(
+      /\D/g,
+      '',
+    )
+    if (phoneNumber.length !== 10) {
+      response.json({ success: false, error: 'invalid_number' })
+      return
+    }
+    if (phoneNumber === '5550000000') {
+      response.json({ success: false, error: 'busy' })
+      return
+    }
+    mockPayphoneCall = {
+      answeredAt: Math.floor(Date.now() / 1000),
+      elapsedSeconds: 0,
+      id: `payphone-${Date.now()}`,
+      otherNumber: phoneNumber,
+      state: 'connected',
+      totalCost: 0,
+    }
+    response.json({ success: true, data: mockPayphoneCall })
+    return
+  }
+  if (endpoint === 'payphone:hangup') {
+    mockPayphoneCall = null
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'payphone:close') {
+    mockPayphoneCall = null
+    response.json({ success: true })
+    return
+  }
   if (endpoint === 'notes:list') {
     response.json({ success: true, data: mockNotes })
     return
@@ -8149,9 +8361,14 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true })
     return
   }
-  response.json({ success: true })
+  console.error(`[NUI] Missing browser mock for ${endpoint}`)
+  response.json({ success: false, error: 'mock_endpoint_missing' })
 })
 
-app.listen(port, () => {
-  console.log(`Mock NUI server listening on http://localhost:${port}`)
-})
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Mock NUI server listening on http://localhost:${port}`)
+  })
+}
+
+module.exports = { app }

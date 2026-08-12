@@ -89,6 +89,7 @@ server_scripts {
     'source/server/calendar.lua',
     'source/server/music.lua',
     'source/server/radio.lua',
+    'source/server/testdata.lua',
 }
 
 files {
