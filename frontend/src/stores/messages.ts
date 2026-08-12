@@ -8,6 +8,7 @@ import type {
   SmsMessage,
   SmsOutgoingMessage,
 } from '@/types/messages'
+import { sortConversationsByRecency } from '@/utils/messages'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
 
 export const useMessagesStore = defineStore('messages', () => {
@@ -23,10 +24,12 @@ export const useMessagesStore = defineStore('messages', () => {
   async function loadConversations(): Promise<boolean> {
     const response = await nuiCall<SmsConversation[]>('messages:conversations')
     if (response.success && response.data) {
-      conversations.value = response.data.map((conversation) => ({
-        ...conversation,
-        phoneNumber: String(conversation.phoneNumber),
-      }))
+      conversations.value = sortConversationsByRecency(
+        response.data.map((conversation) => ({
+          ...conversation,
+          phoneNumber: String(conversation.phoneNumber),
+        })),
+      )
     }
     else if (!response.success) conversations.value = []
     return response.success

@@ -54,6 +54,7 @@ import { useMessagesStore } from '@/stores/messages'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
+import { sortContactsByMessageRecency } from '@/utils/messages'
 import type {
   GifSearchResult,
   SmsAttachmentType,
@@ -139,8 +140,9 @@ const contactAvatarUrls = computed(
 )
 const contactSuggestions = computed(() => {
   const query = composerNumber.value.trim().toLocaleLowerCase(phone.lang)
-  const contacts = calls.contacts.filter(
-    (contact) => contact.canMessage !== false,
+  const contacts = sortContactsByMessageRecency(
+    calls.contacts.filter((contact) => contact.canMessage !== false),
+    messages.conversations,
   )
   if (!query) return contacts.slice(0, 8)
   return contacts
