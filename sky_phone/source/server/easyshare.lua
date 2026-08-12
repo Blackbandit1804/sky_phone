@@ -217,6 +217,39 @@ local function canonical_profile(device, app_id, id)
     return nil
 end
 
+local function canonical_crewlink_invite(device, invite_code)
+    if not device.account_id
+        or type(invite_code) ~= "string"
+        or #invite_code ~= 8
+        or invite_code:find("[^A-Z0-9]")
+    then
+        return nil
+    end
+    local group = first_row([[
+        SELECT g.`name`, g.`invite_code`
+        FROM `sky_phone_crewlink_profiles` p
+        JOIN `sky_phone_crewlink_memberships` m ON m.`profile_id` = p.`id`
+        JOIN `sky_phone_crewlink_groups` g ON g.`id` = m.`group_id`
+        WHERE p.`account_id` = ? AND g.`invite_code` = ?
+            AND m.`role` IN ('owner', 'coordinator')
+        LIMIT 1
+    ]], { tonumber(device.account_id), invite_code })
+    if not group then
+        return nil
+    end
+    local locale = (Locales[Config.Bridge.Locale] or Locales["en"]).Phone.Apps.crewlink
+    local title = locale.shareInviteTitle:gsub("{group}", function() return group.name end)
+    local copy_text = locale.shareInviteBody
+        :gsub("{code}", function() return group.invite_code end)
+        :gsub("{group}", function() return group.name end)
+    return {
+        title = title,
+        subtitle = group.invite_code,
+        copyText = copy_text,
+        link = "skyphone://crewlink/invite/" .. group.invite_code,
+    }
+end
+
 local function canonical_post(device, app_id, id)
     if app_id == "picstagram" then
         local post = first_row([[
@@ -639,8 +672,12 @@ local function sanitize_payload(source, device, data)
             canonical = canonical_document(source, device, app_id, payload.id)
         elseif data.kind == "text" and payload.id then
             canonical = canonical_text(device, app_id, payload.id)
-        elseif data.kind == "link" and payload.id and (app_id == "citymarkt" or app_id == "local-pages") then
-            canonical = canonical_post(device, app_id, payload.id)
+        elseif data.kind == "link" and payload.id then
+            if app_id == "citymarkt" or app_id == "local-pages" then
+                canonical = canonical_post(device, app_id, payload.id)
+            elseif app_id == "crewlink" then
+                canonical = canonical_crewlink_invite(device, payload.id)
+            end
         end
         if not canonical then
             return nil, "unsupported_payload"

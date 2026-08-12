@@ -59,6 +59,22 @@ export function easyShareRoute(payload: EasySharePayload): {
   }
 }
 
+export function easyShareCrewLinkInviteCode(
+  kind: unknown,
+  link: unknown,
+  id: unknown,
+): string | null {
+  if (kind !== 'link') return null
+  if (typeof link === 'string') {
+    const match = link.match(/^skyphone:\/\/crewlink\/invite\/([a-z0-9]{8})$/i)
+    if (match) return match[1].toUpperCase()
+  }
+  if (typeof id === 'string' && /^[a-z0-9]{8}$/i.test(id)) {
+    return id.toUpperCase()
+  }
+  return null
+}
+
 export async function openEasySharePayload(
   router: Router,
   payload: EasySharePayload,
