@@ -266,16 +266,15 @@ function openCityMarktListing(): void {
   })
 }
 
-function sharePost(): void {
-  if (!selected.value) return
+function sharePost(post: PagesPost): void {
   easyShare.open({
     appId: 'local-pages',
-    copyText: `${selected.value.title}\n${selected.value.body}`,
-    id: selected.value.id,
+    copyText: `${post.title}\n${post.body}`,
+    id: post.id,
     kind: 'post',
-    link: `skyphone://local-pages/post/${selected.value.id}`,
-    subtitle: `@${selected.value.author_name}`,
-    title: selected.value.title,
+    link: `skyphone://local-pages/post/${post.id}`,
+    subtitle: `@${post.author_name}`,
+    title: post.title,
   })
 }
 
@@ -362,6 +361,7 @@ onMounted(async () => {
             <div class="pages__post-foot">
               <button type="button" :class="{ active: post.is_liked }" :disabled="reactionPending" :aria-label="phone.t('Apps.localPages.likes')" @click="reactToPost(post, 'like')"><Heart :size="15" :fill="post.is_liked ? 'currentColor' : 'none'" /> {{ post.like_count }}</button>
               <span v-if="post.source_type === 'citymarkt'"><Store :size="14" /> CityMarkt</span>
+              <button type="button" :aria-label="phone.t('Apps.easyShare.share')" @click="sharePost(post)"><Share2 :size="15" /> {{ phone.t('Apps.easyShare.share') }}</button>
               <button type="button" :class="{ active: post.is_saved }" :disabled="reactionPending" :aria-label="phone.t('Apps.localPages.save')" @click="reactToPost(post, 'save')"><Bookmark :size="15" :fill="post.is_saved ? 'currentColor' : 'none'" /> {{ phone.t('Apps.localPages.save') }}</button>
             </div>
             </article>
@@ -415,7 +415,7 @@ onMounted(async () => {
         <div v-if="selected.images.length" class="pages__gallery" :style="{ background: selected.images[galleryIndex]?.gradient }"><button v-if="selected.images.length > 1" @click="moveGallery(-1)"><ChevronLeft /></button><button v-if="selected.images.length > 1" @click="moveGallery(1)"><ChevronRight /></button><span>{{ galleryIndex + 1 }} / {{ selected.images.length }}</span></div>
         <article><div class="pages__author"><span>{{ selected.author_name.charAt(0).toUpperCase() }}</span><div><strong>@{{ selected.author_name }}</strong><small>{{ relativeDate(selected.created_at) }}</small></div><i>{{ label('categories', selected.category) }}</i></div><h1>{{ selected.title }}</h1><p>{{ selected.body }}</p><div class="pages__location"><MapPin :size="17" /><div><small>{{ phone.t('Apps.localPages.location') }}</small><strong>{{ selected.district ? phone.t(`Apps.citymarkt.districts.${selected.district}`) : phone.t('Apps.localPages.allLosSantos') }}</strong></div></div><button v-if="selected.source_type === 'citymarkt'" class="pages__market-link" @click="openCityMarktListing"><Store :size="18" /><span><small>{{ phone.t('Apps.localPages.sharedFrom') }}</small><strong>{{ phone.t('Apps.localPages.openCityMarkt') }}</strong></span><b v-if="selected.citymarkt_price">${{ Number(selected.citymarkt_price).toLocaleString() }}</b></button></article>
       </div>
-      <div class="pages__detail-actions"><button :class="{ active: selected.is_liked }" @click="react('like')"><Heart :size="19" :fill="selected.is_liked ? 'currentColor' : 'none'" />{{ selected.like_count }} {{ phone.t('Apps.localPages.likes') }}</button><button @click="sharePost"><Share2 :size="19" />{{ phone.t('Apps.easyShare.share') }}</button><button @click="react('save')"><Bookmark :size="19" :fill="selected.is_saved ? 'currentColor' : 'none'" />{{ phone.t('Apps.localPages.save') }}</button></div>
+      <div class="pages__detail-actions"><button :class="{ active: selected.is_liked }" @click="react('like')"><Heart :size="19" :fill="selected.is_liked ? 'currentColor' : 'none'" />{{ selected.like_count }} {{ phone.t('Apps.localPages.likes') }}</button><button @click="sharePost(selected)"><Share2 :size="19" />{{ phone.t('Apps.easyShare.share') }}</button><button @click="react('save')"><Bookmark :size="19" :fill="selected.is_saved ? 'currentColor' : 'none'" />{{ phone.t('Apps.localPages.save') }}</button></div>
     </section>
 
     <section v-else class="pages__compose">
