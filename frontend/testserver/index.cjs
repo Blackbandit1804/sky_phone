@@ -160,6 +160,8 @@ let mockMapMarkers = [
 ]
 let crewLinkProfile = {
   activeGroupId: 'crewlink-group-night-shift',
+  avatarMediaId: 1,
+  avatarUrl: 'https://picsum.photos/seed/crewlink-skyline/240/240',
   id: 'crewlink-profile-skyline',
   mapVisible: true,
   overheadVisible: false,
@@ -192,6 +194,7 @@ const crewLinkMembers = {
   'crewlink-group-night-shift': [
     {
       coords: { x: -155.2, y: -1005.8, z: 28.4 },
+      avatarUrl: 'https://picsum.photos/seed/crewlink-skyline/240/240',
       id: 'crewlink-profile-skyline',
       joinedAt: Date.now() - 36 * 86400000,
       mapVisible: true,
@@ -366,7 +369,10 @@ const crewLinkLimits = {
 }
 
 function crewLinkBootstrap(testScenario = '') {
-  if (testScenario === 'crewlink-onboarding') {
+  if (
+    testScenario === 'crewlink-onboarding' ||
+    (testScenario === 'crewlink-register' && !crewLinkProfile)
+  ) {
     return { groups: [], invitations: [], profile: null }
   }
   if (testScenario === 'crewlink-empty') {
@@ -2001,6 +2007,14 @@ let calendarEvents = [
   },
 ]
 const deviceData = {
+  appAuth: {
+    payload: {
+      accountEmail: 'demo@ifruit.com',
+      signedIn: ['citymarkt', 'local-pages', 'feather', 'crewlink'],
+      version: 1,
+    },
+    revision: 1,
+  },
   alarms: {
     payload: [
       {
@@ -4515,6 +4529,10 @@ app.post('/api/:endpoint', (request, response) => {
     }
     crewLinkProfile = {
       activeGroupId: null,
+      avatarMediaId: Number(request.body.avatarMediaId) || null,
+      avatarUrl:
+        mockMedia.find((item) => item.id === Number(request.body.avatarMediaId))
+          ?.url ?? null,
       id: `crewlink-profile-${Date.now()}`,
       mapVisible: true,
       overheadVisible: false,
@@ -4524,8 +4542,25 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:update-profile') {
+    const hasAvatarUpdate = request.body.avatarMediaId !== undefined
+    const avatarMediaId = Number(request.body.avatarMediaId) || null
+    const avatar = hasAvatarUpdate
+      ? mockMedia.find(
+          (item) => item.id === avatarMediaId && item.mediaType === 'photo',
+        )
+      : null
+    if (avatarMediaId && !avatar) {
+      response.json({ success: false, error: 'invalid_profile_image' })
+      return
+    }
     crewLinkProfile = {
       ...crewLinkProfile,
+      avatarMediaId: hasAvatarUpdate
+        ? avatarMediaId
+        : crewLinkProfile.avatarMediaId,
+      avatarUrl: hasAvatarUpdate
+        ? (avatar?.url ?? null)
+        : crewLinkProfile.avatarUrl,
       mapVisible: request.body.mapVisible === true,
       overheadVisible: request.body.overheadVisible === true,
       username: String(request.body.username ?? crewLinkProfile.username),
@@ -4533,6 +4568,7 @@ app.post('/api/:endpoint', (request, response) => {
     for (const members of Object.values(crewLinkMembers)) {
       const own = members.find((member) => member.id === crewLinkProfile.id)
       if (own) {
+        own.avatarUrl = crewLinkProfile.avatarUrl
         own.mapVisible = crewLinkProfile.mapVisible
         own.overheadVisible = crewLinkProfile.overheadVisible
         own.username = crewLinkProfile.username
@@ -4780,7 +4816,7 @@ app.post('/api/:endpoint', (request, response) => {
       success: true,
       data: {
         onboarded: featherOnboarded,
-        profile: featherProfiles[0],
+        profile: featherOnboarded ? featherProfiles[0] : null,
         feed: {
           items: empty
             ? []
@@ -4826,6 +4862,22 @@ app.post('/api/:endpoint', (request, response) => {
     featherProfiles[0].display_name = displayName
     featherProfiles[0].handle = handle
     featherProfiles[0].bio = bio
+    const avatar = mockMedia.find(
+      (item) =>
+        item.id === Number(request.body.avatarId) && item.mediaType === 'photo',
+    )
+    if (request.body.avatarId && !avatar) {
+      response.json({ success: false, error: 'invalid_media' })
+      return
+    }
+    featherProfiles[0].avatar_url = avatar?.url ?? null
+    featherPosts
+      .filter((post) => post.profile_id === featherProfiles[0].id)
+      .forEach((post) => {
+        post.avatar_url = featherProfiles[0].avatar_url
+        post.display_name = displayName
+        post.handle = handle
+      })
     featherOnboarded = true
     response.json({ success: true })
     return
@@ -7096,15 +7148,69 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'development:bootstrap') {
-    if (testScenario === 'feather-onboarding') featherOnboarded = false
+    authenticated = true
+    linkedAccount = {
+      devices: accountDevices,
+      email: 'demo@ifruit.com',
+      id: 1,
+    }
+    if (
+      testScenario === 'feather-onboarding' ||
+      testScenario === 'feather-register'
+    )
+      featherOnboarded = false
     else featherOnboarded = true
+    pagesOnboardingCompleted = ![
+      'local-pages-onboarding',
+      'local-pages-register',
+      'citymarkt-local-pages-account-missing',
+    ].includes(testScenario)
+    if (testScenario === 'crewlink-register') {
+      crewLinkProfile = null
+    } else {
+      crewLinkProfile = {
+        activeGroupId: 'crewlink-group-night-shift',
+        avatarMediaId: 1,
+        avatarUrl: 'https://picsum.photos/seed/crewlink-skyline/240/240',
+        id: 'crewlink-profile-skyline',
+        mapVisible: true,
+        overheadVisible: false,
+        username: 'Skyline',
+      }
+    }
+    if (testScenario === 'citymarkt-register') {
+      marketplaceProfile = {
+        avatar_media_id: null,
+        avatar_url: null,
+        bio: '',
+        display_name: '',
+        email: linkedAccount?.email ?? 'demo@ifruit.com',
+        exists: false,
+        listing_count: 0,
+      }
+    } else {
+      marketplaceProfile = {
+        avatar_media_id: 1,
+        avatar_url: 'https://picsum.photos/seed/citymarkt-demo-avatar/240/240',
+        bio: 'Fair prices, quick replies, and meetups anywhere in Los Santos.',
+        display_name: 'Skyline Deals',
+        email: linkedAccount?.email ?? 'demo@ifruit.com',
+        exists: true,
+        listing_count: marketplaceListings.filter(
+          (listing) => listing.seller_account_id === 1,
+        ).length,
+      }
+    }
     response.json({
       success: true,
       data: {
-        account: testScenario === 'feather-login' ? null : linkedAccount,
+        account: linkedAccount,
         device: {
           data:
-            testScenario.startsWith('citymarkt-')
+            testScenario.startsWith('citymarkt-') ||
+            testScenario.startsWith('feather-') ||
+            testScenario.startsWith('local-pages-') ||
+            testScenario.startsWith('crewlink-')
               ? {
                   ...deviceData,
                   apps: {
@@ -7113,10 +7219,11 @@ app.post('/api/:endpoint', (request, response) => {
                       ...deviceData.apps.payload,
                       homeLayout: {
                         dock: [],
-                        grid:
-                          testScenario === 'citymarkt-local-pages-missing'
-                            ? []
-                            : ['local-pages'],
+                        grid: testScenario.startsWith('crewlink-')
+                          ? ['crewlink']
+                          : testScenario === 'citymarkt-local-pages-missing'
+                            ? ['citymarkt']
+                            : ['citymarkt', 'local-pages'],
                         hidden:
                           testScenario === 'citymarkt-local-pages-missing'
                             ? ['local-pages']
@@ -7125,6 +7232,31 @@ app.post('/api/:endpoint', (request, response) => {
                       },
                     },
                   },
+                  appAuth: [
+                    'citymarkt-login',
+                    'citymarkt-register',
+                    'feather-login',
+                    'feather-register',
+                    'local-pages-login',
+                    'local-pages-register',
+                    'crewlink-login',
+                    'crewlink-register',
+                  ].includes(testScenario)
+                    ? {
+                        payload: {
+                          accountEmail: linkedAccount?.email ?? '',
+                          signedIn: testScenario.startsWith('feather-')
+                            ? ['citymarkt', 'local-pages', 'crewlink']
+                            : testScenario.startsWith('local-pages-')
+                              ? ['citymarkt', 'feather', 'crewlink']
+                              : testScenario.startsWith('crewlink-')
+                                ? ['citymarkt', 'local-pages', 'feather']
+                                : ['local-pages', 'feather', 'crewlink'],
+                          version: 1,
+                        },
+                        revision: deviceData.appAuth?.revision ?? 0,
+                      }
+                    : deviceData.appAuth,
                 }
               : deviceData,
           imei: '356938035643809',
@@ -7679,9 +7811,11 @@ app.post('/api/:endpoint', (request, response) => {
   if (endpoint === 'pages:profile') {
     const email = linkedAccount?.email ?? pagesProfile.email
     const onboarding =
-      ['local-pages-onboarding', 'citymarkt-local-pages-account-missing'].includes(
-        testScenario,
-      ) && !pagesOnboardingCompleted
+      [
+        'local-pages-onboarding',
+        'local-pages-register',
+        'citymarkt-local-pages-account-missing',
+      ].includes(testScenario) && !pagesOnboardingCompleted
     response.json({
       success: true,
       data: {

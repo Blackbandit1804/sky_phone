@@ -15,15 +15,12 @@ export type CrewLinkColour =
   | 'green'
   | 'rose'
 
-export type CrewLinkPingType =
-  | 'meeting'
-  | 'danger'
-  | 'help'
-  | 'target'
-  | 'info'
+export type CrewLinkPingType = 'meeting' | 'danger' | 'help' | 'target' | 'info'
 
 export type CrewLinkProfile = {
   activeGroupId: string | null
+  avatarMediaId: number | null
+  avatarUrl: string | null
   id: string
   mapVisible: boolean
   overheadVisible: boolean
@@ -31,6 +28,7 @@ export type CrewLinkProfile = {
 }
 
 export type CrewLinkMember = {
+  avatarUrl?: string | null
   coords?: MapPoint & { z: number }
   id: string
   joinedAt: number

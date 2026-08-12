@@ -32,6 +32,7 @@ import { useBankingStore } from '@/stores/banking'
 import { useBillingStore } from '@/stores/billing'
 import { useCompaniesStore } from '@/stores/companies'
 import { useAccountStore } from '@/stores/account'
+import { useAppAuthStore } from '@/stores/app-auth'
 import { useMailStore } from '@/stores/mail'
 import { useMessagesStore } from '@/stores/messages'
 import { useDarkChatStore } from '@/stores/darkchat'
@@ -244,6 +245,7 @@ const isDevelopment = import.meta.env.DEV
 
 const phone = usePhoneStore()
 const account = useAccountStore()
+const appAuth = useAppAuthStore()
 const clock = useClockStore()
 const games = useGamesStore()
 const calls = useCallsStore()
@@ -370,6 +372,10 @@ function hydratePhone(payload: PhoneOpenPayload): void {
     notifications.hideDevicePreview(payload.device.imei)
   }
   account.hydrate(payload.account ?? null)
+  appAuth.hydrate(
+    payload.device?.data.appAuth?.payload,
+    payload.account?.email ?? '',
+  )
   notes.hydrate(payload.notes ?? [])
   clock.hydrate(payload.device?.data.alarms?.payload)
   games.hydrate(payload.device?.data.games?.payload)

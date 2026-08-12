@@ -423,6 +423,26 @@ const defaultLocales: LocaleTree = {
       signInBody:
         'CrewLink uses your private iFruit identity to keep groups and roles available across your phones.',
       openSettings: 'Open iFruit Settings',
+      authEyebrow: 'Private crew network',
+      authTitle: 'Welcome to CrewLink',
+      authBody:
+        'Your iFruit email is linked automatically. Use your CrewLink username to continue.',
+      login: 'Log in',
+      register: 'Register',
+      ifruitEmail: 'iFruit address',
+      gallery: 'Gallery',
+      camera: 'Camera',
+      backToLogin: 'Back to CrewLink login',
+      authErrors: {
+        no_ifruit_account: 'Sign in to your iFruit account in Settings first.',
+        invalid_username: 'Use 3–20 letters, numbers, dots, or underscores.',
+        profile_not_found: 'No CrewLink profile exists for this iFruit email.',
+        profile_exists: 'This iFruit email already has a CrewLink profile.',
+        username_taken: 'That CrewLink username is already taken.',
+        invalid_profile_image: 'Choose a valid photo from this phone.',
+        rate_limited: 'Too many attempts. Try again shortly.',
+        request_failed: 'CrewLink could not complete the request.',
+      },
       welcomeEyebrow: 'Your crew. One signal.',
       welcomeTitle: 'Find your people',
       welcomeBody:
@@ -555,6 +575,9 @@ const defaultLocales: LocaleTree = {
       externalApiBody: 'Approved scripts may add temporary group pings.',
       editUsername: 'Edit Username',
       editUsernameBody: 'Your username is unique across CrewLink.',
+      editProfile: 'Edit CrewLink Profile',
+      editProfileBody: 'Change your username and profile photo.',
+      removeProfilePhoto: 'Remove profile photo',
       profileSaved: 'CrewLink profile saved.',
       deleteGroup: 'Delete Group',
       leaveGroup: 'Leave Group',
@@ -594,6 +617,7 @@ const defaultLocales: LocaleTree = {
         profile_required: 'Create your CrewLink profile first.',
         invalid_username: 'Use 3–20 letters, numbers, dots, or underscores.',
         invalid_profile: 'Check your profile details.',
+        invalid_profile_image: 'Choose a valid photo from this phone.',
         username_taken: 'That CrewLink username is already taken.',
         invalid_group: 'Choose a valid group name and signal colour.',
         group_limit: 'You have reached your group limit.',
@@ -1005,14 +1029,16 @@ const defaultLocales: LocaleTree = {
       done: 'Done',
       authEyebrow: 'Feather network',
       authWelcome: 'Welcome to Feather',
-      authBody: 'One iFruit account. Every conversation, wherever you sign in.',
+      authBody:
+        'Your iFruit email is linked automatically. Use your Feather username to continue.',
       login: 'Log in',
       register: 'Register',
       loginTitle: 'Good to see you again',
-      loginBody: 'Log in with your iFruit address to continue to Feather.',
-      registerTitle: 'Create your iFruit account',
+      loginBody:
+        'Use your Feather username. Your iFruit email is linked automatically.',
+      registerTitle: 'Create your Feather profile',
       registerBody:
-        'Choose an address and secure it with a password. Your Feather profile comes next.',
+        'Choose a username and optional profile photo. No password is needed.',
       email: 'iFruit address',
       emailPlaceholder: 'yourname',
       password: 'Password',
@@ -1022,23 +1048,25 @@ const defaultLocales: LocaleTree = {
       showPassword: 'Show password',
       hidePassword: 'Hide password',
       loginAction: 'Continue to Feather',
-      registerAction: 'Create account',
+      registerAction: 'Create profile',
       noAccount: 'New to Feather?',
       haveAccount: 'Already registered?',
-      registerNow: 'Create an account',
+      registerNow: 'Create a profile',
       loginNow: 'Log in',
       authTrust:
-        'Your credentials are verified by the server and this phone is linked to your iFruit account.',
+        'This Feather session is separate from your other apps and linked to your iFruit email.',
       profileStep: 'Step 2 of 2',
       accountConnected: 'iFruit account connected',
       authErrors: {
-        invalid_email: 'Enter a valid 3–32 character iFruit address.',
-        invalid_password: 'Password must be 6–64 characters.',
-        password_mismatch: 'The passwords do not match.',
-        invalid_credentials: 'The iFruit address or password is incorrect.',
-        email_taken: 'That iFruit address is already registered.',
+        no_ifruit_account: 'Sign in to your iFruit account in Settings first.',
+        invalid_handle: 'Use 3–30 letters, numbers or underscores.',
+        invalid_username: 'That username does not match your Feather profile.',
+        profile_not_found: 'No Feather profile exists for this iFruit email.',
+        already_registered: 'This iFruit email already has a Feather profile.',
+        handle_taken: 'That Feather username is already taken.',
+        invalid_media: 'Choose a valid photo from this phone.',
         rate_limited: 'Too many attempts. Try again in a minute.',
-        default: 'The account request failed. Please try again.',
+        default: 'Feather could not complete the request. Please try again.',
       },
       welcome: 'Find your voice',
       welcomeBody:
@@ -2539,8 +2567,21 @@ const defaultLocales: LocaleTree = {
       photos: 'photos',
       activeListings: 'active listings',
       signInTitle: 'Sign in to iFruit',
-      signInBody:
-        'Use Settings to sign in before selling, saving or messaging.',
+      signInBody: 'Log in to your CityMarkt profile to sell, save or message.',
+      authEyebrow: 'CityMarkt account',
+      authTitle: 'Welcome to CityMarkt',
+      authBody:
+        'Your iFruit email is linked automatically. Use your CityMarkt username to continue.',
+      login: 'Login',
+      register: 'Register',
+      authUsername: 'Username',
+      authErrors: {
+        no_ifruit_account: 'Connect an iFruit account in Settings first.',
+        invalid_username: 'Enter the username of your CityMarkt profile.',
+        profile_not_found: 'No CityMarkt profile exists for this iFruit email.',
+        profile_exists:
+          'A CityMarkt profile already exists. Use Login instead.',
+      },
       noMessages: 'No conversations',
       noMessagesBody: 'Messages about offers will appear here.',
       myListings: 'My listings',
@@ -2698,7 +2739,7 @@ const defaultLocales: LocaleTree = {
       authEyebrow: 'Local Pages account',
       authWelcome: 'Welcome to Local Pages',
       authBody:
-        'Sign in or create an iFruit account to build your local profile.',
+        'Your iFruit email is linked automatically. Use your Local Pages username to continue.',
       login: 'Sign in',
       register: 'Register',
       loginTitle: 'Continue with iFruit',
@@ -2769,13 +2810,17 @@ const defaultLocales: LocaleTree = {
         'Review the listing and publish it when you are ready.',
       cityMarktPhotosHint: 'The CityMarkt listing photos will be included.',
       authErrors: {
-        invalid_email: 'Enter a valid 3–32 character iFruit address.',
-        invalid_password: 'Use a password between 6 and 64 characters.',
-        invalid_credentials: 'The iFruit address or password is incorrect.',
-        email_taken: 'This iFruit address is already registered.',
-        password_mismatch: 'The passwords do not match.',
+        no_ifruit_account: 'Sign in to your iFruit account in Settings first.',
+        invalid_username:
+          'Use 3–24 lowercase letters, numbers, dots or underscores.',
+        profile_not_found:
+          'No Local Pages profile exists for this iFruit email.',
+        profile_exists: 'This iFruit email already has a Local Pages profile.',
+        invalid_profile: 'Check your Local Pages username.',
+        invalid_profile_image: 'Choose a valid photo from this phone.',
+        profile_handle_taken: 'This Local Pages username is already taken.',
         rate_limited: 'Too many attempts. Try again shortly.',
-        default: 'The iFruit account request failed.',
+        default: 'Local Pages could not complete the request.',
       },
       errors: {
         profile_required: 'Create your Local Pages profile first.',
@@ -3487,6 +3532,32 @@ const defaultLocales: LocaleTree = {
     send: 'Send',
     start: 'Start',
     stop: 'Stop',
+    signOut: 'Sign Out',
+    signingOut: 'Signing Out...',
+    signOutTitle: 'Sign out of {app}?',
+    signOutBody:
+      'You will only be signed out of {app}. Your other iFruit apps stay signed in.',
+    signOutFailed: 'Could not sign out. Please try again.',
+    appAuth: {
+      eyebrow: 'iFruit account',
+      title: 'Continue to {app}',
+      body: 'Use your iFruit email and password. This login applies only to {app}.',
+      login: 'Login',
+      register: 'Register',
+      email: 'iFruit email',
+      password: 'Password',
+      confirm: 'Confirm password',
+      loginAction: 'Log in',
+      registerAction: 'Create account',
+      errors: {
+        invalid_email: 'Enter a valid iFruit email.',
+        invalid_password: 'Password must be 6–64 characters.',
+        invalid_credentials: 'Email or password is incorrect.',
+        email_taken: 'That iFruit email is already registered.',
+        rate_limited: 'Too many attempts. Try again in a minute.',
+        default: 'The account request failed.',
+      },
+    },
     use: 'Use',
   },
   Notifications: {
@@ -3765,9 +3836,7 @@ export const usePhoneStore = defineStore('phone', {
       value: PhonePreferencesV1['settings'][K],
     ): void {
       this.preferences.settings[key] = (
-        key === 'phoneScale'
-          ? clampPhoneScale(Number(value))
-          : value
+        key === 'phoneScale' ? clampPhoneScale(Number(value)) : value
       ) as PhonePreferencesV1['settings'][K]
       this.saveDeviceNamespace('settings', this.preferences)
     },

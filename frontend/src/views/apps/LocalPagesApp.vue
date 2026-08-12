@@ -6,12 +6,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
-  Eye,
-  EyeOff,
   Heart,
   ImagePlus,
   Images,
-  KeyRound,
+  LogOut,
   Mail,
   MapPin,
   Pencil,
@@ -37,7 +35,10 @@ import { useRoute, useRouter } from 'vue-router'
 
 import CityMarktSelect from '@/components/citymarkt/CityMarktSelect.vue'
 import CityMarktGallery from '@/components/citymarkt/CityMarktGallery.vue'
+import AccountLogoutDialog from '@/components/account/AccountLogoutDialog.vue'
+import AppProfileAuth from '@/components/account/AppProfileAuth.vue'
 import { useAccountStore } from '@/stores/account'
+import { useAppAuthStore } from '@/stores/app-auth'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { useMarketplaceStore } from '@/stores/marketplace'
@@ -46,11 +47,6 @@ import { usePhoneStore } from '@/stores/phone'
 import type { MarketplaceListing } from '@/types/marketplace'
 import type { PagesCategory, PagesPost, PagesProfileDraft } from '@/types/pages'
 import type { PhoneMedia } from '@/types/media'
-import {
-  filterMailAddressInput,
-  MAIL_ADDRESS_INPUT_MAX_LENGTH,
-  normalizeMailAddress,
-} from '@/utils/mail'
 
 type SelectedPhoto = { background: string; id: string }
 type ComposeDraft = {
@@ -62,12 +58,18 @@ type ComposeDraft = {
 }
 type MediaContext = { draft: ComposeDraft; photos: SelectedPhoto[] }
 type ProfileMediaContext = { draft: PagesProfileDraft }
+type AuthMediaContext = {
+  mode: 'login' | 'register'
+  selectedPhoto: PhoneMedia | null
+  username: string
+}
 
 type Screen = 'main' | 'detail' | 'compose'
 type Tab = 'feed' | 'create' | 'profile'
 
 const phone = usePhoneStore()
 const account = useAccountStore()
+const appAuth = useAppAuthStore()
 const messageMedia = useMessageMediaStore()
 const easyShare = useEasyShareStore()
 const marketplace = useMarketplaceStore()
@@ -85,13 +87,18 @@ const feedback = ref('')
 const reactionPending = ref(false)
 const onboardingReady = ref(false)
 const authMode = ref<'login' | 'register'>('login')
-const authForm = ref({ confirm: '', email: '', password: '' })
+const authUsername = ref('')
+const authProfilePhoto = ref<PhoneMedia | null>(null)
 const authPending = ref(false)
-const authPasswordVisible = ref(false)
 const authError = ref('')
 const profileEditing = ref(false)
 const profilePending = ref(false)
-const profileDraft = ref<PagesProfileDraft>({ avatarMediaId: 0, bio: '', handle: '' })
+const logoutDialogOpen = ref(false)
+const profileDraft = ref<PagesProfileDraft>({
+  avatarMediaId: 0,
+  bio: '',
+  handle: '',
+})
 const selectedProfilePhoto = ref<PhoneMedia | null>(null)
 const pickedPhotos = ref<SelectedPhoto[]>([])
 const cityMarktListing = ref<MarketplaceListing | null>(null)
@@ -105,32 +112,60 @@ const draft = ref<ComposeDraft>({
 })
 
 const categoryIds: PagesCategory[] = [
-  'recommendation', 'wanted', 'service', 'event', 'place', 'community', 'citymarkt',
+  'recommendation',
+  'wanted',
+  'service',
+  'event',
+  'place',
+  'community',
+  'citymarkt',
 ]
 const composeCategoryIds = categoryIds.filter((item) => item !== 'citymarkt')
-const districts = ['los_santos', 'vinewood', 'vespucci', 'south_los_santos', 'sandy_shores', 'paleto_bay', 'blaine_county']
+const districts = [
+  'los_santos',
+  'vinewood',
+  'vespucci',
+  'south_los_santos',
+  'sandy_shores',
+  'paleto_bay',
+  'blaine_county',
+]
 const categoryOptions = computed(() => [
   { label: phone.t('Apps.localPages.allCategories'), value: 'all' },
   ...categoryIds.map((value) => ({ label: label('categories', value), value })),
 ])
-const composeCategoryOptions = computed(() => composeCategoryIds.map((value) => ({
-  label: label('categories', value), value,
-})))
-const districtOptions = computed(() => districts.map((value) => ({
-  label: phone.t(`Apps.citymarkt.districts.${value}`), value,
-})))
-const displayedPosts = computed(() => tab.value === 'profile'
-  ? (profileMode.value === 'own' ? pages.ownItems : pages.savedItems)
-  : pages.items)
-const isAuthenticated = computed(() => Boolean(account.email))
-const selectedPhotos = computed(() => draft.value.images
-  .map((id) => pickedPhotos.value.find((photo) => photo.id === id))
-  .filter((photo) => photo !== undefined))
-const selectedImages = computed(() => selectedPhotos.value.map((photo, index) => ({
-  gradient: photo.background,
-  media_id: photo.id,
-  sort_order: index + 1,
-})))
+const composeCategoryOptions = computed(() =>
+  composeCategoryIds.map((value) => ({
+    label: label('categories', value),
+    value,
+  })),
+)
+const districtOptions = computed(() =>
+  districts.map((value) => ({
+    label: phone.t(`Apps.citymarkt.districts.${value}`),
+    value,
+  })),
+)
+const displayedPosts = computed(() =>
+  tab.value === 'profile'
+    ? profileMode.value === 'own'
+      ? pages.ownItems
+      : pages.savedItems
+    : pages.items,
+)
+const isAuthenticated = computed(() => appAuth.isSignedIn('local-pages'))
+const selectedPhotos = computed(() =>
+  draft.value.images
+    .map((id) => pickedPhotos.value.find((photo) => photo.id === id))
+    .filter((photo) => photo !== undefined),
+)
+const selectedImages = computed(() =>
+  selectedPhotos.value.map((photo, index) => ({
+    gradient: photo.background,
+    media_id: photo.id,
+    sort_order: index + 1,
+  })),
+)
 const canPublish = computed(() => {
   const title = draft.value.title.trim().length
   const body = draft.value.body.trim().length
@@ -138,20 +173,26 @@ const canPublish = computed(() => {
 })
 const canSaveProfile = computed(() => {
   const handle = profileDraft.value.handle.trim().toLowerCase()
-  return handle.length >= 3
-    && handle.length <= 24
-    && /^[a-z0-9][a-z0-9._]*[a-z0-9]$/.test(handle)
-    && profileDraft.value.bio.trim().length <= 160
+  return (
+    handle.length >= 3 &&
+    handle.length <= 24 &&
+    /^[a-z0-9][a-z0-9._]*[a-z0-9]$/.test(handle) &&
+    profileDraft.value.bio.trim().length <= 160
+  )
 })
-const profileAvatarUrl = computed(() => selectedProfilePhoto.value?.url
-  ?? (profileDraft.value.avatarMediaId > 0 ? pages.profile?.avatar_url : null))
-const authEmailValid = computed(() => normalizeMailAddress(authForm.value.email) !== null)
-const authPasswordValid = computed(() => {
-  const length = authForm.value.password.length
-  return length >= 6 && length <= 64
+const profileAvatarUrl = computed(
+  () =>
+    selectedProfilePhoto.value?.url ??
+    (profileDraft.value.avatarMediaId > 0 ? pages.profile?.avatar_url : null),
+)
+const authUsernameValid = computed(() => {
+  const username = authUsername.value.trim().toLowerCase()
+  return (
+    username.length >= 3 &&
+    username.length <= 24 &&
+    /^[a-z0-9][a-z0-9._]*[a-z0-9]$/.test(username)
+  )
 })
-const authConfirmValid = computed(() => authMode.value === 'login'
-  || (authForm.value.confirm.length > 0 && authForm.value.confirm === authForm.value.password))
 
 function label(group: string, value: string): string {
   return phone.t(`Apps.localPages.${group}.${value}`)
@@ -162,12 +203,16 @@ function relativeDate(value: number): string {
   const hours = Math.max(1, Math.floor(elapsed / 3_600_000))
   return hours < 24
     ? phone.t('Apps.localPages.hoursAgo', { count: String(hours) })
-    : phone.t('Apps.localPages.daysAgo', { count: String(Math.floor(hours / 24)) })
+    : phone.t('Apps.localPages.daysAgo', {
+        count: String(Math.floor(hours / 24)),
+      })
 }
 
 function showFeedback(key: string): void {
   feedback.value = phone.t(key)
-  window.setTimeout(() => { feedback.value = '' }, 2600)
+  window.setTimeout(() => {
+    feedback.value = ''
+  }, 2600)
 }
 
 async function loadFeed(): Promise<void> {
@@ -210,62 +255,110 @@ async function selectTab(next: Tab): Promise<void> {
   }
 }
 
-function updateAuthEmail(event: Event): void {
-  const input = event.target as HTMLInputElement
-  const filtered = filterMailAddressInput(input.value)
-  if (input.value !== filtered) input.value = filtered
-  authForm.value.email = filtered
-}
-
-function inputValue(event: Event): string {
-  return (event.target as HTMLInputElement).value
-}
-
 function switchAuthMode(mode: 'login' | 'register'): void {
   authMode.value = mode
-  authForm.value.confirm = ''
+  authProfilePhoto.value = null
+  authUsername.value =
+    mode === 'register'
+      ? (account.email.split('@')[0] ?? '')
+          .replace(/[^a-z0-9._]/gi, '_')
+          .slice(0, 24)
+      : ''
   authError.value = ''
 }
 
 function authErrorMessage(error?: string): string {
-  const known = ['invalid_email', 'invalid_password', 'invalid_credentials', 'email_taken', 'rate_limited']
-  return phone.t(`Apps.localPages.authErrors.${error && known.includes(error) ? error : 'default'}`)
+  const known = [
+    'invalid_profile',
+    'invalid_profile_image',
+    'invalid_username',
+    'no_ifruit_account',
+    'profile_exists',
+    'profile_handle_taken',
+    'profile_not_found',
+    'rate_limited',
+  ]
+  return phone.t(
+    `Apps.localPages.authErrors.${error && known.includes(error) ? error : 'default'}`,
+  )
 }
 
 async function submitAuth(): Promise<void> {
   authError.value = ''
-  if (!authEmailValid.value) {
-    authError.value = authErrorMessage('invalid_email')
+  if (!account.email) {
+    authError.value = authErrorMessage('no_ifruit_account')
     return
   }
-  if (!authPasswordValid.value) {
-    authError.value = authErrorMessage('invalid_password')
+  if (!authUsernameValid.value) {
+    authError.value = authErrorMessage('invalid_username')
     return
   }
-  if (!authConfirmValid.value) {
-    authError.value = phone.t('Apps.localPages.authErrors.password_mismatch')
-    return
-  }
-  const email = normalizeMailAddress(authForm.value.email)
-  if (!email) return
+
+  const username = authUsername.value.trim().toLowerCase()
   authPending.value = true
-  const response = authMode.value === 'login'
-    ? await account.login(email, authForm.value.password)
-    : await account.register(email, authForm.value.password)
-  authPending.value = false
-  if (!response.success) {
-    authError.value = authErrorMessage(response.error)
+  const loaded = await pages.loadProfile()
+  if (!loaded || !pages.profile) {
+    authPending.value = false
+    authError.value = authErrorMessage()
     return
   }
-  authForm.value = { confirm: '', email: '', password: '' }
-  authPasswordVisible.value = false
+
+  if (authMode.value === 'login') {
+    authPending.value = false
+    if (!pages.profile.exists) {
+      authError.value = authErrorMessage('profile_not_found')
+      return
+    }
+    if (pages.profile.handle.toLowerCase() !== username) {
+      authError.value = authErrorMessage('invalid_username')
+      return
+    }
+  } else {
+    if (pages.profile.exists) {
+      authPending.value = false
+      authError.value = authErrorMessage('profile_exists')
+      return
+    }
+    const response = await pages.saveProfile({
+      avatarMediaId: authProfilePhoto.value?.id ?? 0,
+      bio: '',
+      handle: username,
+    })
+    authPending.value = false
+    if (!response.success) {
+      authError.value = authErrorMessage(response.error)
+      return
+    }
+  }
+
+  appAuth.signIn('local-pages', account.email)
+  authUsername.value = ''
+  authProfilePhoto.value = null
   await pages.loadProfile()
   ensureBrowserProfile()
   syncProfileDraft()
-  profileEditing.value = !pages.profile?.exists
+  profileEditing.value = false
   tab.value = 'profile'
   screen.value = 'main'
   onboardingReady.value = true
+}
+
+function openAuthMedia(app: 'camera' | 'photos'): void {
+  messageMedia.begin(
+    'local-pages:auth-avatar',
+    'photo',
+    '/apps/local-pages?auth=register',
+    1,
+    {
+      mode: authMode.value,
+      selectedPhoto: authProfilePhoto.value,
+      username: authUsername.value,
+    } satisfies AuthMediaContext,
+  )
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
 }
 
 function syncProfileDraft(): void {
@@ -278,12 +371,16 @@ function syncProfileDraft(): void {
 }
 
 function ensureBrowserProfile(): void {
-  const onboardingScenario = new URLSearchParams(window.location.search).get('testScenario')
+  const onboardingScenario = new URLSearchParams(window.location.search).get(
+    'testScenario',
+  )
   if (
     !import.meta.env.DEV ||
-    ['local-pages-onboarding', 'citymarkt-local-pages-account-missing'].includes(
-      onboardingScenario ?? '',
-    ) ||
+    [
+      'local-pages-onboarding',
+      'local-pages-register',
+      'citymarkt-local-pages-account-missing',
+    ].includes(onboardingScenario ?? '') ||
     pages.profile
   )
     return
@@ -318,7 +415,10 @@ function openProfileMedia(app: 'camera' | 'photos'): void {
     1,
     { draft: { ...profileDraft.value } } satisfies ProfileMediaContext,
   )
-  void router.push({ path: `/apps/${app}`, query: { mediaAttachment: 'photo' } })
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
 }
 
 function removeProfilePhoto(): void {
@@ -334,7 +434,8 @@ async function saveProfile(): Promise<void> {
   profilePending.value = true
   try {
     const response = await pages.saveProfile({
-      avatarMediaId: selectedProfilePhoto.value?.id ?? profileDraft.value.avatarMediaId,
+      avatarMediaId:
+        selectedProfilePhoto.value?.id ?? profileDraft.value.avatarMediaId,
       bio: profileDraft.value.bio.trim(),
       handle: profileDraft.value.handle.trim().toLowerCase(),
     })
@@ -391,7 +492,10 @@ function openMediaApp(app: 'camera' | 'photos'): void {
       photos: [...pickedPhotos.value],
     } satisfies MediaContext,
   )
-  void router.push({ path: `/apps/${app}`, query: { mediaAttachment: 'photo' } })
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
 }
 
 async function publish(): Promise<void> {
@@ -412,7 +516,13 @@ async function publish(): Promise<void> {
     showFeedback(`Apps.localPages.errors.${response.error ?? 'default'}`)
     return
   }
-  draft.value = { body: '', category: 'recommendation', district: 'los_santos', images: [], title: '' }
+  draft.value = {
+    body: '',
+    category: 'recommendation',
+    district: 'los_santos',
+    images: [],
+    title: '',
+  }
   pickedPhotos.value = []
   cityMarktListing.value = null
   cityMarktListingId.value = null
@@ -443,22 +553,32 @@ async function react(kind: 'like' | 'save'): Promise<void> {
     showFeedback('Apps.localPages.errors.not_authenticated')
     return
   }
-  const active = kind === 'like' ? !Boolean(selected.value.is_liked) : !Boolean(selected.value.is_saved)
+  const active =
+    kind === 'like'
+      ? !Boolean(selected.value.is_liked)
+      : !Boolean(selected.value.is_saved)
   if (await pages.react(selected.value.id, kind, active)) {
     if (kind === 'like') {
-      selected.value.like_count = Math.max(0, selected.value.like_count + (active ? 1 : -1))
+      selected.value.like_count = Math.max(
+        0,
+        selected.value.like_count + (active ? 1 : -1),
+      )
       selected.value.is_liked = active
     } else selected.value.is_saved = active
   }
 }
 
-async function reactToPost(post: PagesPost, kind: 'like' | 'save'): Promise<void> {
+async function reactToPost(
+  post: PagesPost,
+  kind: 'like' | 'save',
+): Promise<void> {
   if (!isAuthenticated.value) {
     showFeedback('Apps.localPages.errors.not_authenticated')
     return
   }
   if (reactionPending.value) return
-  const active = kind === 'like' ? !Boolean(post.is_liked) : !Boolean(post.is_saved)
+  const active =
+    kind === 'like' ? !Boolean(post.is_liked) : !Boolean(post.is_saved)
   reactionPending.value = true
   try {
     await pages.react(post.id, kind, active)
@@ -477,7 +597,9 @@ async function removePost(): Promise<void> {
 
 function moveGallery(direction: number): void {
   if (!selected.value?.images.length) return
-  galleryIndex.value = (galleryIndex.value + direction + selected.value.images.length) % selected.value.images.length
+  galleryIndex.value =
+    (galleryIndex.value + direction + selected.value.images.length) %
+    selected.value.images.length
 }
 
 function openCityMarktListing(): void {
@@ -504,8 +626,15 @@ function sharePost(post: PagesPost): void {
 }
 
 onMounted(async () => {
-  const selection = messageMedia.consumeMany<MediaContext>('local-pages:compose')
-  const profileSelection = messageMedia.consumeMany<ProfileMediaContext>('local-pages:profile-avatar')
+  const selection = messageMedia.consumeMany<MediaContext>(
+    'local-pages:compose',
+  )
+  const profileSelection = messageMedia.consumeMany<ProfileMediaContext>(
+    'local-pages:profile-avatar',
+  )
+  const authSelection = messageMedia.consumeMany<AuthMediaContext>(
+    'local-pages:auth-avatar',
+  )
   if (selection) {
     if (selection.context) {
       draft.value = selection.context.draft
@@ -513,10 +642,22 @@ onMounted(async () => {
     }
     for (const media of selection.media) {
       const id = String(media.id)
-      if (draft.value.images.includes(id) || draft.value.images.length >= 6) continue
+      if (draft.value.images.includes(id) || draft.value.images.length >= 6)
+        continue
       draft.value.images.push(id)
-      pickedPhotos.value.push({ background: `url(${JSON.stringify(media.url)})`, id })
+      pickedPhotos.value.push({
+        background: `url(${JSON.stringify(media.url)})`,
+        id,
+      })
     }
+  }
+  if (authSelection) {
+    if (authSelection.context) {
+      authMode.value = authSelection.context.mode
+      authUsername.value = authSelection.context.username
+      authProfilePhoto.value = authSelection.context.selectedPhoto
+    }
+    if (authSelection.media[0]) authProfilePhoto.value = authSelection.media[0]
   }
   if (isAuthenticated.value) {
     await pages.loadProfile()
@@ -530,7 +671,8 @@ onMounted(async () => {
       await loadFeed()
     }
     if (profileSelection) {
-      if (profileSelection.context) profileDraft.value = profileSelection.context.draft
+      if (profileSelection.context)
+        profileDraft.value = profileSelection.context.draft
       if (profileSelection.media[0]) {
         selectedProfilePhoto.value = profileSelection.media[0]
         profileDraft.value.avatarMediaId = profileSelection.media[0].id
@@ -573,7 +715,11 @@ onMounted(async () => {
     if (!listingId || cityMarktListingId.value) screen.value = 'compose'
   }
   const easyShareId = String(route.query.easyShareId ?? '')
-  if (pages.profile?.exists && easyShareId && route.query.easyShareKind === 'post') {
+  if (
+    pages.profile?.exists &&
+    easyShareId &&
+    route.query.easyShareKind === 'post'
+  ) {
     const response = await pages.get(easyShareId)
     if (response.success && response.data) {
       selected.value = response.data
@@ -592,22 +738,41 @@ onMounted(async () => {
     :colors="{ bgIos: 'bg-transparent' }"
   >
     <template v-if="screen === 'main'">
-      <div v-if="!onboardingReady" class="pages__gate-loading">{{ phone.t('Common.loading') }}</div>
+      <div v-if="!onboardingReady" class="pages__gate-loading">
+        {{ phone.t('Common.loading') }}
+      </div>
       <k-navbar
         v-if="onboardingReady && isAuthenticated && pages.profile?.exists"
         class="pages-navbar"
-        :subtitle="phone.t(tab === 'feed' ? 'Apps.localPages.eyebrow' : 'Apps.localPages.name')"
-        :title="phone.t(tab === 'feed' ? 'Apps.localPages.name' : 'Apps.localPages.profile')"
+        :subtitle="
+          phone.t(
+            tab === 'feed' ? 'Apps.localPages.eyebrow' : 'Apps.localPages.name',
+          )
+        "
+        :title="
+          phone.t(
+            tab === 'feed' ? 'Apps.localPages.name' : 'Apps.localPages.profile',
+          )
+        "
       />
 
       <section
         v-if="onboardingReady"
         class="pages__content"
-        :class="{ 'pages__content--gate': !isAuthenticated || !pages.profile?.exists }"
+        :class="{
+          'pages__content--gate': !isAuthenticated || !pages.profile?.exists,
+        }"
       >
         <template v-if="tab === 'feed'">
           <k-glass class="pages-hero-glass">
-            <div class="pages__hero"><div><small>{{ phone.t('Apps.localPages.cityPulse') }}</small><strong>{{ phone.t('Apps.localPages.heroTitle') }}</strong><span>{{ phone.t('Apps.localPages.heroBody') }}</span></div><MapPin :size="40" /></div>
+            <div class="pages__hero">
+              <div>
+                <small>{{ phone.t('Apps.localPages.cityPulse') }}</small
+                ><strong>{{ phone.t('Apps.localPages.heroTitle') }}</strong
+                ><span>{{ phone.t('Apps.localPages.heroBody') }}</span>
+              </div>
+              <MapPin :size="40" />
+            </div>
           </k-glass>
           <k-searchbar
             component="form"
@@ -618,77 +783,123 @@ onMounted(async () => {
             @clear="clearSearch"
             @submit.prevent="loadFeed"
           />
-          <CityMarktSelect :model-value="category" :options="categoryOptions" @change="(value) => { category = value; loadFeed() }" />
+          <CityMarktSelect
+            :model-value="category"
+            :options="categoryOptions"
+            @change="
+              (value) => {
+                category = value
+                loadFeed()
+              }
+            "
+          />
         </template>
 
         <template v-else>
           <section v-if="!isAuthenticated" class="pages__auth">
-            <header class="pages__auth-head">
-              <span><UserRound :size="23" /></span>
-              <div><small>{{ phone.t('Apps.localPages.authEyebrow') }}</small><strong>{{ phone.t('Apps.localPages.authWelcome') }}</strong><p>{{ phone.t('Apps.localPages.authBody') }}</p></div>
-            </header>
-            <div class="pages__auth-modes">
-              <button type="button" :class="{ active: authMode === 'login' }" @click="switchAuthMode('login')">{{ phone.t('Apps.localPages.login') }}</button>
-              <button type="button" :class="{ active: authMode === 'register' }" @click="switchAuthMode('register')">{{ phone.t('Apps.localPages.register') }}</button>
-            </div>
-            <form class="pages__auth-form" @submit.prevent="submitAuth">
-              <div class="pages__auth-copy"><strong>{{ phone.t(authMode === 'login' ? 'Apps.localPages.loginTitle' : 'Apps.localPages.registerTitle') }}</strong><p>{{ phone.t(authMode === 'login' ? 'Apps.localPages.loginBody' : 'Apps.localPages.registerBody') }}</p></div>
-              <label>
-                {{ phone.t('Apps.localPages.authEmail') }}
-                <k-glass class="pages__auth-field">
-                  <Mail :size="16" />
-                  <input :value="authForm.email" :maxlength="MAIL_ADDRESS_INPUT_MAX_LENGTH" autocomplete="username" autocapitalize="none" autocorrect="off" inputmode="email" spellcheck="false" :placeholder="phone.t('Apps.localPages.authEmailPlaceholder')" @input="updateAuthEmail" />
-                  <span v-if="authForm.email && !authForm.email.includes('@')">@ifruit.com</span>
-                </k-glass>
-              </label>
-              <label>
-                {{ phone.t('Apps.localPages.authPassword') }}
-                <k-glass class="pages__auth-field">
-                  <KeyRound :size="16" />
-                  <input :value="authForm.password" :type="authPasswordVisible ? 'text' : 'password'" maxlength="64" :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'" :placeholder="phone.t('Apps.localPages.authPasswordPlaceholder')" @input="authForm.password = inputValue($event)" />
-                  <button type="button" :aria-label="phone.t(authPasswordVisible ? 'Apps.localPages.hidePassword' : 'Apps.localPages.showPassword')" @click="authPasswordVisible = !authPasswordVisible"><EyeOff v-if="authPasswordVisible" :size="16" /><Eye v-else :size="16" /></button>
-                </k-glass>
-              </label>
-              <label v-if="authMode === 'register'">
-                {{ phone.t('Apps.localPages.authConfirmPassword') }}
-                <k-glass class="pages__auth-field">
-                  <KeyRound :size="16" />
-                  <input :value="authForm.confirm" :type="authPasswordVisible ? 'text' : 'password'" maxlength="64" autocomplete="new-password" :placeholder="phone.t('Apps.localPages.authConfirmPlaceholder')" @input="authForm.confirm = inputValue($event)" />
-                </k-glass>
-              </label>
-              <p v-if="authError" class="pages__auth-error">{{ authError }}</p>
-              <k-glass class="pages__auth-submit"><button type="submit" :disabled="authPending">{{ phone.t(authMode === 'login' ? 'Apps.localPages.login' : 'Apps.localPages.register') }}</button></k-glass>
-            </form>
+            <AppProfileAuth
+              :mode="authMode"
+              v-model:username="authUsername"
+              :avatar-url="authProfilePhoto?.url ?? null"
+              :body="phone.t('Apps.localPages.authBody')"
+              :camera-label="phone.t('Apps.localPages.camera')"
+              :email="account.email"
+              :email-label="phone.t('Apps.localPages.profileEmail')"
+              :error="authError"
+              :eyebrow="phone.t('Apps.localPages.authEyebrow')"
+              :gallery-label="phone.t('Apps.localPages.gallery')"
+              :login-label="phone.t('Apps.localPages.login')"
+              :max-username-length="24"
+              :min-username-length="3"
+              :pending="authPending"
+              :register-label="phone.t('Apps.localPages.register')"
+              :title="phone.t('Apps.localPages.authWelcome')"
+              :username-label="phone.t('Apps.localPages.profileHandle')"
+              :username-placeholder="
+                phone.t('Apps.localPages.profileHandlePlaceholder')
+              "
+              @camera="openAuthMedia('camera')"
+              @gallery="openAuthMedia('photos')"
+              @submit="submitAuth"
+              @update:mode="switchAuthMode"
+            />
           </section>
           <template v-else>
-            <section v-if="profileEditing || !pages.profile?.exists" class="pages__profile-editor">
+            <section
+              v-if="profileEditing || !pages.profile?.exists"
+              class="pages__profile-editor"
+            >
               <div class="pages__profile-editor-head">
                 <span><UserRound :size="21" /></span>
                 <div>
-                  <strong>{{ phone.t(pages.profile?.exists ? 'Apps.localPages.editProfile' : 'Apps.localPages.createProfile') }}</strong>
-                  <small>{{ phone.t('Apps.localPages.profileSetupBody') }}</small>
+                  <strong>{{
+                    phone.t(
+                      pages.profile?.exists
+                        ? 'Apps.localPages.editProfile'
+                        : 'Apps.localPages.createProfile',
+                    )
+                  }}</strong>
+                  <small>{{
+                    phone.t('Apps.localPages.profileSetupBody')
+                  }}</small>
                 </div>
               </div>
               <div class="pages__profile-photo-editor">
                 <span class="pages__profile-photo-preview">
-                  <img v-if="profileAvatarUrl" :src="profileAvatarUrl" :alt="phone.t('Apps.localPages.profilePhoto')" />
+                  <img
+                    v-if="profileAvatarUrl"
+                    :src="profileAvatarUrl"
+                    :alt="phone.t('Apps.localPages.profilePhoto')"
+                  />
                   <UserRound v-else :size="30" />
                 </span>
                 <div>
                   <strong>{{ phone.t('Apps.localPages.profilePhoto') }}</strong>
-                  <small>{{ phone.t('Apps.localPages.profilePhotoHint') }}</small>
+                  <small>{{
+                    phone.t('Apps.localPages.profilePhotoHint')
+                  }}</small>
                   <div class="pages__profile-photo-actions">
-                    <k-glass><button type="button" @click="openProfileMedia('camera')"><Camera :size="15" />{{ phone.t('Apps.localPages.camera') }}</button></k-glass>
-                    <k-glass><button type="button" @click="openProfileMedia('photos')"><Images :size="15" />{{ phone.t('Apps.localPages.gallery') }}</button></k-glass>
+                    <k-glass
+                      ><button
+                        type="button"
+                        @click="openProfileMedia('camera')"
+                      >
+                        <Camera :size="15" />{{
+                          phone.t('Apps.localPages.camera')
+                        }}
+                      </button></k-glass
+                    >
+                    <k-glass
+                      ><button
+                        type="button"
+                        @click="openProfileMedia('photos')"
+                      >
+                        <Images :size="15" />{{
+                          phone.t('Apps.localPages.gallery')
+                        }}
+                      </button></k-glass
+                    >
                   </div>
-                  <button v-if="profileAvatarUrl" class="pages__profile-photo-remove" type="button" @click="removeProfilePhoto">{{ phone.t('Apps.localPages.removeProfilePhoto') }}</button>
+                  <button
+                    v-if="profileAvatarUrl"
+                    class="pages__profile-photo-remove"
+                    type="button"
+                    @click="removeProfilePhoto"
+                  >
+                    {{ phone.t('Apps.localPages.removeProfilePhoto') }}
+                  </button>
                 </div>
               </div>
               <label>
                 {{ phone.t('Apps.localPages.profileEmail') }}
-                <k-glass class="pages__profile-field pages__profile-field--readonly">
+                <k-glass
+                  class="pages__profile-field pages__profile-field--readonly"
+                >
                   <Mail :size="16" />
-                  <input :value="pages.profile?.email || account.email" readonly />
+                  <input
+                    :value="pages.profile?.email || account.email"
+                    readonly
+                  />
                 </k-glass>
               </label>
               <label>
@@ -696,55 +907,215 @@ onMounted(async () => {
                 <span>{{ profileDraft.handle.trim().length }}/24</span>
                 <k-glass class="pages__profile-field">
                   <b>@</b>
-                  <input v-model="profileDraft.handle" maxlength="24" :placeholder="phone.t('Apps.localPages.profileHandlePlaceholder')" autocapitalize="none" />
+                  <input
+                    v-model="profileDraft.handle"
+                    maxlength="24"
+                    :placeholder="
+                      phone.t('Apps.localPages.profileHandlePlaceholder')
+                    "
+                    autocapitalize="none"
+                  />
                 </k-glass>
-                <small>{{ phone.t('Apps.localPages.profileHandleHint') }}</small>
+                <small>{{
+                  phone.t('Apps.localPages.profileHandleHint')
+                }}</small>
               </label>
               <label>
                 {{ phone.t('Apps.localPages.profileBio') }}
                 <span>{{ profileDraft.bio.trim().length }}/160</span>
                 <k-glass class="pages__profile-field pages__profile-field--bio">
-                  <textarea v-model="profileDraft.bio" maxlength="160" :placeholder="phone.t('Apps.localPages.profileBioPlaceholder')" />
+                  <textarea
+                    v-model="profileDraft.bio"
+                    maxlength="160"
+                    :placeholder="
+                      phone.t('Apps.localPages.profileBioPlaceholder')
+                    "
+                  />
                 </k-glass>
               </label>
               <div class="pages__profile-actions">
-                <k-glass v-if="pages.profile?.exists" class="pages__profile-action"><button type="button" @click="cancelProfileEdit">{{ phone.t('Apps.localPages.profileCancel') }}</button></k-glass>
-                <k-glass class="pages__profile-action pages__profile-action--save"><button type="button" :disabled="!canSaveProfile || profilePending" @click="saveProfile">{{ phone.t('Apps.localPages.profileSave') }}</button></k-glass>
+                <k-glass
+                  v-if="pages.profile?.exists"
+                  class="pages__profile-action"
+                  ><button type="button" @click="cancelProfileEdit">
+                    {{ phone.t('Apps.localPages.profileCancel') }}
+                  </button></k-glass
+                >
+                <k-glass
+                  class="pages__profile-action pages__profile-action--save"
+                  ><button
+                    type="button"
+                    :disabled="!canSaveProfile || profilePending"
+                    @click="saveProfile"
+                  >
+                    {{ phone.t('Apps.localPages.profileSave') }}
+                  </button></k-glass
+                >
               </div>
             </section>
             <template v-else>
               <k-glass class="pages-profile-glass">
                 <div class="pages__profile">
-                  <span><img v-if="pages.profile.avatar_url" :src="pages.profile.avatar_url" alt="" /><template v-else>{{ pages.profile.handle.charAt(0).toUpperCase() }}</template></span>
-                  <div><small>{{ phone.t('Apps.localPages.localCreator') }}</small><strong>@{{ pages.profile.handle }}</strong><b>{{ pages.profile.post_count }} {{ phone.t('Apps.localPages.posts') }}</b><p v-if="pages.profile.bio">{{ pages.profile.bio }}</p></div>
-                  <button class="pages__profile-edit" type="button" :aria-label="phone.t('Apps.localPages.editProfile')" @click="editProfile"><Pencil :size="15" /></button>
+                  <span
+                    ><img
+                      v-if="pages.profile.avatar_url"
+                      :src="pages.profile.avatar_url"
+                      alt=""
+                    /><template v-else>{{
+                      pages.profile.handle.charAt(0).toUpperCase()
+                    }}</template></span
+                  >
+                  <div>
+                    <small>{{ phone.t('Apps.localPages.localCreator') }}</small
+                    ><strong>@{{ pages.profile.handle }}</strong
+                    ><b
+                      >{{ pages.profile.post_count }}
+                      {{ phone.t('Apps.localPages.posts') }}</b
+                    >
+                    <p v-if="pages.profile.bio">{{ pages.profile.bio }}</p>
+                  </div>
+                  <button
+                    class="pages__profile-edit"
+                    type="button"
+                    :aria-label="phone.t('Apps.localPages.editProfile')"
+                    @click="editProfile"
+                  >
+                    <Pencil :size="15" />
+                  </button>
                 </div>
               </k-glass>
               <k-glass class="pages-segmented-glass">
-                <div class="pages__segmented"><button :class="{ active: profileMode === 'own' }" @click="profileMode = 'own'">{{ phone.t('Apps.localPages.myPosts') }}</button><button :class="{ active: profileMode === 'saved' }" @click="profileMode = 'saved'">{{ phone.t('Apps.localPages.saved') }}</button></div>
+                <div class="pages__segmented">
+                  <button
+                    :class="{ active: profileMode === 'own' }"
+                    @click="profileMode = 'own'"
+                  >
+                    {{ phone.t('Apps.localPages.myPosts') }}</button
+                  ><button
+                    :class="{ active: profileMode === 'saved' }"
+                    @click="profileMode = 'saved'"
+                  >
+                    {{ phone.t('Apps.localPages.saved') }}
+                  </button>
+                </div>
               </k-glass>
             </template>
+            <k-glass class="pages__logout-glass">
+              <button
+                type="button"
+                class="pages__logout"
+                @click="logoutDialogOpen = true"
+              >
+                <LogOut :size="16" />
+                {{ phone.t('Common.signOut') }}
+              </button>
+            </k-glass>
           </template>
         </template>
 
-        <div v-if="pages.isLoading" class="pages__empty">{{ phone.t('Common.loading') }}</div>
-        <div v-else-if="tab === 'feed' || (isAuthenticated && pages.profile?.exists && !profileEditing)" class="pages__feed">
-          <k-glass v-for="post in displayedPosts" :key="post.id" class="pages-post-glass">
+        <div v-if="pages.isLoading" class="pages__empty">
+          {{ phone.t('Common.loading') }}
+        </div>
+        <div
+          v-else-if="
+            tab === 'feed' ||
+            (isAuthenticated && pages.profile?.exists && !profileEditing)
+          "
+          class="pages__feed"
+        >
+          <k-glass
+            v-for="post in displayedPosts"
+            :key="post.id"
+            class="pages-post-glass"
+          >
             <article class="pages__post">
-            <button class="pages__post-open" type="button" @click="openPost(post)">
-              <div class="pages__post-head"><span><img v-if="post.author_avatar" :src="post.author_avatar" alt="" /><template v-else>{{ post.author_name.charAt(0).toUpperCase() }}</template></span><div><strong>@{{ post.author_name }}</strong><small><MapPin :size="10" /> {{ post.district ? phone.t(`Apps.citymarkt.districts.${post.district}`) : phone.t('Apps.localPages.allLosSantos') }} · {{ relativeDate(post.created_at) }}</small></div><i>{{ label('categories', post.category) }}</i></div>
-              <div v-if="post.image" class="pages__cover" :style="{ background: post.image }"><b v-if="post.images.length > 1">1 / {{ post.images.length }}</b></div>
-              <h2>{{ post.title }}</h2><p>{{ post.body }}</p>
-            </button>
-            <div class="pages__post-foot">
-              <button type="button" :class="{ active: post.is_liked }" :disabled="reactionPending" :aria-label="phone.t('Apps.localPages.likes')" @click="reactToPost(post, 'like')"><Heart :size="15" :fill="post.is_liked ? 'currentColor' : 'none'" /> {{ post.like_count }}</button>
-              <span v-if="post.source_type === 'citymarkt'"><Store :size="14" /> CityMarkt</span>
-              <button type="button" :aria-label="phone.t('Apps.easyShare.share')" @click="sharePost(post)"><Share2 :size="15" /> {{ phone.t('Apps.easyShare.share') }}</button>
-              <button type="button" :class="{ active: post.is_saved }" :disabled="reactionPending" :aria-label="phone.t('Apps.localPages.save')" @click="reactToPost(post, 'save')"><Bookmark :size="15" :fill="post.is_saved ? 'currentColor' : 'none'" /> {{ phone.t('Apps.localPages.save') }}</button>
-            </div>
+              <button
+                class="pages__post-open"
+                type="button"
+                @click="openPost(post)"
+              >
+                <div class="pages__post-head">
+                  <span
+                    ><img
+                      v-if="post.author_avatar"
+                      :src="post.author_avatar"
+                      alt=""
+                    /><template v-else>{{
+                      post.author_name.charAt(0).toUpperCase()
+                    }}</template></span
+                  >
+                  <div>
+                    <strong>@{{ post.author_name }}</strong
+                    ><small
+                      ><MapPin :size="10" />
+                      {{
+                        post.district
+                          ? phone.t(`Apps.citymarkt.districts.${post.district}`)
+                          : phone.t('Apps.localPages.allLosSantos')
+                      }}
+                      · {{ relativeDate(post.created_at) }}</small
+                    >
+                  </div>
+                  <i>{{ label('categories', post.category) }}</i>
+                </div>
+                <div
+                  v-if="post.image"
+                  class="pages__cover"
+                  :style="{ background: post.image }"
+                >
+                  <b v-if="post.images.length > 1"
+                    >1 / {{ post.images.length }}</b
+                  >
+                </div>
+                <h2>{{ post.title }}</h2>
+                <p>{{ post.body }}</p>
+              </button>
+              <div class="pages__post-foot">
+                <button
+                  type="button"
+                  :class="{ active: post.is_liked }"
+                  :disabled="reactionPending"
+                  :aria-label="phone.t('Apps.localPages.likes')"
+                  @click="reactToPost(post, 'like')"
+                >
+                  <Heart
+                    :size="15"
+                    :fill="post.is_liked ? 'currentColor' : 'none'"
+                  />
+                  {{ post.like_count }}
+                </button>
+                <span v-if="post.source_type === 'citymarkt'"
+                  ><Store :size="14" /> CityMarkt</span
+                >
+                <button
+                  type="button"
+                  :aria-label="phone.t('Apps.easyShare.share')"
+                  @click="sharePost(post)"
+                >
+                  <Share2 :size="15" /> {{ phone.t('Apps.easyShare.share') }}
+                </button>
+                <button
+                  type="button"
+                  :class="{ active: post.is_saved }"
+                  :disabled="reactionPending"
+                  :aria-label="phone.t('Apps.localPages.save')"
+                  @click="reactToPost(post, 'save')"
+                >
+                  <Bookmark
+                    :size="15"
+                    :fill="post.is_saved ? 'currentColor' : 'none'"
+                  />
+                  {{ phone.t('Apps.localPages.save') }}
+                </button>
+              </div>
             </article>
           </k-glass>
-          <div v-if="!displayedPosts.length" class="pages__empty"><Compass :size="38" /><strong>{{ phone.t('Apps.localPages.noPosts') }}</strong><span>{{ phone.t('Apps.localPages.noPostsBody') }}</span></div>
+          <div v-if="!displayedPosts.length" class="pages__empty">
+            <Compass :size="38" /><strong>{{
+              phone.t('Apps.localPages.noPosts')
+            }}</strong
+            ><span>{{ phone.t('Apps.localPages.noPostsBody') }}</span>
+          </div>
         </div>
       </section>
 
@@ -764,16 +1135,29 @@ onMounted(async () => {
             :link-props="{ class: 'pages-tab-button', type: 'button' }"
             @click="selectTab('feed')"
           >
-            <template #label><span class="pages__tab-label">{{ phone.t('Apps.localPages.discover') }}</span></template>
-            <template #icon><k-icon><Compass :size="20" /></k-icon></template>
+            <template #label
+              ><span class="pages__tab-label">{{
+                phone.t('Apps.localPages.discover')
+              }}</span></template
+            >
+            <template #icon
+              ><k-icon><Compass :size="20" /></k-icon
+            ></template>
           </k-tabbar-link>
           <k-tabbar-link
             component="button"
             :link-props="{ class: 'pages-tab-button', type: 'button' }"
             @click="selectTab('create')"
           >
-            <template #label><span class="pages__tab-label">{{ phone.t('Apps.localPages.create') }}</span></template>
-            <template #icon><span class="pages__tab-icon pages__tab-icon--create"><k-icon><Plus :size="21" /></k-icon></span></template>
+            <template #label
+              ><span class="pages__tab-label">{{
+                phone.t('Apps.localPages.create')
+              }}</span></template
+            >
+            <template #icon
+              ><span class="pages__tab-icon pages__tab-icon--create"
+                ><k-icon><Plus :size="21" /></k-icon></span
+            ></template>
           </k-tabbar-link>
           <k-tabbar-link
             component="button"
@@ -781,8 +1165,14 @@ onMounted(async () => {
             :link-props="{ class: 'pages-tab-button', type: 'button' }"
             @click="selectTab('profile')"
           >
-            <template #label><span class="pages__tab-label">{{ phone.t('Apps.localPages.profile') }}</span></template>
-            <template #icon><k-icon><UserRound :size="20" /></k-icon></template>
+            <template #label
+              ><span class="pages__tab-label">{{
+                phone.t('Apps.localPages.profile')
+              }}</span></template
+            >
+            <template #icon
+              ><k-icon><UserRound :size="20" /></k-icon
+            ></template>
           </k-tabbar-link>
         </k-toolbar-pane>
       </k-tabbar>
@@ -790,25 +1180,115 @@ onMounted(async () => {
 
     <section v-else-if="screen === 'detail' && selected" class="pages__detail">
       <header>
-        <k-glass component="button" type="button" class="pages__detail-control" @click="screen = 'main'">
+        <k-glass
+          component="button"
+          type="button"
+          class="pages__detail-control"
+          @click="screen = 'main'"
+        >
           <ArrowLeft :size="20" />
         </k-glass>
         <strong>{{ phone.t('Apps.localPages.post') }}</strong>
-        <k-glass v-if="selected.is_owner" component="button" type="button" class="pages__detail-control danger" @click="removePost">
+        <k-glass
+          v-if="selected.is_owner"
+          component="button"
+          type="button"
+          class="pages__detail-control danger"
+          @click="removePost"
+        >
           <Trash2 :size="18" />
         </k-glass>
-        <k-glass v-else component="button" type="button" class="pages__detail-control" @click="react('save')">
-          <Bookmark :size="18" :fill="selected.is_saved ? 'currentColor' : 'none'" />
+        <k-glass
+          v-else
+          component="button"
+          type="button"
+          class="pages__detail-control"
+          @click="react('save')"
+        >
+          <Bookmark
+            :size="18"
+            :fill="selected.is_saved ? 'currentColor' : 'none'"
+          />
         </k-glass>
       </header>
       <div class="pages__detail-scroll">
-        <div v-if="selected.images.length" class="pages__gallery" :style="{ background: selected.images[galleryIndex]?.gradient }"><button v-if="selected.images.length > 1" @click="moveGallery(-1)"><ChevronLeft /></button><button v-if="selected.images.length > 1" @click="moveGallery(1)"><ChevronRight /></button><span>{{ galleryIndex + 1 }} / {{ selected.images.length }}</span></div>
-        <article><div class="pages__author"><span><img v-if="selected.author_avatar" :src="selected.author_avatar" alt="" /><template v-else>{{ selected.author_name.charAt(0).toUpperCase() }}</template></span><div><strong>@{{ selected.author_name }}</strong><small>{{ relativeDate(selected.created_at) }}</small></div><i>{{ label('categories', selected.category) }}</i></div><h1>{{ selected.title }}</h1><p>{{ selected.body }}</p><div class="pages__location"><MapPin :size="17" /><div><small>{{ phone.t('Apps.localPages.location') }}</small><strong>{{ selected.district ? phone.t(`Apps.citymarkt.districts.${selected.district}`) : phone.t('Apps.localPages.allLosSantos') }}</strong></div></div><button v-if="selected.source_type === 'citymarkt'" class="pages__market-link" @click="openCityMarktListing"><Store :size="18" /><span><small>{{ phone.t('Apps.localPages.sharedFrom') }}</small><strong>{{ phone.t('Apps.localPages.openCityMarkt') }}</strong></span><b v-if="selected.citymarkt_price">${{ Number(selected.citymarkt_price).toLocaleString() }}</b></button></article>
+        <div
+          v-if="selected.images.length"
+          class="pages__gallery"
+          :style="{ background: selected.images[galleryIndex]?.gradient }"
+        >
+          <button v-if="selected.images.length > 1" @click="moveGallery(-1)">
+            <ChevronLeft /></button
+          ><button v-if="selected.images.length > 1" @click="moveGallery(1)">
+            <ChevronRight /></button
+          ><span>{{ galleryIndex + 1 }} / {{ selected.images.length }}</span>
+        </div>
+        <article>
+          <div class="pages__author">
+            <span
+              ><img
+                v-if="selected.author_avatar"
+                :src="selected.author_avatar"
+                alt=""
+              /><template v-else>{{
+                selected.author_name.charAt(0).toUpperCase()
+              }}</template></span
+            >
+            <div>
+              <strong>@{{ selected.author_name }}</strong
+              ><small>{{ relativeDate(selected.created_at) }}</small>
+            </div>
+            <i>{{ label('categories', selected.category) }}</i>
+          </div>
+          <h1>{{ selected.title }}</h1>
+          <p>{{ selected.body }}</p>
+          <div class="pages__location">
+            <MapPin :size="17" />
+            <div>
+              <small>{{ phone.t('Apps.localPages.location') }}</small
+              ><strong>{{
+                selected.district
+                  ? phone.t(`Apps.citymarkt.districts.${selected.district}`)
+                  : phone.t('Apps.localPages.allLosSantos')
+              }}</strong>
+            </div>
+          </div>
+          <button
+            v-if="selected.source_type === 'citymarkt'"
+            class="pages__market-link"
+            @click="openCityMarktListing"
+          >
+            <Store :size="18" /><span
+              ><small>{{ phone.t('Apps.localPages.sharedFrom') }}</small
+              ><strong>{{
+                phone.t('Apps.localPages.openCityMarkt')
+              }}</strong></span
+            ><b v-if="selected.citymarkt_price"
+              >${{ Number(selected.citymarkt_price).toLocaleString() }}</b
+            >
+          </button>
+        </article>
       </div>
       <k-glass class="pages__detail-actions">
-        <button type="button" :class="{ active: selected.is_liked }" @click="react('like')"><Heart :size="19" :fill="selected.is_liked ? 'currentColor' : 'none'" />{{ selected.like_count }} {{ phone.t('Apps.localPages.likes') }}</button>
-        <button type="button" @click="sharePost(selected)"><Share2 :size="19" />{{ phone.t('Apps.easyShare.share') }}</button>
-        <button type="button" @click="react('save')"><Bookmark :size="19" :fill="selected.is_saved ? 'currentColor' : 'none'" />{{ phone.t('Apps.localPages.save') }}</button>
+        <button
+          type="button"
+          :class="{ active: selected.is_liked }"
+          @click="react('like')"
+        >
+          <Heart
+            :size="19"
+            :fill="selected.is_liked ? 'currentColor' : 'none'"
+          />{{ selected.like_count }} {{ phone.t('Apps.localPages.likes') }}
+        </button>
+        <button type="button" @click="sharePost(selected)">
+          <Share2 :size="19" />{{ phone.t('Apps.easyShare.share') }}
+        </button>
+        <button type="button" @click="react('save')">
+          <Bookmark
+            :size="19"
+            :fill="selected.is_saved ? 'currentColor' : 'none'"
+          />{{ phone.t('Apps.localPages.save') }}
+        </button>
       </k-glass>
     </section>
 
@@ -822,16 +1302,38 @@ onMounted(async () => {
         center-title
         left-class="pages-create-action pages-create-action--close !min-w-[58px] !h-11 !p-0 !rounded-full"
         right-class="pages-create-action pages-create-action--publish !min-w-[58px] !h-11 !p-0 !rounded-full"
-        :title="phone.t(cityMarktListing ? 'Apps.localPages.cityMarktComposeNavTitle' : 'Apps.localPages.shareWithCity')"
-        :subtitle="phone.t(cityMarktListing ? 'Apps.localPages.categories.citymarkt' : 'Apps.localPages.newPost')"
+        :title="
+          phone.t(
+            cityMarktListing
+              ? 'Apps.localPages.cityMarktComposeNavTitle'
+              : 'Apps.localPages.shareWithCity',
+          )
+        "
+        :subtitle="
+          phone.t(
+            cityMarktListing
+              ? 'Apps.localPages.categories.citymarkt'
+              : 'Apps.localPages.newPost',
+          )
+        "
       >
         <template #left>
-          <button class="pages-create-close" type="button" :aria-label="phone.t('Common.close')" @click="closeCompose">
+          <button
+            class="pages-create-close"
+            type="button"
+            :aria-label="phone.t('Common.close')"
+            @click="closeCompose"
+          >
             {{ phone.t('Common.close') }}
           </button>
         </template>
         <template #right>
-          <button class="pages-create-publish" type="button" :disabled="!canPublish" @click="publish">
+          <button
+            class="pages-create-publish"
+            type="button"
+            :disabled="!canPublish"
+            @click="publish"
+          >
             {{ phone.t('Apps.localPages.publish') }}
           </button>
         </template>
@@ -840,28 +1342,87 @@ onMounted(async () => {
         <k-glass v-if="cityMarktListing" class="pages__citymarkt-source">
           <Store :size="19" />
           <span
-            ><strong>{{ phone.t('Apps.localPages.cityMarktComposeTitle') }}</strong
-            ><small>{{ phone.t('Apps.localPages.cityMarktComposeHint') }}</small></span
+            ><strong>{{
+              phone.t('Apps.localPages.cityMarktComposeTitle')
+            }}</strong
+            ><small>{{
+              phone.t('Apps.localPages.cityMarktComposeHint')
+            }}</small></span
           >
         </k-glass>
-        <label>{{ phone.t('Apps.localPages.title') }} <span :class="{ valid: draft.title.trim().length >= 5 }">{{ draft.title.trim().length }}/80 · {{ phone.t('Apps.citymarkt.minimumCharacters', { minimum: '5' }) }}</span><k-glass class="pages__field-glass"><input v-model="draft.title" maxlength="80" :placeholder="phone.t('Apps.localPages.titlePlaceholder')" /></k-glass></label>
-        <label>{{ phone.t('Apps.localPages.body') }} <span :class="{ valid: draft.body.trim().length >= 10 }">{{ draft.body.trim().length }}/1500 · {{ phone.t('Apps.citymarkt.minimumCharacters', { minimum: '10' }) }}</span><k-glass class="pages__field-glass pages__field-glass--textarea"><textarea v-model="draft.body" maxlength="1500" :placeholder="phone.t('Apps.localPages.bodyPlaceholder')" /></k-glass></label>
-        <div class="pages__form-row"><label>{{ phone.t('Apps.localPages.category') }}<CityMarktSelect :model-value="draft.category" :options="composeCategoryOptions" @change="(value) => draft.category = value as typeof draft.category" /></label><label>{{ phone.t('Apps.localPages.location') }}<CityMarktSelect :model-value="draft.district" :options="districtOptions" @change="(value) => draft.district = value" /></label></div>
+        <label
+          >{{ phone.t('Apps.localPages.title') }}
+          <span :class="{ valid: draft.title.trim().length >= 5 }"
+            >{{ draft.title.trim().length }}/80 ·
+            {{
+              phone.t('Apps.citymarkt.minimumCharacters', { minimum: '5' })
+            }}</span
+          ><k-glass class="pages__field-glass"
+            ><input
+              v-model="draft.title"
+              maxlength="80"
+              :placeholder="
+                phone.t('Apps.localPages.titlePlaceholder')
+              " /></k-glass
+        ></label>
+        <label
+          >{{ phone.t('Apps.localPages.body') }}
+          <span :class="{ valid: draft.body.trim().length >= 10 }"
+            >{{ draft.body.trim().length }}/1500 ·
+            {{
+              phone.t('Apps.citymarkt.minimumCharacters', { minimum: '10' })
+            }}</span
+          ><k-glass class="pages__field-glass pages__field-glass--textarea">
+            <textarea
+              v-model="draft.body"
+              maxlength="1500"
+              :placeholder="phone.t('Apps.localPages.bodyPlaceholder')"
+            /></k-glass
+        ></label>
+        <div class="pages__form-row">
+          <label
+            >{{ phone.t('Apps.localPages.category')
+            }}<CityMarktSelect
+              :model-value="draft.category"
+              :options="composeCategoryOptions"
+              @change="
+                (value) => (draft.category = value as typeof draft.category)
+              " /></label
+          ><label
+            >{{ phone.t('Apps.localPages.location')
+            }}<CityMarktSelect
+              :model-value="draft.district"
+              :options="districtOptions"
+              @change="(value) => (draft.district = value)"
+          /></label>
+        </div>
         <section class="pages__photos">
           <ImagePlus :size="30" />
           <h2>{{ phone.t('Apps.citymarkt.addPhotos') }}</h2>
-          <p>{{ phone.t(cityMarktListing ? 'Apps.localPages.cityMarktPhotosHint' : 'Apps.citymarkt.addPhotosBody') }}</p>
+          <p>
+            {{
+              phone.t(
+                cityMarktListing
+                  ? 'Apps.localPages.cityMarktPhotosHint'
+                  : 'Apps.citymarkt.addPhotosBody',
+              )
+            }}
+          </p>
           <div class="pages__photo-actions">
-            <k-glass><button type="button" @click="openMediaApp('photos')">
-              <span><Images :size="20" /></span>
-              <strong>{{ phone.t('Apps.citymarkt.chooseGallery') }}</strong>
-              <small>{{ phone.t('Apps.citymarkt.chooseGalleryBody') }}</small>
-            </button></k-glass>
-            <k-glass><button type="button" @click="openMediaApp('camera')">
-              <span><Camera :size="20" /></span>
-              <strong>{{ phone.t('Apps.citymarkt.takePhotos') }}</strong>
-              <small>{{ phone.t('Apps.citymarkt.takePhotosBody') }}</small>
-            </button></k-glass>
+            <k-glass
+              ><button type="button" @click="openMediaApp('photos')">
+                <span><Images :size="20" /></span>
+                <strong>{{ phone.t('Apps.citymarkt.chooseGallery') }}</strong>
+                <small>{{ phone.t('Apps.citymarkt.chooseGalleryBody') }}</small>
+              </button></k-glass
+            >
+            <k-glass
+              ><button type="button" @click="openMediaApp('camera')">
+                <span><Camera :size="20" /></span>
+                <strong>{{ phone.t('Apps.citymarkt.takePhotos') }}</strong>
+                <small>{{ phone.t('Apps.citymarkt.takePhotosBody') }}</small>
+              </button></k-glass
+            >
           </div>
           <div class="pages__selected-heading">
             <strong>{{ phone.t('Apps.citymarkt.selectedPhotos') }}</strong>
@@ -877,57 +1438,1254 @@ onMounted(async () => {
             :photo-label="phone.t('Apps.citymarkt.photo')"
           />
           <div v-if="selectedImages.length" class="pages__selected-strip">
-            <button v-for="(photo, index) in selectedImages" :key="photo.media_id" type="button" :style="{ background: photo.gradient }" :aria-label="phone.t('Apps.citymarkt.removePhoto', { number: String(index + 1) })" @click="togglePhoto(photo.media_id)"><i>{{ index + 1 }}</i><X :size="12" /></button>
+            <button
+              v-for="(photo, index) in selectedImages"
+              :key="photo.media_id"
+              type="button"
+              :style="{ background: photo.gradient }"
+              :aria-label="
+                phone.t('Apps.citymarkt.removePhoto', {
+                  number: String(index + 1),
+                })
+              "
+              @click="togglePhoto(photo.media_id)"
+            >
+              <i>{{ index + 1 }}</i
+              ><X :size="12" />
+            </button>
           </div>
         </section>
       </div>
     </section>
-    <Transition name="toast"><div v-if="feedback" class="pages__toast">{{ feedback }}</div></Transition>
+    <AccountLogoutDialog
+      v-model:opened="logoutDialogOpen"
+      app-id="local-pages"
+      :app-name="phone.t('Apps.localPages.name')"
+      @logged-out="tab = 'profile'"
+    />
+    <Transition name="toast"
+      ><div v-if="feedback" class="pages__toast">
+        {{ feedback }}
+      </div></Transition
+    >
   </k-page>
 </template>
 
 <style scoped>
-.pages{--yellow:#ffd63e;--ink:#15191d;--panel:#20262c;--muted:#9ba4aa;position:absolute;inset:0;padding:47px 0 24px;overflow:hidden;background:#12171b;color:#f7f7f2;font-family:Inter,system-ui,sans-serif}.pages--light{--panel:#f0f0eb;--muted:#737a7d;background:#fbfbf6;color:#171b1e}.pages button,.pages input,.pages textarea{font:inherit;color:inherit}.pages button{border:0}.pages__header{height:65px;padding:6px 14px;display:grid;grid-template-columns:36px 1fr 36px;align-items:center}.pages__header>button,.pages__detail>header button{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:var(--panel)}.pages__header>div{text-align:center}.pages__header span,.pages__compose header small{display:block;color:var(--yellow);font-size:8px;font-weight:900;letter-spacing:.11em;text-transform:uppercase}.pages__header h1{margin:0;font-size:22px;line-height:1.05}.pages__content{height:calc(100% - 65px - 59px);padding:0 13px 18px;overflow-y:auto;scrollbar-width:none}.pages__hero{height:105px;margin-bottom:10px;padding:15px;border-radius:17px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(125deg,#514005,#d99a00);color:#fff7d2;box-shadow:0 8px 22px #0003}.pages__hero div{max-width:210px}.pages__hero small,.pages__hero strong,.pages__hero span{display:block}.pages__hero small{font-size:8px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}.pages__hero strong{margin:2px 0;font-size:18px}.pages__hero span{font-size:9px;line-height:1.35}.pages__hero>svg{color:var(--yellow);filter:drop-shadow(0 4px 6px #0005)}.pages__search{height:39px;margin-bottom:7px;padding:0 8px 0 10px;border-radius:11px;display:flex;align-items:center;gap:7px;background:var(--panel);color:var(--muted)}.pages__search input{min-width:0;flex:1;border:0;outline:0;background:none;font-size:11px}.pages__search button{padding:5px 8px;border-radius:7px;background:var(--yellow);color:#17191a;font-size:9px;font-weight:800}.pages__feed{padding-top:10px;display:flex;flex-direction:column;gap:12px}.pages__post{width:100%;padding:11px;border-radius:16px;text-align:left;background:var(--panel);box-shadow:0 5px 18px #0002}.pages__post-head{display:flex;align-items:center;gap:7px}.pages__post-head>span,.pages__profile>span,.pages__author>span{width:32px;height:32px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--yellow);color:#20231f;font-size:13px;font-weight:900}.pages__post-head>div{min-width:0;flex:1}.pages__post-head strong,.pages__post-head small{display:block}.pages__post-head strong{font-size:11px}.pages__post-head small{display:flex;align-items:center;gap:2px;overflow:hidden;color:var(--muted);font-size:8px;white-space:nowrap}.pages__post-head i,.pages__author i{padding:4px 6px;border-radius:7px;background:#ffd63e22;color:var(--yellow);font-size:7px;font-style:normal;font-weight:800}.pages__cover{height:138px;margin:9px 0;border-radius:12px;background-size:cover!important;position:relative}.pages__cover>b{position:absolute;right:7px;bottom:7px;padding:3px 6px;border-radius:6px;background:#111b;color:white;font-size:8px}.pages__cover--empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;background:linear-gradient(145deg,#262d32,#1a2024)!important;color:var(--muted);font-size:9px}.pages--light .pages__cover--empty{background:#e7e8e2!important}.pages__post h2{margin:0 0 3px;font-size:14px}.pages__post p{margin:0;display:-webkit-box;overflow:hidden;color:var(--muted);font-size:10px;line-height:1.4;-webkit-box-orient:vertical;-webkit-line-clamp:2}.pages__post-foot{margin-top:9px;padding-top:8px;border-top:1px solid #ffffff12;display:flex;align-items:center;gap:13px;color:var(--muted);font-size:9px}.pages__post-foot span{display:flex;align-items:center;gap:4px}.pages__post-foot svg:last-child{margin-left:auto}.pages__empty{min-height:230px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;color:var(--muted)}.pages__empty strong{font-size:15px}.pages__empty span{max-width:220px;font-size:10px}.pages__profile{margin:3px 0 10px;padding:15px;border-radius:17px;display:flex;align-items:center;gap:10px;background:linear-gradient(125deg,#58450b,#262b2f)}.pages__profile>span{width:48px;height:48px;font-size:19px}.pages__profile small,.pages__profile strong,.pages__profile b{display:block}.pages__profile small{color:var(--yellow);font-size:8px;text-transform:uppercase}.pages__profile strong{font-size:16px}.pages__profile b{color:var(--muted);font-size:9px}.pages__segmented{padding:4px;border-radius:11px;display:flex;background:var(--panel)}.pages__segmented button{flex:1;padding:8px;border-radius:8px;background:none;font-size:10px}.pages__segmented button.active{background:var(--yellow);color:#17191a;font-weight:800}.pages__tabbar{position:absolute;right:0;bottom:22px;left:0;height:59px;padding:5px 35px 0;display:flex;align-items:center;justify-content:space-between;border-top:1px solid #ffffff13;background:#151a1eea;backdrop-filter:blur(15px)}.pages--light .pages__tabbar{background:#fbfbf6ec}.pages__tabbar button{width:55px;padding:0;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;color:var(--muted);font-size:8px}.pages__tabbar button.active{color:var(--yellow)}.pages__tabbar .create span{width:44px;height:36px;margin-top:-17px;border-radius:13px;display:grid;place-items:center;background:var(--yellow);color:#17191a;box-shadow:0 5px 15px #0004}.pages__detail,.pages__compose{position:absolute;inset:0;padding-top:47px;background:#12171b}.pages--light .pages__detail,.pages--light .pages__compose{background:#fbfbf6}.pages__detail>header,.pages__compose>header{height:53px;padding:5px 13px;border-bottom:1px solid #ffffff12;display:flex;align-items:center;gap:8px}.pages__detail>header strong{flex:1;text-align:center;font-size:13px}.pages__detail>header .danger{color:#ff6961}.pages__detail-scroll{height:calc(100% - 105px);padding-bottom:64px;overflow-y:auto}.pages__gallery{height:235px;display:flex;align-items:center;justify-content:space-between;background-size:cover!important;position:relative}.pages__gallery button{width:32px;height:38px;margin:8px;border-radius:10px;display:grid;place-items:center;background:#101820aa;color:#fff}.pages__gallery>span{position:absolute;right:10px;bottom:9px;padding:4px 7px;border-radius:7px;background:#101820bb;color:#fff;font-size:8px}.pages__detail article{padding:13px 15px}.pages__author{display:flex;align-items:center;gap:8px}.pages__author>div{flex:1}.pages__author strong,.pages__author small{display:block}.pages__author strong{font-size:12px}.pages__author small{color:var(--muted);font-size:8px}.pages__detail h1{margin:14px 0 5px;font-size:20px}.pages__detail article>p{margin:0;color:var(--muted);font-size:11px;line-height:1.55;white-space:pre-wrap}.pages__location,.pages__market-link{margin-top:14px;padding:10px;border-radius:12px;display:flex;align-items:center;gap:8px;background:var(--panel)}.pages__location svg{color:var(--yellow)}.pages__location small,.pages__location strong,.pages__market-link small,.pages__market-link strong{display:block}.pages__location small,.pages__market-link small{color:var(--muted);font-size:8px}.pages__location strong,.pages__market-link strong{font-size:10px}.pages__market-link{width:100%;text-align:left}.pages__market-link>svg{color:var(--yellow)}.pages__market-link>span{flex:1}.pages__market-link>b{color:var(--yellow);font-size:11px}.pages__detail-actions{position:absolute;right:12px;bottom:30px;left:12px;height:43px;padding:4px;border-radius:14px;display:flex;gap:5px;background:var(--panel);box-shadow:0 7px 25px #0005}.pages__detail-actions button{flex:1;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:5px;background:none;font-size:10px;font-weight:700}.pages__detail-actions button.active{color:#ff6473}.pages__compose>header>div{min-width:0;flex:1}.pages__compose>header strong{display:block;font-size:12px}.pages__compose>header>button{padding:7px;border-radius:10px;background:var(--panel)}.pages__compose>header>button:last-child{display:flex;align-items:center;gap:4px;background:var(--yellow);color:#17191a;font-size:9px;font-weight:800}.pages__compose>header>button:disabled{opacity:.35}.pages__compose-scroll{height:calc(100% - 53px);padding:15px 14px 35px;overflow-y:auto}.pages__compose-scroll label{display:block;margin-bottom:14px;color:var(--muted);font-size:10px;font-weight:700}.pages__compose-scroll label>span{float:right;color:#ff9c47;font-size:8px}.pages__compose-scroll label>span.valid{color:#59d889}.pages__compose input,.pages__compose textarea{width:100%;margin-top:5px;padding:11px;border:1px solid #ffffff13;border-radius:11px;outline:0;background:var(--panel);font-size:12px}.pages__compose textarea{height:116px;resize:none;line-height:1.45}.pages__form-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}.pages__photo-title{margin:5px 0 8px;display:flex;align-items:center;justify-content:space-between}.pages__photo-title strong,.pages__photo-title small{display:block}.pages__photo-title strong,.pages__gallery-label{font-size:12px}.pages__photo-title small{color:var(--muted);font-size:8px}.pages__photo-title button{padding:7px 9px;border-radius:9px;display:flex;align-items:center;gap:4px;background:var(--yellow);color:#17191a;font-size:9px;font-weight:800}.pages__selected{margin-bottom:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.pages__selected button,.pages__picker button{aspect-ratio:1;border-radius:10px;background-size:cover!important;position:relative}.pages__selected svg{position:absolute;top:5px;right:5px;padding:3px;box-sizing:content-box;border-radius:50%;background:#12171bcc;color:white}.pages__gallery-label{display:block;margin-bottom:7px}.pages__picker{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.pages__picker button{border:2px solid transparent}.pages__picker button.active{border-color:var(--yellow)}.pages__picker i{width:19px;height:19px;margin:4px;border-radius:50%;display:grid;place-items:center;background:var(--yellow);color:#17191a;font-size:9px;font-style:normal;font-weight:900}.pages__toast{position:absolute;z-index:20;right:17px;bottom:91px;left:17px;padding:11px;border-radius:11px;background:#fff6cf;color:#1b2023;box-shadow:0 8px 30px #0007;font-size:10px;font-weight:800;text-align:center}.toast-enter-active,.toast-leave-active{transition:.2s}.toast-enter-from,.toast-leave-to{transform:translateY(8px);opacity:0}
-.pages__tabbar{height:58px;padding:7px 7px 0;justify-content:space-around;backdrop-filter:blur(18px)}
-.pages--light .pages__tabbar{border-color:#00000012}
-.pages__tabbar button{width:54px;gap:2px}
-.pages__tabbar button>span{position:relative}
-.pages__tabbar .create span{width:37px;height:30px;margin-top:-4px;border-radius:10px;box-shadow:none}
-.pages__header{height:64px;padding:6px 16px 8px;display:flex;align-items:center;justify-content:space-between}
-.pages__header>div{text-align:left}
-.pages__header .pages__brand{display:flex;align-items:center;gap:4px;color:var(--yellow);font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
-.pages__header h1{margin:1px 0 0;font-size:25px;line-height:1}
-.pages__content{height:calc(100% - 64px - 58px)}
-.pages__segmented button{min-height:34px;padding:8px 10px;font-size:12px;font-weight:700}
-.pages__post-open{width:100%;padding:0;text-align:left;background:none}.pages__post-foot{gap:6px}.pages__post-foot button{min-height:28px;padding:5px 8px;border-radius:9px;display:flex;align-items:center;gap:4px;background:#ffffff08;color:var(--muted);font-size:9px;font-weight:800}.pages__post-foot button:last-child{margin-left:auto}.pages__post-foot button:first-child.active{background:#ff647318;color:#ff6473}.pages__post-foot button:last-child.active{background:#ffd63e1c;color:var(--yellow)}.pages__post-foot button:disabled{opacity:.55}.pages__post-foot button svg:last-child{margin-left:0}.pages--light .pages__post-foot button{background:#00000008}
-.pages__photos{margin-top:5px}.pages__photos>svg{color:var(--yellow)}.pages__photos>h2{margin:7px 0 3px;font-size:19px}.pages__photos>p{margin:0 0 11px;color:var(--muted);font-size:9px;line-height:1.4}.pages__photo-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pages__photo-actions>button{min-width:0;padding:11px 9px;border:1px solid #ffffff12;border-radius:14px;display:flex;flex-direction:column;align-items:flex-start;text-align:left;background:var(--panel)}.pages__photo-actions>button>span{width:34px;height:34px;margin-bottom:8px;border-radius:11px;display:grid;place-items:center;background:#ffd63e1c;color:var(--yellow)}.pages__photo-actions strong{font-size:11px}.pages__photo-actions small{margin-top:2px;color:var(--muted);font-size:8px;line-height:1.35}.pages__selected-heading{margin:15px 1px 7px;display:flex;align-items:center;justify-content:space-between}.pages__selected-heading strong{font-size:12px}.pages__selected-heading span{padding:3px 6px;border-radius:7px;background:var(--panel);color:var(--yellow);font-size:9px;font-weight:900}.pages__selection-gallery{height:142px;border-radius:14px}.pages__selected-strip{margin-top:7px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}.pages__selected-strip button{position:relative;width:46px;height:46px;flex:none;border:1px solid #ffffff1d;border-radius:9px;background-position:center!important;background-size:cover!important}.pages__selected-strip button i{position:absolute;left:3px;bottom:3px;width:15px;height:15px;border-radius:50%;display:grid;place-items:center;background:var(--yellow);color:#17191a;font-size:7px;font-style:normal;font-weight:900}.pages__selected-strip button svg{position:absolute;top:3px;right:3px;padding:2px;box-sizing:content-box;border-radius:50%;background:#11120fc7;color:#fff}
-.pages__photo-source{position:absolute;z-index:8;inset:47px 0 0;padding:14px 14px 33px;background:#12171b}.pages--light .pages__photo-source{background:#fbfbf6}.pages__photo-source>header{height:52px;display:flex;align-items:center;gap:8px}.pages__photo-source>header>div{min-width:0;flex:1}.pages__photo-source>header small,.pages__photo-source>header strong{display:block}.pages__photo-source>header small{color:var(--yellow);font-size:8px;font-weight:900;text-transform:uppercase}.pages__photo-source>header strong{font-size:18px}.pages__photo-source>header>span{padding:4px 7px;border-radius:8px;background:var(--panel);color:var(--yellow);font-size:8px;font-weight:900}.pages__photo-source>header>button{width:31px;height:31px;padding:0;border-radius:50%;display:grid;place-items:center;background:var(--panel)}.pages__photo-picker{max-height:calc(100% - 58px);display:grid;grid-template-columns:repeat(3,1fr);gap:7px;overflow-y:auto;scrollbar-width:none}.pages__photo-picker button{position:relative;aspect-ratio:1;border:2px solid transparent;border-radius:11px;background-position:center!important;background-size:cover!important}.pages__photo-picker button.active{border-color:var(--yellow)}.pages__photo-picker i{width:19px;height:19px;margin:5px;border-radius:50%;display:grid;place-items:center;background:var(--yellow);color:#17191a;font-size:9px;font-style:normal;font-weight:900}.pages__capture{height:calc(100% - 52px);display:flex;flex-direction:column;align-items:center}.pages__viewfinder{position:relative;width:100%;min-height:305px;overflow:hidden;border-radius:18px;background-position:center!important;background-size:cover!important;box-shadow:inset 0 0 0 1px #ffffff1c}.pages__viewfinder:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#0001,#00000038)}.pages__viewfinder>i{position:absolute;z-index:2;width:25px;height:25px;border-color:#fff;border-style:solid}.pages__viewfinder .corner-tl{top:18px;left:18px;border-width:2px 0 0 2px}.pages__viewfinder .corner-tr{top:18px;right:18px;border-width:2px 2px 0 0}.pages__viewfinder .corner-bl{bottom:18px;left:18px;border-width:0 0 2px 2px}.pages__viewfinder .corner-br{right:18px;bottom:18px;border-width:0 2px 2px 0}.pages__camera-flash{position:absolute;z-index:4;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .12s}.pages__camera-flash.active{opacity:.9}.pages__capture p{max-width:230px;margin:9px 0;color:var(--muted);font-size:8px;text-align:center}.pages__shutter{width:58px;height:58px;padding:0;border:5px solid #f5f5ee;border-radius:50%;display:grid;place-items:center;background:var(--yellow);color:#17191a;box-shadow:0 0 0 2px #ffffff42}.pages--light .pages__photo-actions>button,.pages--light .pages__selected-strip button{border-color:#00000012}
+.pages {
+  --yellow: #ffd63e;
+  --ink: #15191d;
+  --panel: #20262c;
+  --muted: #9ba4aa;
+  position: absolute;
+  inset: 0;
+  padding: 47px 0 24px;
+  overflow: hidden;
+  background: #12171b;
+  color: #f7f7f2;
+  font-family: Inter, system-ui, sans-serif;
+}
+.pages--light {
+  --panel: #f0f0eb;
+  --muted: #737a7d;
+  background: #fbfbf6;
+  color: #171b1e;
+}
+.pages button,
+.pages input,
+.pages textarea {
+  font: inherit;
+  color: inherit;
+}
+.pages button {
+  border: 0;
+}
+.pages__header {
+  height: 65px;
+  padding: 6px 14px;
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+}
+.pages__header > button,
+.pages__detail > header button {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: var(--panel);
+}
+.pages__header > div {
+  text-align: center;
+}
+.pages__header span,
+.pages__compose header small {
+  display: block;
+  color: var(--yellow);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.pages__header h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.05;
+}
+.pages__content {
+  height: calc(100% - 65px - 59px);
+  padding: 0 13px 18px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.pages__hero {
+  height: 105px;
+  margin-bottom: 10px;
+  padding: 15px;
+  border-radius: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(125deg, #514005, #d99a00);
+  color: #fff7d2;
+  box-shadow: 0 8px 22px #0003;
+}
+.pages__hero div {
+  max-width: 210px;
+}
+.pages__hero small,
+.pages__hero strong,
+.pages__hero span {
+  display: block;
+}
+.pages__hero small {
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.pages__hero strong {
+  margin: 2px 0;
+  font-size: 18px;
+}
+.pages__hero span {
+  font-size: 9px;
+  line-height: 1.35;
+}
+.pages__hero > svg {
+  color: var(--yellow);
+  filter: drop-shadow(0 4px 6px #0005);
+}
+.pages__search {
+  height: 39px;
+  margin-bottom: 7px;
+  padding: 0 8px 0 10px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--panel);
+  color: var(--muted);
+}
+.pages__search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: none;
+  font-size: 11px;
+}
+.pages__search button {
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--yellow);
+  color: #17191a;
+  font-size: 9px;
+  font-weight: 800;
+}
+.pages__feed {
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pages__post {
+  width: 100%;
+  padding: 11px;
+  border-radius: 16px;
+  text-align: left;
+  background: var(--panel);
+  box-shadow: 0 5px 18px #0002;
+}
+.pages__post-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pages__post-head > span,
+.pages__profile > span,
+.pages__author > span {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--yellow);
+  color: #20231f;
+  font-size: 13px;
+  font-weight: 900;
+}
+.pages__post-head > div {
+  min-width: 0;
+  flex: 1;
+}
+.pages__post-head strong,
+.pages__post-head small {
+  display: block;
+}
+.pages__post-head strong {
+  font-size: 11px;
+}
+.pages__post-head small {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  white-space: nowrap;
+}
+.pages__post-head i,
+.pages__author i {
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: #ffd63e22;
+  color: var(--yellow);
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 800;
+}
+.pages__cover {
+  height: 138px;
+  margin: 9px 0;
+  border-radius: 12px;
+  background-size: cover !important;
+  position: relative;
+}
+.pages__cover > b {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #111b;
+  color: white;
+  font-size: 8px;
+}
+.pages__cover--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: linear-gradient(145deg, #262d32, #1a2024) !important;
+  color: var(--muted);
+  font-size: 9px;
+}
+.pages--light .pages__cover--empty {
+  background: #e7e8e2 !important;
+}
+.pages__post h2 {
+  margin: 0 0 3px;
+  font-size: 14px;
+}
+.pages__post p {
+  margin: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.pages__post-foot {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid #ffffff12;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.pages__post-foot span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pages__post-foot svg:last-child {
+  margin-left: auto;
+}
+.pages__empty {
+  min-height: 230px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--muted);
+}
+.pages__empty strong {
+  font-size: 15px;
+}
+.pages__empty span {
+  max-width: 220px;
+  font-size: 10px;
+}
+.pages__profile {
+  margin: 3px 0 10px;
+  padding: 15px;
+  border-radius: 17px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(125deg, #58450b, #262b2f);
+}
+.pages__profile > span {
+  width: 48px;
+  height: 48px;
+  font-size: 19px;
+}
+.pages__profile small,
+.pages__profile strong,
+.pages__profile b {
+  display: block;
+}
+.pages__profile small {
+  color: var(--yellow);
+  font-size: 8px;
+  text-transform: uppercase;
+}
+.pages__profile strong {
+  font-size: 16px;
+}
+.pages__profile b {
+  color: var(--muted);
+  font-size: 9px;
+}
+.pages__segmented {
+  padding: 4px;
+  border-radius: 11px;
+  display: flex;
+  background: var(--panel);
+}
+.pages__segmented button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  background: none;
+  font-size: 10px;
+}
+.pages__segmented button.active {
+  background: var(--yellow);
+  color: #17191a;
+  font-weight: 800;
+}
+.pages__tabbar {
+  position: absolute;
+  right: 0;
+  bottom: 22px;
+  left: 0;
+  height: 59px;
+  padding: 5px 35px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #ffffff13;
+  background: #151a1eea;
+  backdrop-filter: blur(15px);
+}
+.pages--light .pages__tabbar {
+  background: #fbfbf6ec;
+}
+.pages__tabbar button {
+  width: 55px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  color: var(--muted);
+  font-size: 8px;
+}
+.pages__tabbar button.active {
+  color: var(--yellow);
+}
+.pages__tabbar .create span {
+  width: 44px;
+  height: 36px;
+  margin-top: -17px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: var(--yellow);
+  color: #17191a;
+  box-shadow: 0 5px 15px #0004;
+}
+.pages__detail,
+.pages__compose {
+  position: absolute;
+  inset: 0;
+  padding-top: 47px;
+  background: #12171b;
+}
+.pages--light .pages__detail,
+.pages--light .pages__compose {
+  background: #fbfbf6;
+}
+.pages__detail > header,
+.pages__compose > header {
+  height: 53px;
+  padding: 5px 13px;
+  border-bottom: 1px solid #ffffff12;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pages__detail > header strong {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+}
+.pages__detail > header .danger {
+  color: #ff6961;
+}
+.pages__detail-scroll {
+  height: calc(100% - 105px);
+  padding-bottom: 64px;
+  overflow-y: auto;
+}
+.pages__gallery {
+  height: 235px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-size: cover !important;
+  position: relative;
+}
+.pages__gallery button {
+  width: 32px;
+  height: 38px;
+  margin: 8px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: #101820aa;
+  color: #fff;
+}
+.pages__gallery > span {
+  position: absolute;
+  right: 10px;
+  bottom: 9px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: #101820bb;
+  color: #fff;
+  font-size: 8px;
+}
+.pages__detail article {
+  padding: 13px 15px;
+}
+.pages__author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pages__author > div {
+  flex: 1;
+}
+.pages__author strong,
+.pages__author small {
+  display: block;
+}
+.pages__author strong {
+  font-size: 12px;
+}
+.pages__author small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.pages__detail h1 {
+  margin: 14px 0 5px;
+  font-size: 20px;
+}
+.pages__detail article > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.pages__location,
+.pages__market-link {
+  margin-top: 14px;
+  padding: 10px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+}
+.pages__location svg {
+  color: var(--yellow);
+}
+.pages__location small,
+.pages__location strong,
+.pages__market-link small,
+.pages__market-link strong {
+  display: block;
+}
+.pages__location small,
+.pages__market-link small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.pages__location strong,
+.pages__market-link strong {
+  font-size: 10px;
+}
+.pages__market-link {
+  width: 100%;
+  text-align: left;
+}
+.pages__market-link > svg {
+  color: var(--yellow);
+}
+.pages__market-link > span {
+  flex: 1;
+}
+.pages__market-link > b {
+  color: var(--yellow);
+  font-size: 11px;
+}
+.pages__detail-actions {
+  position: absolute;
+  right: 12px;
+  bottom: 30px;
+  left: 12px;
+  height: 43px;
+  padding: 4px;
+  border-radius: 14px;
+  display: flex;
+  gap: 5px;
+  background: var(--panel);
+  box-shadow: 0 7px 25px #0005;
+}
+.pages__detail-actions button {
+  flex: 1;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: none;
+  font-size: 10px;
+  font-weight: 700;
+}
+.pages__detail-actions button.active {
+  color: #ff6473;
+}
+.pages__compose > header > div {
+  min-width: 0;
+  flex: 1;
+}
+.pages__compose > header strong {
+  display: block;
+  font-size: 12px;
+}
+.pages__compose > header > button {
+  padding: 7px;
+  border-radius: 10px;
+  background: var(--panel);
+}
+.pages__compose > header > button:last-child {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--yellow);
+  color: #17191a;
+  font-size: 9px;
+  font-weight: 800;
+}
+.pages__compose > header > button:disabled {
+  opacity: 0.35;
+}
+.pages__compose-scroll {
+  height: calc(100% - 53px);
+  padding: 15px 14px 35px;
+  overflow-y: auto;
+}
+.pages__compose-scroll label {
+  display: block;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.pages__compose-scroll label > span {
+  float: right;
+  color: #ff9c47;
+  font-size: 8px;
+}
+.pages__compose-scroll label > span.valid {
+  color: #59d889;
+}
+.pages__compose input,
+.pages__compose textarea {
+  width: 100%;
+  margin-top: 5px;
+  padding: 11px;
+  border: 1px solid #ffffff13;
+  border-radius: 11px;
+  outline: 0;
+  background: var(--panel);
+  font-size: 12px;
+}
+.pages__compose textarea {
+  height: 116px;
+  resize: none;
+  line-height: 1.45;
+}
+.pages__form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.pages__photo-title {
+  margin: 5px 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pages__photo-title strong,
+.pages__photo-title small {
+  display: block;
+}
+.pages__photo-title strong,
+.pages__gallery-label {
+  font-size: 12px;
+}
+.pages__photo-title small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.pages__photo-title button {
+  padding: 7px 9px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--yellow);
+  color: #17191a;
+  font-size: 9px;
+  font-weight: 800;
+}
+.pages__selected {
+  margin-bottom: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.pages__selected button,
+.pages__picker button {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  background-size: cover !important;
+  position: relative;
+}
+.pages__selected svg {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  padding: 3px;
+  box-sizing: content-box;
+  border-radius: 50%;
+  background: #12171bcc;
+  color: white;
+}
+.pages__gallery-label {
+  display: block;
+  margin-bottom: 7px;
+}
+.pages__picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.pages__picker button {
+  border: 2px solid transparent;
+}
+.pages__picker button.active {
+  border-color: var(--yellow);
+}
+.pages__picker i {
+  width: 19px;
+  height: 19px;
+  margin: 4px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--yellow);
+  color: #17191a;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+.pages__toast {
+  position: absolute;
+  z-index: 20;
+  right: 17px;
+  bottom: 91px;
+  left: 17px;
+  padding: 11px;
+  border-radius: 11px;
+  background: #fff6cf;
+  color: #1b2023;
+  box-shadow: 0 8px 30px #0007;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+}
+.toast-enter-active,
+.toast-leave-active {
+  transition: 0.2s;
+}
+.toast-enter-from,
+.toast-leave-to {
+  transform: translateY(8px);
+  opacity: 0;
+}
+.pages__tabbar {
+  height: 58px;
+  padding: 7px 7px 0;
+  justify-content: space-around;
+  backdrop-filter: blur(18px);
+}
+.pages--light .pages__tabbar {
+  border-color: #00000012;
+}
+.pages__tabbar button {
+  width: 54px;
+  gap: 2px;
+}
+.pages__tabbar button > span {
+  position: relative;
+}
+.pages__tabbar .create span {
+  width: 37px;
+  height: 30px;
+  margin-top: -4px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+.pages__header {
+  height: 64px;
+  padding: 6px 16px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pages__header > div {
+  text-align: left;
+}
+.pages__header .pages__brand {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--yellow);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.pages__header h1 {
+  margin: 1px 0 0;
+  font-size: 25px;
+  line-height: 1;
+}
+.pages__content {
+  height: calc(100% - 64px - 58px);
+}
+.pages__segmented button {
+  min-height: 34px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pages__post-open {
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  background: none;
+}
+.pages__post-foot {
+  gap: 6px;
+}
+.pages__post-foot button {
+  min-height: 28px;
+  padding: 5px 8px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff08;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+.pages__post-foot button:last-child {
+  margin-left: auto;
+}
+.pages__post-foot button:first-child.active {
+  background: #ff647318;
+  color: #ff6473;
+}
+.pages__post-foot button:last-child.active {
+  background: #ffd63e1c;
+  color: var(--yellow);
+}
+.pages__post-foot button:disabled {
+  opacity: 0.55;
+}
+.pages__post-foot button svg:last-child {
+  margin-left: 0;
+}
+.pages--light .pages__post-foot button {
+  background: #00000008;
+}
+.pages__photos {
+  margin-top: 5px;
+}
+.pages__photos > svg {
+  color: var(--yellow);
+}
+.pages__photos > h2 {
+  margin: 7px 0 3px;
+  font-size: 19px;
+}
+.pages__photos > p {
+  margin: 0 0 11px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+.pages__photo-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.pages__photo-actions > button {
+  min-width: 0;
+  padding: 11px 9px;
+  border: 1px solid #ffffff12;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  background: var(--panel);
+}
+.pages__photo-actions > button > span {
+  width: 34px;
+  height: 34px;
+  margin-bottom: 8px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: #ffd63e1c;
+  color: var(--yellow);
+}
+.pages__photo-actions strong {
+  font-size: 11px;
+}
+.pages__photo-actions small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+.pages__selected-heading {
+  margin: 15px 1px 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pages__selected-heading strong {
+  font-size: 12px;
+}
+.pages__selected-heading span {
+  padding: 3px 6px;
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--yellow);
+  font-size: 9px;
+  font-weight: 900;
+}
+.pages__selection-gallery {
+  height: 142px;
+  border-radius: 14px;
+}
+.pages__selected-strip {
+  margin-top: 7px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pages__selected-strip button {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border: 1px solid #ffffff1d;
+  border-radius: 9px;
+  background-position: center !important;
+  background-size: cover !important;
+}
+.pages__selected-strip button i {
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--yellow);
+  color: #17191a;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 900;
+}
+.pages__selected-strip button svg {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  padding: 2px;
+  box-sizing: content-box;
+  border-radius: 50%;
+  background: #11120fc7;
+  color: #fff;
+}
+.pages__photo-source {
+  position: absolute;
+  z-index: 8;
+  inset: 47px 0 0;
+  padding: 14px 14px 33px;
+  background: #12171b;
+}
+.pages--light .pages__photo-source {
+  background: #fbfbf6;
+}
+.pages__photo-source > header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pages__photo-source > header > div {
+  min-width: 0;
+  flex: 1;
+}
+.pages__photo-source > header small,
+.pages__photo-source > header strong {
+  display: block;
+}
+.pages__photo-source > header small {
+  color: var(--yellow);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.pages__photo-source > header strong {
+  font-size: 18px;
+}
+.pages__photo-source > header > span {
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--yellow);
+  font-size: 8px;
+  font-weight: 900;
+}
+.pages__photo-source > header > button {
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--panel);
+}
+.pages__photo-picker {
+  max-height: calc(100% - 58px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.pages__photo-picker button {
+  position: relative;
+  aspect-ratio: 1;
+  border: 2px solid transparent;
+  border-radius: 11px;
+  background-position: center !important;
+  background-size: cover !important;
+}
+.pages__photo-picker button.active {
+  border-color: var(--yellow);
+}
+.pages__photo-picker i {
+  width: 19px;
+  height: 19px;
+  margin: 5px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--yellow);
+  color: #17191a;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+.pages__capture {
+  height: calc(100% - 52px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.pages__viewfinder {
+  position: relative;
+  width: 100%;
+  min-height: 305px;
+  overflow: hidden;
+  border-radius: 18px;
+  background-position: center !important;
+  background-size: cover !important;
+  box-shadow: inset 0 0 0 1px #ffffff1c;
+}
+.pages__viewfinder:after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #0001, #00000038);
+}
+.pages__viewfinder > i {
+  position: absolute;
+  z-index: 2;
+  width: 25px;
+  height: 25px;
+  border-color: #fff;
+  border-style: solid;
+}
+.pages__viewfinder .corner-tl {
+  top: 18px;
+  left: 18px;
+  border-width: 2px 0 0 2px;
+}
+.pages__viewfinder .corner-tr {
+  top: 18px;
+  right: 18px;
+  border-width: 2px 2px 0 0;
+}
+.pages__viewfinder .corner-bl {
+  bottom: 18px;
+  left: 18px;
+  border-width: 0 0 2px 2px;
+}
+.pages__viewfinder .corner-br {
+  right: 18px;
+  bottom: 18px;
+  border-width: 0 2px 2px 0;
+}
+.pages__camera-flash {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.pages__camera-flash.active {
+  opacity: 0.9;
+}
+.pages__capture p {
+  max-width: 230px;
+  margin: 9px 0;
+  color: var(--muted);
+  font-size: 8px;
+  text-align: center;
+}
+.pages__shutter {
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  border: 5px solid #f5f5ee;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--yellow);
+  color: #17191a;
+  box-shadow: 0 0 0 2px #ffffff42;
+}
+.pages--light .pages__photo-actions > button,
+.pages--light .pages__selected-strip button {
+  border-color: #00000012;
+}
 /* Keep community content readable at the physical phone scale. */
-.pages__header span,.pages__compose header small,.pages__header .pages__brand{font-size:12px}
-.pages__hero{padding:13px 15px;gap:12px}.pages__hero div{min-width:0;max-width:205px}.pages__hero small{font-size:9.5px;line-height:1.1}.pages__hero strong{margin:4px 0 3px;font-size:16px;line-height:1.12}.pages__hero span{font-size:11px;line-height:1.3}.pages__hero>svg{flex:none}
-.pages__search input{font-size:13px}.pages__search button{font-size:12px}
-.pages__post-head strong{font-size:13px}.pages__post-head small{font-size:11.5px}
-.pages__post-head i,.pages__author i{font-size:10.5px}
-.pages__cover>b,.pages__gallery>span{font-size:10.5px}
-.pages__cover--empty,.pages__empty span{font-size:12px}
-.pages__post h2{font-size:16px}.pages__post p{font-size:13px}
-.pages__post-foot,.pages__post-foot button{font-size:11.5px}
-.pages__profile small,.pages__profile b{font-size:11.5px}
-.pages__tabbar button{font-size:10.5px}
-.pages__author strong{font-size:14px}
-.pages__author small,.pages__location small,.pages__market-link small{font-size:11.5px}
-.pages__detail article>p{font-size:13px}
-.pages__location strong,.pages__market-link strong{font-size:13px}.pages__market-link>b{font-size:14px}
-.pages__detail-actions button{font-size:12.5px}
-.pages__compose>header strong{font-size:14px}.pages__compose>header>button:last-child{font-size:12px}
-.pages__compose-scroll label{font-size:12px}.pages__compose-scroll label>span{font-size:10.5px}
-.pages__compose input,.pages__compose textarea{font-size:13px}
-.pages__photo-title strong,.pages__gallery-label,.pages__selected-heading strong{font-size:14px}
-.pages__photo-title small,.pages__photos>p,.pages__photo-actions small,.pages__capture p{font-size:11.5px}
-.pages__photo-title button{font-size:12px}.pages__photo-actions strong{font-size:13px}
-.pages__selected-heading span,.pages__photo-source>header small,.pages__photo-source>header>span{font-size:11px}
-.pages__selected-strip button i,.pages__photo-picker i{font-size:10px}
-.pages__toast{font-size:12px}
+.pages__header span,
+.pages__compose header small,
+.pages__header .pages__brand {
+  font-size: 12px;
+}
+.pages__hero {
+  padding: 13px 15px;
+  gap: 12px;
+}
+.pages__hero div {
+  min-width: 0;
+  max-width: 205px;
+}
+.pages__hero small {
+  font-size: 9.5px;
+  line-height: 1.1;
+}
+.pages__hero strong {
+  margin: 4px 0 3px;
+  font-size: 16px;
+  line-height: 1.12;
+}
+.pages__hero span {
+  font-size: 11px;
+  line-height: 1.3;
+}
+.pages__hero > svg {
+  flex: none;
+}
+.pages__search input {
+  font-size: 13px;
+}
+.pages__search button {
+  font-size: 12px;
+}
+.pages__post-head strong {
+  font-size: 13px;
+}
+.pages__post-head small {
+  font-size: 11.5px;
+}
+.pages__post-head i,
+.pages__author i {
+  font-size: 10.5px;
+}
+.pages__cover > b,
+.pages__gallery > span {
+  font-size: 10.5px;
+}
+.pages__cover--empty,
+.pages__empty span {
+  font-size: 12px;
+}
+.pages__post h2 {
+  font-size: 16px;
+}
+.pages__post p {
+  font-size: 13px;
+}
+.pages__post-foot,
+.pages__post-foot button {
+  font-size: 11.5px;
+}
+.pages__profile small,
+.pages__profile b {
+  font-size: 11.5px;
+}
+.pages__tabbar button {
+  font-size: 10.5px;
+}
+.pages__author strong {
+  font-size: 14px;
+}
+.pages__author small,
+.pages__location small,
+.pages__market-link small {
+  font-size: 11.5px;
+}
+.pages__detail article > p {
+  font-size: 13px;
+}
+.pages__location strong,
+.pages__market-link strong {
+  font-size: 13px;
+}
+.pages__market-link > b {
+  font-size: 14px;
+}
+.pages__detail-actions button {
+  font-size: 12.5px;
+}
+.pages__compose > header strong {
+  font-size: 14px;
+}
+.pages__compose > header > button:last-child {
+  font-size: 12px;
+}
+.pages__compose-scroll label {
+  font-size: 12px;
+}
+.pages__compose-scroll label > span {
+  font-size: 10.5px;
+}
+.pages__compose input,
+.pages__compose textarea {
+  font-size: 13px;
+}
+.pages__photo-title strong,
+.pages__gallery-label,
+.pages__selected-heading strong {
+  font-size: 14px;
+}
+.pages__photo-title small,
+.pages__photos > p,
+.pages__photo-actions small,
+.pages__capture p {
+  font-size: 11.5px;
+}
+.pages__photo-title button {
+  font-size: 12px;
+}
+.pages__photo-actions strong {
+  font-size: 13px;
+}
+.pages__selected-heading span,
+.pages__photo-source > header small,
+.pages__photo-source > header > span {
+  font-size: 11px;
+}
+.pages__selected-strip button i,
+.pages__photo-picker i {
+  font-size: 10px;
+}
+.pages__toast {
+  font-size: 12px;
+}
 .pages {
   --color-primary: var(--yellow);
   position: relative;
@@ -985,6 +2743,22 @@ onMounted(async () => {
 }
 .pages-profile-glass {
   margin: 3px 0 10px;
+}
+.pages__logout-glass {
+  margin: 10px 0;
+  border-radius: 12px;
+}
+.pages__logout {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: transparent;
+  color: #ff6b70;
+  font-size: 11px;
+  font-weight: 800;
 }
 .pages__profile {
   margin: 0;
@@ -1232,7 +3006,7 @@ onMounted(async () => {
   color: var(--yellow);
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .pages__auth-head strong {
@@ -1334,7 +3108,7 @@ onMounted(async () => {
   font-weight: 850;
 }
 .pages__auth-submit button:disabled {
-  opacity: .45;
+  opacity: 0.45;
 }
 .pages__profile > div {
   min-width: 0;
@@ -1558,6 +3332,6 @@ onMounted(async () => {
   color: var(--yellow);
 }
 .pages__profile-action button:disabled {
-  opacity: .4;
+  opacity: 0.4;
 }
 </style>
