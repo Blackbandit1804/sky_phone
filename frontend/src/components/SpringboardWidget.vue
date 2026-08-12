@@ -31,6 +31,10 @@ import { useCallsStore } from '@/stores/calls'
 import { useMessagesStore } from '@/stores/messages'
 import { usePhoneStore } from '@/stores/phone'
 import type { WidgetInstance } from '@/types/widgets'
+import {
+  reorderDirectionFromKeyboard,
+  type ReorderDirection,
+} from '@/utils/keyboard'
 import type { WeatherConditionId } from '@/types/weather'
 import { WIDGET_SPANS } from '@/utils/widgetLayout'
 
@@ -50,6 +54,7 @@ const emit = defineEmits<{
   dragstart: [event: PointerEvent]
   menu: []
   remove: []
+  reorder: [direction: ReorderDirection]
 }>()
 
 const phone = usePhoneStore()
@@ -68,6 +73,8 @@ let holdTimer: number | undefined
 let pointerStart = { x: 0, y: 0 }
 let dragStartPage = 0
 let dragPageWidth = 0
+let pointerTarget: HTMLElement | null = null
+let pointerId: number | null = null
 
 const weatherIcons: Record<WeatherConditionId, Component> = {
   sunny: Sun,
@@ -173,6 +180,9 @@ function onPointerDown(event: PointerEvent): void {
   ) {
     return
   }
+  pointerTarget = event.currentTarget as HTMLElement
+  pointerId = event.pointerId
+  pointerTarget.setPointerCapture(pointerId)
   pointerStart = { x: event.clientX, y: event.clientY }
   clearHold()
   if (props.editMode) {
@@ -210,35 +220,48 @@ function beginDrag(event: PointerEvent): void {
       .closest<HTMLElement>('.springboard-page')
       ?.getBoundingClientRect().width ?? 0
   isDragging.value = true
-  window.addEventListener('pointermove', onPointerMove)
-  window.addEventListener('pointerup', onPointerUp)
-  window.addEventListener('pointercancel', cancelDrag)
   emit('dragstart', event)
 }
 
 function onPointerUp(event: PointerEvent): void {
   clearHold()
-  if (!isDragging.value) return
-  suppressClick.value = true
-  emit('dragend', event)
-  isDragging.value = false
-  dragOffset.value = { x: 0, y: 0 }
-  removeDragListeners()
+  if (isDragging.value) {
+    suppressClick.value = true
+    emit('dragend', event)
+    isDragging.value = false
+    dragOffset.value = { x: 0, y: 0 }
+  }
+  releasePointerCapture()
 }
 
 function cancelDrag(): void {
   clearHold()
-  if (!isDragging.value) return
+  const wasDragging = isDragging.value
   isDragging.value = false
   dragOffset.value = { x: 0, y: 0 }
-  removeDragListeners()
-  emit('dragcancel')
+  releasePointerCapture()
+  if (wasDragging) emit('dragcancel')
 }
 
-function removeDragListeners(): void {
-  window.removeEventListener('pointermove', onPointerMove)
-  window.removeEventListener('pointerup', onPointerUp)
-  window.removeEventListener('pointercancel', cancelDrag)
+function releasePointerCapture(): void {
+  if (
+    pointerTarget &&
+    pointerId !== null &&
+    pointerTarget.hasPointerCapture(pointerId)
+  ) {
+    pointerTarget.releasePointerCapture(pointerId)
+  }
+  pointerTarget = null
+  pointerId = null
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (!props.editMode) return
+  const direction = reorderDirectionFromKeyboard(event)
+  if (!direction) return
+  event.preventDefault()
+  event.stopPropagation()
+  emit('reorder', direction)
 }
 
 function openWidget(): void {
@@ -276,7 +299,7 @@ async function messageContact(phoneNumber: string): Promise<void> {
 
 onBeforeUnmount(() => {
   clearHold()
-  removeDragListeners()
+  releasePointerCapture()
 })
 </script>
 
@@ -300,9 +323,14 @@ onBeforeUnmount(() => {
       :class="`home-widget--${instance.kind}`"
       role="button"
       tabindex="0"
+      :aria-keyshortcuts="
+        editMode ? 'ArrowLeft ArrowRight ArrowUp ArrowDown' : undefined
+      "
       @click="openWidget"
       @contextmenu.prevent
+      @keydown="onKeydown"
       @keydown.enter="openWidget"
+      @lostpointercapture="cancelDrag"
       @pointercancel="cancelDrag"
       @pointerdown="onPointerDown"
       @pointerleave="isDragging || clearHold()"

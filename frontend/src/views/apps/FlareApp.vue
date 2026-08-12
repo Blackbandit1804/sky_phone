@@ -85,6 +85,7 @@ import type { PhoneMedia } from '@/types/media'
 import type { EasySharePayload } from '@/types/easyshare'
 import type { GifSearchResult, SmsAttachmentType } from '@/types/messages'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
+import { handleEnterAction } from '@/utils/keyboard'
 
 type FlareTab = 'discover' | 'explore' | 'likes' | 'matches' | 'profile'
 type ExploreMode = 'all' | 'dates' | 'friends' | 'longTerm'
@@ -1145,7 +1146,7 @@ onBeforeUnmount(() => {
         :value="draft"
         :disabled="flare.sending"
         @input="draft = eventValue($event)"
-        @keydown.enter.exact.prevent="sendMessage"
+        @keydown.enter.exact="handleEnterAction($event, sendMessage)"
       >
         <template #left>
           <k-toolbar-pane class="ios:h-10 messages-messagebar__tools">
@@ -1861,7 +1862,7 @@ onBeforeUnmount(() => {
         :aria-modal="choiceOpened ? 'true' : undefined"
         aria-labelledby="flare-choice-sheet-title"
         :inert="!choiceOpened"
-        @keydown.esc="closeChoice"
+        @keydown.esc.stop.prevent="closeChoice"
       >
         <span class="flare-choice-sheet__grabber" aria-hidden="true" />
         <header class="flare-choice-sheet__header">
@@ -3096,5 +3097,20 @@ onBeforeUnmount(() => {
 }
 :global(.phone-app.dark .flare-action) {
   box-shadow: none;
+}
+@supports not (color: color-mix(in srgb, white, black)) {
+  .flare-navbar {
+    border-bottom-color: rgb(127 127 127 / 18%);
+  }
+  .flare-photo-slot {
+    background: rgb(127 127 127 / 18%);
+  }
+  .flare-photo-grid :deep(.flare-photo-add) {
+    border-color: rgb(127 127 127 / 44%);
+    background: var(--flare-surface);
+  }
+  .flare-choice-sheet__grabber {
+    background: rgb(127 127 127 / 38%);
+  }
 }
 </style>

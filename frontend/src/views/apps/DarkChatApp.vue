@@ -68,6 +68,7 @@ import type { EasySharePayload } from '@/types/easyshare'
 import type { MediaType, PhoneMedia } from '@/types/media'
 import { copyText } from '@/utils/clipboard'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
+import { handleEnterAction } from '@/utils/keyboard'
 
 const VOICE_MAX_DURATION_MS = 60_000
 const VOICE_MAX_BYTES = 270_000
@@ -2332,7 +2333,7 @@ onBeforeUnmount(() => {
               clear-button
               @input="setIdentifier"
               @clear="identifier = ''"
-              @keydown.enter.prevent="requestStart()"
+              @keydown.enter="handleEnterAction($event, requestStart)"
           /></k-list>
           <k-button
             large
@@ -2601,7 +2602,7 @@ onBeforeUnmount(() => {
           :placeholder="t('message')"
           :colors="darkMessagebarColors"
           @input="setDraft"
-          @keydown.enter.exact.prevent="sendText"
+          @keydown.enter.exact="handleEnterAction($event, sendText)"
         >
           <template #left
             ><k-link
