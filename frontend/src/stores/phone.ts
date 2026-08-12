@@ -2755,6 +2755,17 @@ const defaultLocales: LocaleTree = {
       cityMarktShare: 'Share to Local Pages',
       cityMarktShared: 'Shared to Local Pages.',
       cityMarktShareHint: 'One CityMarkt share per day',
+      cityMarktAlreadyShared: 'Already published',
+      cityMarktOpenSharedHint: 'Open the Local Pages post',
+      cityMarktAppMissing: 'Local Pages is not installed',
+      cityMarktInstallHint: 'Install Local Pages to share this listing',
+      cityMarktAccountMissing: 'Local Pages profile required',
+      cityMarktAccountHint: 'Create a Local Pages profile before sharing',
+      cityMarktComposeTitle: 'Share CityMarkt listing',
+      cityMarktComposeNavTitle: 'Share listing',
+      cityMarktComposeHint:
+        'Review the listing and publish it when you are ready.',
+      cityMarktPhotosHint: 'The CityMarkt listing photos will be included.',
       authErrors: {
         invalid_email: 'Enter a valid 3–32 character iFruit address.',
         invalid_password: 'Use a password between 6 and 64 characters.',

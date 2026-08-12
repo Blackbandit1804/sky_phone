@@ -2521,6 +2521,32 @@ const pagesPosts = [
     images: [],
   },
 ]
+const cityMarktSharedScenarioPost = {
+  id: 'pages-citymarkt-owner-demo',
+  account_id: 1,
+  author_name: 'demo',
+  source_type: 'citymarkt',
+  citymarkt_listing_id: '81bc9d37-20e1-4d8a-82f8-f4b85f77cf04',
+  title: 'Complete mechanic tool set',
+  body: 'Complete mechanic tool set with trolley, sockets and diagnostic equipment. Everything is clean and ready for work.',
+  category: 'citymarkt',
+  district: 'south_los_santos',
+  created_at: Date.parse('2026-08-06T13:10:00Z'),
+  like_count: 4,
+  images: [
+    {
+      media_id: 'capture-tools',
+      gradient: 'linear-gradient(135deg, #ffc75f, #f96d80 48%, #4b4453)',
+      sort_order: 1,
+    },
+  ],
+}
+
+function pagesPostsForScenario(testScenario) {
+  return testScenario === 'citymarkt-shared'
+    ? [cityMarktSharedScenarioPost, ...pagesPosts]
+    : pagesPosts
+}
 const pagesReactions = [
   { post_id: 'pages-1', account_id: 1, kind: 'like' },
   { post_id: 'pages-3', account_id: 1, kind: 'save' },
@@ -7078,7 +7104,30 @@ app.post('/api/:endpoint', (request, response) => {
       data: {
         account: testScenario === 'feather-login' ? null : linkedAccount,
         device: {
-          data: deviceData,
+          data:
+            testScenario.startsWith('citymarkt-')
+              ? {
+                  ...deviceData,
+                  apps: {
+                    ...deviceData.apps,
+                    payload: {
+                      ...deviceData.apps.payload,
+                      homeLayout: {
+                        dock: [],
+                        grid:
+                          testScenario === 'citymarkt-local-pages-missing'
+                            ? []
+                            : ['local-pages'],
+                        hidden:
+                          testScenario === 'citymarkt-local-pages-missing'
+                            ? ['local-pages']
+                            : [],
+                        version: 3,
+                      },
+                    },
+                  },
+                }
+              : deviceData,
           imei: '356938035643809',
           name: 'Personal iFruit Phone',
           sim: mockSim,
@@ -7591,7 +7640,7 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'pages:list') {
     const query = String(request.body.search ?? '').toLowerCase()
-    let items = pagesPosts
+    let items = pagesPostsForScenario(testScenario)
     if (request.body.category && request.body.category !== 'all')
       items = items.filter((item) => item.category === request.body.category)
     if (query)
@@ -7614,7 +7663,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'pages:get') {
-    const post = pagesPosts.find((item) => item.id === request.body.id)
+    const post = pagesPostsForScenario(testScenario).find(
+      (item) => item.id === request.body.id,
+    )
     response.json(
       post
         ? { success: true, data: pageView(post) }
@@ -7629,7 +7680,9 @@ app.post('/api/:endpoint', (request, response) => {
   if (endpoint === 'pages:profile') {
     const email = linkedAccount?.email ?? pagesProfile.email
     const onboarding =
-      testScenario === 'local-pages-onboarding' && !pagesOnboardingCompleted
+      ['local-pages-onboarding', 'citymarkt-local-pages-account-missing'].includes(
+        testScenario,
+      ) && !pagesOnboardingCompleted
     response.json({
       success: true,
       data: {
@@ -7639,7 +7692,9 @@ app.post('/api/:endpoint', (request, response) => {
         email,
         exists: onboarding ? false : pagesProfile.exists,
         handle: onboarding ? email.split('@')[0] : pagesProfile.handle,
-        post_count: pagesPosts.filter((item) => item.account_id === 1).length,
+        post_count: pagesPostsForScenario(testScenario).filter(
+          (item) => item.account_id === 1,
+        ).length,
       },
     })
     return
@@ -7684,7 +7739,9 @@ app.post('/api/:endpoint', (request, response) => {
       success: true,
       data: {
         hasMore: false,
-        items: pagesPosts.filter((item) => item.account_id === 1).map(pageView),
+        items: pagesPostsForScenario(testScenario)
+          .filter((item) => item.account_id === 1)
+          .map(pageView),
         offset: 0,
       },
     })
@@ -7730,7 +7787,11 @@ app.post('/api/:endpoint', (request, response) => {
       response.json({ success: false, error: 'citymarkt_not_found' })
       return
     }
-    if (pagesPosts.some((item) => item.citymarkt_listing_id === listing.id)) {
+    if (
+      pagesPostsForScenario(testScenario).some(
+        (item) => item.citymarkt_listing_id === listing.id,
+      )
+    ) {
       response.json({ success: false, error: 'citymarkt_already_shared' })
       return
     }
