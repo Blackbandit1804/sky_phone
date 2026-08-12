@@ -709,6 +709,17 @@ onMounted(async () => {
   if (route.query.compose === '1') screen.value = 'composer'
   await feather.bootstrap()
   if (feather.onboarded) {
+    const easyShareId = String(route.query.easyShareId ?? '')
+    if (easyShareId && route.query.easyShareKind === 'profile') {
+      const profileId = Number(easyShareId)
+      if (Number.isInteger(profileId) && profileId > 0)
+        await openProfile(profileId)
+    } else if (easyShareId && route.query.easyShareKind === 'post') {
+      if (await feather.loadThread(easyShareId)) {
+        threadReplyTarget.value = feather.thread?.post ?? null
+        screen.value = 'thread'
+      }
+    }
     await feather.loadActivities()
     if (tab.value === 'profile' && feather.profile)
       await feather.loadProfile(feather.profile.id)

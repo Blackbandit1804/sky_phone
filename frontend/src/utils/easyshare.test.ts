@@ -49,4 +49,26 @@ describe('EasyShare deep links', () => {
       ).query.listingId,
     ).toBe('listing-1')
   })
+
+  it.each([
+    ['picstagram', 'post', 'pic-post-1', '/apps/picstagram'],
+    ['picstagram', 'profile', 'pic-profile-1', '/apps/picstagram'],
+    ['feather', 'post', 'feather-post-1', '/apps/feather'],
+    ['fliptok', 'post', 'fliptok-1', '/apps/fliptok'],
+    ['local-pages', 'post', 'pages-post-1', '/apps/local-pages'],
+  ])('preserves the exact %s %s target', (appId, kind, id, path) => {
+    expect(
+      easyShareRoute(
+        payload({
+          appId: appId as EasySharePayload['appId'],
+          id,
+          kind: kind as EasySharePayload['kind'],
+          link: `skyphone://${appId}/${kind}/${id}`,
+        }),
+      ),
+    ).toMatchObject({
+      path,
+      query: { easyShareId: id, easyShareKind: kind },
+    })
+  })
 })

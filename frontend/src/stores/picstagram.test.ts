@@ -213,4 +213,12 @@ describe('Picstagram store', () => {
     expect(store.feed).toEqual([])
     expect(store.stories).toEqual([])
   })
+
+  it('loads an exact shared post by id', async () => {
+    vi.mocked(nuiCall).mockResolvedValue({ success: true, data: { ...post } })
+    const store = usePicstagramStore()
+
+    expect(await store.loadPost(post.id)).toEqual(post)
+    expect(nuiCall).toHaveBeenCalledWith('picstagram:post', { id: post.id })
+  })
 })

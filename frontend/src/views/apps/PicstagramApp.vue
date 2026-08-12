@@ -55,7 +55,7 @@ import {
   kToggle,
 } from 'konsta/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import picstagramIcon from '@/assets/img/app-icons/picstagram.webp'
 import { useMessageMediaStore } from '@/stores/messageMedia'
@@ -80,6 +80,7 @@ type ProfileSection = 'photos' | 'saved'
 const phone = usePhoneStore()
 const store = usePicstagramStore()
 const mediaPicker = useMessageMediaStore()
+const route = useRoute()
 const router = useRouter()
 
 const tab = ref<Tab>('home')
@@ -629,6 +630,16 @@ watch(profileSection, (section) => {
 
 onMounted(async () => {
   await store.bootstrap()
+  const easyShareId = String(route.query.easyShareId ?? '')
+  if (easyShareId && route.query.easyShareKind === 'profile') {
+    await openProfile(easyShareId)
+  } else if (easyShareId && route.query.easyShareKind === 'post') {
+    const post = await store.loadPost(easyShareId)
+    if (post) {
+      tab.value = 'home'
+      selectedPost.value = post
+    }
+  }
   const composeSelection = mediaPicker.consumeMany<{
     caption?: string
     commentsEnabled?: boolean

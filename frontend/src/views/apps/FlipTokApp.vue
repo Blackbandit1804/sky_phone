@@ -50,7 +50,7 @@ import {
   kToggle,
 } from 'konsta/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import flipTokIcon from '@/assets/img/app-icons/fliptok.webp'
 import { useFlipTokStore } from '@/stores/fliptok'
@@ -71,6 +71,7 @@ type AuthMode = 'login' | 'register'
 const phone = usePhoneStore()
 const store = useFlipTokStore()
 const messageMedia = useMessageMediaStore()
+const route = useRoute()
 const router = useRouter()
 const authMode = ref<AuthMode>('login')
 const authHandle = ref('')
@@ -776,6 +777,18 @@ onMounted(async () => {
     composeOpen.value = true
   }
   await store.bootstrap()
+  const easyShareId = String(route.query.easyShareId ?? '')
+  if (easyShareId && route.query.easyShareKind === 'profile') {
+    const profileId = Number(easyShareId)
+    if (Number.isInteger(profileId) && profileId > 0)
+      await openProfile(profileId)
+  } else if (easyShareId && route.query.easyShareKind === 'post') {
+    const video = await store.loadVideo(easyShareId)
+    if (video) {
+      store.feed = [video]
+      tab.value = 'feed'
+    }
+  }
   await nextTick()
   observeVideos()
 })

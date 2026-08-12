@@ -5387,6 +5387,15 @@ app.post('/api/:endpoint', (request, response) => {
     })
     return
   }
+  if (endpoint === 'picstagram:post') {
+    const post = picstagramPosts.find((item) => item.id === request.body.id)
+    response.json(
+      post
+        ? { success: true, data: post }
+        : { success: false, error: 'post_not_found' },
+    )
+    return
+  }
   if (endpoint === 'picstagram:explore') {
     response.json({
       success: true,
@@ -5766,6 +5775,15 @@ app.post('/api/:endpoint', (request, response) => {
       video[key] = request.body.active
     }
     response.json({ success: true })
+    return
+  }
+  if (endpoint === 'fliptok:video') {
+    const video = flipTokVideos.find((item) => item.id === request.body.id)
+    response.json(
+      video
+        ? { success: true, data: video }
+        : { success: false, error: 'video_not_found' },
+    )
     return
   }
   if (endpoint === 'fliptok:follow') {

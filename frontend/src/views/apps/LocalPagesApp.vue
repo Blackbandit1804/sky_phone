@@ -279,7 +279,7 @@ function sharePost(): void {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
   const selection = messageMedia.consumeMany<MediaContext>('local-pages:compose')
   if (selection) {
     if (selection.context) {
@@ -294,7 +294,16 @@ onMounted(() => {
     }
   }
   if (route.query.compose === '1') screen.value = 'compose'
-  void loadFeed()
+  await loadFeed()
+  const easyShareId = String(route.query.easyShareId ?? '')
+  if (easyShareId && route.query.easyShareKind === 'post') {
+    const response = await pages.get(easyShareId)
+    if (response.success && response.data) {
+      selected.value = response.data
+      galleryIndex.value = 0
+      screen.value = 'detail'
+    }
+  }
 })
 </script>
 

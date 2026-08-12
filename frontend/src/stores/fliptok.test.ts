@@ -183,4 +183,12 @@ describe('FlipTok verification updates', () => {
     expect(store.feed).toEqual([])
     expect(store.activities).toEqual([])
   })
+
+  it('loads an exact shared video by id', async () => {
+    vi.mocked(nuiCall).mockResolvedValue({ success: true, data: { ...video } })
+    const store = useFlipTokStore()
+
+    expect(await store.loadVideo(video.id)).toEqual(video)
+    expect(nuiCall).toHaveBeenCalledWith('fliptok:video', { id: video.id })
+  })
 })
