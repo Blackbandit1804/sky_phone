@@ -53,6 +53,8 @@ import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type { MusicPlaylist, MusicTrack } from '@/types/music'
 import { easyShareMusicTarget } from '@/utils/easyshare'
+import { consumeEscape, handleEnterAction } from '@/utils/keyboard'
+import { musicEscapeLayer } from '@/utils/musicEscape'
 
 type MusicTab = 'library' | 'playlists' | 'search'
 type MusicSheet =
@@ -498,6 +500,31 @@ function updateVolume(event: Event): void {
   music.setVolume(Number(eventValue(event)) / 100)
 }
 
+function onKeydown(event: KeyboardEvent): void {
+  const layer = musicEscapeLayer({
+    actionMenuOpened: actionMenuOpened.value,
+    activeSheet: Boolean(activeSheet.value),
+    addMenuOpened: addMenuOpened.value,
+    confirmDeletePlaylist: confirmDeletePlaylist.value,
+    confirmRemoveTrack: confirmRemoveTrack.value,
+    playerOpened: playerOpened.value,
+  })
+  if (!layer) return
+  if (!consumeEscape(event)) return
+
+  if (layer === 'remove-track-confirmation') {
+    cancelRemoveTrack()
+  } else if (layer === 'delete-playlist-confirmation') {
+    confirmDeletePlaylist.value = false
+  } else if (layer === 'sheet') {
+    closeSheet()
+  } else if (layer === 'menu') {
+    dismissMenus()
+  } else if (layer === 'player') {
+    playerOpened.value = false
+  }
+}
+
 watch(
   () => music.playlists,
   () => {
@@ -510,6 +537,7 @@ watch(
 )
 
 onMounted(async () => {
+  window.addEventListener('keydown', onKeydown, true)
   await music.load()
   const target = easyShareMusicTarget(
     route.query.easyShareKind,
@@ -531,6 +559,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (playerPickerTimer !== null) window.clearTimeout(playerPickerTimer)
+  window.removeEventListener('keydown', onKeydown, true)
 })
 </script>
 
@@ -1061,12 +1090,12 @@ onBeforeUnmount(() => {
       </k-list>
     </section>
 
-    <k-sheet
-      :opened="Boolean(activeSheet)"
-      class="music-form-sheet"
-      @backdropclick="closeSheet"
-    >
-      <section class="music-sheet-content">
+    <div class="music-form-sheet">
+      <k-sheet
+        :opened="Boolean(activeSheet)"
+        @backdropclick="closeSheet"
+      >
+        <section class="music-sheet-content">
         <header>
           <k-link component="button" @click="closeSheet">{{
             phone.t(
@@ -1089,7 +1118,7 @@ onBeforeUnmount(() => {
               type="url"
               :value="youtubeUrl"
               @input="youtubeUrl = eventValue($event)"
-              @keydown.enter="submitYouTube"
+              @keydown.enter="handleEnterAction($event, submitYouTube)"
             />
             <k-list-input
               :label="phone.t('Apps.music.youtubeTitle')"
@@ -1098,7 +1127,7 @@ onBeforeUnmount(() => {
               :placeholder="phone.t('Apps.music.youtubeTitlePlaceholder')"
               :value="youtubeTitle"
               @input="youtubeTitle = eventValue($event)"
-              @keydown.enter="submitYouTube"
+              @keydown.enter="handleEnterAction($event, submitYouTube)"
             />
             <k-list-input
               :label="phone.t('Apps.music.youtubeArtist')"
@@ -1107,7 +1136,7 @@ onBeforeUnmount(() => {
               :placeholder="phone.t('Apps.music.youtubeArtistPlaceholder')"
               :value="youtubeArtist"
               @input="youtubeArtist = eventValue($event)"
-              @keydown.enter="submitYouTube"
+              @keydown.enter="handleEnterAction($event, submitYouTube)"
             />
           </k-list>
           <p v-if="music.error" class="music-form-error" role="alert">
@@ -1256,7 +1285,7 @@ onBeforeUnmount(() => {
               :placeholder="phone.t('Apps.music.playlistPlaceholder')"
               :value="playlistName"
               @input="playlistName = eventValue($event)"
-              @keydown.enter="submitPlaylist"
+              @keydown.enter="handleEnterAction($event, submitPlaylist)"
             />
           </k-list>
           <p v-if="music.error" class="music-form-error" role="alert">
@@ -1272,15 +1301,16 @@ onBeforeUnmount(() => {
             <template v-else>{{ phone.t('Common.save') }}</template>
           </k-button>
         </template>
-      </section>
-    </k-sheet>
+        </section>
+      </k-sheet>
+    </div>
 
-    <k-sheet
-      :opened="playerOpened"
-      class="music-player-sheet"
-      @backdropclick="playerOpened = false"
-    >
-      <section v-if="music.currentTrack" class="music-player">
+    <div class="music-player-sheet">
+      <k-sheet
+        :opened="playerOpened"
+        @backdropclick="playerOpened = false"
+      >
+        <section v-if="music.currentTrack" class="music-player">
         <header>
           <k-link
             component="button"
@@ -1383,8 +1413,9 @@ onBeforeUnmount(() => {
         <p v-if="music.playbackError" class="music-player-error">
           {{ phone.t('Apps.music.errors.playback_failed') }}
         </p>
-      </section>
-    </k-sheet>
+        </section>
+      </k-sheet>
+    </div>
 
     <k-dialog
       :opened="confirmRemoveTrack"
@@ -1874,6 +1905,7 @@ onBeforeUnmount(() => {
 .music-form-sheet,
 .music-player-sheet {
   --music-accent: #fa2d48;
+  display: contents;
   color: var(--music-label);
 }
 
@@ -1985,7 +2017,7 @@ onBeforeUnmount(() => {
   color: #ff453a !important;
 }
 
-.music-player-sheet {
+.music-player-sheet :deep(.k-sheet) {
   background: rgb(22 22 25 / 96%) !important;
 }
 

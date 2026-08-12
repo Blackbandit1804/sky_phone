@@ -11,18 +11,18 @@ local function server_prepare(action, data)
 end
 
 local function suspend_phone()
-    SetNuiFocus(false, false)
+    TriggerEvent("sky_phone:client:setSuspended", true)
     TriggerEvent("sky_phone:animation:phone", false)
     SendNUIMessage({ type = "app:suspend" })
 end
 
 local function resume_phone()
     SendNUIMessage({ type = "app:resume" })
-    SetNuiFocus(true, true)
+    TriggerEvent("sky_phone:client:setSuspended", false)
     TriggerEvent("sky_phone:animation:phone", true)
 end
 
-local function stop_camera()
+local function stop_camera(resume)
     local state = camera_state
     if not state then
         return
@@ -37,7 +37,9 @@ local function stop_camera()
     if DoesEntityExist(state.ped) then
         FreezeEntityPosition(state.ped, state.frozen)
     end
-    resume_phone()
+    if resume ~= false then
+        resume_phone()
+    end
 end
 
 local function camera_number(value, fallback)
@@ -105,13 +107,17 @@ local function run_camera(provider_name, camera_data)
     local maximum_left = camera_number(camera_data.maximumLeft)
     local maximum_right = camera_number(camera_data.maximumRight)
     local night_vision = camera_state.night_vision
+    local resume_after_camera = false
+    local close_phone_after_camera = false
     while camera_state and camera_state.camera == camera do
         Wait(0)
         DisableAllControlActions(0)
-        if IsDisabledControlJustPressed(0, config.ExitControl)
-            or IsPedDeadOrDying(ped, true)
-            or GetResourceState(provider_name) ~= "started"
-        then
+        if IsDisabledControlJustPressed(0, config.ExitControl) then
+            resume_after_camera = true
+            break
+        end
+        if IsPedDeadOrDying(ped, true) or GetResourceState(provider_name) ~= "started" then
+            close_phone_after_camera = true
             break
         end
 
@@ -147,12 +153,29 @@ local function run_camera(provider_name, camera_data)
             SetNightvision(night_vision)
         end
     end
-    stop_camera()
+    stop_camera(resume_after_camera)
+    if close_phone_after_camera then
+        TriggerEvent("sky_phone:client:forceClose")
+    end
 end
 
-RegisterNUICallback("housing:overview", function(_, cb)
+RegisterNetEvent("sky_phone:device:invalidated", function()
+    stop_camera(false)
+end)
+
+RegisterNUICallback("housing:overview", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     local result = Bridge.Callbacks.Trigger("sky_phone:housing:overview", {})
-    cb(result or { success = false, error = "request_failed" })
+    cb(type(result) == "table" and result or { success = false, error = "request_failed" })
+end)
+
+AddEventHandler("sky_phone:client:nuiReady", function()
+    if camera_state then
+        suspend_phone()
+    end
 end)
 
 RegisterNUICallback("housing:key-candidates", function(data, cb)
@@ -161,7 +184,7 @@ RegisterNUICallback("housing:key-candidates", function(data, cb)
         return
     end
     local result = server_prepare("key_candidates", data)
-    cb(result or { success = false, error = "request_failed" })
+    cb(type(result) == "table" and result or { success = false, error = "request_failed" })
 end)
 
 RegisterNUICallback("housing:command", function(data, cb)
@@ -182,8 +205,8 @@ RegisterNUICallback("housing:command", function(data, cb)
     end
 
     local prepared = server_prepare(data.action, data)
-    if not prepared or not prepared.success or type(prepared.data) ~= "table" then
-        cb(prepared or { success = false, error = "request_failed" })
+    if type(prepared) ~= "table" or not prepared.success or type(prepared.data) ~= "table" then
+        cb(type(prepared) == "table" and prepared or { success = false, error = "request_failed" })
         return
     end
     if data.action == "set_waypoint" then
@@ -214,6 +237,6 @@ end)
 
 AddEventHandler("onResourceStop", function(resource_name)
     if resource_name == GetCurrentResourceName() and camera_state then
-        stop_camera()
+        stop_camera(false)
     end
 end)

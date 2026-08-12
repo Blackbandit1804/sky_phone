@@ -348,6 +348,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.number-merge-header > div {
+  min-width: 0;
 }
 
 .number-merge-header span {
@@ -357,6 +362,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   font-weight: 800;
   letter-spacing: 1.2px;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
 .number-merge-header h1 {
@@ -364,6 +370,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   font-size: 28px;
   line-height: 1;
   letter-spacing: -1px;
+  overflow-wrap: anywhere;
 }
 
 .number-merge-header button,
@@ -383,11 +390,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 
 .number-merge-menu {
   height: calc(100% - 55px);
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 13px;
+  overflow-y: auto;
+  padding: 12px 0;
   text-align: center;
 }
 
@@ -401,6 +411,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   border-radius: 29px;
   background: #7e5147;
   box-shadow: 0 17px 30px rgb(93 48 36 / 20%);
+  flex: 0 0 auto;
+  margin-top: auto;
   transform: rotate(-2deg);
 }
 
@@ -418,8 +430,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 .number-merge-hero__tile--4 { color: #fff7e4; background: #e96c2c; }
 .number-merge-hero__tile--8 { color: #fff7e4; background: #713c31; }
 
-.number-merge-menu__intro h2 { margin: 0; font-size: 25px; letter-spacing: -0.5px; }
-.number-merge-menu__intro p { max-width: 300px; margin: 6px 0 0; color: #8b675b; font-size: 14px; line-height: 1.45; }
+.number-merge-menu__intro { width: 100%; }
+.number-merge-menu__intro h2 { margin: 0; font-size: 25px; letter-spacing: -0.5px; overflow-wrap: anywhere; }
+.number-merge-menu__intro p { max-width: 300px; margin: 6px auto 0; color: #8b675b; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 
 .number-merge-records {
   width: 100%;
@@ -429,6 +442,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 }
 
 .number-merge-records div {
+  min-width: 0;
   display: grid;
   gap: 1px;
   padding: 8px;
@@ -443,9 +457,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
-.number-merge-records strong { font-size: 20px; }
+.number-merge-records strong { min-width: 0; overflow-wrap: anywhere; font-size: 20px; }
 
 .number-merge-menu__actions { width: 100%; display: grid; gap: 7px; }
 
@@ -453,11 +468,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 .number-merge-secondary,
 .number-merge-danger {
   min-height: 46px;
-  padding: 0 18px;
+  padding: 10px 18px;
   border-radius: 14px;
   font-size: 15px;
   font-weight: 850;
   cursor: pointer;
+  overflow-wrap: anywhere;
 }
 
 .number-merge-primary {
@@ -474,14 +490,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 }
 
 .number-merge-how-to {
+  width: 100%;
+  flex: 0 0 auto;
+  margin-bottom: auto;
   padding: 9px 15px;
   border-radius: 14px;
   color: #795549;
   background: rgb(255 255 255 / 28%);
 }
 
-.number-merge-how-to strong { font-size: 13px; text-transform: uppercase; }
-.number-merge-how-to p { margin: 5px 0 0; font-size: 12px; line-height: 1.4; }
+.number-merge-how-to strong { font-size: 13px; text-transform: uppercase; overflow-wrap: anywhere; }
+.number-merge-how-to p { margin: 5px 0 0; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 .number-merge-how-to div {
   margin: 7px 0 4px;
   color: #a7472d;
@@ -489,7 +508,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   font-weight: 900;
   letter-spacing: -0.2px;
 }
-.number-merge-how-to small { display: block; color: #8b6559; font-size: 11px; line-height: 1.35; }
+.number-merge-how-to small { display: block; color: #8b6559; font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
 
 .number-merge-game {
   position: absolute;
@@ -629,7 +648,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   padding: 22px;
   border-radius: 20px;
@@ -637,12 +656,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   backdrop-filter: blur(5px);
   color: #fff7ea;
   text-align: center;
+  overflow-y: auto;
 }
 
-.number-merge-overlay > span { color: #ffc75b; font-size: 29px; font-weight: 900; }
-.number-merge-overlay h2 { margin: 0; font-size: 25px; }
-.number-merge-overlay p { margin: -3px 0 4px; color: #e7cabd; font-size: 14px; line-height: 1.4; }
-.number-merge-overlay button { min-width: 160px; }
+.number-merge-overlay > span { margin-top: auto; color: #ffc75b; font-size: 29px; font-weight: 900; }
+.number-merge-overlay h2 { margin: 0; font-size: 25px; overflow-wrap: anywhere; }
+.number-merge-overlay p { margin: -3px 0 4px; color: #e7cabd; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.number-merge-overlay button { min-width: min(160px, 100%); }
+.number-merge-overlay .number-merge-link { margin-bottom: auto; }
 .number-merge-overlay .number-merge-secondary { color: #fff1df; background: rgb(255 255 255 / 8%); border-color: rgb(255 255 255 / 13%); }
 
 .number-merge-link {
@@ -677,6 +698,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   inset: 0;
   display: grid;
   place-items: center;
+  min-height: 0;
+  overflow-y: auto;
   padding: 30px;
   background: rgb(54 29 25 / 54%);
   backdrop-filter: blur(6px);
@@ -684,6 +707,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 
 .number-merge-confirm > div {
   width: 100%;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
   display: grid;
   gap: 9px;
   padding: 21px;
@@ -694,8 +719,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   text-align: center;
 }
 
-.number-merge-confirm h2 { margin: 0; font-size: 21px; }
-.number-merge-confirm p { margin: 0 0 5px; color: #876359; font-size: 14px; line-height: 1.4; }
+.number-merge-confirm h2 { margin: 0; font-size: 21px; overflow-wrap: anywhere; }
+.number-merge-confirm p { margin: 0 0 5px; color: #876359; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
 .number-merge-danger { border: 0; color: #fff; background: #b64f39; }
 
 button:active { transform: scale(0.97); }

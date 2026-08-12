@@ -35,7 +35,10 @@ function closeFromOutside(event: PointerEvent): void {
 }
 
 function closeFromEscape(event: KeyboardEvent): void {
-  if (event.key === 'Escape') opened.value = false
+  if (event.key !== 'Escape' || !opened.value) return
+  event.preventDefault()
+  event.stopPropagation()
+  opened.value = false
 }
 
 onMounted(() => {

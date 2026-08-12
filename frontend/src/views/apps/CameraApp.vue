@@ -53,6 +53,7 @@ const elapsed = ref('00:00')
 const captures = ref<CaptureItem[]>([])
 const latestMedia = ref<PhoneMedia | null>(null)
 const gameCanvas = ref<HTMLCanvasElement | null>(null)
+const gameViewUnavailable = ref(false)
 const noticeText = ref('')
 const videoBitrateKbps = ref(1500)
 let shutterTimer: number | undefined
@@ -291,10 +292,26 @@ function resizeGameView(entry?: ResizeObserverEntry): void {
 
 function startGameView(): void {
   if (isDevelopment || !gameCanvas.value) return
-  gameView = createGameView(gameCanvas.value)
+  try {
+    gameView = createGameView(gameCanvas.value, {
+      onContextRestored: () => {
+        resizeGameView()
+        startGameViewRenderLoop()
+      },
+    })
+  } catch (error) {
+    gameViewUnavailable.value = true
+    console.error('[Camera] Game-view rendering is unavailable.', error)
+    return
+  }
   resizeObserver = new ResizeObserver((entries) => resizeGameView(entries[0]))
   resizeObserver.observe(gameCanvas.value)
   resizeGameView()
+  startGameViewRenderLoop()
+}
+
+function startGameViewRenderLoop(): void {
+  if (renderFrameId !== undefined) return
   const render = () => {
     if (!gameView || gameView.isLost()) {
       renderFrameId = undefined
@@ -434,7 +451,7 @@ onBeforeUnmount(() => {
   >
     <div class="camera-viewport" @wheel.prevent="zoomWithWheel">
       <canvas
-        v-if="!isDevelopment"
+        v-if="!isDevelopment && !gameViewUnavailable"
         ref="gameCanvas"
         class="camera-game-view"
         aria-hidden="true"

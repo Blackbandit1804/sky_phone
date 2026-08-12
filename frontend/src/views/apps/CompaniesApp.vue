@@ -94,6 +94,7 @@ import type {
   CompanySummary,
 } from '@/types/companies'
 import type { PhoneMedia } from '@/types/media'
+import { handleEnterAction } from '@/utils/keyboard'
 import { nuiCall } from '@/utils/nui'
 
 type CompaniesTab = 'directory' | 'requests' | 'work'
@@ -1764,7 +1765,7 @@ onBeforeUnmount(() => {
           :placeholder="phone.t('Apps.companies.requests.replyPlaceholder')"
           :value="threadDraft"
           @input="threadDraft = messagebarValue($event)"
-          @keydown.enter.exact.prevent="sendThreadMessage"
+          @keydown.enter.exact="handleEnterAction($event, sendThreadMessage)"
         >
           <template #right>
             <k-toolbar-pane class="ios:h-10">

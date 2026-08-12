@@ -12,6 +12,7 @@ import { nuiCall } from '@/utils/nui'
 import type { NuiResponse } from '@/utils/nui'
 import {
   DEFAULT_PHONE_PREFERENCES,
+  clampPhoneScale,
   ensureAppNotificationPreferences,
   parsePhonePreferences,
   type AppNotificationPreferences,
@@ -38,6 +39,7 @@ export type PhoneOpenPayload = {
 }
 
 const namespaceQueues = new Map<string, Promise<void>>()
+let nextPersistenceSession = 0
 
 const companiesFallbackLocales = {
   name: 'Companies',
@@ -3606,11 +3608,14 @@ export const usePhoneStore = defineStore('phone', {
     currentPage: 1,
     device: null as PhoneDevice | null,
     deviceRevisions: {} as Record<string, number>,
+    deviceSessionToken: null as string | null,
     isOpen: false,
     lang: 'en',
     launchOrigin: null as AppLaunchOrigin | null,
     locales: defaultLocales,
     preferences: cloneJsonData(DEFAULT_PHONE_PREFERENCES),
+    persistenceGeneration: 0,
+    persistenceSession: ++nextPersistenceSession,
     security: {
       enabled: false,
       length: null,
@@ -3631,6 +3636,15 @@ export const usePhoneStore = defineStore('phone', {
       this.isOpen = false
     },
     open(payload: PhoneOpenPayload = {}): void {
+      const nextImei = payload.device?.imei ?? this.device?.imei ?? null
+      const nextToken = payload.token ?? this.deviceSessionToken
+      if (
+        nextImei !== (this.device?.imei ?? null) ||
+        nextToken !== this.deviceSessionToken
+      ) {
+        this.persistenceGeneration += 1
+      }
+      this.deviceSessionToken = nextToken
       this.lang = payload.lang ?? 'en'
       this.locales = payload.locales ?? defaultLocales
       if (payload.device) this.hydrateDevice(payload.device)
@@ -3640,6 +3654,13 @@ export const usePhoneStore = defineStore('phone', {
         lockedUntil: 0,
       }
       this.isOpen = true
+    },
+    endDeviceSession(): void {
+      this.close()
+      if (this.deviceSessionToken !== null) {
+        this.deviceSessionToken = null
+        this.persistenceGeneration += 1
+      }
     },
     hydrateDevice(device: PhoneDevice): void {
       this.device = device
@@ -3654,22 +3675,59 @@ export const usePhoneStore = defineStore('phone', {
       )
     },
     saveDeviceNamespace(namespace: string, payload: unknown): void {
-      const previous = namespaceQueues.get(namespace) ?? Promise.resolve()
+      const imei = this.device?.imei
+      if (!imei) {
+        console.error(
+          `[Phone persistence] Could not save ${namespace} without an active device.`,
+        )
+        return
+      }
+      const generation = this.persistenceGeneration
+      const session = this.persistenceSession
+      const token = this.deviceSessionToken
+      const queuedPayload = cloneJsonData(payload)
+      const queueKey = `${session}:${generation}:${imei}:${namespace}`
+      const isCurrentScope = (): boolean =>
+        this.persistenceSession === session &&
+        this.persistenceGeneration === generation &&
+        this.device?.imei === imei &&
+        this.deviceSessionToken === token
+      const previous = namespaceQueues.get(queueKey) ?? Promise.resolve()
       const queued = previous.then(async () => {
+        if (!isCurrentScope()) return
         const response = await nuiCall<{ revision: number }>('device:save', {
+          imei,
           namespace,
-          payload,
+          payload: queuedPayload,
           revision: this.deviceRevisions[namespace] ?? 0,
+          sessionToken: token,
         })
-        if (response.success && response.data) {
-          this.deviceRevisions[namespace] = response.data.revision
+        if (
+          isCurrentScope() &&
+          response.success &&
+          Number.isInteger(response.data?.revision) &&
+          Number(response.data?.revision) >= 0
+        ) {
+          this.deviceRevisions[namespace] = Number(response.data?.revision)
         }
       })
       const tracked = queued.finally(() => {
-        if (namespaceQueues.get(namespace) === tracked)
-          namespaceQueues.delete(namespace)
+        if (namespaceQueues.get(queueKey) === tracked)
+          namespaceQueues.delete(queueKey)
       })
-      namespaceQueues.set(namespace, tracked)
+      namespaceQueues.set(queueKey, tracked)
+    },
+    async flushDevicePersistence(): Promise<void> {
+      const imei = this.device?.imei
+      if (!imei) return
+      const queuePrefix = `${this.persistenceSession}:${this.persistenceGeneration}:${imei}:`
+      while (true) {
+        const activeQueues = [...namespaceQueues.entries()]
+          .filter(([key]) => key.startsWith(queuePrefix))
+          .map(([, queue]) => queue)
+        if (!activeQueues.length) return
+        await Promise.all(activeQueues)
+      }
     },
     setCurrentPage(page: number, pageCount?: number): void {
       this.currentPage = clampPage(page, pageCount)
@@ -3695,7 +3753,11 @@ export const usePhoneStore = defineStore('phone', {
       key: K,
       value: PhonePreferencesV1['settings'][K],
     ): void {
-      this.preferences.settings[key] = value
+      this.preferences.settings[key] = (
+        key === 'phoneScale'
+          ? clampPhoneScale(Number(value))
+          : value
+      ) as PhonePreferencesV1['settings'][K]
       this.saveDeviceNamespace('settings', this.preferences)
     },
     setAlertVolumes(value: number): void {

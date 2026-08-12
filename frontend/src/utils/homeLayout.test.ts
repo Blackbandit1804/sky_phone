@@ -5,6 +5,7 @@ import {
   createDefaultHomeLayout,
   deleteHomePage,
   HOME_GRID_PAGE_SIZE,
+  homeKeyboardTarget,
   MAX_HOME_GRID_PAGES,
   moveHomeApp,
   parseHomeLayout,
@@ -132,6 +133,15 @@ describe('home layout', () => {
     expect(moved.grid[12]).toBe('mail')
     expect(moved.grid[0]).toBe('phone')
     expect(moved.grid[4]).toBe('notes')
+  })
+
+  it('provides bounded keyboard reorder targets without wrapping rows', () => {
+    expect(homeKeyboardTarget(defaults, 'grid', 1, 'right')).toBe(2)
+    expect(homeKeyboardTarget(defaults, 'grid', 3, 'right')).toBeNull()
+    expect(homeKeyboardTarget(defaults, 'grid', 0, 'up')).toBeNull()
+    expect(homeKeyboardTarget(defaults, 'grid', 0, 'down')).toBe(4)
+    expect(homeKeyboardTarget(defaults, 'dock', 1, 'left')).toBe(0)
+    expect(homeKeyboardTarget(defaults, 'dock', 1, 'down')).toBeNull()
   })
 
   it('shifts occupied grid slots instead of replacing their apps', () => {

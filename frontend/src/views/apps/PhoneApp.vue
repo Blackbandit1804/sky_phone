@@ -3729,7 +3729,7 @@ onBeforeUnmount(() => {
     box-shadow: inset 0 0 0 1px rgba(142, 142, 147, 0.18);
   }
 
-  .phone-recent-row:has(button:hover),
+  .phone-recent-row:hover,
   .phone-my-card:hover,
   .phone-contact-row:hover {
     border-radius: 14px;
