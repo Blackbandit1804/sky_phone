@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Camera, Pause, Play } from 'lucide-vue-next'
+import { Camera, Pause, Play, TriangleAlert } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
+import { usePhoneStore } from '@/stores/phone'
 import type { SmsMessageType } from '@/types/messages'
 
 type MessageAttachment = {
@@ -11,7 +12,9 @@ type MessageAttachment = {
 }
 
 const props = defineProps<{ message: MessageAttachment }>()
+const phone = usePhoneStore()
 const playing = ref(false)
+const playbackFailed = ref(false)
 const video = ref<HTMLVideoElement>()
 
 const imageStyles: Record<string, string> = {
@@ -55,9 +58,18 @@ async function toggleVideo(): Promise<void> {
     playing.value = !playing.value
     return
   }
-  if (video.value.paused) await video.value.play()
-  else video.value.pause()
-  playing.value = !video.value.paused
+  if (!video.value.paused) {
+    video.value.pause()
+    return
+  }
+  playbackFailed.value = false
+  try {
+    await video.value.play()
+  } catch (error) {
+    playing.value = false
+    playbackFailed.value = true
+    console.error('[Messages] Could not play the attached video.', error)
+  }
 }
 
 function durationLabel(milliseconds: number | null): string {
@@ -85,8 +97,13 @@ function durationLabel(milliseconds: number | null): string {
     v-else-if="message.message_type === 'video'"
     type="button"
     class="messages-attachment messages-attachment--video"
-    :class="{ playing }"
+    :class="{ playing, 'messages-attachment--failed': playbackFailed }"
     :style="{ background }"
+    :aria-label="
+      playbackFailed
+        ? phone.t('Apps.photos.errors.unsupported')
+        : phone.t('Apps.photos.videoAlt')
+    "
     @click="toggleVideo"
   >
     <video
@@ -95,15 +112,25 @@ function durationLabel(milliseconds: number | null): string {
       :src="mediaUrl"
       playsinline
       preload="metadata"
+      @play="playing = true"
+      @pause="playing = false"
       @ended="playing = false"
+      @error="playbackFailed = true"
     />
     <span
-      ><Pause v-if="playing" :size="22" fill="currentColor" /><Play
+      ><TriangleAlert v-if="playbackFailed" :size="22" /><Pause
+        v-else-if="playing"
+        :size="22"
+        fill="currentColor"
+      /><Play
         v-else
         :size="22"
         fill="currentColor"
     /></span>
-    <small>{{ durationLabel(message.media_duration_ms) }}</small>
+    <small v-if="playbackFailed">{{
+      phone.t('Apps.photos.errors.unsupported')
+    }}</small>
+    <small v-else>{{ durationLabel(message.media_duration_ms) }}</small>
   </button>
   <div v-else class="messages-attachment messages-attachment--gif">
     <img

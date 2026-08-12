@@ -17,13 +17,16 @@ import type { WidgetKind, WidgetSettings, WidgetSize } from '@/types/widgets'
 import {
   deleteHomePage as previewHomePageDelete,
   HOME_GRID_PAGE_SIZE,
+  homeKeyboardTarget,
   MAX_HOME_GRID_PAGES,
   type HomeArea,
 } from '@/utils/homeLayout'
+import type { ReorderDirection } from '@/utils/keyboard'
 import {
   deleteWidgetPage as previewWidgetPageDelete,
   moveWidget as previewWidgetMove,
   WIDGET_GRID_COLUMNS,
+  widgetKeyboardTarget,
   widgetOccupiedCells,
 } from '@/utils/widgetLayout'
 
@@ -515,6 +518,14 @@ function stopWidgetDrag(): void {
   clearWidgetDragPreview()
 }
 
+function reorderWidget(id: string, direction: ReorderDirection): void {
+  const instance = widgets.layout.instances.find((widget) => widget.id === id)
+  if (!instance) return
+  const target = widgetKeyboardTarget(instance, direction)
+  if (!target) return
+  widgets.move(id, instance.page, target.column, target.row)
+}
+
 function removeWidget(id: string): void {
   widgets.remove(id)
   if (widgetActionId.value === id) widgetActionId.value = null
@@ -620,6 +631,21 @@ function stopHomeDrag(): void {
   draggingHomeApp.value = null
 }
 
+function reorderHomeApp(
+  area: HomeArea,
+  sourceIndex: number,
+  direction: ReorderDirection,
+): void {
+  const targetIndex = homeKeyboardTarget(
+    appStore.homeLayout,
+    area,
+    sourceIndex,
+    direction,
+  )
+  if (targetIndex === null) return
+  appStore.moveHomeApp(area, sourceIndex, area, targetIndex)
+}
+
 async function addHomePage(): Promise<void> {
   if (addingHomePage.value) return
   addingHomePage.value = true
@@ -704,6 +730,7 @@ watch(isEditablePage, (visible) => {
             @dragstart="startWidgetDrag"
             @menu="openWidgetMenu"
             @remove="removeWidget"
+            @reorder="reorderWidget"
           />
         </div>
       </section>
@@ -725,6 +752,7 @@ watch(isEditablePage, (visible) => {
           @dragstart="startWidgetDrag"
           @menu="openWidgetMenu"
           @remove="removeWidget"
+          @reorder="reorderWidget"
         />
         <TransitionGroup
           :name="
@@ -750,6 +778,7 @@ watch(isEditablePage, (visible) => {
               @dragstart="startHomeDrag('grid', cell.sourceIndex)"
               @edit="enterEditMode"
               @remove="removeHomeApp(cell.app.id)"
+              @reorder="reorderHomeApp('grid', cell.sourceIndex, $event)"
             />
             <div
               v-else
@@ -946,6 +975,7 @@ watch(isEditablePage, (visible) => {
             @dragstart="startHomeDrag('dock', appIndex)"
             @edit="enterEditMode"
             @remove="removeHomeApp(app.id)"
+            @reorder="reorderHomeApp('dock', appIndex, $event)"
           />
           <div
             v-else

@@ -447,6 +447,8 @@ watch(() => catalog.openRequests[props.app.id], flushOpenRequest, {
   right: auto;
   bottom: auto;
   left: 50%;
+  width: 827px;
+  height: 368px;
   width: 100cqh;
   height: 100cqw;
   transform: translate(-50%, -50%) rotate(90deg);

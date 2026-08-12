@@ -32,7 +32,7 @@ local attachment_assets = {
 local attachment_mimes = {
     gif = "image/gif",
     image = "image/jpeg",
-    video = "video/mp4",
+    video = "video/webm",
 }
 
 local function allowed_media_url(value)
@@ -208,7 +208,9 @@ local function validate_attachment(source, device, message_type, data)
         return nil
     end
     local payload = data.mediaAssetId
-    if not valid_attachment_asset(message_type, payload) then
+    local built_in_asset = valid_attachment_asset(message_type, payload)
+    local mime = built_in_asset and attachment_mimes[message_type] or nil
+    if not built_in_asset then
         if message_type == "gif" then
             return nil
         end
@@ -226,7 +228,7 @@ local function validate_attachment(source, device, message_type, data)
             params = { media_id, device.imei }
         end
         local rows = Bridge.Database.Query(([[
-            SELECT `url`, `media_type` FROM `sky_phone_media`
+            SELECT `url`, `media_type`, `mime_type` FROM `sky_phone_media`
             WHERE `id` = ? AND %s
             LIMIT 1
         ]]):format(condition), params)
@@ -241,6 +243,7 @@ local function validate_attachment(source, device, message_type, data)
             return nil
         end
         payload = media.url
+        mime = type(media.mime_type) == "string" and media.mime_type ~= "" and media.mime_type or nil
     end
     local duration = nil
     if message_type == "video" and data.mediaDurationMs ~= nil then
@@ -252,7 +255,7 @@ local function validate_attachment(source, device, message_type, data)
     end
     return {
         duration = duration,
-        mime = attachment_mimes[message_type],
+        mime = mime,
         payload = payload,
     }
 end

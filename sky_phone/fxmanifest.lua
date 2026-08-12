@@ -30,6 +30,7 @@ client_scripts {
     'source/bridge/client/housing.lua',
     'source/bridge/client/housing/*.lua',
     'source/client/animations.lua',
+    'source/client/focus.lua',
     'source/client/camera.lua',
     'source/client/garage.lua',
     'source/client/skyride.lua',
@@ -46,6 +47,7 @@ client_scripts {
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'config/config.lua',
+    'config/payphones.lua',
     'config/companies.lua',
     'config/media.lua',
     'config/music.lua',
@@ -66,6 +68,7 @@ server_scripts {
     'source/server/companies.lua',
     'source/server/custom_app_storage.lua',
     'source/server/sim.lua',
+    'source/server/payphones.lua',
     'source/server/calls.lua',
     'source/server/media.lua',
     'source/server/messages.lua',

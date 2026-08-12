@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import SpringboardWidget from '@/components/SpringboardWidget.vue'
 import { useWidgetsStore } from '@/stores/widgets'
+import type { ReorderDirection } from '@/utils/keyboard'
 import { WIDGET_HOME_ROWS, WIDGET_PAGE_ROWS } from '@/utils/widgetLayout'
 
 const props = defineProps<{
@@ -17,6 +18,7 @@ const emit = defineEmits<{
   dragstart: [id: string, event: PointerEvent]
   menu: [id: string]
   remove: [id: string]
+  reorder: [id: string, direction: ReorderDirection]
 }>()
 const widgets = useWidgetsStore()
 const rows = computed(() =>
@@ -51,6 +53,7 @@ const instances = computed(() =>
       @dragstart="emit('dragstart', instance.id, $event)"
       @menu="emit('menu', instance.id)"
       @remove="emit('remove', instance.id)"
+      @reorder="emit('reorder', instance.id, $event)"
     />
   </div>
 </template>

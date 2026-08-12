@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  MAX_LOCK_SCREEN_NOTIFICATIONS,
   useNotificationsStore,
   type PhoneNotificationDevice,
 } from '@/stores/notifications'
@@ -255,5 +256,27 @@ describe('notifications store', () => {
     expect(notifications.lockScreenNotifications[0].text).toBe('Saved message')
     notifications.clearLockScreen()
     expect(notifications.lockScreenNotifications).toEqual([])
+  })
+
+  it('bounds persisted lock screen history to the newest notifications', () => {
+    openPhone('111')
+    const notifications = useNotificationsStore()
+    const items = Array.from(
+      { length: MAX_LOCK_SCREEN_NOTIFICATIONS + 10 },
+      (_, index) => ({
+        appId: 'mail' as const,
+        id: `saved-${index}`,
+        text: `Message ${index}`,
+        title: 'Mail',
+      }),
+    )
+
+    notifications.hydrate({ items, version: 1 }, '111')
+
+    expect(notifications.lockScreenNotifications).toHaveLength(
+      MAX_LOCK_SCREEN_NOTIFICATIONS,
+    )
+    expect(notifications.lockScreenNotifications[0]?.id).toBe('saved-59')
+    expect(notifications.lockScreenNotifications.at(-1)?.id).toBe('saved-10')
   })
 })

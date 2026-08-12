@@ -406,6 +406,14 @@ Bridge.Callbacks.Register("sky_phone:sim:insert", function(source, data)
     return insert_sim(source, data.imei, data.confirmed == true)
 end)
 
+Bridge.Callbacks.Register("sky_phone:sim:picker-close", function(source)
+    if operation_locks[source] then
+        return { success = false, error = "operation_in_progress" }
+    end
+    pending_insertions[source] = nil
+    return { success = true }
+end)
+
 Bridge.Callbacks.Register("sky_phone:sim:eject", function(source)
     if not sim_cards_enabled then
         return { success = false, error = "disabled" }

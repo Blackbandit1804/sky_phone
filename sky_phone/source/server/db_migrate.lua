@@ -377,6 +377,7 @@ local schema = {
             { name = "url", type = "TEXT NOT NULL" },
             { name = "remote_id", type = "VARCHAR(128) NOT NULL" },
             { name = "media_type", type = "ENUM('photo', 'video') NOT NULL" },
+            { name = "mime_type", type = "VARCHAR(120) NULL" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
         },
         primaryKey = "id",
@@ -2523,6 +2524,37 @@ Bridge.Database.Query([[
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_darkchat_messages`
     MODIFY COLUMN `message_type` ENUM('text', 'emoji', 'gif', 'voice', 'image', 'video', 'share', 'system') NOT NULL DEFAULT 'text'
+]], {})
+Bridge.Database.Query([[
+    UPDATE `sky_phone_media`
+    SET `mime_type` = CASE
+        WHEN `media_type` = 'video' AND LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.webm' THEN 'video/webm'
+        WHEN `media_type` = 'video' AND LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.mp4' THEN 'video/mp4'
+        WHEN `media_type` = 'photo' AND LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.png' THEN 'image/png'
+        WHEN `media_type` = 'photo' AND LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.webp' THEN 'image/webp'
+        WHEN `media_type` = 'photo' AND (
+            LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.jpg'
+            OR LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.jpeg'
+        ) THEN 'image/jpeg'
+        ELSE NULL
+    END
+    WHERE `mime_type` IS NULL OR `mime_type` = ''
+]], {})
+Bridge.Database.Query([[
+    UPDATE `sky_phone_sms_messages` message
+    INNER JOIN `sky_phone_media` media ON media.`url` = message.`media_payload`
+    SET message.`media_mime` = media.`mime_type`
+    WHERE message.`message_type` = 'video'
+        AND media.`mime_type` IN ('video/webm', 'video/mp4')
+        AND (message.`media_mime` IS NULL OR message.`media_mime` <> media.`mime_type`)
+]], {})
+Bridge.Database.Query([[
+    UPDATE `sky_phone_darkchat_messages` message
+    INNER JOIN `sky_phone_media` media ON media.`url` = message.`media_payload`
+    SET message.`media_mime` = media.`mime_type`
+    WHERE message.`message_type` = 'video'
+        AND media.`mime_type` IN ('video/webm', 'video/mp4')
+        AND (message.`media_mime` IS NULL OR message.`media_mime` <> media.`mime_type`)
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_marketplace_images`

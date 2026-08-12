@@ -88,7 +88,11 @@ end
 for index = 1, #server_callbacks do
     local callback_name = server_callbacks[index]
     RegisterNUICallback(callback_name, function(data, cb)
-        local result = Bridge.Callbacks.Trigger("sky_phone:" .. callback_name, data or {})
+        if type(data) ~= "table" then
+            cb({ success = false, error = "invalid_request" })
+            return
+        end
+        local result = Bridge.Callbacks.Trigger("sky_phone:" .. callback_name, data)
         if not result then
             cb({ success = false, error = "request_failed" })
             return

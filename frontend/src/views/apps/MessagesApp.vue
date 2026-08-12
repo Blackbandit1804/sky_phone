@@ -54,6 +54,7 @@ import { useMessagesStore } from '@/stores/messages'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
+import { handleEnterAction } from '@/utils/keyboard'
 import { sortContactsByMessageRecency } from '@/utils/messages'
 import type {
   GifSearchResult,
@@ -1496,7 +1497,7 @@ onBeforeUnmount(() => {
       :value="draft"
       :disabled="sending"
       @input="draft = eventValue($event)"
-      @keydown.enter.exact.prevent="sendTextMessage"
+      @keydown.enter.exact="handleEnterAction($event, sendTextMessage)"
     >
       <template #left>
         <k-toolbar-pane class="ios:h-10 messages-messagebar__tools">
