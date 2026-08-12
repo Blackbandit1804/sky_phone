@@ -4091,7 +4091,6 @@ function easyShareHistoryForScenario(testScenario) {
 }
 
 app.post('/api/:endpoint', (request, response) => {
-  console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
   const testScenario = String(request.body._testScenario ?? '')
   if (lifecycleEndpoints.has(endpoint)) {
@@ -7235,7 +7234,7 @@ app.post('/api/:endpoint', (request, response) => {
             : messageType === 'gif'
               ? 'image/gif'
               : messageType === 'video'
-                ? 'video/mp4'
+                ? 'video/webm'
                 : null,
       media_payload:
         messageType === 'voice'

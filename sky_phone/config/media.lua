@@ -1,11 +1,11 @@
 Config.Media = {
-    GiphyApiKey = "",
+    GiphyApiKeyConvar = "sky_phone_giphy_api_key",
     GifPageSize = 24,
     GifRating = "pg-13",
     UrlMaxLength = 2048,
     AllowedGifHosts = { "giphy.com" },
     FiveManage = {
-        ApiKey = "e4UZ9y39JfkxHoZMAgRUVK6KMQsNCKPJ", -- Dashboard -> Tokens -> create a token with Media access.
+        ApiKeyConvar = "sky_phone_fivemanage_api_key",
         BaseUrl = "https://api.fivemanage.com/api/v3/file",
         RequestTimeoutMs = 10000,
         UploadTimeoutMs = 25000,

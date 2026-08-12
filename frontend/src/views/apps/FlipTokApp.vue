@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   Send,
   Share2,
+  TriangleAlert,
   UserRound,
   Video,
   X,
@@ -116,6 +117,7 @@ const publishing = ref(false)
 const feedback = ref('')
 const likedPulseId = ref<string | null>(null)
 const reactionPulse = ref<{ id: string; kind: 'like' | 'save' } | null>(null)
+const playbackFailedIds = ref(new Set<string>())
 const profileDraft = ref({
   accountType: 'person',
   bio: '',
@@ -250,11 +252,66 @@ async function confirmLogout(): Promise<void> {
 }
 
 function setVideoElement(id: string, element: unknown): void {
-  if (element instanceof HTMLVideoElement) videoElements.set(id, element)
+  if (element instanceof HTMLVideoElement) {
+    videoElements.set(id, element)
+    return
+  }
+  videoElements.delete(id)
+  setPlaybackFailed(id, false)
 }
 
 function setMusicElement(id: string, element: unknown): void {
-  if (element instanceof HTMLAudioElement) musicElements.set(id, element)
+  if (element instanceof HTMLAudioElement) {
+    musicElements.set(id, element)
+    return
+  }
+  musicElements.delete(id)
+}
+
+function setPlaybackFailed(id: string, failed: boolean): void {
+  const next = new Set(playbackFailedIds.value)
+  if (failed) next.add(id)
+  else next.delete(id)
+  playbackFailedIds.value = next
+}
+
+async function playFeedVideo(
+  id: string,
+  element: HTMLVideoElement,
+  showNotice = false,
+): Promise<boolean> {
+  setPlaybackFailed(id, false)
+  try {
+    await element.play()
+  } catch (error) {
+    setPlaybackFailed(id, true)
+    console.error(`[FlipTok] Could not play video ${id}.`, error)
+    if (showNotice) notify(t('errors.video_not_found'))
+    return false
+  }
+
+  const music = musicElements.get(id)
+  if (music) {
+    try {
+      await music.play()
+    } catch (error) {
+      console.error(`[FlipTok] Could not play music for video ${id}.`, error)
+    }
+  }
+  return true
+}
+
+function handleFeedVideoError(id: string, event: Event): void {
+  setPlaybackFailed(id, true)
+  const code = (event.currentTarget as HTMLVideoElement).error?.code
+  console.error(
+    `[FlipTok] Video ${id} could not be decoded or loaded${code ? ` (media error ${code})` : ''}.`,
+  )
+}
+
+function retryPlayback(video: FlipTokVideo): void {
+  const element = videoElements.get(video.id)
+  if (element) void playFeedVideo(video.id, element, true)
 }
 
 function chooseMusicTrack(trackId: string): void {
@@ -305,10 +362,8 @@ function observeVideos(): void {
               otherAudio?.pause()
             }
           })
-          void video.play().catch(() => undefined)
           const id = video.dataset.id
-          const music = id ? musicElements.get(id) : undefined
-          if (music) void music.play().catch(() => undefined)
+          if (id) void playFeedVideo(id, video)
           if (id) void nuiCall('fliptok:view', { id })
         } else {
           video.pause()
@@ -327,8 +382,7 @@ function togglePlayback(video: FlipTokVideo): void {
   if (!element) return
   const music = musicElements.get(video.id)
   if (element.paused) {
-    void element.play()
-    if (music) void music.play().catch(() => undefined)
+    void playFeedVideo(video.id, element, true)
   } else {
     element.pause()
     music?.pause()
@@ -339,6 +393,7 @@ function prepareFeedVideo(
   video: FlipTokVideo,
   element: HTMLVideoElement,
 ): void {
+  setPlaybackFailed(video.id, false)
   element.volume = (Number(video.original_volume) || 0) / 100
   const start = Math.min(
     (Number(video.trim_start_ms) || 0) / 1000,
@@ -943,6 +998,7 @@ onBeforeUnmount(() => {
             @timeupdate="
               enforceVideoTrim(video, $event.target as HTMLVideoElement)
             "
+            @error="handleFeedVideoError(video.id, $event)"
           />
           <audio
             v-if="video.music_url"
@@ -959,6 +1015,17 @@ onBeforeUnmount(() => {
             @click="handleVideoClick(video)"
             @dblclick.prevent="handleVideoDoubleClick(video)"
           />
+          <button
+            v-if="playbackFailedIds.has(video.id)"
+            type="button"
+            class="video-playback-fallback"
+            :aria-label="`${t('errors.video_not_found')} ${phone.t('Common.start')}`"
+            @click.stop="retryPlayback(video)"
+          >
+            <TriangleAlert />
+            <strong>{{ t('errors.video_not_found') }}</strong>
+            <span>{{ phone.t('Common.start') }}</span>
+          </button>
           <Transition name="double-like">
             <Heart
               v-if="likedPulseId === video.id"
@@ -1931,6 +1998,36 @@ onBeforeUnmount(() => {
     transparent 36%,
     rgba(0, 0, 0, 0.74)
   );
+}
+.video-playback-fallback {
+  position: absolute;
+  z-index: 10;
+  top: 50%;
+  left: 50%;
+  width: min(230px, 72%);
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgb(18 18 20 / 88%);
+  color: #fff;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+.video-playback-fallback svg {
+  width: 28px;
+  height: 28px;
+  color: #ff9f0a;
+}
+.video-playback-fallback strong {
+  font-size: 12px;
+}
+.video-playback-fallback span {
+  color: #64a8ff;
+  font-size: 11px;
+  font-weight: 700;
 }
 .video-copy {
   position: absolute;
