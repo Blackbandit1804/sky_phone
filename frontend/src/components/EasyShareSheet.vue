@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { kButton, kGlass, kLink, kList, kListInput, kListItem, kPreloader, kSheet } from 'konsta/vue'
+import { kButton, kGlass, kLink, kList, kListItem, kPreloader, kSheet } from 'konsta/vue'
 import {
   Check,
   Clock3,
   History,
   MessageCircle,
   Share2,
-  ShieldCheck,
   UserRound,
   X,
 } from 'lucide-vue-next'
@@ -26,7 +25,6 @@ import type {
   EasyShareChatApp,
   EasyShareDestinationApp,
   EasyShareTransfer,
-  EasyShareVisibility,
 } from '@/types/easyshare'
 import {
   easyShareDestinationAppIds,
@@ -48,7 +46,6 @@ const dragging = ref(false)
 let dragPointerId: number | null = null
 let dragStartTime = 0
 let dragStartY = 0
-const visibilityOptions: EasyShareVisibility[] = ['everyone', 'contacts', 'hidden']
 const app = computed(() =>
   easyShare.payload ? getPhoneApp(easyShare.payload.appId) : undefined,
 )
@@ -333,23 +330,10 @@ async function openTransfer(transfer: EasyShareTransfer): Promise<void> {
 
       <section v-else-if="easyShare.nearbyOpened" class="easyshare-detail">
         <div class="easyshare-detail__toolbar">
-          <k-link component="button" @click="easyShare.nearbyOpened = false">{{ phone.t('Common.back') }}</k-link>
+          <span aria-hidden="true"></span>
           <strong>{{ label('nearby') }}</strong>
           <k-link component="button" @click="easyShare.showHistory"><History :size="18" /></k-link>
         </div>
-        <k-list inset strong class="easyshare-visibility">
-          <k-list-input
-            type="select"
-            :label="label('visibility')"
-            :value="easyShare.visibility"
-            @change="easyShare.setVisibility(($event.target as HTMLSelectElement).value as EasyShareVisibility)"
-          >
-            <template #media><ShieldCheck :size="18" /></template>
-            <option v-for="option in visibilityOptions" :key="option" :value="option">
-              {{ label(`visibilityOptions.${option}`) }}
-            </option>
-          </k-list-input>
-        </k-list>
 
         <k-glass v-if="easyShare.incomingTransfer" class="easyshare-incoming">
           <UserRound :size="28" />
