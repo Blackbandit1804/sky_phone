@@ -2910,6 +2910,7 @@ const defaultLocales: LocaleTree = {
       title: 'Title',
       titlePlaceholder: 'What is planned?',
       date: 'Date',
+      allDay: 'All-day',
       starts: 'Starts',
       ends: 'Ends',
       reminder: 'Reminder',

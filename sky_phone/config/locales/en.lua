@@ -1102,7 +1102,7 @@ Locales["en"] = {
                 searchPlaceholder = "Search events", previousMonth = "Previous month", nextMonth = "Next month",
                 eyebrow = "Your time. Clearly planned.", schedule = "Schedule", event = "Event", appointment = "Appointment",
                 newEvent = "New event", editEvent = "Edit event", deleteEvent = "Delete event", details = "Event details",
-                title = "Title", titlePlaceholder = "What is planned?", date = "Date", starts = "Starts", ends = "Ends",
+                title = "Title", titlePlaceholder = "What is planned?", date = "Date", allDay = "All-day", starts = "Starts", ends = "Ends",
                 reminder = "Reminder", reminderNotification = "Upcoming: {title}", note = "Note",
                 notePlaceholder = "Add details, an address or anything to remember...", noEvents = "Nothing planned",
                 noEventsBody = "This day is still free. Add an event whenever you are ready.",
