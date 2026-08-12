@@ -4588,6 +4588,9 @@ button {
 .messages-thread-page--emoji {
   padding-bottom: 288px !important;
 }
+.messages-thread-page--share {
+  padding-bottom: 260px !important;
+}
 .messages-chat-header {
   position: fixed;
   z-index: 35;
@@ -4914,7 +4917,7 @@ button {
   position: fixed;
   z-index: 43;
   right: 12px;
-  bottom: 65px;
+  bottom: 89px;
   left: 12px;
   padding: 7px;
   border: 1px solid rgb(255 255 255 / 72%);

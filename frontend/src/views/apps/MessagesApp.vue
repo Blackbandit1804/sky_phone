@@ -1120,7 +1120,10 @@ onBeforeUnmount(() => {
   <k-page
     v-else
     class="messages-page messages-thread-page"
-    :class="{ 'messages-thread-page--emoji': attachmentPanelOpen }"
+    :class="{
+      'messages-thread-page--emoji': attachmentPanelOpen,
+      'messages-thread-page--share': Boolean(shareDraft),
+    }"
     :aria-label="activeTitle"
   >
     <header class="messages-chat-header">
