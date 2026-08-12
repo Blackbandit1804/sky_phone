@@ -239,6 +239,7 @@ function onKeydown(event: KeyboardEvent): void {
   if (!visible.value) return
   if (event.key === 'Escape') {
     event.preventDefault()
+    event.stopImmediatePropagation()
     void close()
     return
   }
@@ -256,7 +257,7 @@ function onKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   prepareButtonSounds()
   window.addEventListener('message', onMessage)
-  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('keydown', onKeydown, true)
   ticker = window.setInterval(() => {
     now.value = Date.now()
   }, 250)
@@ -264,7 +265,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('message', onMessage)
-  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('keydown', onKeydown, true)
   if (ticker !== undefined) window.clearInterval(ticker)
   for (const sound of buttonSounds) {
     sound.pause()
@@ -399,6 +400,7 @@ onBeforeUnmount(() => {
     rgb(0 0 0 / 84%) 72%
   );
   font-family: 'Segoe UI', Arial, sans-serif;
+  pointer-events: auto;
   user-select: none;
 }
 

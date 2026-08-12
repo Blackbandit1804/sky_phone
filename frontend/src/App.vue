@@ -237,6 +237,9 @@ const REFERENCE_VIEWPORT_WIDTH = 1920
 const REFERENCE_VIEWPORT_HEIGHT = 1080
 const PHONE_BASE_SCALE = 0.69
 const DEVELOPMENT_PHONE_SCALE = 1.25
+const PHONE_PORTRAIT_WIDTH = 390
+const PHONE_PORTRAIT_HEIGHT = 844
+const MIN_PRODUCTION_PHONE_ZOOM = 260 / PHONE_PORTRAIT_WIDTH
 const isDevelopment = import.meta.env.DEV
 
 const phone = usePhoneStore()
@@ -291,11 +294,34 @@ const phoneBaseZoom = computed(
     viewportScale.value *
     (isDevelopment ? DEVELOPMENT_PHONE_SCALE : PHONE_BASE_SCALE),
 )
+const phoneZoom = computed(() => {
+  const preferred =
+    phoneBaseZoom.value * (phone.preferences.settings.phoneScale / 100)
+  if (isDevelopment) return preferred
+
+  const edgeGap = 24 * viewportScale.value
+  const shellWidth = phone.cameraLandscape
+    ? PHONE_PORTRAIT_HEIGHT
+    : PHONE_PORTRAIT_WIDTH
+  const shellHeight = phone.cameraLandscape
+    ? PHONE_PORTRAIT_WIDTH
+    : PHONE_PORTRAIT_HEIGHT
+  const viewportMaximum = Math.max(
+    0,
+    Math.min(
+      (window.innerWidth - edgeGap) / shellWidth,
+      (window.innerHeight - edgeGap) / shellHeight,
+    ),
+  )
+  return Math.min(
+    viewportMaximum,
+    Math.max(MIN_PRODUCTION_PHONE_ZOOM, preferred),
+  )
+})
 const phoneResolutionStyle = computed<CSSProperties>(() => ({
   '--phone-edge-gap': `${24 * viewportScale.value}px`,
   '--phone-stack-gap': `${16 * viewportScale.value}px`,
-  '--phone-zoom':
-    phoneBaseZoom.value * (phone.preferences.settings.phoneScale / 100),
+  '--phone-zoom': phoneZoom.value,
 }))
 const phoneStageStyle = computed<CSSProperties>(() => ({
   ...phoneResolutionStyle.value,
@@ -315,6 +341,8 @@ let pendingCompaniesChange: CompanyChangedPayload | null = null
 let unlockTimer: number | undefined
 let passcodeLockTimer: number | undefined
 let unlockedServicesFrame: number | undefined
+let phoneClosePending = false
+let simPickerClosePending = false
 
 function getViewportScale(): number {
   const heightScale = window.innerHeight / REFERENCE_VIEWPORT_HEIGHT
@@ -505,7 +533,7 @@ function onMessage(event: MessageEvent<AppMessage>): void {
     hydratePhone(event.data.data as PhoneOpenPayload)
   } else if (event.data?.type === 'app:close') {
     activitySuspended.value = false
-    phone.close()
+    phone.endDeviceSession()
   } else if (event.data?.type === 'app:suspend') {
     activitySuspended.value = true
   } else if (event.data?.type === 'app:resume') {
@@ -899,14 +927,69 @@ function onMessage(event: MessageEvent<AppMessage>): void {
   }
 }
 
+async function closeSimPicker(): Promise<void> {
+  if (simPickerClosePending || !simPicker.value) return
+  simPickerClosePending = true
+  const closingPicker = simPicker.value
+  try {
+    const response = await nuiCall('sim:picker-close')
+    if (response.success && simPicker.value === closingPicker) {
+      simPicker.value = null
+    }
+  } finally {
+    simPickerClosePending = false
+  }
+}
+
+async function closePhone(): Promise<void> {
+  if (phoneClosePending || !phone.isOpen) return
+  phoneClosePending = true
+  const closingGeneration = phone.persistenceGeneration
+  const closingImei = phone.device?.imei ?? null
+  const closingToken = phone.deviceSessionToken
+  try {
+    await phone.flushDevicePersistence()
+    if (
+      !phone.isOpen ||
+      phone.persistenceGeneration !== closingGeneration ||
+      (phone.device?.imei ?? null) !== closingImei ||
+      phone.deviceSessionToken !== closingToken
+    ) {
+      return
+    }
+    const response = await nuiCall('close')
+    if (
+      !response.success ||
+      !phone.isOpen ||
+      phone.persistenceGeneration !== closingGeneration ||
+      (phone.device?.imei ?? null) !== closingImei ||
+      phone.deviceSessionToken !== closingToken
+    ) {
+      return
+    }
+    phone.endDeviceSession()
+  } finally {
+    phoneClosePending = false
+  }
+}
+
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !phone.isOpen || activitySuspended.value) return
-  if (controlCenterOpened.value) {
-    controlCenterOpened.value = false
+  if (event.key !== 'Escape') return
+  if (simPicker.value) {
+    event.preventDefault()
+    void closeSimPicker()
     return
   }
-  phone.close()
-  void nuiCall('close')
+
+  queueMicrotask(() => {
+    if (event.defaultPrevented || !phone.isOpen || activitySuspended.value)
+      return
+    if (controlCenterOpened.value) {
+      controlCenterOpened.value = false
+      return
+    }
+    void closePhone()
+  })
 }
 
 function onSystemColorSchemeChange(event: MediaQueryListEvent): void {
@@ -1051,7 +1134,7 @@ onMounted(() => {
   window.addEventListener('resize', updateViewportScale)
   systemColorScheme.addEventListener('change', onSystemColorSchemeChange)
   phone.setSystemDarkMode(systemColorScheme.matches)
-  void nuiCall('ui:ready')
+  void nuiCall('ui:ready', { protocolVersion: 1 })
   clockTicker = setInterval(() => {
     const now = Date.now()
     for (const alarm of clock.dueAlarms(now)) {
@@ -1116,11 +1199,9 @@ watch(
 )
 
 watch(
-  [() => notifications.requiresAttention, () => calls.activeCall],
-  ([requiresAttention, activeCall]) => {
-    void nuiCall('notification:focus', {
-      active: requiresAttention || activeCall !== null,
-    })
+  () => notifications.requiresAttention,
+  (requiresAttention) => {
+    void nuiCall('notification:focus', { active: requiresAttention })
   },
 )
 
@@ -1204,7 +1285,7 @@ onBeforeUnmount(() => {
     v-if="simPicker"
     :choices="simPicker.choices"
     :number="simPicker.number"
-    @close="simPicker = null"
+    @close="closeSimPicker"
   />
   <Transition name="phone-lift" appear>
     <main
@@ -1263,7 +1344,9 @@ onBeforeUnmount(() => {
                 :style="phoneDisplayStyle"
                 :class="{
                   dark: phone.isDarkMode,
+                  'phone-app--darkchat': route.params.appId === 'darkchat',
                   'phone-app--light': !phone.isDarkMode,
+                  'phone-app--messages': route.params.appId === 'messages',
                   [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
                   'phone-app--unlocking': isUnlocking,
                 }"

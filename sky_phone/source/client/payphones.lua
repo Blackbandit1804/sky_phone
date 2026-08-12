@@ -6,6 +6,7 @@ local active_call_state = nil
 local active_call_number = nil
 local active_call_elapsed_seconds = 0
 local active_call_elapsed_updated_at = 0
+local active_call_payload = nil
 local call_channel = 0
 local replacement_prop = nil
 local hidden_prop = nil
@@ -360,11 +361,20 @@ local function booth_payload(booth)
     }
 end
 
+local function payphone_open_payload()
+    return {
+        currency = Config.Payphones.Currency,
+        maxNumberLength = Config.Sim.NumberLength,
+        pricePerSecond = Config.Payphones.PricePerSecond,
+        locales = get_locale().Nui.Payphone,
+    }
+end
+
 local function close_payphone()
     local was_open = payphone_open
     payphone_open = false
     if was_open then
-        SetNuiFocus(false, false)
+        TriggerEvent("sky_phone:client:setPayphoneFocus", false)
         SendNUIMessage({ type = "payphone:close" })
     end
     if not active_call_id then
@@ -418,6 +428,7 @@ local function apply_active_call_state(data)
         active_call_elapsed_seconds = 0
         active_call_elapsed_updated_at = 0
     end
+    active_call_payload = data
 end
 
 local function clear_active_call_state()
@@ -426,6 +437,7 @@ local function clear_active_call_state()
     active_call_number = nil
     active_call_elapsed_seconds = 0
     active_call_elapsed_updated_at = 0
+    active_call_payload = nil
     hangup_requested = false
 end
 
@@ -435,48 +447,51 @@ local function open_payphone(booth)
     end
     active_booth = booth
     payphone_open = true
-    SetNuiFocus(true, true)
+    TriggerEvent("sky_phone:client:setPayphoneFocus", true)
     SendNUIMessage({
         type = "payphone:open",
-        data = {
-            currency = Config.Payphones.Currency,
-            maxNumberLength = Config.Sim.NumberLength,
-            pricePerSecond = Config.Payphones.PricePerSecond,
-            locales = get_locale().Nui.Payphone,
-        },
+        data = payphone_open_payload(),
     })
 end
 
 RegisterNUICallback("payphone:dial", function(data, cb)
-    if not payphone_open or not active_booth or active_call_id then
+    if type(data) ~= "table" or not payphone_open or not active_booth or active_call_id then
         cb({ success = false, error = "invalid_request" })
         return
     end
     local payload = booth_payload(active_booth)
-    payload.phoneNumber = type(data) == "table" and data.phoneNumber or nil
+    payload.phoneNumber = data.phoneNumber
     local result = Bridge.Callbacks.Trigger("sky_phone:payphone:dial", payload)
-    local call_started = result and result.success and result.data
+    local call_started = type(result) == "table" and result.success and type(result.data) == "table"
         and (result.data.state == "ringing" or result.data.state == "connected")
     if call_started then
         apply_active_call_state(result.data)
     end
-    cb(result or { success = false, error = "request_failed" })
+    cb(type(result) == "table" and result or { success = false, error = "request_failed" })
     if call_started then
         close_payphone()
         start_call_visuals()
     end
 end)
 
-RegisterNUICallback("payphone:hangup", function(_, cb)
+RegisterNUICallback("payphone:hangup", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     if not active_call_id then
         cb({ success = false, error = "call_not_found" })
         return
     end
     local result = Bridge.Callbacks.Trigger("sky_phone:payphone:hangup", { id = active_call_id })
-    cb(result or { success = false, error = "request_failed" })
+    cb(type(result) == "table" and result or { success = false, error = "request_failed" })
 end)
 
-RegisterNUICallback("payphone:close", function(_, cb)
+RegisterNUICallback("payphone:close", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     if active_call_id then
         Bridge.Callbacks.Trigger("sky_phone:payphone:hangup", { id = active_call_id })
     end
@@ -485,7 +500,7 @@ RegisterNUICallback("payphone:close", function(_, cb)
 end)
 
 RegisterNetEvent("sky_phone:payphone:state", function(data)
-    if type(data) ~= "table" then
+    if type(data) ~= "table" or type(data.id) ~= "string" or type(data.state) ~= "string" then
         return
     end
     if data.state == "ringing" or data.state == "connected" then
@@ -504,6 +519,24 @@ RegisterNetEvent("sky_phone:payphone:state", function(data)
         play_hangup_visuals()
     end
     SendNUIMessage({ type = "payphone:state", data = data })
+end)
+
+AddEventHandler("sky_phone:client:nuiReady", function()
+    if payphone_open then
+        TriggerEvent("sky_phone:client:setPayphoneFocus", true)
+        SendNUIMessage({ type = "payphone:open", data = payphone_open_payload() })
+    else
+        TriggerEvent("sky_phone:client:setPayphoneFocus", false)
+        SendNUIMessage({ type = "payphone:close" })
+    end
+    if active_call_payload then
+        local payload = {}
+        for key, value in pairs(active_call_payload) do
+            payload[key] = value
+        end
+        payload.elapsedSeconds = current_call_elapsed_seconds()
+        SendNUIMessage({ type = "payphone:state", data = payload })
+    end
 end)
 
 CreateThread(function()
@@ -625,9 +658,7 @@ AddEventHandler("onResourceStop", function(resource_name)
     if resource_name ~= GetCurrentResourceName() then
         return
     end
-    if payphone_open then
-        SetNuiFocus(false, false)
-    end
+    TriggerEvent("sky_phone:client:setPayphoneFocus", false)
     leave_call_voice()
     stop_call_visuals()
     clear_active_call_state()

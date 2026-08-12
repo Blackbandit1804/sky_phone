@@ -1,9 +1,17 @@
 local is_open = false
 local open_requested = false
 local notification_focus = false
+local call_focus = false
+local payphone_focus = false
+local camera_active = false
+local camera_nui_focused = true
 local device_payload = nil
 local sim_picker_open = false
+local sim_picker_payload = nil
+local active_call_payload = nil
 local call_channel = 0
+local nui_generation = 0
+local activity_suspended = false
 
 Bridge.Debug("debug", "[sky_phone] Client script initialized.", { always = true })
 
@@ -256,6 +264,46 @@ local function get_locale()
     return Locales[Config.Bridge.Locale] or Locales["en"]
 end
 
+local function update_nui_focus()
+    local focus = SkyPhoneFocus.Resolve({
+        activity_suspended = activity_suspended,
+        call_focus = call_focus,
+        camera_active = camera_active,
+        camera_nui_focused = camera_nui_focused,
+        is_open = is_open,
+        notification_focus = notification_focus,
+        payphone_focus = payphone_focus,
+        sim_picker_open = sim_picker_open,
+    })
+    SetNuiFocus(focus.focused, focus.focused)
+    SetNuiFocusKeepInput(focus.keep_input)
+    TriggerEvent("sky_phone:client:cameraFocusApplied", {
+        active = camera_active,
+        focused = focus.focused,
+        gameInput = focus.keep_input,
+    })
+end
+
+AddEventHandler("sky_phone:client:setSuspended", function(suspended)
+    activity_suspended = suspended == true
+    update_nui_focus()
+end)
+
+AddEventHandler("sky_phone:client:setPayphoneFocus", function(focused)
+    payphone_focus = focused == true
+    update_nui_focus()
+end)
+
+AddEventHandler("sky_phone:client:setCameraFocus", function(data)
+    if type(data) ~= "table" or type(data.active) ~= "boolean" or type(data.nuiFocused) ~= "boolean" then
+        Bridge.Debug("error", "[sky_phone] Rejected invalid camera focus claim.")
+        return
+    end
+    camera_active = data.active
+    camera_nui_focused = data.nuiFocused
+    update_nui_focus()
+end)
+
 local function send_open_message()
     if not device_payload then
         return
@@ -279,20 +327,30 @@ local function open_phone()
     send_open_message()
 end
 
-local function close_phone()
+local function close_phone(close_device_session)
+    local was_requested = open_requested
+    local was_open = is_open
     open_requested = false
+    call_focus = false
+    activity_suspended = false
     TriggerEvent("sky_phone:animation:phone", false)
-    if not is_open then
-        return
-    end
-
     is_open = false
-    SkyPhoneApps.SetPhoneOpen(false)
-    TriggerEvent("sky_phone:nuiClosed")
-    SetNuiFocus(notification_focus or sim_picker_open, notification_focus or sim_picker_open)
-    SendNUIMessage({ type = "app:close" })
-    Bridge.Callbacks.Trigger("sky_phone:device:close", {})
+    if was_open then
+        SkyPhoneApps.SetPhoneOpen(false)
+        TriggerEvent("sky_phone:nuiClosed")
+    end
+    update_nui_focus()
+    if was_requested or was_open then
+        SendNUIMessage({ type = "app:close" })
+        if close_device_session ~= false then
+            Bridge.Callbacks.Trigger("sky_phone:device:close", {})
+        end
+    end
 end
+
+AddEventHandler("sky_phone:client:forceClose", function()
+    close_phone()
+end)
 
 local function leave_call_voice()
     if call_channel == 0 then
@@ -337,24 +395,58 @@ RegisterNetEvent("sky_phone:testdata:feedback", function(success, detail)
     Bridge.Framework.Notify("iFruit", message, success and "success" or "error", 7000)
 end)
 
-RegisterNUICallback("ui:ready", function(_, cb)
+RegisterNUICallback("ui:ready", function(data, cb)
+    if type(data) ~= "table" or data.protocolVersion ~= 1 then
+        cb({ success = false, error = "unsupported_protocol" })
+        return
+
+    end
+    nui_generation = nui_generation + 1
+    -- Browser state is recreated on a CEF reload. A notification focus claim
+    -- cannot survive unless its notification is replayed as part of this handshake.
+    notification_focus = false
     Bridge.Debug("debug", "[sky_phone] NUI reported ready.", { always = true })
-    TriggerEvent("sky_phone:client:nuiReady")
     SkyPhoneApps.SendCatalog()
     if open_requested and device_payload then
         send_open_message()
     end
+    if active_call_payload then
+        SendNUIMessage({ type = "call:state", data = active_call_payload })
+    end
+    if sim_picker_open and sim_picker_payload then
+        SendNUIMessage({ type = "sim:picker", data = sim_picker_payload })
+    else
+        SendNUIMessage({ type = "sim:picker-close" })
+    end
 
-    cb({ success = true })
+    update_nui_focus()
+    TriggerEvent("sky_phone:client:nuiReady", {
+        generation = nui_generation,
+        protocolVersion = 1,
+    })
+
+    cb({
+        success = true,
+        data = {
+            generation = nui_generation,
+            protocolVersion = 1,
+        },
+    })
 end)
 
-RegisterNUICallback("ui:opened", function(_, cb)
+RegisterNUICallback("ui:opened", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     if not open_requested or not device_payload then
         Bridge.Debug(
             "warn",
             "[sky_phone] Ignored a NUI open confirmation without a pending device open.",
             { always = true }
         )
+        SendNUIMessage({ type = "app:close" })
+        update_nui_focus()
         cb({ success = false, error = "open_not_requested" })
         return
     end
@@ -362,29 +454,49 @@ RegisterNUICallback("ui:opened", function(_, cb)
     is_open = true
     SkyPhoneApps.SetPhoneOpen(true)
     notification_focus = false
-    SetNuiFocus(true, true)
+    call_focus = false
+    update_nui_focus()
     TriggerEvent("sky_phone:animation:phone", true)
     cb({ success = true })
 end)
 
-RegisterNUICallback("close", function(_, cb)
+RegisterNUICallback("close", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     close_phone()
     cb({ success = true })
 end)
 
 RegisterNUICallback("notification:focus", function(data, cb)
+    if type(data) ~= "table" or type(data.active) ~= "boolean" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     notification_focus = data.active == true and not is_open
-    SetNuiFocus(is_open or notification_focus, is_open or notification_focus)
+    update_nui_focus()
     cb({ success = true })
 end)
 
-RegisterNUICallback("sim:picker-close", function(_, cb)
+RegisterNUICallback("sim:picker-close", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     sim_picker_open = false
-    SetNuiFocus(is_open or notification_focus, is_open or notification_focus)
-    cb({ success = true })
+    sim_picker_payload = nil
+    update_nui_focus()
+    SendNUIMessage({ type = "sim:picker-close" })
+    local result = Bridge.Callbacks.Trigger("sky_phone:sim:picker-close", {})
+    cb(type(result) == "table" and result or { success = false, error = "request_failed" })
 end)
 
-RegisterNUICallback("map:getPlayerCoords", function(_, cb)
+RegisterNUICallback("map:getPlayerCoords", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     local coords = GetEntityCoords(PlayerPedId())
     cb({
         success = true,
@@ -439,7 +551,11 @@ local function weather_region(coords)
     return "los_santos"
 end
 
-RegisterNUICallback("weather:get", function(_, cb)
+RegisterNUICallback("weather:get", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     local coords = GetEntityCoords(PlayerPedId())
     local weather_hash = GetPrevWeatherTypeHashName()
     local next_weather_hash = GetNextWeatherTypeHashName()
@@ -479,9 +595,13 @@ local function garage_vehicle_kind(model_hash, fallback)
 end
 
 RegisterNUICallback("garage:vehicles", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     local result = Bridge.Callbacks.Trigger("sky_phone:garage:vehicles", data)
-    if not result or not result.success or type(result.data) ~= "table" then
-        cb(result or { success = false, error = "request_failed" })
+    if type(result) ~= "table" or not result.success or type(result.data) ~= "table" then
+        cb(type(result) == "table" and result or { success = false, error = "request_failed" })
         return
     end
     for _, vehicle in ipairs(result.data.vehicles or {}) do
@@ -505,8 +625,12 @@ end)
 
 for _, callback_name in ipairs(server_callbacks) do
     RegisterNUICallback(callback_name, function(data, cb)
+        if type(data) ~= "table" then
+            cb({ success = false, error = "invalid_request" })
+            return
+        end
         local result = Bridge.Callbacks.Trigger("sky_phone:" .. callback_name, data)
-        if result then
+        if type(result) == "table" then
             cb(result)
             return
         end
@@ -516,6 +640,10 @@ for _, callback_name in ipairs(server_callbacks) do
 end
 
 RegisterNetEvent("sky_phone:device:open", function(data)
+    if type(data) ~= "table" or type(data.device) ~= "table" or type(data.device.imei) ~= "string" then
+        Bridge.Debug("error", "[sky_phone] Rejected invalid device open data.")
+        return
+    end
     Bridge.Debug(
         "debug",
         "[sky_phone] Client received device open for IMEI %s account_linked=%s.",
@@ -525,19 +653,27 @@ RegisterNetEvent("sky_phone:device:open", function(data)
     )
     device_payload = data
     open_requested = true
+    if is_open then
+        SkyPhoneApps.SendCatalog()
+        SendNUIMessage({ type = "device:updated", data = data })
+        return
+    end
     open_phone()
 end)
 
 RegisterNetEvent("sky_phone:device:updated", function(data)
+    if type(data) ~= "table" or type(data.device) ~= "table" or type(data.device.imei) ~= "string" then
+        Bridge.Debug("error", "[sky_phone] Rejected invalid device update data.")
+        return
+    end
     device_payload = data
     SendNUIMessage({ type = "device:updated", data = data })
 end)
 
 RegisterNetEvent("sky_phone:device:invalidated", function()
-    open_requested = false
-    device_payload = nil
     TriggerEvent("sky_phone:animation:reset")
-    close_phone()
+    close_phone(false)
+    device_payload = nil
 end)
 
 RegisterNetEvent("sky_phone:device:error", function(error_code)
@@ -669,14 +805,20 @@ RegisterNetEvent("sky_phone:flare:message", function(data)
 end)
 
 RegisterNetEvent("sky_phone:sim:picker", function(data)
+    if type(data) ~= "table" or type(data.number) ~= "string" or type(data.choices) ~= "table" then
+        Bridge.Debug("error", "[sky_phone] Rejected invalid SIM picker data.")
+        return
+    end
     sim_picker_open = true
-    SetNuiFocus(true, true)
+    sim_picker_payload = data
+    update_nui_focus()
     SendNUIMessage({ type = "sim:picker", data = data })
 end)
 
 RegisterNetEvent("sky_phone:sim:picker-close", function()
     sim_picker_open = false
-    SetNuiFocus(is_open or notification_focus, is_open or notification_focus)
+    sim_picker_payload = nil
+    update_nui_focus()
     SendNUIMessage({ type = "sim:picker-close" })
 end)
 
@@ -752,13 +894,35 @@ RegisterNetEvent("sky_phone:darkchat:new", function(data)
 end)
 
 RegisterNetEvent("sky_phone:call:incoming", function(data)
-    notification_focus = true
-    SetNuiFocus(true, true)
+    if type(data) ~= "table" or type(data.id) ~= "string" or data.state ~= "ringing" then
+        Bridge.Debug("error", "[sky_phone] Rejected invalid incoming call data.")
+        return
+    end
+    active_call_payload = data
+    call_focus = true
+    update_nui_focus()
     TriggerEvent("sky_phone:animation:call", data)
     SendNUIMessage({ type = "call:incoming", data = data })
 end)
 
 RegisterNetEvent("sky_phone:call:state", function(data)
+    if type(data) ~= "table" or type(data.id) ~= "string" or type(data.state) ~= "string" then
+        Bridge.Debug("error", "[sky_phone] Rejected invalid call state data.")
+        return
+    end
+    if data.state == "ringing" or data.state == "connected" then
+        active_call_payload = data
+    end
+    if data.state ~= "ringing" then
+        local focus_changed = call_focus
+        call_focus = false
+        if focus_changed then
+            update_nui_focus()
+        end
+    end
+    if data.state ~= "ringing" and data.state ~= "connected" then
+        active_call_payload = nil
+    end
     if data.state == "connected" and data.channel then
         if not join_call_voice(data.channel) then
             TriggerEvent("sky_phone:device:error", "voice_unavailable")
@@ -784,9 +948,19 @@ AddEventHandler("onResourceStop", function(resource_name)
         return
     end
 
-    if is_open or notification_focus then
-        SetNuiFocus(false, false)
-    end
+    is_open = false
+    open_requested = false
+    notification_focus = false
+    call_focus = false
+    payphone_focus = false
+    camera_active = false
+    camera_nui_focused = true
+    sim_picker_open = false
+    sim_picker_payload = nil
+    active_call_payload = nil
+    activity_suspended = false
+    SetNuiFocusKeepInput(false)
+    SetNuiFocus(false, false)
 
     TriggerEvent("sky_phone:animation:reset")
     leave_call_voice()

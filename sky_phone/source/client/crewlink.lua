@@ -16,6 +16,10 @@ local function draw_overhead_label(coords, username, role)
 end
 
 RegisterNUICallback("crewlink:live", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     local result = Bridge.Callbacks.Trigger("sky_phone:crewlink:live", data)
     overhead_members = result and result.success and result.data and result.data.overheadMembers or {}
     overhead_expires_at = GetGameTimer() + Config.CrewLink.OverheadRefreshMilliseconds * 2
