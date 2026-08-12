@@ -1,3 +1,24 @@
+SkyPhoneHousing = {}
+
+function SkyPhoneHousing.ResolveShare(source, property_id)
+    local overview = Bridge.Housing.GetOverview(source)
+    if not overview or type(overview.properties) ~= "table" then
+        return nil
+    end
+    for _, property in ipairs(overview.properties) do
+        if property.id == property_id then
+            return {
+                title = property.name,
+                subtitle = property.access,
+                copyText = property.name,
+                link = "skyphone://house/property/" .. property.id,
+                meta = { access = property.access, entrance = property.entrance },
+            }
+        end
+    end
+    return nil
+end
+
 Bridge.Callbacks.Register("sky_phone:housing:overview", function(source)
     if not SkyPhone.AllowOperation(
         source,

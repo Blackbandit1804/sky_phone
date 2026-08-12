@@ -353,6 +353,7 @@ const defaultLocales: LocaleTree = {
       destinations: 'Share destinations',
       newMessage: 'New Message',
       shareProfile: 'Share Profile',
+      share: 'Share',
       kinds: {
         contact: 'Contact',
         document: 'Document',
@@ -404,6 +405,7 @@ const defaultLocales: LocaleTree = {
         transfer_not_found: 'That transfer is no longer available.',
         too_far: 'The recipient is too far away.',
         not_owned: 'This item no longer belongs to this phone.',
+        unsupported_payload: 'This item is not available for EasyShare.',
         payload_too_large: 'This item is too large to share.',
         location_unavailable: 'Your location is unavailable.',
         rate_limited: 'Too many share requests. Try again shortly.',

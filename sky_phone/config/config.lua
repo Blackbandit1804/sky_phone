@@ -194,6 +194,9 @@ Config.EasyShare = {
     PendingSeconds = 30,
     TransferDurationMs = 3000,
     RequestsPerMinute = 12,
+    BootstrapRequestsPerMinute = 30,
+    VisibilityUpdatesPerMinute = 10,
+    ActionsPerMinute = 30,
     PayloadMaxBytes = 24000,
 }
 

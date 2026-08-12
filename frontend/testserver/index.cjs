@@ -3711,7 +3711,7 @@ const easyShareHistory = [
     id: 'easyshare-outgoing-transferring',
     otherName: 'Noah Walker',
     payload: {
-      appId: 'gallery',
+      appId: 'photos',
       copyText: 'Sunset over Los Santos.',
       id: 3,
       imageUrl:
@@ -3801,7 +3801,7 @@ const easyShareHistory = [
     id: 'easyshare-failed',
     otherName: 'Noah Walker',
     payload: {
-      appId: 'gallery',
+      appId: 'photos',
       copyText: 'Vehicle walkaround video.',
       id: 7,
       kind: 'video',
@@ -3811,6 +3811,158 @@ const easyShareHistory = [
     status: 'failed',
   },
 ]
+const easyShareCatalog = [
+  {
+    appId: 'phone',
+    copyText: 'Mia Santos\n5550142',
+    id: 'contact-mia-santos',
+    kind: 'contact',
+    link: 'skyphone://phone/5550142',
+    subtitle: '5550142',
+    title: 'Mia Santos',
+  },
+  {
+    appId: 'calendar',
+    copyText: 'Downtown meetup\nBring the project notes.',
+    id: 'calendar-event-easyshare',
+    kind: 'document',
+    link: 'skyphone://calendar/event/calendar-event-easyshare',
+    subtitle: 'Tonight, 20:30',
+    title: 'Downtown meetup',
+  },
+  {
+    appId: 'citymarkt',
+    copyText: 'Comet Retro Custom in excellent condition.',
+    id: 'listing-easyshare-comet',
+    imageUrl: 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=900',
+    kind: 'link',
+    link: 'skyphone://citymarkt/listing/listing-easyshare-comet',
+    subtitle: '$84,000',
+    title: 'Comet Retro Custom',
+  },
+  {
+    appId: 'map',
+    copyText: 'Legion Square meeting point',
+    kind: 'location',
+    link: 'skyphone://location/current',
+    title: 'Legion Square',
+  },
+  {
+    appId: 'notes',
+    copyText: 'Check fuel, tires and radio before departure.',
+    id: 'note-easyshare-checklist',
+    kind: 'note',
+    title: 'Departure checklist',
+  },
+  {
+    appId: 'photos',
+    copyText: 'Sunset over Los Santos.',
+    id: 3,
+    imageUrl: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=900',
+    kind: 'photo',
+    link: 'skyphone://media/3',
+    title: 'Los Santos sunset',
+  },
+  {
+    appId: 'music',
+    copyText: 'Night Drive collection · 8 tracks',
+    id: 'playlist-easyshare-night-drive',
+    kind: 'playlist',
+    link: 'skyphone://music/playlist/playlist-easyshare-night-drive',
+    subtitle: '8 tracks',
+    title: 'Night Drive collection',
+  },
+  {
+    appId: 'local-pages',
+    copyText: 'Road closure\nAlta Street is closed until midnight.',
+    id: 'pages-post-easyshare-road-closure',
+    kind: 'post',
+    link: 'skyphone://local-pages/post/pages-post-easyshare-road-closure',
+    subtitle: '@nightshiftls',
+    title: 'Road closure',
+  },
+  {
+    appId: 'picstagram',
+    copyText: '@mia.santos',
+    id: 'picstagram-profile-easyshare-mia',
+    imageUrl: 'https://i.pravatar.cc/320?img=47',
+    kind: 'profile',
+    link: 'skyphone://picstagram/profile/picstagram-profile-easyshare-mia',
+    subtitle: '@mia.santos',
+    title: 'Mia Santos',
+  },
+  {
+    appId: 'darkchat',
+    copyText: 'Use the north entrance. The south gate is locked.',
+    id: 'darkchat-message-easyshare-entrance',
+    kind: 'text',
+    subtitle: 'NightOwl',
+    title: 'Use the north entrance',
+  },
+  {
+    appId: 'music',
+    copyText: 'Night Drive — Neon Coast',
+    id: 'night-drive',
+    imageUrl: 'https://picsum.photos/seed/easyshare-night-drive/720/720',
+    kind: 'track',
+    link: 'skyphone://music/server/night-drive',
+    subtitle: 'Neon Coast',
+    title: 'Night Drive',
+  },
+  {
+    appId: 'photos',
+    copyText: 'Vehicle walkaround video.',
+    id: 7,
+    imageUrl: 'https://videos.pexels.com/video-files/3130284/3130284-hd_1920_1080_30fps.mp4',
+    kind: 'video',
+    link: 'skyphone://media/7',
+    title: 'Vehicle walkaround',
+  },
+  {
+    appId: 'companies',
+    copyText: 'Los Santos Customs\nRepairs, tuning and roadside support.',
+    id: 'mechanic',
+    kind: 'profile',
+    link: 'skyphone://companies/profile/mechanic',
+    subtitle: '555-MECH',
+    title: 'Los Santos Customs',
+  },
+  {
+    appId: 'mail',
+    copyText: 'Project handoff\nThe final checklist is attached below.',
+    id: 17,
+    kind: 'document',
+    link: 'skyphone://mail/message/17',
+    subtitle: 'mia@ifruit.com',
+    title: 'Project handoff',
+  },
+  {
+    appId: 'garage',
+    copyText: 'Comet Retro Custom\nSKY 2048',
+    id: 'SKY 2048',
+    kind: 'document',
+    link: 'skyphone://garage/vehicle/SKY%202048',
+    subtitle: 'SKY 2048',
+    title: 'Comet Retro Custom',
+  },
+  {
+    appId: 'house',
+    copyText: 'Vespucci Canals Apartment',
+    id: 'vespucci-apartment-4',
+    kind: 'document',
+    link: 'skyphone://house/property/vespucci-apartment-4',
+    subtitle: 'Owner',
+    title: 'Vespucci Canals Apartment',
+  },
+].map((payload, index) => ({
+  createdAt: Date.now() - (index + 1) * 5 * 60 * 1000,
+  direction: index % 2 === 0 ? 'incoming' : 'outgoing',
+  id: `easyshare-catalog-${payload.kind}`,
+  otherName: index % 2 === 0 ? 'Mia Santos' : 'Noah Walker',
+  payload,
+  progress: 100,
+  status: 'completed',
+}))
 let easyShareVisibility = 'everyone'
 
 function easyShareHistoryForScenario(testScenario) {
@@ -3824,6 +3976,10 @@ function easyShareHistoryForScenario(testScenario) {
     return easyShareHistory.filter(
       (transfer) => !['pending', 'transferring'].includes(transfer.status),
     )
+  }
+  if (testScenario === 'easyshare-catalog') return easyShareCatalog
+  if (testScenario === 'easyshare-full') {
+    return [...easyShareHistory, ...easyShareCatalog]
   }
   return easyShareHistory
 }

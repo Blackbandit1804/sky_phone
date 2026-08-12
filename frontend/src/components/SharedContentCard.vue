@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Image, MapPin, Music2, Play, UserRound } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { getPhoneApp, getPhoneAppLabel } from '@/config/apps'
 import { usePhoneStore } from '@/stores/phone'
 import type { EasySharePayload } from '@/types/easyshare'
+import { openEasySharePayload } from '@/utils/easyshare'
 
 const props = withDefaults(
   defineProps<{
@@ -15,6 +17,7 @@ const props = withDefaults(
   { compact: false, variant: 'messages' },
 )
 const phone = usePhoneStore()
+const router = useRouter()
 const imageFailed = ref(false)
 const sourceApp = computed(() => getPhoneApp(props.payload.appId))
 const isVideo = computed(
@@ -47,6 +50,11 @@ watch(
       `shared-content-card--${variant}`,
       { 'shared-content-card--compact': compact },
     ]"
+    role="button"
+    tabindex="0"
+    @click="openEasySharePayload(router, payload)"
+    @keydown.enter.prevent="openEasySharePayload(router, payload)"
+    @keydown.space.prevent="openEasySharePayload(router, payload)"
   >
     <div class="shared-content-card__source">
       <img v-if="sourceApp?.iconImage" :src="sourceApp.iconImage" alt="" />
@@ -92,6 +100,12 @@ watch(
   color: #171719;
   background: rgb(255 255 255 / 96%);
   box-shadow: 0 8px 24px rgb(19 45 78 / 13%);
+  cursor: pointer;
+}
+
+.shared-content-card:focus-visible {
+  outline: 3px solid #0a84ff;
+  outline-offset: 2px;
 }
 
 .shared-content-card__source {

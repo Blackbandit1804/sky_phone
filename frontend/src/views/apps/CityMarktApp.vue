@@ -50,6 +50,7 @@ import CityMarktSelect from '@/components/citymarkt/CityMarktSelect.vue'
 import CityMarktGallery from '@/components/citymarkt/CityMarktGallery.vue'
 import CityMarktOfferCard from '@/components/citymarkt/CityMarktOfferCard.vue'
 import { useAccountStore } from '@/stores/account'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { useMarketplaceStore } from '@/stores/marketplace'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePagesStore } from '@/stores/pages'
@@ -115,6 +116,7 @@ const phone = usePhoneStore()
 const route = useRoute()
 const router = useRouter()
 const account = useAccountStore()
+const easyShare = useEasyShareStore()
 const marketplace = useMarketplaceStore()
 const messageMedia = useMessageMediaStore()
 const pages = usePagesStore()
@@ -365,6 +367,19 @@ async function shareToLocalPages(): Promise<void> {
       ? 'Apps.localPages.cityMarktShared'
       : `Apps.localPages.errors.${response.error ?? 'default'}`,
   )
+}
+
+function shareListing(): void {
+  if (!selectedListing.value) return
+  easyShare.open({
+    appId: 'citymarkt',
+    copyText: `${selectedListing.value.title}\n${selectedListing.value.description}`,
+    id: selectedListing.value.id,
+    kind: 'link',
+    link: `skyphone://citymarkt/listing/${selectedListing.value.id}`,
+    subtitle: formatPrice(selectedListing.value),
+    title: selectedListing.value.title,
+  })
 }
 
 async function loadFeed(): Promise<void> {
@@ -1100,6 +1115,14 @@ onMounted(async () => {
           {{ phone.t('Apps.citymarkt.phone') }}:
           {{ selectedListing.phone_number }}
         </p>
+        <button
+          v-if="selectedListing.status === 'active' || selectedListing.status === 'reserved'"
+          class="citymarkt__pages-share"
+          type="button"
+          @click="shareListing"
+        >
+          <Share2 :size="17" /><span><strong>{{ phone.t('Apps.easyShare.share') }}</strong></span>
+        </button>
         <template v-if="selectedListing.is_owner">
           <button
             v-if="

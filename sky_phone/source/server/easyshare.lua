@@ -17,12 +17,19 @@ local valid_kinds = {
     video = true,
 }
 local valid_apps = {
+    calendar = true,
     camera = true,
+    citymarkt = true,
+    companies = true,
     crewlink = true,
     darkchat = true,
     feather = true,
     flare = true,
     fliptok = true,
+    garage = true,
+    house = true,
+    ["local-pages"] = true,
+    mail = true,
     map = true,
     messages = true,
     music = true,
@@ -32,6 +39,12 @@ local valid_apps = {
     picstagram = true,
 }
 local valid_visibilities = { contacts = true, everyone = true, hidden = true }
+
+Bridge.Database.Query([[
+    UPDATE `sky_phone_easyshare_transfers`
+    SET `status` = 'expired', `updated_at` = CURRENT_TIMESTAMP, `completed_at` = CURRENT_TIMESTAMP
+    WHERE `status` IN ('pending', 'transferring')
+]], {})
 
 local function uuid()
     local rows = Bridge.Database.Query("SELECT UUID() AS `id`", {})
@@ -77,6 +90,370 @@ local function append_params(target, values)
     for _, value in ipairs(values) do
         target[#target + 1] = value
     end
+end
+
+local function first_row(query, params)
+    local rows = Bridge.Database.Query(query, params)
+    return rows[1]
+end
+
+local function canonical_profile(device, app_id, id)
+    if app_id == "picstagram" then
+        local profile = first_row([[
+            SELECT p.`display_name`, p.`handle`, p.`bio`, media.`url` AS `image_url`
+            FROM `sky_phone_picstagram_profiles` p
+            LEFT JOIN `sky_phone_media` media ON media.`id` = p.`avatar_media_id`
+            WHERE p.`id` = ? AND p.`status` = 'active'
+                AND (p.`private` = 0 OR EXISTS(
+                    SELECT 1 FROM `sky_phone_picstagram_sessions` session
+                    WHERE session.`device_imei` = ? AND session.`profile_id` = p.`id`
+                ) OR EXISTS(
+                    SELECT 1 FROM `sky_phone_picstagram_follows` follow
+                    WHERE follow.`following_id` = p.`id` AND follow.`status` = 'accepted'
+                        AND follow.`follower_id` = (
+                            SELECT session.`profile_id` FROM `sky_phone_picstagram_sessions` session
+                            WHERE session.`device_imei` = ? LIMIT 1
+                        )
+                )) LIMIT 1
+        ]], { id, device.imei, device.imei })
+        if profile then
+            return {
+                title = profile.display_name,
+                subtitle = "@" .. profile.handle,
+                copyText = "@" .. profile.handle,
+                imageUrl = profile.image_url,
+                link = "skyphone://picstagram/profile/" .. id,
+            }
+        end
+    elseif app_id == "feather" then
+        local profile = first_row([[
+            SELECT p.`display_name`, p.`handle`, media.`url` AS `image_url`
+            FROM `sky_phone_feather_profiles` p
+            LEFT JOIN `sky_phone_media` media ON media.`id` = p.`avatar_media_id`
+            WHERE p.`id` = ? LIMIT 1
+        ]], { id })
+        if profile then
+            return {
+                title = profile.display_name,
+                subtitle = "@" .. profile.handle,
+                copyText = "@" .. profile.handle,
+                imageUrl = profile.image_url,
+                link = "skyphone://feather/profile/" .. id,
+            }
+        end
+    elseif app_id == "fliptok" then
+        local profile = first_row("SELECT `display_name`, `handle` FROM `sky_phone_fliptok_profiles` WHERE `id` = ? LIMIT 1", { id })
+        if profile then
+            return {
+                title = profile.display_name,
+                subtitle = "@" .. profile.handle,
+                copyText = "@" .. profile.handle,
+                link = "skyphone://fliptok/profile/" .. id,
+            }
+        end
+    elseif app_id == "flare" and device.account_id then
+        local profile = first_row([[
+            SELECT p.`name`, p.`age`, p.`bio`, media.`url` AS `image_url`
+            FROM `sky_phone_flare_profiles` p
+            LEFT JOIN `sky_phone_flare_profile_photos` photo ON photo.`profile_id` = p.`id` AND photo.`sort_order` = 1
+            LEFT JOIN `sky_phone_media` media ON media.`id` = photo.`media_id`
+            WHERE p.`id` = ? AND p.`account_id` = ? LIMIT 1
+        ]], { id, tonumber(device.account_id) })
+        if profile then
+            local title = ("%s, %s"):format(profile.name, profile.age)
+            return {
+                title = title,
+                copyText = title .. "\n" .. profile.bio,
+                imageUrl = profile.image_url,
+                link = "skyphone://flare/profile/" .. id,
+            }
+        end
+    elseif app_id == "crewlink" and device.account_id then
+        local profile = first_row([[
+            SELECT p.`username`, g.`name` AS `group_name`
+            FROM `sky_phone_crewlink_profiles` p
+            LEFT JOIN `sky_phone_crewlink_groups` g ON g.`id` = p.`active_group_id`
+            WHERE p.`id` = ? AND p.`account_id` = ? LIMIT 1
+        ]], { id, tonumber(device.account_id) })
+        if profile then
+            return {
+                title = "@" .. profile.username,
+                subtitle = profile.group_name,
+                copyText = "@" .. profile.username,
+                link = "skyphone://crewlink/profile/" .. id,
+            }
+        end
+    elseif app_id == "darkchat" and device.account_id then
+        local profile = first_row([[
+            SELECT `alias`, `dark_id`, `invite_code` FROM `sky_phone_darkchat_profiles`
+            WHERE `id` = ? AND `account_id` = ? LIMIT 1
+        ]], { id, tonumber(device.account_id) })
+        if profile then
+            return {
+                title = profile.alias,
+                subtitle = profile.dark_id,
+                copyText = profile.alias .. "\n" .. profile.dark_id .. "\n" .. profile.invite_code,
+                link = "skyphone://darkchat/invite/" .. profile.invite_code,
+            }
+        end
+    elseif app_id == "companies" then
+        local definition = Config.Companies.Enabled and Config.Companies.Definitions[id] or nil
+        if definition and definition.Public then
+            local profile = first_row([[
+                SELECT profile.`description`, media.`url` AS `image_url`
+                FROM `sky_phone_company_profiles` profile
+                LEFT JOIN `sky_phone_media` media ON media.`id` = profile.`logo_media_id`
+                WHERE profile.`company_id` = ? LIMIT 1
+            ]], { id })
+            return {
+                title = definition.Name,
+                subtitle = definition.ServiceLine.Number,
+                copyText = definition.Name .. "\n" .. (profile and profile.description or definition.Description),
+                imageUrl = profile and profile.image_url or nil,
+                link = "skyphone://companies/profile/" .. id,
+            }
+        end
+    end
+    return nil
+end
+
+local function canonical_post(device, app_id, id)
+    if app_id == "picstagram" then
+        local post = first_row([[
+            SELECT post.`caption`, profile.`display_name`, profile.`handle`, media.`url` AS `image_url`
+            FROM `sky_phone_picstagram_posts` post
+            JOIN `sky_phone_picstagram_profiles` profile ON profile.`id` = post.`profile_id`
+            LEFT JOIN `sky_phone_picstagram_post_media` post_media
+                ON post_media.`post_id` = post.`id` AND post_media.`position` = 1
+            LEFT JOIN `sky_phone_media` media ON media.`id` = post_media.`media_id`
+            WHERE post.`id` = ? AND post.`status` = 'published' AND profile.`status` = 'active'
+                AND (profile.`private` = 0 OR EXISTS(
+                    SELECT 1 FROM `sky_phone_picstagram_sessions` session
+                    WHERE session.`device_imei` = ? AND session.`profile_id` = profile.`id`
+                ) OR EXISTS(
+                    SELECT 1 FROM `sky_phone_picstagram_follows` follow
+                    WHERE follow.`following_id` = profile.`id` AND follow.`status` = 'accepted'
+                        AND follow.`follower_id` = (
+                            SELECT session.`profile_id` FROM `sky_phone_picstagram_sessions` session
+                            WHERE session.`device_imei` = ? LIMIT 1
+                        )
+                )) LIMIT 1
+        ]], { id, device.imei, device.imei })
+        if post then
+            local title = post.caption ~= "" and post.caption or post.display_name
+            return {
+                title = title,
+                subtitle = "@" .. post.handle,
+                copyText = "@" .. post.handle .. ": " .. post.caption,
+                imageUrl = post.image_url,
+                link = "skyphone://picstagram/post/" .. id,
+            }
+        end
+    elseif app_id == "feather" then
+        local post = first_row([[
+            SELECT post.`body`, profile.`handle`, media.`url` AS `image_url`
+            FROM `sky_phone_feather_posts` post
+            JOIN `sky_phone_feather_profiles` profile ON profile.`id` = post.`profile_id`
+            LEFT JOIN `sky_phone_feather_post_media` post_media
+                ON post_media.`post_id` = post.`id` AND post_media.`sort_order` = 0
+            LEFT JOIN `sky_phone_media` media ON media.`id` = post_media.`media_id`
+            WHERE post.`id` = ? AND post.`status` = 'published' LIMIT 1
+        ]], { id })
+        if post then
+            return {
+                title = post.body,
+                subtitle = "@" .. post.handle,
+                copyText = "@" .. post.handle .. ": " .. post.body,
+                imageUrl = post.image_url,
+                link = "skyphone://feather/post/" .. id,
+            }
+        end
+    elseif app_id == "fliptok" then
+        local post = first_row([[
+            SELECT video.`caption`, profile.`display_name`, profile.`handle`, media.`url` AS `image_url`
+            FROM `sky_phone_fliptok_videos` video
+            JOIN `sky_phone_fliptok_profiles` profile ON profile.`id` = video.`profile_id`
+            JOIN `sky_phone_media` media ON media.`id` = video.`media_id`
+            WHERE video.`id` = ? AND video.`status` = 'published' AND (
+                video.`visibility` = 'public' OR EXISTS(
+                    SELECT 1 FROM `sky_phone_fliptok_sessions` session
+                    WHERE session.`device_imei` = ? AND session.`profile_id` = profile.`id`
+                ) OR (video.`visibility` = 'followers' AND EXISTS(
+                    SELECT 1 FROM `sky_phone_fliptok_follows` follow
+                    WHERE follow.`following_id` = profile.`id` AND follow.`follower_id` = (
+                        SELECT session.`profile_id` FROM `sky_phone_fliptok_sessions` session
+                        WHERE session.`device_imei` = ? LIMIT 1
+                    )
+                ))
+            ) LIMIT 1
+        ]], { id, device.imei, device.imei })
+        if post then
+            local title = post.caption ~= "" and post.caption or post.display_name
+            return {
+                title = title,
+                subtitle = "@" .. post.handle,
+                copyText = "@" .. post.handle .. ": " .. post.caption,
+                imageUrl = post.image_url,
+                link = "skyphone://fliptok/video/" .. id,
+            }
+        end
+    elseif app_id == "local-pages" then
+        local post = first_row([[
+            SELECT post.`title`, post.`body`, SUBSTRING_INDEX(account.`email`, '@', 1) AS `author_name`,
+                media.`url` AS `image_url`
+            FROM `sky_phone_pages_posts` post
+            JOIN `sky_phone_accounts` account ON account.`id` = post.`account_id`
+            LEFT JOIN `sky_phone_pages_images` image ON image.`post_id` = post.`id` AND image.`sort_order` = 1
+            LEFT JOIN `sky_phone_media` media ON media.`id` = image.`media_id`
+            WHERE post.`id` = ? LIMIT 1
+        ]], { id })
+        if post then
+            return {
+                title = post.title,
+                subtitle = post.author_name,
+                copyText = post.title .. "\n" .. post.body,
+                imageUrl = post.image_url,
+                link = "skyphone://local-pages/post/" .. id,
+            }
+        end
+    elseif app_id == "citymarkt" then
+        local post = first_row([[
+            SELECT listing.`title`, listing.`description`, listing.`price`, listing.`price_type`, media.`url` AS `image_url`
+            FROM `sky_phone_marketplace_listings` listing
+            LEFT JOIN `sky_phone_marketplace_images` image
+                ON image.`listing_id` = listing.`id` AND image.`sort_order` = 1
+            LEFT JOIN `sky_phone_media` media ON media.`id` = image.`media_id`
+            WHERE listing.`id` = ? AND listing.`status` IN ('active', 'reserved') LIMIT 1
+        ]], { id })
+        if post then
+            local price = post.price_type == "fixed" and tostring(post.price) or post.price_type
+            return {
+                title = post.title,
+                subtitle = price,
+                copyText = post.title .. "\n" .. post.description,
+                imageUrl = post.image_url,
+                link = "skyphone://citymarkt/listing/" .. id,
+            }
+        end
+    end
+    return nil
+end
+
+local function canonical_music(device, data)
+    if data.kind == "track" and type(data.meta) == "table" and data.meta.source == "server" then
+        for _, track in ipairs(Config.Music.Tracks) do
+            if track.Id == data.id then
+                return {
+                    title = track.Title,
+                    subtitle = track.Artist,
+                    copyText = track.Title .. " — " .. track.Artist,
+                    link = "skyphone://music/server/" .. track.Id,
+                    meta = { source = "server" },
+                }
+            end
+        end
+    elseif data.kind == "track" and type(data.meta) == "table" and data.meta.source == "youtube" then
+        local condition, params = owner_condition(device, "song")
+        local query_params = { data.id }
+        append_params(query_params, params)
+        local track = first_row(([=[
+            SELECT song.`title`, song.`artist`, song.`video_id`
+            FROM `sky_phone_music_youtube_songs` song
+            WHERE song.`id` = ? AND %s LIMIT 1
+        ]=]):format(condition), query_params)
+        if track then
+            return {
+                title = track.title,
+                subtitle = track.artist,
+                copyText = track.title .. " — " .. track.artist,
+                imageUrl = "https://i.ytimg.com/vi/" .. track.video_id .. "/hqdefault.jpg",
+                link = "skyphone://music/youtube/" .. data.id,
+                meta = { source = "youtube" },
+            }
+        end
+    elseif data.kind == "playlist" then
+        local condition, params = owner_condition(device, "playlist")
+        local query_params = { data.id }
+        append_params(query_params, params)
+        local playlist = first_row(([=[
+            SELECT playlist.`name`, COUNT(item.`id`) AS `song_count`
+            FROM `sky_phone_music_playlists` playlist
+            LEFT JOIN `sky_phone_music_playlist_items` item ON item.`playlist_id` = playlist.`id`
+            WHERE playlist.`id` = ? AND %s
+            GROUP BY playlist.`id`, playlist.`name` LIMIT 1
+        ]=]):format(condition), query_params)
+        if playlist then
+            return {
+                title = playlist.name,
+                subtitle = tostring(playlist.song_count) .. " tracks",
+                copyText = playlist.name .. " · " .. tostring(playlist.song_count),
+                link = "skyphone://music/playlist/" .. data.id,
+            }
+        end
+    end
+    return nil
+end
+
+local function canonical_document(source, device, app_id, id)
+    if app_id == "calendar" and device.account_id then
+        local event = first_row([[
+            SELECT `title`, `note`, `starts_at`, `ends_at` FROM `sky_phone_calendar_events`
+            WHERE `id` = ? AND `account_id` = ? LIMIT 1
+        ]], { id, tonumber(device.account_id) })
+        if event then
+            return {
+                title = event.title,
+                subtitle = tostring(event.starts_at),
+                copyText = event.title .. "\n" .. event.note,
+                link = "skyphone://calendar/event/" .. id,
+                meta = { startAt = tostring(event.starts_at), endAt = tostring(event.ends_at) },
+            }
+        end
+    elseif app_id == "mail" and device.account_id then
+        local message = first_row([[
+            SELECT message.`subject`, message.`body`, sender.`email` AS `sender_email`
+            FROM `sky_phone_mail_entries` entry
+            JOIN `sky_phone_mail_messages` message ON message.`id` = entry.`message_id`
+            LEFT JOIN `sky_phone_accounts` sender ON sender.`id` = message.`sender_account_id`
+            WHERE entry.`id` = ? AND entry.`account_id` = ? AND entry.`trashed_at` IS NULL LIMIT 1
+        ]], { id, tonumber(device.account_id) })
+        if message then
+            return {
+                title = message.subject,
+                subtitle = message.sender_email,
+                copyText = message.subject .. "\n" .. message.body,
+                link = "skyphone://mail/message/" .. id,
+            }
+        end
+    elseif app_id == "garage" then
+        return SkyPhoneGarage.ResolveShare(source, id)
+    elseif app_id == "house" then
+        return SkyPhoneHousing.ResolveShare(source, id)
+    end
+    return nil
+end
+
+local function canonical_text(device, app_id, id)
+    if app_id ~= "darkchat" or not device.account_id then
+        return nil
+    end
+    local message = first_row([[
+        SELECT message.`body`, message.`message_type`, sender.`alias` AS `sender_alias`
+        FROM `sky_phone_darkchat_messages` message
+        JOIN `sky_phone_darkchat_members` member ON member.`conversation_id` = message.`conversation_id`
+        JOIN `sky_phone_darkchat_profiles` viewer ON viewer.`id` = member.`profile_id`
+        LEFT JOIN `sky_phone_darkchat_profiles` sender ON sender.`id` = message.`sender_profile_id`
+        WHERE message.`id` = ? AND viewer.`account_id` = ? AND message.`deleted_for_everyone` = 0
+            AND message.`message_type` IN ('text', 'emoji') LIMIT 1
+    ]], { id, tonumber(device.account_id) })
+    if not message then
+        return nil
+    end
+    return {
+        title = message.body,
+        subtitle = message.sender_alias,
+        copyText = message.body,
+    }
 end
 
 local function display_name(source)
@@ -250,8 +627,30 @@ local function sanitize_payload(source, device, data)
         end
         local coords = GetEntityCoords(ped)
         payload.meta = { x = coords.x, y = coords.y, z = coords.z }
-    elseif type(data.imageUrl) == "string" and #data.imageUrl <= 2048 and data.imageUrl:match("^https://") then
-        payload.imageUrl = data.imageUrl
+    else
+        local canonical
+        if data.kind == "profile" and payload.id then
+            canonical = canonical_profile(device, app_id, payload.id)
+        elseif data.kind == "post" and payload.id then
+            canonical = canonical_post(device, app_id, payload.id)
+        elseif (data.kind == "track" or data.kind == "playlist") and app_id == "music" and payload.id then
+            canonical = canonical_music(device, data)
+        elseif data.kind == "document" and payload.id then
+            canonical = canonical_document(source, device, app_id, payload.id)
+        elseif data.kind == "text" and payload.id then
+            canonical = canonical_text(device, app_id, payload.id)
+        elseif data.kind == "link" and payload.id and (app_id == "citymarkt" or app_id == "local-pages") then
+            canonical = canonical_post(device, app_id, payload.id)
+        end
+        if not canonical then
+            return nil, "unsupported_payload"
+        end
+        payload.title = canonical.title
+        payload.copyText = canonical.copyText
+        payload.subtitle = canonical.subtitle
+        payload.imageUrl = canonical.imageUrl
+        payload.link = canonical.link
+        payload.meta = canonical.meta
     end
 
     local encoded = json.encode(payload)
@@ -262,6 +661,9 @@ local function sanitize_payload(source, device, data)
 end
 
 function SkyPhoneEasyShare.SanitizeChatPayload(source, data)
+    if not Config.EasyShare.Enabled then
+        return nil, "disabled"
+    end
     local device, error_response = current_device(source)
     if not device then
         return nil, error_response.error
@@ -328,12 +730,15 @@ local function apply_received_payload(transfer)
             meta.name, meta.notes or "", meta.organization or "", meta.phoneNumber,
         })
         TriggerClientEvent("sky_phone:contacts:changed", transfer.recipient_source, {})
-    elseif transfer.payload.kind == "note" then
+    elseif transfer.payload.kind == "note" or transfer.payload.kind == "text" or transfer.payload.kind == "document" then
         Bridge.Database.Query([[ 
             INSERT INTO `sky_phone_notes`
                 (`id`, `account_id`, `device_imei`, `title`, `body`, `pinned`)
             VALUES (?, ?, ?, ?, ?, 0)
-        ]], { uuid(), account_id, account_id and nil or device.imei, meta.title or "", meta.body or "" })
+        ]], {
+            uuid(), account_id, account_id and nil or device.imei,
+            meta.title or transfer.payload.title, meta.body or transfer.payload.copyText,
+        })
         if account_id then
             SkyPhone.RefreshAccount(account_id)
         else
@@ -353,6 +758,15 @@ local function apply_received_payload(transfer)
             account_id, account_id and nil or device.imei, meta.url, meta.remoteId, transfer.payload.kind,
         })
         TriggerClientEvent("sky_phone:gallery:changed", transfer.recipient_source, {})
+    elseif transfer.payload.kind == "post"
+        or transfer.payload.kind == "profile"
+        or transfer.payload.kind == "track"
+        or transfer.payload.kind == "playlist"
+        or transfer.payload.kind == "link"
+    then
+        return type(transfer.payload.link) == "string"
+    else
+        return false
     end
     return true
 end
@@ -415,6 +829,9 @@ Bridge.Callbacks.Register("sky_phone:easyshare:bootstrap", function(source)
     if not Config.EasyShare.Enabled then
         return { success = false, error = "disabled" }
     end
+    if not SkyPhone.AllowOperation(source, "easyshare_bootstrap", Config.EasyShare.BootstrapRequestsPerMinute, 60) then
+        return { success = false, error = "rate_limited" }
+    end
     local device, error_response = current_device(source)
     if not device then
         return error_response
@@ -437,6 +854,12 @@ Bridge.Callbacks.Register("sky_phone:easyshare:bootstrap", function(source)
 end)
 
 Bridge.Callbacks.Register("sky_phone:easyshare:set-visibility", function(source, data)
+    if not Config.EasyShare.Enabled then
+        return { success = false, error = "disabled" }
+    end
+    if not SkyPhone.AllowOperation(source, "easyshare_visibility", Config.EasyShare.VisibilityUpdatesPerMinute, 60) then
+        return { success = false, error = "rate_limited" }
+    end
     local device, error_response = current_device(source)
     if not device then
         return error_response
@@ -453,6 +876,9 @@ Bridge.Callbacks.Register("sky_phone:easyshare:set-visibility", function(source,
 end)
 
 Bridge.Callbacks.Register("sky_phone:easyshare:request", function(source, data)
+    if not Config.EasyShare.Enabled then
+        return { success = false, error = "disabled" }
+    end
     if not SkyPhone.AllowOperation(source, "easyshare_request", Config.EasyShare.RequestsPerMinute, 60) then
         return { success = false, error = "rate_limited" }
     end
@@ -503,6 +929,12 @@ Bridge.Callbacks.Register("sky_phone:easyshare:request", function(source, data)
 end)
 
 Bridge.Callbacks.Register("sky_phone:easyshare:respond", function(source, data)
+    if not Config.EasyShare.Enabled then
+        return { success = false, error = "disabled" }
+    end
+    if not SkyPhone.AllowOperation(source, "easyshare_action", Config.EasyShare.ActionsPerMinute, 60) then
+        return { success = false, error = "rate_limited" }
+    end
     local id = type(data) == "table" and data.id or nil
     local transfer = type(id) == "string" and active_transfers[id] or nil
     if not transfer or transfer.recipient_source ~= source or transfer.status ~= "pending" or type(data.accepted) ~= "boolean" then
@@ -527,6 +959,12 @@ Bridge.Callbacks.Register("sky_phone:easyshare:respond", function(source, data)
 end)
 
 Bridge.Callbacks.Register("sky_phone:easyshare:cancel", function(source, data)
+    if not Config.EasyShare.Enabled then
+        return { success = false, error = "disabled" }
+    end
+    if not SkyPhone.AllowOperation(source, "easyshare_action", Config.EasyShare.ActionsPerMinute, 60) then
+        return { success = false, error = "rate_limited" }
+    end
     local id = type(data) == "table" and data.id or nil
     local transfer = type(id) == "string" and active_transfers[id] or nil
     if not transfer or (transfer.sender_source ~= source and transfer.recipient_source ~= source) then

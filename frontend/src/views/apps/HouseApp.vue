@@ -26,6 +26,7 @@ import {
   LockOpen,
   Plus,
   Router,
+  Share2,
   UserRound,
   UsersRound,
   WifiOff,
@@ -34,6 +35,7 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { useHousingStore } from '@/stores/housing'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type {
   HousingKey,
@@ -43,6 +45,7 @@ import type {
 
 const phone = usePhoneStore()
 const housing = useHousingStore()
+const easyShare = useEasyShareStore()
 const selectedPropertyId = ref<string | null>(null)
 const candidatesOpened = ref(false)
 const revokeCandidate = ref<HousingKey | null>(null)
@@ -193,6 +196,18 @@ function accessLabel(property: HousingProperty): string {
   return phone.t(
     property.access === 'owner' ? 'Apps.house.owner' : 'Apps.house.keyholder',
   )
+}
+
+function shareProperty(property: HousingProperty): void {
+  easyShare.open({
+    appId: 'house',
+    copyText: property.name,
+    id: property.id,
+    kind: 'document',
+    link: `skyphone://house/property/${property.id}`,
+    subtitle: accessLabel(property),
+    title: property.name,
+  })
 }
 
 onMounted(() => {
@@ -412,6 +427,15 @@ onBeforeUnmount(() => {
           >
             <Camera :size="23" />
             <span>{{ phone.t('Apps.house.viewCamera') }}</span>
+          </k-glass>
+          <k-glass
+            :highlight="false"
+            component="button"
+            type="button"
+            @click="shareProperty(selectedProperty)"
+          >
+            <Share2 :size="23" />
+            <span>{{ phone.t('Apps.easyShare.share') }}</span>
           </k-glass>
         </div>
 

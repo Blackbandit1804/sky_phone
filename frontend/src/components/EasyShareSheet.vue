@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { kButton, kGlass, kLink, kPreloader, kSheet } from 'konsta/vue'
+import { kButton, kGlass, kLink, kList, kListInput, kListItem, kPreloader, kSheet } from 'konsta/vue'
 import {
   Check,
   Clock3,
@@ -27,6 +27,7 @@ import type {
   EasyShareTransfer,
   EasyShareVisibility,
 } from '@/types/easyshare'
+import { openEasySharePayload } from '@/utils/easyshare'
 
 const phone = usePhoneStore()
 const appStore = useAppStoreStore()
@@ -44,7 +45,7 @@ let dragPointerId: number | null = null
 let dragStartTime = 0
 let dragStartY = 0
 const visibilityOptions: EasyShareVisibility[] = ['everyone', 'contacts', 'hidden']
-type EasyShareDestinationAppId = 'darkchat' | 'messages' | 'notes'
+type EasyShareDestinationAppId = 'darkchat' | 'flare' | 'messages' | 'notes'
 const app = computed(() =>
   easyShare.payload ? getPhoneApp(easyShare.payload.appId) : undefined,
 )
@@ -57,7 +58,7 @@ const sharePeople = computed(() => {
   }> = []
   const phoneNumbers = new Set<string>()
 
-  if (easyShare.payload?.appId === 'flare') {
+  if (!appStore.homeLayout.hidden.includes('flare')) {
     for (const match of flare.matches) {
       people.push({
         avatar: match.profile.photoUrls[0],
@@ -107,6 +108,7 @@ const sharePeople = computed(() => {
 const shareAppIds: EasyShareDestinationAppId[] = [
   'messages',
   'darkchat',
+  'flare',
   'notes',
 ]
 const shareApps = computed(() =>
@@ -193,14 +195,14 @@ function shareToChat(kind: EasyShareChatApp, targetId: string): void {
   void router.push(`/apps/${kind}`)
 }
 
-function openChatApp(kind: 'darkchat' | 'messages'): void {
+function openChatApp(kind: EasyShareChatApp): void {
   if (!easyShare.prepareChatDraft(kind)) return
   close()
   void router.push(`/apps/${kind}`)
 }
 
 function openShareApp(appId: EasyShareDestinationAppId): void {
-  if (appId === 'messages' || appId === 'darkchat') {
+  if (appId === 'messages' || appId === 'darkchat' || appId === 'flare') {
     openChatApp(appId)
     return
   }
@@ -234,6 +236,11 @@ async function cancelTransfer(transfer: EasyShareTransfer): Promise<void> {
   if (!(await easyShare.cancel(transfer.id))) {
     feedback.value = label('errors.request_failed')
   }
+}
+
+async function openTransfer(transfer: EasyShareTransfer): Promise<void> {
+  close()
+  await openEasySharePayload(router, transfer.payload)
 }
 </script>
 
@@ -329,18 +336,19 @@ async function cancelTransfer(transfer: EasyShareTransfer): Promise<void> {
           <strong>{{ label('nearby') }}</strong>
           <k-link component="button" @click="easyShare.showHistory"><History :size="18" /></k-link>
         </div>
-        <div class="easyshare-visibility">
-          <ShieldCheck :size="18" />
-          <select
+        <k-list inset strong class="easyshare-visibility">
+          <k-list-input
+            type="select"
+            :label="label('visibility')"
             :value="easyShare.visibility"
-            :aria-label="label('visibility')"
             @change="easyShare.setVisibility(($event.target as HTMLSelectElement).value as EasyShareVisibility)"
           >
+            <template #media><ShieldCheck :size="18" /></template>
             <option v-for="option in visibilityOptions" :key="option" :value="option">
               {{ label(`visibilityOptions.${option}`) }}
             </option>
-          </select>
-        </div>
+          </k-list-input>
+        </k-list>
 
         <k-glass v-if="easyShare.incomingTransfer" class="easyshare-incoming">
           <UserRound :size="28" />
@@ -369,13 +377,19 @@ async function cancelTransfer(transfer: EasyShareTransfer): Promise<void> {
         </k-glass>
 
         <div v-if="easyShare.loading" class="easyshare-loading"><k-preloader /></div>
-        <div v-else-if="easyShare.targets.length" class="easyshare-targets">
-          <button v-for="target in easyShare.targets" :key="target.id" type="button" @click="requestTransfer(target.id)">
-            <span><UserRound /></span>
-              <div><strong>{{ target.name }}</strong><small>{{ label('distance', { distance: String(target.distance) }) }}</small></div>
-            <Share2 :size="18" />
-          </button>
-        </div>
+        <k-list v-else-if="easyShare.targets.length" inset strong class="easyshare-targets">
+          <k-list-item
+            v-for="target in easyShare.targets"
+            :key="target.id"
+            link
+            :title="target.name"
+            :subtitle="label('distance', { distance: String(target.distance) })"
+            @click="requestTransfer(target.id)"
+          >
+            <template #media><span><UserRound /></span></template>
+            <template #after><Share2 :size="18" /></template>
+          </k-list-item>
+        </k-list>
         <p v-else class="easyshare-empty">{{ label('noNearby') }}</p>
       </section>
 
@@ -385,17 +399,20 @@ async function cancelTransfer(transfer: EasyShareTransfer): Promise<void> {
           <strong>{{ label('history') }}</strong>
           <span></span>
         </div>
-        <div class="easyshare-history">
-          <article v-for="transfer in easyShare.history" :key="transfer.id">
-            <span><Clock3 /></span>
-            <div>
-              <strong>{{ transfer.payload.title }}</strong>
-              <small>{{ transfer.otherName }} · {{ statusLabel(transfer) }}</small>
-            </div>
-            <small>{{ transfer.direction === 'incoming' ? '↓' : '↑' }}</small>
-          </article>
+        <k-list inset strong class="easyshare-history">
+          <k-list-item
+            v-for="transfer in easyShare.history"
+            :key="transfer.id"
+            link
+            :title="transfer.payload.title"
+            :subtitle="`${transfer.otherName} · ${statusLabel(transfer)}`"
+            @click="openTransfer(transfer)"
+          >
+            <template #media><span><Clock3 /></span></template>
+            <template #after>{{ transfer.direction === 'incoming' ? '↓' : '↑' }}</template>
+          </k-list-item>
           <p v-if="!easyShare.history.length" class="easyshare-empty">{{ label('noHistory') }}</p>
-        </div>
+        </k-list>
       </section>
 
         <p v-if="feedback" class="easyshare-feedback">{{ feedback }}</p>
