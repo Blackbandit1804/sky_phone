@@ -2458,6 +2458,15 @@ const pagesReactions = [
   { post_id: 'pages-1', account_id: 1, kind: 'like' },
   { post_id: 'pages-3', account_id: 1, kind: 'save' },
 ]
+let pagesProfile = {
+  avatar_media_id: null,
+  avatar_url: null,
+  bio: 'Vinewood tips and city stories.',
+  email: 'demo@ifruit.com',
+  exists: true,
+  handle: 'demo',
+}
+let pagesOnboardingCompleted = false
 
 function pageView(post) {
   const listing = marketplaceListings.find(
@@ -2465,6 +2474,7 @@ function pageView(post) {
   )
   return {
     ...post,
+    author_avatar: post.account_id === 1 ? pagesProfile.avatar_url : null,
     citymarkt_price: listing?.price ?? null,
     image: post.images[0]?.gradient ?? null,
     is_liked: pagesReactions.some(
@@ -7500,6 +7510,54 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: false, error: 'not_authenticated' })
     return
   }
+  if (endpoint === 'pages:profile') {
+    const email = linkedAccount?.email ?? pagesProfile.email
+    const onboarding =
+      testScenario === 'local-pages-onboarding' && !pagesOnboardingCompleted
+    response.json({
+      success: true,
+      data: {
+        avatar_media_id: onboarding ? null : pagesProfile.avatar_media_id,
+        avatar_url: onboarding ? null : pagesProfile.avatar_url,
+        bio: onboarding ? '' : pagesProfile.bio,
+        email,
+        exists: onboarding ? false : pagesProfile.exists,
+        handle: onboarding ? email.split('@')[0] : pagesProfile.handle,
+        post_count: pagesPosts.filter((item) => item.account_id === 1).length,
+      },
+    })
+    return
+  }
+  if (endpoint === 'pages:profile-save') {
+    pagesOnboardingCompleted = true
+    const avatarMediaId = Number(request.body.avatarMediaId) || 0
+    const avatarMedia = avatarMediaId > 0
+      ? mockMedia.find((item) => item.id === avatarMediaId && item.mediaType === 'photo')
+      : null
+    if (avatarMediaId > 0 && !avatarMedia) {
+      response.json({ success: false, error: 'invalid_profile_image' })
+      return
+    }
+    pagesProfile = {
+      avatar_media_id: avatarMedia?.id ?? null,
+      avatar_url: avatarMedia?.url ?? null,
+      bio: String(request.body.bio ?? '').trim(),
+      email: linkedAccount?.email ?? pagesProfile.email,
+      exists: true,
+      handle: String(request.body.handle ?? '').trim().toLowerCase(),
+    }
+    pagesPosts.forEach((post) => {
+      if (post.account_id === 1) post.author_name = pagesProfile.handle
+    })
+    response.json({
+      success: true,
+      data: {
+        ...pagesProfile,
+        post_count: pagesPosts.filter((item) => item.account_id === 1).length,
+      },
+    })
+    return
+  }
   if (endpoint === 'pages:list-own') {
     response.json({
       success: true,
@@ -7530,7 +7588,7 @@ app.post('/api/:endpoint', (request, response) => {
       ...request.body,
       id,
       account_id: 1,
-      author_name: 'demo',
+      author_name: pagesProfile.handle,
       source_type: 'personal',
       citymarkt_listing_id: null,
       created_at: new Date().toISOString(),
@@ -7570,7 +7628,7 @@ app.post('/api/:endpoint', (request, response) => {
     pagesPosts.unshift({
       id,
       account_id: 1,
-      author_name: 'demo',
+      author_name: pagesProfile.handle,
       source_type: 'citymarkt',
       citymarkt_listing_id: listing.id,
       title: listing.title,

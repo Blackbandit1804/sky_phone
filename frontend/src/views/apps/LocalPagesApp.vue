@@ -6,10 +6,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
+  Eye,
+  EyeOff,
   Heart,
   ImagePlus,
   Images,
+  KeyRound,
+  Mail,
   MapPin,
+  Pencil,
   Plus,
   Share2,
   Store,
@@ -18,7 +23,6 @@ import {
   X,
 } from 'lucide-vue-next'
 import {
-  kButton,
   kGlass,
   kIcon,
   kNavbar,
@@ -38,7 +42,13 @@ import { useMessageMediaStore } from '@/stores/messageMedia'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { usePagesStore } from '@/stores/pages'
 import { usePhoneStore } from '@/stores/phone'
-import type { PagesCategory, PagesPost } from '@/types/pages'
+import type { PagesCategory, PagesPost, PagesProfileDraft } from '@/types/pages'
+import type { PhoneMedia } from '@/types/media'
+import {
+  filterMailAddressInput,
+  MAIL_ADDRESS_INPUT_MAX_LENGTH,
+  normalizeMailAddress,
+} from '@/utils/mail'
 
 type SelectedPhoto = { background: string; id: string }
 type ComposeDraft = {
@@ -49,6 +59,7 @@ type ComposeDraft = {
   title: string
 }
 type MediaContext = { draft: ComposeDraft; photos: SelectedPhoto[] }
+type ProfileMediaContext = { draft: PagesProfileDraft }
 
 type Screen = 'main' | 'detail' | 'compose'
 type Tab = 'feed' | 'create' | 'profile'
@@ -69,6 +80,16 @@ const search = ref('')
 const category = ref<string>('all')
 const feedback = ref('')
 const reactionPending = ref(false)
+const onboardingReady = ref(false)
+const authMode = ref<'login' | 'register'>('login')
+const authForm = ref({ confirm: '', email: '', password: '' })
+const authPending = ref(false)
+const authPasswordVisible = ref(false)
+const authError = ref('')
+const profileEditing = ref(false)
+const profilePending = ref(false)
+const profileDraft = ref<PagesProfileDraft>({ avatarMediaId: 0, bio: '', handle: '' })
+const selectedProfilePhoto = ref<PhoneMedia | null>(null)
 const pickedPhotos = ref<SelectedPhoto[]>([])
 const draft = ref<ComposeDraft>({
   body: '',
@@ -110,6 +131,22 @@ const canPublish = computed(() => {
   const body = draft.value.body.trim().length
   return title >= 5 && title <= 80 && body >= 10 && body <= 1500
 })
+const canSaveProfile = computed(() => {
+  const handle = profileDraft.value.handle.trim().toLowerCase()
+  return handle.length >= 3
+    && handle.length <= 24
+    && /^[a-z0-9][a-z0-9._]*[a-z0-9]$/.test(handle)
+    && profileDraft.value.bio.trim().length <= 160
+})
+const profileAvatarUrl = computed(() => selectedProfilePhoto.value?.url
+  ?? (profileDraft.value.avatarMediaId > 0 ? pages.profile?.avatar_url : null))
+const authEmailValid = computed(() => normalizeMailAddress(authForm.value.email) !== null)
+const authPasswordValid = computed(() => {
+  const length = authForm.value.password.length
+  return length >= 6 && length <= 64
+})
+const authConfirmValid = computed(() => authMode.value === 'login'
+  || (authForm.value.confirm.length > 0 && authForm.value.confirm === authForm.value.password))
 
 function label(group: string, value: string): string {
   return phone.t(`Apps.localPages.${group}.${value}`)
@@ -147,12 +184,167 @@ async function selectTab(next: Tab): Promise<void> {
       tab.value = 'profile'
       return
     }
+    if (!pages.profile) await pages.loadProfile()
+    if (!pages.profile?.exists) {
+      syncProfileDraft()
+      profileEditing.value = true
+      tab.value = 'profile'
+      screen.value = 'main'
+      return
+    }
     screen.value = 'compose'
     return
   }
   tab.value = next
   screen.value = 'main'
-  if (next === 'profile' && isAuthenticated.value) await pages.loadProfile()
+  if (next === 'profile' && isAuthenticated.value) {
+    await pages.loadProfile()
+    ensureBrowserProfile()
+    syncProfileDraft()
+    profileEditing.value = !pages.profile?.exists
+  }
+}
+
+function updateAuthEmail(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const filtered = filterMailAddressInput(input.value)
+  if (input.value !== filtered) input.value = filtered
+  authForm.value.email = filtered
+}
+
+function inputValue(event: Event): string {
+  return (event.target as HTMLInputElement).value
+}
+
+function switchAuthMode(mode: 'login' | 'register'): void {
+  authMode.value = mode
+  authForm.value.confirm = ''
+  authError.value = ''
+}
+
+function authErrorMessage(error?: string): string {
+  const known = ['invalid_email', 'invalid_password', 'invalid_credentials', 'email_taken', 'rate_limited']
+  return phone.t(`Apps.localPages.authErrors.${error && known.includes(error) ? error : 'default'}`)
+}
+
+async function submitAuth(): Promise<void> {
+  authError.value = ''
+  if (!authEmailValid.value) {
+    authError.value = authErrorMessage('invalid_email')
+    return
+  }
+  if (!authPasswordValid.value) {
+    authError.value = authErrorMessage('invalid_password')
+    return
+  }
+  if (!authConfirmValid.value) {
+    authError.value = phone.t('Apps.localPages.authErrors.password_mismatch')
+    return
+  }
+  const email = normalizeMailAddress(authForm.value.email)
+  if (!email) return
+  authPending.value = true
+  const response = authMode.value === 'login'
+    ? await account.login(email, authForm.value.password)
+    : await account.register(email, authForm.value.password)
+  authPending.value = false
+  if (!response.success) {
+    authError.value = authErrorMessage(response.error)
+    return
+  }
+  authForm.value = { confirm: '', email: '', password: '' }
+  authPasswordVisible.value = false
+  await pages.loadProfile()
+  ensureBrowserProfile()
+  syncProfileDraft()
+  profileEditing.value = !pages.profile?.exists
+  tab.value = 'profile'
+  screen.value = 'main'
+  onboardingReady.value = true
+}
+
+function syncProfileDraft(): void {
+  profileDraft.value = {
+    avatarMediaId: pages.profile?.avatar_media_id ?? 0,
+    bio: pages.profile?.bio ?? '',
+    handle: pages.profile?.handle ?? account.email.split('@')[0].toLowerCase(),
+  }
+  selectedProfilePhoto.value = null
+}
+
+function ensureBrowserProfile(): void {
+  const onboardingScenario = new URLSearchParams(window.location.search).get('testScenario')
+  if (!import.meta.env.DEV || onboardingScenario === 'local-pages-onboarding' || pages.profile) return
+  const handle = account.email.split('@')[0].toLowerCase()
+  pages.profile = {
+    avatar_media_id: null,
+    avatar_url: null,
+    bio: '',
+    email: account.email,
+    exists: true,
+    handle,
+    post_count: pages.ownItems.length,
+  }
+}
+
+function editProfile(): void {
+  syncProfileDraft()
+  profileEditing.value = true
+}
+
+function cancelProfileEdit(): void {
+  if (!pages.profile?.exists) return
+  syncProfileDraft()
+  profileEditing.value = false
+}
+
+function openProfileMedia(app: 'camera' | 'photos'): void {
+  messageMedia.begin(
+    'local-pages:profile-avatar',
+    'photo',
+    '/apps/local-pages?profileEdit=1',
+    1,
+    { draft: { ...profileDraft.value } } satisfies ProfileMediaContext,
+  )
+  void router.push({ path: `/apps/${app}`, query: { mediaAttachment: 'photo' } })
+}
+
+function removeProfilePhoto(): void {
+  selectedProfilePhoto.value = null
+  profileDraft.value.avatarMediaId = 0
+}
+
+async function saveProfile(): Promise<void> {
+  if (!canSaveProfile.value || profilePending.value) {
+    showFeedback('Apps.localPages.errors.invalid_profile')
+    return
+  }
+  profilePending.value = true
+  try {
+    const response = await pages.saveProfile({
+      avatarMediaId: selectedProfilePhoto.value?.id ?? profileDraft.value.avatarMediaId,
+      bio: profileDraft.value.bio.trim(),
+      handle: profileDraft.value.handle.trim().toLowerCase(),
+    })
+    if (!response.success) {
+      showFeedback(`Apps.localPages.errors.${response.error ?? 'default'}`)
+      return
+    }
+    const loaded = await pages.loadProfile()
+    ensureBrowserProfile()
+    if (!pages.profile?.exists || (!loaded && !import.meta.env.DEV)) {
+      showFeedback('Apps.localPages.errors.request_failed')
+      return
+    }
+    syncProfileDraft()
+    tab.value = 'profile'
+    screen.value = 'main'
+    profileEditing.value = false
+    await loadFeed()
+    showFeedback('Apps.localPages.profileSaved')
+  } finally {
+    profilePending.value = false
+  }
 }
 
 async function openPost(post: PagesPost): Promise<void> {
@@ -280,6 +472,7 @@ function sharePost(post: PagesPost): void {
 
 onMounted(async () => {
   const selection = messageMedia.consumeMany<MediaContext>('local-pages:compose')
+  const profileSelection = messageMedia.consumeMany<ProfileMediaContext>('local-pages:profile-avatar')
   if (selection) {
     if (selection.context) {
       draft.value = selection.context.draft
@@ -292,10 +485,35 @@ onMounted(async () => {
       pickedPhotos.value.push({ background: `url(${JSON.stringify(media.url)})`, id })
     }
   }
-  if (route.query.compose === '1') screen.value = 'compose'
-  await loadFeed()
+  if (isAuthenticated.value) {
+    await pages.loadProfile()
+    ensureBrowserProfile()
+    if (!pages.profile?.exists) {
+      syncProfileDraft()
+      profileEditing.value = true
+      tab.value = 'profile'
+      screen.value = 'main'
+    } else {
+      await loadFeed()
+    }
+    if (profileSelection) {
+      if (profileSelection.context) profileDraft.value = profileSelection.context.draft
+      if (profileSelection.media[0]) {
+        selectedProfilePhoto.value = profileSelection.media[0]
+        profileDraft.value.avatarMediaId = profileSelection.media[0].id
+      }
+      profileEditing.value = true
+      tab.value = 'profile'
+      screen.value = 'main'
+    }
+  } else {
+    tab.value = 'profile'
+    screen.value = 'main'
+  }
+  onboardingReady.value = true
+  if (route.query.compose === '1' && pages.profile?.exists) screen.value = 'compose'
   const easyShareId = String(route.query.easyShareId ?? '')
-  if (easyShareId && route.query.easyShareKind === 'post') {
+  if (pages.profile?.exists && easyShareId && route.query.easyShareKind === 'post') {
     const response = await pages.get(easyShareId)
     if (response.success && response.data) {
       selected.value = response.data
@@ -314,13 +532,19 @@ onMounted(async () => {
     :colors="{ bgIos: 'bg-transparent' }"
   >
     <template v-if="screen === 'main'">
+      <div v-if="!onboardingReady" class="pages__gate-loading">{{ phone.t('Common.loading') }}</div>
       <k-navbar
+        v-if="onboardingReady && isAuthenticated && pages.profile?.exists"
         class="pages-navbar"
         :subtitle="phone.t(tab === 'feed' ? 'Apps.localPages.eyebrow' : 'Apps.localPages.name')"
         :title="phone.t(tab === 'feed' ? 'Apps.localPages.name' : 'Apps.localPages.profile')"
       />
 
-      <section class="pages__content">
+      <section
+        v-if="onboardingReady"
+        class="pages__content"
+        :class="{ 'pages__content--gate': !isAuthenticated || !pages.profile?.exists }"
+      >
         <template v-if="tab === 'feed'">
           <k-glass class="pages-hero-glass">
             <div class="pages__hero"><div><small>{{ phone.t('Apps.localPages.cityPulse') }}</small><strong>{{ phone.t('Apps.localPages.heroTitle') }}</strong><span>{{ phone.t('Apps.localPages.heroBody') }}</span></div><MapPin :size="40" /></div>
@@ -338,23 +562,117 @@ onMounted(async () => {
         </template>
 
         <template v-else>
-          <div v-if="!isAuthenticated" class="pages__empty"><UserRound :size="42" /><strong>{{ phone.t('Apps.localPages.signInTitle') }}</strong><span>{{ phone.t('Apps.localPages.signInBody') }}</span></div>
+          <section v-if="!isAuthenticated" class="pages__auth">
+            <header class="pages__auth-head">
+              <span><UserRound :size="23" /></span>
+              <div><small>{{ phone.t('Apps.localPages.authEyebrow') }}</small><strong>{{ phone.t('Apps.localPages.authWelcome') }}</strong><p>{{ phone.t('Apps.localPages.authBody') }}</p></div>
+            </header>
+            <div class="pages__auth-modes">
+              <button type="button" :class="{ active: authMode === 'login' }" @click="switchAuthMode('login')">{{ phone.t('Apps.localPages.login') }}</button>
+              <button type="button" :class="{ active: authMode === 'register' }" @click="switchAuthMode('register')">{{ phone.t('Apps.localPages.register') }}</button>
+            </div>
+            <form class="pages__auth-form" @submit.prevent="submitAuth">
+              <div class="pages__auth-copy"><strong>{{ phone.t(authMode === 'login' ? 'Apps.localPages.loginTitle' : 'Apps.localPages.registerTitle') }}</strong><p>{{ phone.t(authMode === 'login' ? 'Apps.localPages.loginBody' : 'Apps.localPages.registerBody') }}</p></div>
+              <label>
+                {{ phone.t('Apps.localPages.authEmail') }}
+                <k-glass class="pages__auth-field">
+                  <Mail :size="16" />
+                  <input :value="authForm.email" :maxlength="MAIL_ADDRESS_INPUT_MAX_LENGTH" autocomplete="username" autocapitalize="none" autocorrect="off" inputmode="email" spellcheck="false" :placeholder="phone.t('Apps.localPages.authEmailPlaceholder')" @input="updateAuthEmail" />
+                  <span v-if="authForm.email && !authForm.email.includes('@')">@ifruit.com</span>
+                </k-glass>
+              </label>
+              <label>
+                {{ phone.t('Apps.localPages.authPassword') }}
+                <k-glass class="pages__auth-field">
+                  <KeyRound :size="16" />
+                  <input :value="authForm.password" :type="authPasswordVisible ? 'text' : 'password'" maxlength="64" :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'" :placeholder="phone.t('Apps.localPages.authPasswordPlaceholder')" @input="authForm.password = inputValue($event)" />
+                  <button type="button" :aria-label="phone.t(authPasswordVisible ? 'Apps.localPages.hidePassword' : 'Apps.localPages.showPassword')" @click="authPasswordVisible = !authPasswordVisible"><EyeOff v-if="authPasswordVisible" :size="16" /><Eye v-else :size="16" /></button>
+                </k-glass>
+              </label>
+              <label v-if="authMode === 'register'">
+                {{ phone.t('Apps.localPages.authConfirmPassword') }}
+                <k-glass class="pages__auth-field">
+                  <KeyRound :size="16" />
+                  <input :value="authForm.confirm" :type="authPasswordVisible ? 'text' : 'password'" maxlength="64" autocomplete="new-password" :placeholder="phone.t('Apps.localPages.authConfirmPlaceholder')" @input="authForm.confirm = inputValue($event)" />
+                </k-glass>
+              </label>
+              <p v-if="authError" class="pages__auth-error">{{ authError }}</p>
+              <k-glass class="pages__auth-submit"><button type="submit" :disabled="authPending">{{ phone.t(authMode === 'login' ? 'Apps.localPages.login' : 'Apps.localPages.register') }}</button></k-glass>
+            </form>
+          </section>
           <template v-else>
-            <k-glass class="pages-profile-glass">
-              <div class="pages__profile"><span>{{ account.email.charAt(0).toUpperCase() }}</span><div><small>{{ phone.t('Apps.localPages.localCreator') }}</small><strong>@{{ account.email.split('@')[0] }}</strong><b>{{ pages.ownItems.length }} {{ phone.t('Apps.localPages.posts') }}</b></div></div>
-            </k-glass>
-            <k-glass class="pages-segmented-glass">
-              <div class="pages__segmented"><button :class="{ active: profileMode === 'own' }" @click="profileMode = 'own'">{{ phone.t('Apps.localPages.myPosts') }}</button><button :class="{ active: profileMode === 'saved' }" @click="profileMode = 'saved'">{{ phone.t('Apps.localPages.saved') }}</button></div>
-            </k-glass>
+            <section v-if="profileEditing || !pages.profile?.exists" class="pages__profile-editor">
+              <div class="pages__profile-editor-head">
+                <span><UserRound :size="21" /></span>
+                <div>
+                  <strong>{{ phone.t(pages.profile?.exists ? 'Apps.localPages.editProfile' : 'Apps.localPages.createProfile') }}</strong>
+                  <small>{{ phone.t('Apps.localPages.profileSetupBody') }}</small>
+                </div>
+              </div>
+              <div class="pages__profile-photo-editor">
+                <span class="pages__profile-photo-preview">
+                  <img v-if="profileAvatarUrl" :src="profileAvatarUrl" :alt="phone.t('Apps.localPages.profilePhoto')" />
+                  <UserRound v-else :size="30" />
+                </span>
+                <div>
+                  <strong>{{ phone.t('Apps.localPages.profilePhoto') }}</strong>
+                  <small>{{ phone.t('Apps.localPages.profilePhotoHint') }}</small>
+                  <div class="pages__profile-photo-actions">
+                    <k-glass><button type="button" @click="openProfileMedia('camera')"><Camera :size="15" />{{ phone.t('Apps.localPages.camera') }}</button></k-glass>
+                    <k-glass><button type="button" @click="openProfileMedia('photos')"><Images :size="15" />{{ phone.t('Apps.localPages.gallery') }}</button></k-glass>
+                  </div>
+                  <button v-if="profileAvatarUrl" class="pages__profile-photo-remove" type="button" @click="removeProfilePhoto">{{ phone.t('Apps.localPages.removeProfilePhoto') }}</button>
+                </div>
+              </div>
+              <label>
+                {{ phone.t('Apps.localPages.profileEmail') }}
+                <k-glass class="pages__profile-field pages__profile-field--readonly">
+                  <Mail :size="16" />
+                  <input :value="pages.profile?.email || account.email" readonly />
+                </k-glass>
+              </label>
+              <label>
+                {{ phone.t('Apps.localPages.profileHandle') }}
+                <span>{{ profileDraft.handle.trim().length }}/24</span>
+                <k-glass class="pages__profile-field">
+                  <b>@</b>
+                  <input v-model="profileDraft.handle" maxlength="24" :placeholder="phone.t('Apps.localPages.profileHandlePlaceholder')" autocapitalize="none" />
+                </k-glass>
+                <small>{{ phone.t('Apps.localPages.profileHandleHint') }}</small>
+              </label>
+              <label>
+                {{ phone.t('Apps.localPages.profileBio') }}
+                <span>{{ profileDraft.bio.trim().length }}/160</span>
+                <k-glass class="pages__profile-field pages__profile-field--bio">
+                  <textarea v-model="profileDraft.bio" maxlength="160" :placeholder="phone.t('Apps.localPages.profileBioPlaceholder')" />
+                </k-glass>
+              </label>
+              <div class="pages__profile-actions">
+                <k-glass v-if="pages.profile?.exists" class="pages__profile-action"><button type="button" @click="cancelProfileEdit">{{ phone.t('Apps.localPages.profileCancel') }}</button></k-glass>
+                <k-glass class="pages__profile-action pages__profile-action--save"><button type="button" :disabled="!canSaveProfile || profilePending" @click="saveProfile">{{ phone.t('Apps.localPages.profileSave') }}</button></k-glass>
+              </div>
+            </section>
+            <template v-else>
+              <k-glass class="pages-profile-glass">
+                <div class="pages__profile">
+                  <span><img v-if="pages.profile.avatar_url" :src="pages.profile.avatar_url" alt="" /><template v-else>{{ pages.profile.handle.charAt(0).toUpperCase() }}</template></span>
+                  <div><small>{{ phone.t('Apps.localPages.localCreator') }}</small><strong>@{{ pages.profile.handle }}</strong><b>{{ pages.profile.post_count }} {{ phone.t('Apps.localPages.posts') }}</b><p v-if="pages.profile.bio">{{ pages.profile.bio }}</p></div>
+                  <button class="pages__profile-edit" type="button" :aria-label="phone.t('Apps.localPages.editProfile')" @click="editProfile"><Pencil :size="15" /></button>
+                </div>
+              </k-glass>
+              <k-glass class="pages-segmented-glass">
+                <div class="pages__segmented"><button :class="{ active: profileMode === 'own' }" @click="profileMode = 'own'">{{ phone.t('Apps.localPages.myPosts') }}</button><button :class="{ active: profileMode === 'saved' }" @click="profileMode = 'saved'">{{ phone.t('Apps.localPages.saved') }}</button></div>
+              </k-glass>
+            </template>
           </template>
         </template>
 
         <div v-if="pages.isLoading" class="pages__empty">{{ phone.t('Common.loading') }}</div>
-        <div v-else-if="isAuthenticated || tab === 'feed'" class="pages__feed">
+        <div v-else-if="tab === 'feed' || (isAuthenticated && pages.profile?.exists && !profileEditing)" class="pages__feed">
           <k-glass v-for="post in displayedPosts" :key="post.id" class="pages-post-glass">
             <article class="pages__post">
             <button class="pages__post-open" type="button" @click="openPost(post)">
-              <div class="pages__post-head"><span>{{ post.author_name.charAt(0).toUpperCase() }}</span><div><strong>@{{ post.author_name }}</strong><small><MapPin :size="10" /> {{ post.district ? phone.t(`Apps.citymarkt.districts.${post.district}`) : phone.t('Apps.localPages.allLosSantos') }} · {{ relativeDate(post.created_at) }}</small></div><i>{{ label('categories', post.category) }}</i></div>
+              <div class="pages__post-head"><span><img v-if="post.author_avatar" :src="post.author_avatar" alt="" /><template v-else>{{ post.author_name.charAt(0).toUpperCase() }}</template></span><div><strong>@{{ post.author_name }}</strong><small><MapPin :size="10" /> {{ post.district ? phone.t(`Apps.citymarkt.districts.${post.district}`) : phone.t('Apps.localPages.allLosSantos') }} · {{ relativeDate(post.created_at) }}</small></div><i>{{ label('categories', post.category) }}</i></div>
               <div v-if="post.image" class="pages__cover" :style="{ background: post.image }"><b v-if="post.images.length > 1">1 / {{ post.images.length }}</b></div>
               <h2>{{ post.title }}</h2><p>{{ post.body }}</p>
             </button>
@@ -371,6 +689,7 @@ onMounted(async () => {
       </section>
 
       <k-tabbar
+        v-if="isAuthenticated && pages.profile?.exists"
         component="nav"
         icons
         labels
@@ -410,12 +729,27 @@ onMounted(async () => {
     </template>
 
     <section v-else-if="screen === 'detail' && selected" class="pages__detail">
-      <header><k-button component="button" clear rounded @click="screen = 'main'"><ArrowLeft :size="20" /></k-button><strong>{{ phone.t('Apps.localPages.post') }}</strong><k-button v-if="selected.is_owner" component="button" clear rounded class="danger" @click="removePost"><Trash2 :size="18" /></k-button><k-button v-else component="button" clear rounded @click="react('save')"><Bookmark :size="18" :fill="selected.is_saved ? 'currentColor' : 'none'" /></k-button></header>
+      <header>
+        <k-glass component="button" type="button" class="pages__detail-control" @click="screen = 'main'">
+          <ArrowLeft :size="20" />
+        </k-glass>
+        <strong>{{ phone.t('Apps.localPages.post') }}</strong>
+        <k-glass v-if="selected.is_owner" component="button" type="button" class="pages__detail-control danger" @click="removePost">
+          <Trash2 :size="18" />
+        </k-glass>
+        <k-glass v-else component="button" type="button" class="pages__detail-control" @click="react('save')">
+          <Bookmark :size="18" :fill="selected.is_saved ? 'currentColor' : 'none'" />
+        </k-glass>
+      </header>
       <div class="pages__detail-scroll">
         <div v-if="selected.images.length" class="pages__gallery" :style="{ background: selected.images[galleryIndex]?.gradient }"><button v-if="selected.images.length > 1" @click="moveGallery(-1)"><ChevronLeft /></button><button v-if="selected.images.length > 1" @click="moveGallery(1)"><ChevronRight /></button><span>{{ galleryIndex + 1 }} / {{ selected.images.length }}</span></div>
-        <article><div class="pages__author"><span>{{ selected.author_name.charAt(0).toUpperCase() }}</span><div><strong>@{{ selected.author_name }}</strong><small>{{ relativeDate(selected.created_at) }}</small></div><i>{{ label('categories', selected.category) }}</i></div><h1>{{ selected.title }}</h1><p>{{ selected.body }}</p><div class="pages__location"><MapPin :size="17" /><div><small>{{ phone.t('Apps.localPages.location') }}</small><strong>{{ selected.district ? phone.t(`Apps.citymarkt.districts.${selected.district}`) : phone.t('Apps.localPages.allLosSantos') }}</strong></div></div><button v-if="selected.source_type === 'citymarkt'" class="pages__market-link" @click="openCityMarktListing"><Store :size="18" /><span><small>{{ phone.t('Apps.localPages.sharedFrom') }}</small><strong>{{ phone.t('Apps.localPages.openCityMarkt') }}</strong></span><b v-if="selected.citymarkt_price">${{ Number(selected.citymarkt_price).toLocaleString() }}</b></button></article>
+        <article><div class="pages__author"><span><img v-if="selected.author_avatar" :src="selected.author_avatar" alt="" /><template v-else>{{ selected.author_name.charAt(0).toUpperCase() }}</template></span><div><strong>@{{ selected.author_name }}</strong><small>{{ relativeDate(selected.created_at) }}</small></div><i>{{ label('categories', selected.category) }}</i></div><h1>{{ selected.title }}</h1><p>{{ selected.body }}</p><div class="pages__location"><MapPin :size="17" /><div><small>{{ phone.t('Apps.localPages.location') }}</small><strong>{{ selected.district ? phone.t(`Apps.citymarkt.districts.${selected.district}`) : phone.t('Apps.localPages.allLosSantos') }}</strong></div></div><button v-if="selected.source_type === 'citymarkt'" class="pages__market-link" @click="openCityMarktListing"><Store :size="18" /><span><small>{{ phone.t('Apps.localPages.sharedFrom') }}</small><strong>{{ phone.t('Apps.localPages.openCityMarkt') }}</strong></span><b v-if="selected.citymarkt_price">${{ Number(selected.citymarkt_price).toLocaleString() }}</b></button></article>
       </div>
-      <div class="pages__detail-actions"><button :class="{ active: selected.is_liked }" @click="react('like')"><Heart :size="19" :fill="selected.is_liked ? 'currentColor' : 'none'" />{{ selected.like_count }} {{ phone.t('Apps.localPages.likes') }}</button><button @click="sharePost(selected)"><Share2 :size="19" />{{ phone.t('Apps.easyShare.share') }}</button><button @click="react('save')"><Bookmark :size="19" :fill="selected.is_saved ? 'currentColor' : 'none'" />{{ phone.t('Apps.localPages.save') }}</button></div>
+      <k-glass class="pages__detail-actions">
+        <button type="button" :class="{ active: selected.is_liked }" @click="react('like')"><Heart :size="19" :fill="selected.is_liked ? 'currentColor' : 'none'" />{{ selected.like_count }} {{ phone.t('Apps.localPages.likes') }}</button>
+        <button type="button" @click="sharePost(selected)"><Share2 :size="19" />{{ phone.t('Apps.easyShare.share') }}</button>
+        <button type="button" @click="react('save')"><Bookmark :size="19" :fill="selected.is_saved ? 'currentColor' : 'none'" />{{ phone.t('Apps.localPages.save') }}</button>
+      </k-glass>
     </section>
 
     <section v-else class="pages__compose">
@@ -546,6 +880,18 @@ onMounted(async () => {
   inset: 0;
   height: auto;
   padding: 108px 13px 112px;
+}
+.pages__content--gate {
+  padding: 68px 18px 34px;
+}
+.pages__gate-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
 }
 .pages-hero-glass,
 .pages-profile-glass,
@@ -738,5 +1084,377 @@ onMounted(async () => {
   background: var(--yellow);
   color: #17191a;
   box-shadow: 0 4px 12px #00000030;
+}
+.pages__detail > header .pages__detail-control,
+.pages__detail-actions {
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--color-ios-dark-glass);
+  box-shadow: var(--shadow-ios-dark-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.pages--light .pages__detail-control,
+.pages--light .pages__detail-actions {
+  background: var(--color-ios-light-glass);
+  box-shadow: var(--shadow-ios-light-glass);
+}
+.pages__auth {
+  padding: 2px 1px 18px;
+}
+.pages__auth-head {
+  padding: 5px 2px 15px;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+.pages__auth-head > span {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #ffd63e1b;
+  color: var(--yellow);
+}
+.pages__auth-head div {
+  min-width: 0;
+}
+.pages__auth-head small,
+.pages__auth-head strong {
+  display: block;
+}
+.pages__auth-head small {
+  color: var(--yellow);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.pages__auth-head strong {
+  margin-top: 2px;
+  font-size: 18px;
+}
+.pages__auth-head p,
+.pages__auth-copy p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.pages__auth-modes {
+  margin-bottom: 14px;
+  padding: 4px;
+  border-radius: 11px;
+  display: flex;
+  background: var(--panel);
+}
+.pages__auth-modes button {
+  min-height: 34px;
+  flex: 1;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 750;
+}
+.pages__auth-modes button.active {
+  background: var(--yellow);
+  color: #17191a;
+}
+.pages__auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pages__auth-copy strong {
+  font-size: 15px;
+}
+.pages__auth-form label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+.pages__auth-field {
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--yellow);
+}
+.pages__auth-field input {
+  min-width: 0;
+  flex: 1;
+  padding: 11px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f7f7f2;
+  font-size: 13px;
+}
+.pages--light .pages__auth-field input {
+  color: #171b1e;
+}
+.pages__auth-field > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.pages__auth-field button {
+  width: 30px;
+  height: 30px;
+  margin-right: -7px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--muted);
+}
+.pages__auth-error {
+  margin: -2px 2px 0;
+  color: #ff6961;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.pages__auth-submit {
+  border-radius: 11px;
+  overflow: hidden;
+  color: var(--yellow);
+}
+.pages__auth-submit button {
+  width: 100%;
+  min-height: 44px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 850;
+}
+.pages__auth-submit button:disabled {
+  opacity: .45;
+}
+.pages__profile > div {
+  min-width: 0;
+  flex: 1;
+}
+.pages__profile p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.pages__profile-edit {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: #ffffff0d;
+  color: var(--yellow);
+}
+.pages--light .pages__profile-edit {
+  background: #0000000a;
+}
+.pages__profile-editor {
+  padding: 2px 1px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pages__profile-editor-head {
+  padding: 5px 2px 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pages__profile-editor-head > span {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #ffd63e1b;
+  color: var(--yellow);
+}
+.pages__profile-editor-head strong,
+.pages__profile-editor-head small {
+  display: block;
+}
+.pages__profile-editor-head strong {
+  font-size: 17px;
+}
+.pages__profile-editor-head small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+.pages__profile-photo-editor {
+  padding: 12px;
+  border: 1px solid #ffffff14;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff08;
+}
+.pages--light .pages__profile-photo-editor {
+  border-color: #00000012;
+  background: #00000005;
+}
+.pages__profile-photo-preview {
+  width: 70px;
+  height: 70px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #ffd63e1b;
+  color: var(--yellow);
+}
+.pages__profile-photo-preview img,
+.pages__profile > span img,
+.pages__post-head > span img,
+.pages__author > span img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pages__profile-photo-editor > div {
+  min-width: 0;
+  flex: 1;
+}
+.pages__profile-photo-editor strong,
+.pages__profile-photo-editor small {
+  display: block;
+}
+.pages__profile-photo-editor strong {
+  font-size: 13px;
+}
+.pages__profile-photo-editor small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.3;
+}
+.pages__profile-photo-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+}
+.pages__profile-photo-actions > * {
+  min-width: 0;
+  flex: 1;
+  border-radius: 9px;
+  overflow: hidden;
+}
+.pages__profile-photo-actions button {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: transparent;
+  color: var(--yellow);
+  font-size: 10px;
+  font-weight: 800;
+}
+.pages__profile-photo-remove {
+  margin-top: 7px;
+  padding: 0;
+  background: transparent;
+  color: #ff6961;
+  font-size: 10px;
+  font-weight: 700;
+}
+.pages__profile-editor label {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+.pages__profile-editor label > span {
+  float: right;
+  font-size: 10px;
+  font-weight: 600;
+}
+.pages__profile-editor label > small {
+  display: block;
+  margin: 5px 2px 0;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.pages__profile-field {
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--yellow);
+}
+.pages__profile-field input,
+.pages__profile-field textarea {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 11px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+}
+.pages__profile-field input,
+.pages__profile-field textarea {
+  color: #f7f7f2;
+}
+.pages--light .pages__profile-field input,
+.pages--light .pages__profile-field textarea {
+  color: #171b1e;
+}
+.pages__profile-field--readonly {
+  color: var(--muted);
+}
+.pages__profile-field--readonly input {
+  color: var(--muted);
+}
+.pages__profile-field--bio {
+  align-items: flex-start;
+}
+.pages__profile-field textarea {
+  min-height: 88px;
+  resize: none;
+  line-height: 1.4;
+}
+.pages__profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.pages__profile-action {
+  min-width: 96px;
+  border-radius: 11px;
+  overflow: hidden;
+}
+.pages__profile-action button {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 14px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+}
+.pages__profile-action--save {
+  color: var(--yellow);
+}
+.pages__profile-action button:disabled {
+  opacity: .4;
 }
 </style>

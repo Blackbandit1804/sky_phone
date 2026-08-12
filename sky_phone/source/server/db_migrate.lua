@@ -776,6 +776,37 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_pages_profiles",
+        columns = {
+            { name = "account_id", type = "BIGINT UNSIGNED NOT NULL" },
+            {
+                name = "handle",
+                type = "VARCHAR(24) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_general_ci",
+            },
+            { name = "bio", type = "VARCHAR(160) NOT NULL DEFAULT ''" },
+            { name = "avatar_media_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            {
+                name = "updated_at",
+                type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            },
+        },
+        primaryKey = "account_id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_pages_profile_handle", columns = "(`handle`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_pages_profile_avatar", columns = "(`avatar_media_id`)" },
+        },
+        foreignKeys = {
+            { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+            { column = "avatar_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_pages_posts",
         columns = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },

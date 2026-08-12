@@ -14,6 +14,27 @@ local function valid_text(value, minimum, maximum)
     return length and length >= minimum and length <= maximum
 end
 
+local function normalize_handle(value)
+    local handle = trim(value)
+    if not handle then return nil end
+    handle = handle:lower():gsub("^@", "")
+    local length = utf8.len(handle)
+    if not length
+        or length < Config.LocalPages.ProfileHandleMinLength
+        or length > Config.LocalPages.ProfileHandleMaxLength
+        or not handle:match("^[a-z0-9][a-z0-9._]*[a-z0-9]$")
+    then
+        return nil
+    end
+    return handle
+end
+
+local function default_handle(account)
+    local email_name = type(account.email) == "string" and account.email:match("^([^@]+)") or ""
+    local candidate = email_name:lower():gsub("[^a-z0-9._]", "_"):sub(1, Config.LocalPages.ProfileHandleMaxLength)
+    return normalize_handle(candidate) or ("local%s"):format(account.id)
+end
+
 local function new_id()
     local rows = Bridge.Database.Query("SELECT UUID() AS `id`", {})
     if not rows[1] or type(rows[1].id) ~= "string" then
@@ -83,7 +104,8 @@ local function list_posts(account_id, where_clause, values, limit, offset)
     return hydrate_posts(Bridge.Database.Query(([[
         SELECT p.`id`, p.`title`, p.`body`, p.`category`, p.`district`, p.`source_type`,
             p.`citymarkt_listing_id`, UNIX_TIMESTAMP(p.`created_at`) AS `created_at_unix`,
-            SUBSTRING_INDEX(a.`email`, '@', 1) AS `author_name`,
+            COALESCE(profile.`handle`, SUBSTRING_INDEX(a.`email`, '@', 1)) AS `author_name`,
+            avatar.`url` AS `author_avatar`,
             (p.`account_id` = ?) AS `is_owner`,
             EXISTS(SELECT 1 FROM `sky_phone_pages_reactions` r WHERE r.`post_id` = p.`id`
                 AND r.`account_id` = ? AND r.`kind` = 'like') AS `is_liked`,
@@ -96,6 +118,8 @@ local function list_posts(account_id, where_clause, values, limit, offset)
             m.`price` AS `citymarkt_price`
         FROM `sky_phone_pages_posts` p
         JOIN `sky_phone_accounts` a ON a.`id` = p.`account_id`
+        LEFT JOIN `sky_phone_pages_profiles` profile ON profile.`account_id` = p.`account_id`
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = profile.`avatar_media_id`
         LEFT JOIN `sky_phone_marketplace_listings` m ON m.`id` = p.`citymarkt_listing_id`
         WHERE %s
         ORDER BY p.`created_at` DESC
@@ -109,6 +133,102 @@ local function optional_account(source)
     local rows = Bridge.Database.Query("SELECT `account_id` FROM `sky_phone_devices` WHERE `imei` = ? LIMIT 1", { session.imei })
     return rows[1] and tonumber(rows[1].account_id) or nil, nil
 end
+
+local function profile_dto(account)
+    local rows = Bridge.Database.Query([[
+        SELECT profile.`handle`, profile.`bio`, profile.`avatar_media_id`, avatar.`url` AS `avatar_url`,
+            (SELECT COUNT(*) FROM `sky_phone_pages_posts` post
+                WHERE post.`account_id` = ?) AS `post_count`
+        FROM `sky_phone_accounts` account
+        LEFT JOIN `sky_phone_pages_profiles` profile ON profile.`account_id` = account.`id`
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = profile.`avatar_media_id`
+        WHERE account.`id` = ?
+        LIMIT 1
+    ]], { account.id, account.id })
+    local row = rows[1]
+    if not row then
+        error(("[sky_phone] Could not load Local Pages profile account %s."):format(account.id))
+    end
+    return {
+        avatar_media_id = tonumber(row.avatar_media_id),
+        avatar_url = row.avatar_url,
+        bio = row.bio or "",
+        email = account.email,
+        exists = row.handle ~= nil,
+        handle = row.handle or default_handle(account),
+        post_count = tonumber(row.post_count) or 0,
+    }
+end
+
+local function require_profile(account_id)
+    local rows = Bridge.Database.Query([[
+        SELECT `account_id`, `handle`, `bio`
+        FROM `sky_phone_pages_profiles`
+        WHERE `account_id` = ?
+        LIMIT 1
+    ]], { account_id })
+    if not rows[1] then
+        return nil, { success = false, error = "profile_required" }
+    end
+    return rows[1], nil
+end
+
+Bridge.Callbacks.Register("sky_phone:pages:profile", function(source)
+    local account, error_response = SkyPhone.RequireAccount(source)
+    if not account then return error_response end
+    return { success = true, data = profile_dto(account) }
+end)
+
+Bridge.Callbacks.Register("sky_phone:pages:profile-save", function(source, data)
+    local account, error_response = SkyPhone.RequireAccount(source)
+    if not account then return error_response end
+    if not SkyPhone.AllowOperation(source, "pages:profile-save", 12, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    if type(data) ~= "table" or type(data.bio) ~= "string" then
+        return { success = false, error = "invalid_profile" }
+    end
+    local handle = normalize_handle(data.handle)
+    local bio = trim(data.bio)
+    local avatar_media_id = tonumber(data.avatarMediaId)
+    if not handle or not valid_text(bio, 0, Config.LocalPages.ProfileBioMaxLength)
+        or not avatar_media_id or avatar_media_id < 0 or avatar_media_id ~= math.floor(avatar_media_id)
+    then
+        return { success = false, error = "invalid_profile" }
+    end
+    if avatar_media_id > 0 and not SkyPhoneMedia.ResolveOwnedMedia(source, tostring(avatar_media_id), "photo") then
+        Bridge.Debug("warn", "[sky_phone] Rejected unowned Local Pages profile image from source %s.", tostring(source))
+        return { success = false, error = "invalid_profile_image" }
+    end
+    local duplicate = Bridge.Database.Query([[
+        SELECT `account_id`
+        FROM `sky_phone_pages_profiles`
+        WHERE `handle` = ? AND `account_id` <> ?
+        LIMIT 1
+    ]], { handle, account.id })
+    if duplicate[1] then
+        return { success = false, error = "profile_handle_taken" }
+    end
+    local existing = Bridge.Database.Query([[
+        SELECT `account_id`
+        FROM `sky_phone_pages_profiles`
+        WHERE `account_id` = ?
+        LIMIT 1
+    ]], { account.id })
+    if existing[1] then
+        Bridge.Database.Query([[
+            UPDATE `sky_phone_pages_profiles`
+            SET `handle` = ?, `bio` = ?, `avatar_media_id` = NULLIF(?, 0)
+            WHERE `account_id` = ?
+        ]], { handle, bio, avatar_media_id, account.id })
+    else
+        Bridge.Database.Query([[
+            INSERT INTO `sky_phone_pages_profiles` (`account_id`, `handle`, `bio`, `avatar_media_id`)
+            VALUES (?, ?, ?, NULLIF(?, 0))
+        ]], { account.id, handle, bio, avatar_media_id })
+    end
+    return { success = true, data = profile_dto(account) }
+end)
 
 Bridge.Callbacks.Register("sky_phone:pages:list", function(source, data)
     if type(data) ~= "table" then return { success = false, error = "invalid_request" } end
@@ -163,6 +283,8 @@ end)
 Bridge.Callbacks.Register("sky_phone:pages:create", function(source, data)
     local account, error_response = SkyPhone.RequireAccount(source)
     if not account then return error_response end
+    local _, profile_error = require_profile(account.id)
+    if profile_error then return profile_error end
     if not SkyPhone.AllowOperation(source, "pages:create", 6, 60) then
         return { success = false, error = "rate_limited" }
     end
@@ -201,6 +323,8 @@ end)
 Bridge.Callbacks.Register("sky_phone:pages:share-citymarkt", function(source, data)
     local account, error_response = SkyPhone.RequireAccount(source)
     if not account then return error_response end
+    local _, profile_error = require_profile(account.id)
+    if profile_error then return profile_error end
     if not SkyPhone.AllowOperation(source, "pages:share-citymarkt", 3, 60) then
         return { success = false, error = "rate_limited" }
     end

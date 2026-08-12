@@ -59,6 +59,8 @@ local server_callbacks = {
     "marketplace:block",
     "pages:list",
     "pages:get",
+    "pages:profile",
+    "pages:profile-save",
     "pages:list-own",
     "pages:create",
     "pages:share-citymarkt",
