@@ -20,6 +20,13 @@ Config.Phone = {
     DeviceName = "iFruit Phone",
 }
 
+Config.TestData = {
+    Enabled = true,
+    Command = "phonetestdata",
+    AdminOnly = false, -- enable only on development servers; every run is scoped to the executing player's phone
+    AdminGroups = { "admin", "superadmin" },
+}
+
 Config.CustomApps = {
     Enabled = true,
     BundledApps = true,

@@ -395,11 +395,11 @@ onBeforeUnmount(() => {
       </p>
     </div>
 
-    <k-sheet
-      :opened="Boolean(selectedVehicle)"
-      class="garage-sheet"
-      @backdropclick="selectedVehicle = null"
-    >
+    <div class="garage-sheet">
+      <k-sheet
+        :opened="Boolean(selectedVehicle)"
+        @backdropclick="selectedVehicle = null"
+      >
       <section v-if="selectedVehicle" class="garage-detail">
         <k-link
           component="button"
@@ -499,7 +499,8 @@ onBeforeUnmount(() => {
           <Share2 :size="18" />{{ phone.t('Apps.easyShare.share') }}
         </k-button>
       </section>
-    </k-sheet>
+      </k-sheet>
+    </div>
     <k-dialog
       :opened="Boolean(valetCandidate)"
       class="garage-valet-confirm"

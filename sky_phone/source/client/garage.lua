@@ -441,6 +441,10 @@ local function run_valet_delivery(order)
 end
 
 RegisterNUICallback("garage:valet-request", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     if current_valet then
         cb({ success = false, error = "valet_active" })
         return

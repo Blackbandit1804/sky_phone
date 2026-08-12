@@ -1404,6 +1404,31 @@ onBeforeUnmount(() => {
   --k-button-bg-color: var(--billing-blue);
   width: 100%;
 }
+@supports not (color: color-mix(in srgb, white, black)) {
+  .billing-navbar {
+    --k-navbar-bg-color: rgb(7 9 12 / 90%);
+    background: rgb(7 9 12 / 88%);
+  }
+  .billing-app--light .billing-navbar {
+    --k-navbar-bg-color: rgb(245 247 250 / 91%);
+    background: rgb(245 247 250 / 88%);
+  }
+  .billing-summary__item,
+  .billing-filter-panel,
+  .billing-invoice-card,
+  .billing-list-row,
+  .billing-search :deep(form),
+  .billing-detail__hero,
+  .billing-panel,
+  .billing-note {
+    background: var(--billing-panel);
+  }
+  .billing-detail__hero--paid {
+    background:
+      radial-gradient(circle at 50% 6%, rgb(72 199 111 / 18%), transparent 52%),
+      var(--billing-panel);
+  }
+}
 .billing-toast {
   z-index: 50;
 }

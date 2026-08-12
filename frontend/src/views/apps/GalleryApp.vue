@@ -84,10 +84,13 @@ const imageZoom = ref(1)
 const imagePan = ref({ x: 0, y: 0 })
 const landscapeViewer = ref(false)
 const dragging = ref(false)
+const videoPlaybackError = ref(false)
 const dragStart = ref({ panX: 0, panY: 0, x: 0, y: 0 })
 let observer: IntersectionObserver | null = null
 let toastTimer: number | undefined
 let pendingDeleteCorrelation = ''
+let dragTarget: HTMLElement | null = null
+let dragPointerId: number | null = null
 
 const imageStyle = computed(() => ({
   cursor:
@@ -227,6 +230,7 @@ function openMedia(entry: PhoneMedia): void {
   landscapeViewer.value = false
   phone.setCameraLandscape(false)
   selected.value = entry
+  videoPlaybackError.value = false
   imageZoom.value = 1
   imagePan.value = { x: 0, y: 0 }
 }
@@ -254,6 +258,7 @@ function closeMedia(): void {
   landscapeViewer.value = false
   phone.setCameraLandscape(false)
   selected.value = null
+  videoPlaybackError.value = false
   deleteDialogOpened.value = false
   stopDragging()
 }
@@ -295,6 +300,9 @@ function startDragging(event: PointerEvent): void {
     setZoom(2)
     return
   }
+  dragTarget = event.currentTarget as HTMLElement
+  dragPointerId = event.pointerId
+  dragTarget.setPointerCapture(event.pointerId)
   dragging.value = true
   dragStart.value = {
     panX: imagePan.value.x,
@@ -302,8 +310,6 @@ function startDragging(event: PointerEvent): void {
     x: event.clientX,
     y: event.clientY,
   }
-  window.addEventListener('pointermove', moveImage)
-  window.addEventListener('pointerup', stopDragging)
 }
 
 function moveImage(event: PointerEvent): void {
@@ -316,8 +322,44 @@ function moveImage(event: PointerEvent): void {
 
 function stopDragging(): void {
   dragging.value = false
-  window.removeEventListener('pointermove', moveImage)
-  window.removeEventListener('pointerup', stopDragging)
+  if (
+    dragTarget &&
+    dragPointerId !== null &&
+    dragTarget.hasPointerCapture(dragPointerId)
+  ) {
+    dragTarget.releasePointerCapture(dragPointerId)
+  }
+  dragTarget = null
+  dragPointerId = null
+}
+
+function moveImageWithKeyboard(event: KeyboardEvent): void {
+  if (imageZoom.value <= 1) return
+  const step = event.shiftKey ? 48 : 24
+  const offsets: Partial<Record<string, { x: number; y: number }>> = {
+    ArrowDown: { x: 0, y: -step },
+    ArrowLeft: { x: step, y: 0 },
+    ArrowRight: { x: -step, y: 0 },
+    ArrowUp: { x: 0, y: step },
+  }
+  const offset = offsets[event.key]
+  if (!offset) return
+  event.preventDefault()
+  event.stopPropagation()
+  imagePan.value = {
+    x: imagePan.value.x + offset.x,
+    y: imagePan.value.y + offset.y,
+  }
+}
+
+async function initializeVideo(event: Event): Promise<void> {
+  orientToMedia(event)
+  videoPlaybackError.value = false
+  try {
+    await (event.currentTarget as HTMLVideoElement).play()
+  } catch {
+    // The native controls remain visible when embedded CEF blocks autoplay.
+  }
 }
 
 async function deleteSelected(): Promise<void> {
@@ -569,18 +611,33 @@ onBeforeUnmount(() => {
           :alt="phone.t('Apps.photos.photoAlt')"
           :style="imageStyle"
           draggable="false"
+          tabindex="0"
           @load="orientToMedia"
           @pointerdown="startDragging"
+          @pointermove="moveImage"
+          @pointerup="stopDragging"
+          @pointercancel="stopDragging"
+          @lostpointercapture="stopDragging"
+          @keydown="moveImageWithKeyboard"
           @dblclick="setZoom(imageZoom === 1 ? 2 : 1)"
         />
         <video
           v-else
           :src="selected.url"
           controls
-          autoplay
           playsinline
-          @loadedmetadata="orientToMedia"
+          @loadedmetadata="initializeVideo"
+          @error="videoPlaybackError = true"
         ></video>
+        <k-block
+          v-if="selected.mediaType === 'video' && videoPlaybackError"
+          strong
+          inset
+          class="gallery-error"
+          role="alert"
+        >
+          {{ phone.t('Apps.photos.errors.unsupported') }}
+        </k-block>
       </div>
     </div>
 
@@ -776,6 +833,8 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 50%;
   left: 50%;
+  width: 720px;
+  height: 368px;
   width: 100cqh;
   height: 100cqw;
   transform: translate(-50%, -50%) rotate(90deg);

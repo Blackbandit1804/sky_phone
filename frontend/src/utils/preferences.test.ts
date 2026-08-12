@@ -85,6 +85,17 @@ describe('preferences', () => {
     expect(value.settings.screenBrightness).toBe(10)
   })
 
+  it('keeps the phone above the minimum usable scale', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({
+        version: 1,
+        settings: { phoneScale: 50 },
+      }),
+    )
+
+    expect(value.settings.phoneScale).toBe(75)
+  })
+
   it('preserves safe notification preferences for custom apps', () => {
     const appId = 'example-app' as LaunchablePhoneAppId
     const value = parsePhonePreferences(

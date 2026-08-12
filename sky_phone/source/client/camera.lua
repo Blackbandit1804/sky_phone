@@ -6,6 +6,10 @@ local ultrawide_fov_multiplier = 2.0
 local front_camera_distance = 0.75
 local front_camera_height = 0.05
 local front_camera_target_height = 0.03
+local unfocused_camera_controls = {
+    1, -- INPUT_LOOK_LR
+    2, -- INPUT_LOOK_UD
+}
 local camera_state = {
     active = false,
     enforcing = false,
@@ -16,6 +20,7 @@ local camera_state = {
     front_camera_handle = nil,
     landscape = false,
     ultrawide_camera_handle = nil,
+    applied_nui_focus = true,
     nui_focused = true,
     previous_ped_view = nil,
     previous_radar_hidden = nil,
@@ -145,27 +150,32 @@ local function restore_camera_view()
     end
 end
 
-local function set_camera_focus(focused)
-    if camera_state.nui_focused == focused then
-        return
+local function apply_unfocused_camera_controls()
+    DisableAllControlActions(0)
+    for _, control in ipairs(unfocused_camera_controls) do
+        EnableControlAction(0, control, true)
     end
-    camera_state.nui_focused = focused
-    if focused then
-        SetNuiFocus(true, true)
-        SetNuiFocusKeepInput(false)
-        SendNUIMessage({ type = "camera:focus", data = { focused = true } })
-        return
-    end
-    SetNuiFocus(false, false)
-    SetNuiFocusKeepInput(true)
-    SendNUIMessage({ type = "camera:focus", data = { focused = false } })
+    DisablePlayerFiring(PlayerId(), true)
+end
+
+local function update_camera_focus_claim()
+    TriggerEvent("sky_phone:client:setCameraFocus", {
+        active = camera_state.active,
+        nuiFocused = camera_state.nui_focused,
+    })
+end
+
+local set_camera_focus
+
+local function watch_unfocused_camera_controls()
     if camera_state.focus_watcher then
         return
     end
     camera_state.focus_watcher = true
     CreateThread(function()
-        while camera_state.active and not camera_state.nui_focused do
-            if IsControlJustReleased(0, 22) then
+        while camera_state.active and not camera_state.applied_nui_focus do
+            apply_unfocused_camera_controls()
+            if IsDisabledControlJustReleased(0, 22) then
                 set_camera_focus(true)
                 break
             end
@@ -174,6 +184,28 @@ local function set_camera_focus(focused)
         camera_state.focus_watcher = false
     end)
 end
+
+set_camera_focus = function(focused)
+    camera_state.nui_focused = focused
+    update_camera_focus_claim()
+end
+
+AddEventHandler("sky_phone:client:cameraFocusApplied", function(data)
+    if type(data) ~= "table"
+        or type(data.active) ~= "boolean"
+        or type(data.focused) ~= "boolean"
+        or type(data.gameInput) ~= "boolean"
+    then
+        return
+    end
+    if camera_state.applied_nui_focus ~= data.focused then
+        camera_state.applied_nui_focus = data.focused
+        SendNUIMessage({ type = "camera:focus", data = { focused = data.focused } })
+    end
+    if data.active and data.gameInput then
+        watch_unfocused_camera_controls()
+    end
+end)
 
 local function set_camera_active(active)
     if camera_state.active == active then
@@ -251,11 +283,8 @@ local function set_camera_active(active)
     clear_front_camera()
     clear_ultrawide_camera()
     restore_camera_view()
-    if not camera_state.nui_focused then
-        camera_state.nui_focused = true
-        SetNuiFocusKeepInput(false)
-        SetNuiFocus(true, true)
-    end
+    camera_state.nui_focused = true
+    update_camera_focus_claim()
     TriggerEvent("sky_phone:animation:camera", {
         active = false,
         front = false,
@@ -325,58 +354,102 @@ local function set_camera_zoom(zoom)
 end
 
 RegisterNUICallback("camera:setActive", function(data, cb)
-    set_camera_active(data and data.active == true)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    set_camera_active(data.active == true)
     cb({ success = true })
 end)
 
 RegisterNUICallback("camera:setFocus", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     if camera_state.active then
-        set_camera_focus(data and data.focused == true)
+        set_camera_focus(data.focused == true)
     end
     cb({ success = true })
 end)
 
 RegisterNUICallback("camera:setFlash", function(data, cb)
-    set_flash_enabled(data and data.enabled == true)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    set_flash_enabled(data.enabled == true)
     cb({ success = true })
 end)
 
 RegisterNUICallback("camera:setFacing", function(data, cb)
-    set_front_camera(data and data.front == true)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    set_front_camera(data.front == true)
     cb({ success = true })
 end)
 
 RegisterNUICallback("camera:setOrientation", function(data, cb)
-    set_camera_landscape(data and data.landscape == true)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    set_camera_landscape(data.landscape == true)
     cb({ success = true })
 end)
 
 RegisterNUICallback("camera:setZoom", function(data, cb)
-    cb({ success = set_camera_zoom(tonumber(data and data.zoom)) })
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    cb({ success = set_camera_zoom(tonumber(data.zoom)) })
 end)
 
 RegisterNUICallback("media:requestUpload", function(data, cb)
-    TriggerServerEvent("sky_phone:media:request-upload", data or {})
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    TriggerServerEvent("sky_phone:media:request-upload", data)
     cb({ success = true })
 end)
 
 RegisterNUICallback("media:completeUpload", function(data, cb)
-    TriggerServerEvent("sky_phone:media:complete-upload", data or {})
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    TriggerServerEvent("sky_phone:media:complete-upload", data)
     cb({ success = true })
 end)
 
 RegisterNUICallback("media:cancelUpload", function(data, cb)
-    TriggerServerEvent("sky_phone:media:cancel-upload", data or {})
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    TriggerServerEvent("sky_phone:media:cancel-upload", data)
     cb({ success = true })
 end)
 
 RegisterNUICallback("media:failUpload", function(data, cb)
-    TriggerServerEvent("sky_phone:media:fail-upload", data or {})
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    TriggerServerEvent("sky_phone:media:fail-upload", data)
     cb({ success = true })
 end)
 
 RegisterNUICallback("gallery:delete", function(data, cb)
-    TriggerServerEvent("sky_phone:media:delete", data or {})
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    TriggerServerEvent("sky_phone:media:delete", data)
     cb({ success = true })
 end)
 
@@ -401,6 +474,5 @@ AddEventHandler("onResourceStop", function(resource_name)
     if resource_name == GetCurrentResourceName() then
         set_flash_enabled(false)
         set_camera_active(false)
-        SetNuiFocusKeepInput(false)
     end
 end)

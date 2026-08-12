@@ -538,12 +538,16 @@ Bridge.Callbacks.Register("sky_phone:darkchat:send", function(source, data)
         media_waveform = voice.waveform
     elseif message_type == "image" or message_type == "video" then
         local media_type = message_type == "image" and "photo" or "video"
-        local media_url, media_error = SkyPhoneMedia.ResolveOwnedMedia(source, data.mediaAssetId, media_type)
+        local media_url, media_error, resolved_mime = SkyPhoneMedia.ResolveOwnedMedia(
+            source,
+            data.mediaAssetId,
+            media_type
+        )
         if not media_url then
             return { success = false, error = media_error }
         end
         media_payload = media_url
-        media_mime = message_type == "image" and "image/jpeg" or "video/mp4"
+        media_mime = resolved_mime
     elseif message_type == "share" then
         local share
         local share_error

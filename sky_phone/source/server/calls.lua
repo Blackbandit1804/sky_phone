@@ -1024,31 +1024,45 @@ end)
 
 local payphone_models = {}
 for _, model_name in ipairs(Config.Payphones.Props or {}) do
-    payphone_models[model_name] = true
+    if type(model_name) == "string" then
+        payphone_models[model_name] = true
+    end
 end
 
-local function valid_payphone_position(source, data)
-    if type(data) ~= "table" or not payphone_models[data.model] or type(data.coords) ~= "table" then
-        return nil
-    end
-    local x = tonumber(data.coords.x)
-    local y = tonumber(data.coords.y)
-    local z = tonumber(data.coords.z)
-    if not x or not y or not z or x ~= x or y ~= y or z ~= z
-        or math.abs(x) > 10000.0 or math.abs(y) > 10000.0 or math.abs(z) > 2000.0
-    then
-        return nil
-    end
+local payphone_locations, rejected_payphone_locations = SkyPhonePayphones.ValidateLocations(
+    Config.Payphones.Locations,
+    payphone_models
+)
+if Config.Payphones.Enabled and #payphone_locations == 0 then
+    Bridge.Debug(
+        "error",
+        "[sky_phone] Payphones are enabled, but no valid server-owned locations are configured; payphone calls will be rejected.",
+        { always = true }
+    )
+elseif Config.Payphones.Enabled and rejected_payphone_locations > 0 then
+    Bridge.Debug(
+        "warn",
+        "[sky_phone] Ignored %s invalid server-owned payphone location(s).",
+        rejected_payphone_locations,
+        { always = true }
+    )
+end
+
+local function valid_payphone_position(source)
     local ped = GetPlayerPed(source)
     if not ped or ped == 0 then
         return nil
     end
     local player_coords = GetEntityCoords(ped)
-    local booth_coords = vector3(x, y, z)
-    if #(player_coords - booth_coords) > Config.Payphones.ServerValidationDistance then
+    local location = SkyPhonePayphones.FindNearest(
+        payphone_locations,
+        player_coords,
+        Config.Payphones.ServerValidationDistance
+    )
+    if not location then
         return nil
     end
-    return booth_coords, data.model
+    return vector3(location.coords.x, location.coords.y, location.coords.z), location.model
 end
 
 local function payphone_terminal(number, state)
@@ -1064,10 +1078,13 @@ local function payphone_terminal(number, state)
 end
 
 Bridge.Callbacks.Register("sky_phone:payphone:dial", function(source, data)
+    if type(data) ~= "table" then
+        return { success = false, error = "invalid_request" }
+    end
     if not Config.Payphones.Enabled or not SkyPhone.AllowOperation(source, "payphone_dial", 15, 60) then
         return { success = false, error = "rate_limited" }
     end
-    local booth_coords, booth_model = valid_payphone_position(source, data)
+    local booth_coords, booth_model = valid_payphone_position(source)
     if not booth_coords then
         return { success = false, error = "invalid_payphone" }
     end

@@ -1,6 +1,8 @@
 import type { LaunchablePhoneAppId } from '@/types/apps'
+import type { ReorderDirection } from '@/utils/keyboard'
 
 export const HOME_DOCK_CAPACITY = 4
+export const HOME_GRID_COLUMNS = 4
 export const HOME_GRID_PAGE_SIZE = 20
 export const MAX_HOME_GRID_PAGES = 5
 
@@ -303,4 +305,32 @@ export function moveHomeApp(
 
   source[sourceIndex] = insertIntoSlot(target, targetIndex, appId)
   return next
+}
+
+export function homeKeyboardTarget(
+  layout: HomeLayout,
+  area: HomeArea,
+  sourceIndex: number,
+  direction: ReorderDirection,
+): number | null {
+  const source = layout[area]
+  if (!source[sourceIndex]) return null
+
+  if (area === 'dock') {
+    if (direction !== 'left' && direction !== 'right') return null
+    const targetIndex = sourceIndex + (direction === 'left' ? -1 : 1)
+    return targetIndex >= 0 && targetIndex < source.length ? targetIndex : null
+  }
+
+  const column = sourceIndex % HOME_GRID_COLUMNS
+  if (direction === 'left' && column === 0) return null
+  if (direction === 'right' && column === HOME_GRID_COLUMNS - 1) return null
+  const deltas: Record<ReorderDirection, number> = {
+    down: HOME_GRID_COLUMNS,
+    left: -1,
+    right: 1,
+    up: -HOME_GRID_COLUMNS,
+  }
+  const targetIndex = sourceIndex + deltas[direction]
+  return targetIndex >= 0 && targetIndex < source.length ? targetIndex : null
 }

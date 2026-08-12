@@ -85,6 +85,7 @@ import type {
 } from '@/types/crewlink'
 import { copyText } from '@/utils/clipboard'
 import { easyShareCrewLinkInviteCode } from '@/utils/easyshare'
+import { consumeEscape, handleEnterAction } from '@/utils/keyboard'
 import { nuiCall } from '@/utils/nui'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
@@ -912,7 +913,30 @@ function onCrewLinkMessage(event: MessageEvent): void {
   if (event.data?.type === 'crewlink:changed') void crew.bootstrap()
 }
 
+function onKeydown(event: KeyboardEvent): void {
+  if (
+    !confirmAction.value &&
+    !sheet.value &&
+    !selectedMember.value &&
+    !selectedPing.value
+  ) {
+    return
+  }
+  if (!consumeEscape(event)) return
+
+  if (confirmAction.value) {
+    cancelConfirmation()
+  } else if (sheet.value) {
+    closeSheet()
+  } else if (selectedMember.value) {
+    selectedMember.value = null
+  } else {
+    selectedPing.value = null
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', onKeydown, true)
   const authSelection = messageMedia.consumeMany<AuthMediaContext>(
     'crewlink:auth-avatar',
   )
@@ -948,6 +972,7 @@ onBeforeUnmount(() => {
   if (liveTimer) window.clearInterval(liveTimer)
   if (toastTimer) window.clearTimeout(toastTimer)
   if (pointerFrame) cancelAnimationFrame(pointerFrame)
+  window.removeEventListener('keydown', onKeydown, true)
   window.removeEventListener('message', onCrewLinkMessage)
 })
 </script>
@@ -1020,7 +1045,7 @@ onBeforeUnmount(() => {
             maxlength="20"
             outline
             @input="updateValue('username', $event)"
-            @keydown.enter="createProfile"
+            @keydown.enter="handleEnterAction($event, createProfile)"
           />
         </k-list>
         <p v-if="formError" class="crewlink-error" role="alert">
@@ -1627,11 +1652,7 @@ onBeforeUnmount(() => {
       </k-tabbar>
     </template>
 
-    <k-sheet
-      :opened="Boolean(sheet)"
-      class="crewlink-sheet"
-      @backdropclick="closeSheet"
-    >
+    <k-sheet :opened="Boolean(sheet)" @backdropclick="closeSheet">
       <section
         v-if="sheet"
         class="crewlink-sheet__content"
@@ -1699,7 +1720,7 @@ onBeforeUnmount(() => {
               maxlength="8"
               outline
               @input="updateValue('inviteCode', $event)"
-              @keydown.enter="joinGroup"
+              @keydown.enter="handleEnterAction($event, joinGroup)"
           /></k-list>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
           <k-button
@@ -2028,7 +2049,7 @@ onBeforeUnmount(() => {
               maxlength="20"
               outline
               @input="updateValue('username', $event)"
-              @keydown.enter="saveProfile"
+              @keydown.enter="handleEnterAction($event, saveProfile)"
           /></k-list>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
           <k-button
@@ -2046,7 +2067,6 @@ onBeforeUnmount(() => {
 
     <k-sheet
       :opened="Boolean(selectedMember && !sheet)"
-      class="crewlink-sheet"
       @backdropclick="selectedMember = null"
     >
       <section
@@ -2088,7 +2108,6 @@ onBeforeUnmount(() => {
 
     <k-sheet
       :opened="Boolean(selectedPing)"
-      class="crewlink-sheet"
       @backdropclick="selectedPing = null"
     >
       <section

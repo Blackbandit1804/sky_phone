@@ -1,9 +1,10 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useAccountStore } from '@/stores/account'
 import { useMailStore } from '@/stores/mail'
-import type { MailCounts, MailListItem } from '@/types/mail'
-import { nuiCall } from '@/utils/nui'
+import type { MailCounts, MailListItem, MailListResponse } from '@/types/mail'
+import { nuiCall, type NuiResponse } from '@/utils/nui'
 
 vi.mock('@/utils/nui', () => ({
   nuiCall: vi.fn(),
@@ -45,7 +46,7 @@ describe('mail store', () => {
         success: true,
       })
       .mockResolvedValueOnce({
-        data: { hasMore: false, items: [listItem(2)] },
+        data: { hasMore: false, items: [listItem(2)], offset: 0 },
         success: true,
       })
 
@@ -128,5 +129,104 @@ describe('mail store', () => {
     expect(mail.items).toEqual([])
     expect(mail.folder).toBe('inbox')
     expect(mail.search).toBe('')
+  })
+
+  it('ignores an older folder response after a newer navigation', async () => {
+    let resolveOlder!: (response: NuiResponse<MailListResponse>) => void
+    const olderResponse = new Promise<NuiResponse<MailListResponse>>(
+      (resolve) => {
+        resolveOlder = resolve
+      },
+    )
+    mockNuiCall
+      .mockReturnValueOnce(olderResponse)
+      .mockResolvedValueOnce({
+        data: { hasMore: false, items: [listItem(2)] },
+        success: true,
+      })
+    const mail = useMailStore()
+
+    const olderRequest = mail.loadFolder('inbox')
+    await mail.loadFolder('sent')
+    resolveOlder({
+      data: { hasMore: false, items: [listItem(1)], offset: 0 },
+      success: true,
+    })
+    await olderRequest
+
+    expect(mail.folder).toBe('sent')
+    expect(mail.items.map((item) => item.id)).toEqual([2])
+    expect(mail.loading).toBe(false)
+  })
+
+  it('ignores mailbox counts returned after the session was cleared', async () => {
+    let resolveCounts!: (response: NuiResponse<MailCounts>) => void
+    mockNuiCall.mockReturnValueOnce(
+      new Promise<NuiResponse<MailCounts>>((resolve) => {
+        resolveCounts = resolve
+      }),
+    )
+    const mail = useMailStore()
+
+    const bootstrap = mail.bootstrap('alex@ifruit.com')
+    await mail.bootstrap('')
+    resolveCounts({ data: counts, success: true })
+    await bootstrap
+
+    expect(mail.accountEmail).toBe('')
+    expect(mail.counts).toEqual({
+      drafts: 0,
+      inbox: 0,
+      sent: 0,
+      trash: 0,
+      unread: 0,
+    })
+  })
+
+  it('ignores a late login after the mailbox session was cleared', async () => {
+    let resolveLogin!: (response: NuiResponse<{ devices: []; email: string }>) => void
+    mockNuiCall.mockReturnValueOnce(
+      new Promise<NuiResponse<{ devices: []; email: string }>>((resolve) => {
+        resolveLogin = resolve
+      }),
+    )
+    const mail = useMailStore()
+    const account = useAccountStore()
+
+    const login = mail.login('alex', 'secret')
+    await mail.bootstrap('')
+    resolveLogin({
+      data: { devices: [], email: 'alex@ifruit.com' },
+      success: true,
+    })
+    await login
+
+    expect(mail.accountEmail).toBe('')
+    expect(account.email).toBe('')
+  })
+
+  it('ignores a late login after an external mailbox session change', async () => {
+    let resolveLogin!: (response: NuiResponse<{ devices: []; email: string }>) => void
+    mockNuiCall
+      .mockReturnValueOnce(
+        new Promise<NuiResponse<{ devices: []; email: string }>>((resolve) => {
+          resolveLogin = resolve
+        }),
+      )
+      .mockResolvedValueOnce({ data: counts, success: true })
+    const mail = useMailStore()
+    const account = useAccountStore()
+
+    const login = mail.login('alex', 'secret')
+    account.hydrate({ devices: [], email: 'morgan@ifruit.com' })
+    await mail.bootstrap('morgan@ifruit.com')
+    resolveLogin({
+      data: { devices: [], email: 'alex@ifruit.com' },
+      success: true,
+    })
+    await login
+
+    expect(mail.accountEmail).toBe('morgan@ifruit.com')
+    expect(account.email).toBe('morgan@ifruit.com')
   })
 })

@@ -2852,4 +2852,10 @@ onBeforeUnmount(() => {
     transform: scale(1.28);
   }
 }
+
+@supports not (color: color-mix(in srgb, white, black)) {
+  .ps-activity--unread {
+    background: rgb(10 132 255 / 10%);
+  }
+}
 </style>

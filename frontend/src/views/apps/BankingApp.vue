@@ -40,6 +40,7 @@ import type {
   BankingTransactionKind,
 } from '@/types/banking'
 import type { PhoneContact } from '@/types/phone'
+import { handleEnterAction } from '@/utils/keyboard'
 import { formatPhoneNumber, normalizePhoneNumber } from '@/utils/phone'
 
 type BankingTab = 'home' | 'activity'
@@ -153,7 +154,9 @@ function closeAction(): void {
 
 function updateTarget(event: Event): void {
   if (!(event.target instanceof HTMLInputElement)) {
-    console.error('[banking] Phone number input emitted without an input target.')
+    console.error(
+      '[banking] Phone number input emitted without an input target.',
+    )
     return
   }
   target.value = event.target.value
@@ -163,7 +166,9 @@ function updateTarget(event: Event): void {
 function selectContact(contact: PhoneContact): void {
   target.value = contact.phone_number
   formError.value = ''
-  void nextTick(() => document.getElementById('banking-transfer-amount')?.focus())
+  void nextTick(() =>
+    document.getElementById('banking-transfer-amount')?.focus(),
+  )
 }
 
 function updateAmount(event: Event): void {
@@ -237,6 +242,7 @@ function focusableSheetElements(): HTMLElement[] {
 function handleSheetKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     event.preventDefault()
+    event.stopPropagation()
     closeAction()
     return
   }
@@ -258,6 +264,15 @@ function handleSheetKeydown(event: KeyboardEvent): void {
   }
 }
 
+function handleWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !action.value || event.defaultPrevented) {
+    return
+  }
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  closeAction()
+}
+
 function errorMessage(code: string): string {
   return phone.t(`Apps.banking.errors.${code}`) ===
     `Apps.banking.errors.${code}`
@@ -268,9 +283,8 @@ function errorMessage(code: string): string {
 async function submitAction(): Promise<void> {
   if (!action.value) return
   const parsedAmount = Number(amount.value)
-  const phoneNumber = action.value === 'transfer'
-    ? normalizePhoneNumber(target.value)
-    : undefined
+  const phoneNumber =
+    action.value === 'transfer' ? normalizePhoneNumber(target.value) : undefined
   if (
     !Number.isSafeInteger(parsedAmount) ||
     parsedAmount <= 0 ||
@@ -291,13 +305,17 @@ async function submitAction(): Promise<void> {
   action.value = null
 }
 
-onMounted(() => void banking.load())
+onMounted(() => {
+  window.addEventListener('keydown', handleWindowKeydown)
+  void banking.load()
+})
 
 watch(action, async (currentAction) => {
   if (currentAction) {
-    previousFocus = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null
+    previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
     await nextTick()
     document.getElementById('banking-transfer-target')?.focus()
     return
@@ -307,6 +325,7 @@ watch(action, async (currentAction) => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleWindowKeydown)
   if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
   previousFocus?.focus()
 })
@@ -379,12 +398,17 @@ onBeforeUnmount(() => {
           </div>
           <strong>{{ formatMoney(banking.overview.bank) }}</strong>
           <div class="banking-balance__trend">
-            <span>{{ formatMoney(totals.incoming - totals.outgoing, true) }}</span>
+            <span>{{
+              formatMoney(totals.incoming - totals.outgoing, true)
+            }}</span>
             {{ phone.t('Apps.banking.recentPeriod') }}
           </div>
         </k-glass>
 
-        <section class="banking-actions" :aria-label="phone.t('Apps.banking.actions')">
+        <section
+          class="banking-actions"
+          :aria-label="phone.t('Apps.banking.actions')"
+        >
           <k-glass
             component="button"
             type="button"
@@ -435,17 +459,27 @@ onBeforeUnmount(() => {
           >
             <k-list inset strong class="banking-transaction-list">
               <k-list-item
-              v-for="transaction in banking.overview.transactions.slice(0, 5)"
-              :key="transaction.id"
+                v-for="transaction in banking.overview.transactions.slice(0, 5)"
+                :key="transaction.id"
                 :subtitle="formatDate(transaction.createdAt)"
                 :title="transactionTitle(transaction)"
               >
                 <template #media>
-                  <component :is="transactionIcons[transaction.kind]" :size="17" />
+                  <component
+                    :is="transactionIcons[transaction.kind]"
+                    :size="17"
+                  />
                 </template>
                 <template #after>
                   <b :class="{ 'is-incoming': isIncoming(transaction.kind) }">
-                    {{ formatMoney(isIncoming(transaction.kind) ? transaction.amount : -transaction.amount, true) }}
+                    {{
+                      formatMoney(
+                        isIncoming(transaction.kind)
+                          ? transaction.amount
+                          : -transaction.amount,
+                        true,
+                      )
+                    }}
                   </b>
                 </template>
               </k-list-item>
@@ -460,13 +494,18 @@ onBeforeUnmount(() => {
       <template v-else>
         <section class="banking-activity-hero">
           <span>{{ phone.t('Apps.banking.activity') }}</span>
-          <strong>{{ formatMoney(totals.incoming - totals.outgoing, true) }}</strong>
+          <strong>{{
+            formatMoney(totals.incoming - totals.outgoing, true)
+          }}</strong>
           <small>{{ phone.t('Apps.banking.recentPeriod') }}</small>
         </section>
 
         <k-card :content-wrap="false" class="banking-card banking-chart-card">
           <div class="banking-chart-legend">
-            <span><i class="is-incoming"></i>{{ phone.t('Apps.banking.incoming') }}</span>
+            <span
+              ><i class="is-incoming"></i
+              >{{ phone.t('Apps.banking.incoming') }}</span
+            >
             <span><i></i>{{ phone.t('Apps.banking.outgoing') }}</span>
           </div>
           <div class="banking-chart">
@@ -475,14 +514,19 @@ onBeforeUnmount(() => {
               :key="day.date.getTime()"
               class="banking-chart__day"
               role="img"
-              :aria-label="phone.t('Apps.banking.chartDaySummary', {
-                day: day.label,
-                incoming: formatMoney(day.incoming),
-                outgoing: formatMoney(day.outgoing),
-              })"
+              :aria-label="
+                phone.t('Apps.banking.chartDaySummary', {
+                  day: day.label,
+                  incoming: formatMoney(day.incoming),
+                  outgoing: formatMoney(day.outgoing),
+                })
+              "
             >
               <div>
-                <i class="is-incoming" :style="{ height: `${day.incomingHeight}%` }"></i>
+                <i
+                  class="is-incoming"
+                  :style="{ height: `${day.incomingHeight}%` }"
+                ></i>
                 <i :style="{ height: `${day.outgoingHeight}%` }"></i>
               </div>
               <span>{{ day.label }}</span>
@@ -494,7 +538,10 @@ onBeforeUnmount(() => {
           <div class="banking-section-title">
             <h2>{{ phone.t('Apps.banking.allTransactions') }}</h2>
           </div>
-          <k-card :content-wrap="false" class="banking-card banking-transaction-card">
+          <k-card
+            :content-wrap="false"
+            class="banking-card banking-transaction-card"
+          >
             <k-list inset strong class="banking-transaction-list">
               <k-list-item
                 v-for="transaction in banking.overview.transactions"
@@ -503,11 +550,21 @@ onBeforeUnmount(() => {
                 :title="transactionTitle(transaction)"
               >
                 <template #media>
-                  <component :is="transactionIcons[transaction.kind]" :size="17" />
+                  <component
+                    :is="transactionIcons[transaction.kind]"
+                    :size="17"
+                  />
                 </template>
                 <template #after>
                   <b :class="{ 'is-incoming': isIncoming(transaction.kind) }">
-                    {{ formatMoney(isIncoming(transaction.kind) ? transaction.amount : -transaction.amount, true) }}
+                    {{
+                      formatMoney(
+                        isIncoming(transaction.kind)
+                          ? transaction.amount
+                          : -transaction.amount,
+                        true,
+                      )
+                    }}
                   </b>
                 </template>
               </k-list-item>
@@ -553,7 +610,7 @@ onBeforeUnmount(() => {
       </k-toolbar-pane>
     </k-tabbar>
 
-    <k-sheet :opened="Boolean(action)" class="banking-sheet" @backdropclick="closeAction">
+    <k-sheet :opened="Boolean(action)" @backdropclick="closeAction">
       <section
         v-if="action"
         class="banking-sheet__content"
@@ -600,7 +657,7 @@ onBeforeUnmount(() => {
             type="number"
             :value="amount"
             @input="updateAmount"
-            @keydown.enter="submitAction"
+            @keydown.enter="handleEnterAction($event, submitAction)"
           />
         </k-list>
         <div class="banking-contact-picker">

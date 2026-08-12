@@ -85,6 +85,7 @@ import type { PhoneMedia } from '@/types/media'
 import type { EasySharePayload } from '@/types/easyshare'
 import type { GifSearchResult, SmsAttachmentType } from '@/types/messages'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
+import { handleEnterAction } from '@/utils/keyboard'
 
 type FlareTab = 'discover' | 'explore' | 'likes' | 'matches' | 'profile'
 type ExploreMode = 'all' | 'dates' | 'friends' | 'longTerm'
@@ -1145,7 +1146,7 @@ onBeforeUnmount(() => {
         :value="draft"
         :disabled="flare.sending"
         @input="draft = eventValue($event)"
-        @keydown.enter.exact.prevent="sendMessage"
+        @keydown.enter.exact="handleEnterAction($event, sendMessage)"
       >
         <template #left>
           <k-toolbar-pane class="ios:h-10 messages-messagebar__tools">
@@ -1847,11 +1848,8 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <k-sheet
-      :opened="choiceOpened"
-      class="flare-choice-sheet"
-      @backdropclick="closeChoice"
-    >
+    <div class="flare-choice-sheet">
+      <k-sheet :opened="choiceOpened" @backdropclick="closeChoice">
       <section
         id="flare-choice-sheet"
         ref="choiceSheetContent"
@@ -1861,7 +1859,7 @@ onBeforeUnmount(() => {
         :aria-modal="choiceOpened ? 'true' : undefined"
         aria-labelledby="flare-choice-sheet-title"
         :inert="!choiceOpened"
-        @keydown.esc="closeChoice"
+        @keydown.esc.stop.prevent="closeChoice"
       >
         <span class="flare-choice-sheet__grabber" aria-hidden="true" />
         <header class="flare-choice-sheet__header">
@@ -1910,7 +1908,8 @@ onBeforeUnmount(() => {
           </k-list-item>
         </k-list>
       </section>
-    </k-sheet>
+      </k-sheet>
+    </div>
 
     <k-dialog :opened="unmatchDialog" @backdropclick="unmatchDialog = false">
       <template #title>{{ phone.t('Apps.flare.unmatchTitle') }}</template>
@@ -2854,7 +2853,7 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 
-:global(.flare-choice-sheet) {
+.flare-choice-sheet :deep(.k-sheet) {
   z-index: 70;
   max-height: min(62%, 420px);
   overflow-y: auto !important;
@@ -3096,5 +3095,20 @@ onBeforeUnmount(() => {
 }
 :global(.phone-app.dark .flare-action) {
   box-shadow: none;
+}
+@supports not (color: color-mix(in srgb, white, black)) {
+  .flare-navbar {
+    border-bottom-color: rgb(127 127 127 / 18%);
+  }
+  .flare-photo-slot {
+    background: rgb(127 127 127 / 18%);
+  }
+  .flare-photo-grid :deep(.flare-photo-add) {
+    border-color: rgb(127 127 127 / 44%);
+    background: var(--flare-surface);
+  }
+  .flare-choice-sheet__grabber {
+    background: rgb(127 127 127 / 38%);
+  }
 }
 </style>

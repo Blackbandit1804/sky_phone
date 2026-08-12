@@ -7,6 +7,22 @@ const port = Number(process.argv[2]) || 3001
 app.use(cors())
 app.use(express.json())
 
+const lifecycleEndpoints = new Set([
+  'camera:setActive',
+  'camera:setFacing',
+  'camera:setFlash',
+  'camera:setFocus',
+  'camera:setOrientation',
+  'camera:setZoom',
+  'close',
+  'custom-app:lifecycle',
+  'device:notification-open',
+  'notification:focus',
+  'sim:picker-close',
+  'ui:opened',
+  'ui:ready',
+])
+
 function calendarTime(dayOffset, hour, minute = 0) {
   const value = new Date()
   value.setDate(value.getDate() + dayOffset)
@@ -2088,6 +2104,38 @@ const deviceData = {
     },
     revision: 2,
   },
+  notifications: {
+    payload: {
+      items: [
+        {
+          appId: 'messages',
+          id: 'demo-notification-message',
+          route: '/apps/messages?phoneNumber=5551110001',
+          subtitle: 'Alex Rivera',
+          text: 'Meet us at the observatory after sunset.',
+          title: 'Messages',
+        },
+        {
+          appId: 'companies',
+          id: 'demo-notification-company',
+          route: '/apps/companies?area=requests',
+          subtitle: 'Los Santos Customs',
+          text: 'Your repair request has been accepted.',
+          title: 'Companies',
+        },
+        {
+          appId: 'billing',
+          id: 'demo-notification-billing',
+          route: '/apps/billing',
+          subtitle: 'Los Santos Customs',
+          text: 'A new invoice for $1,850 is ready.',
+          title: 'Billing',
+        },
+      ],
+      version: 1,
+    },
+    revision: 1,
+  },
   settings: {
     payload: {
       settings: {
@@ -2110,6 +2158,14 @@ const deviceData = {
 }
 let mockPasscode = ''
 let mockSecurity = { enabled: false, length: null, lockedUntil: 0 }
+let mockSim = {
+  id: 'development-sim',
+  number: '5551234567',
+  removable: true,
+  registered: true,
+  type: 'registered',
+}
+let mockPayphoneCall = null
 const blockedCallNumbers = new Set()
 let recentCalls = [
   {
@@ -4049,9 +4105,12 @@ function easyShareHistoryForScenario(testScenario) {
 }
 
 app.post('/api/:endpoint', (request, response) => {
-  console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
   const testScenario = String(request.body._testScenario ?? '')
+  if (lifecycleEndpoints.has(endpoint)) {
+    response.json({ success: true })
+    return
+  }
   if (endpoint.startsWith('companies:') && testScenario === 'companies-error') {
     response.json({ success: false, error: 'service_unavailable' })
     return
@@ -5923,6 +5982,47 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: flipTokActivities })
     return
   }
+  if (endpoint === 'fliptok:mark-activities') {
+    const readAt = new Date().toISOString()
+    flipTokActivities = flipTokActivities.map((activity) => ({
+      ...activity,
+      read_at: activity.read_at ?? readAt,
+    }))
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'fliptok:view') {
+    const video = flipTokVideos.find((item) => item.id === request.body.id)
+    if (!video) {
+      response.json({ success: false, error: 'video_not_found' })
+      return
+    }
+    video.view_count += 1
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'fliptok:report') {
+    const video = flipTokVideos.find((item) => item.id === request.body.id)
+    if (!video) {
+      response.json({ success: false, error: 'video_not_found' })
+      return
+    }
+    flipTokReports.push({
+      caption: video.caption,
+      created_at: Date.now(),
+      creator_display_name: video.display_name,
+      creator_handle: video.handle,
+      details: String(request.body.details ?? ''),
+      id: `report-${Date.now()}`,
+      reason: request.body.reason,
+      reporter_display_name: flipTokProfile.display_name,
+      reporter_handle: flipTokProfile.handle,
+      url: video.url,
+      video_id: video.id,
+    })
+    response.json({ success: true })
+    return
+  }
   if (endpoint === 'fliptok:profile') {
     const profileId = Number(request.body.profileId || 0)
     const handle = String(request.body.handle || '').toLowerCase()
@@ -7161,13 +7261,7 @@ app.post('/api/:endpoint', (request, response) => {
               : deviceData,
           imei: '356938035643809',
           name: 'Personal iFruit Phone',
-          sim: {
-            id: 'development-sim',
-            number: '5551234567',
-            removable: true,
-            registered: true,
-            type: 'registered',
-          },
+          sim: mockSim,
         },
         notes: mockNotes,
         security: mockSecurity,
@@ -7272,7 +7366,7 @@ app.post('/api/:endpoint', (request, response) => {
             : messageType === 'gif'
               ? 'image/gif'
               : messageType === 'video'
-                ? 'video/mp4'
+                ? 'video/webm'
                 : null,
       media_payload:
         messageType === 'voice'
@@ -7491,6 +7585,15 @@ app.post('/api/:endpoint', (request, response) => {
     const current = deviceData[request.body.namespace]
     const revision = (current?.revision ?? 0) + 1
     deviceData[request.body.namespace] = {
+      payload: request.body.payload,
+      revision,
+    }
+    response.json({ success: true, data: { revision } })
+    return
+  }
+  if (endpoint === 'notifications:save') {
+    const revision = (deviceData.notifications?.revision ?? 0) + 1
+    deviceData.notifications = {
       payload: request.body.payload,
       revision,
     }
@@ -7929,16 +8032,29 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'marketplace:profile-save') {
+    const displayName = String(request.body.displayName ?? '').trim()
+    const bio = String(request.body.bio ?? '').trim()
     const avatarMediaId = Number(request.body.avatarMediaId)
     const avatar = mockMedia.find(
       (item) => item.id === avatarMediaId && item.mediaType === 'photo',
     )
+    if (
+      displayName.length < 2 ||
+      displayName.length > 40 ||
+      bio.length > 160 ||
+      !Number.isInteger(avatarMediaId) ||
+      avatarMediaId < 0 ||
+      (avatarMediaId > 0 && !avatar)
+    ) {
+      response.json({ success: false, error: 'invalid_profile' })
+      return
+    }
     marketplaceProfile = {
       ...marketplaceProfile,
       avatar_media_id: avatarMediaId || null,
       avatar_url: avatar?.url ?? null,
-      bio: String(request.body.bio ?? '').trim(),
-      display_name: String(request.body.displayName ?? '').trim(),
+      bio,
+      display_name: displayName,
       exists: true,
     }
     response.json({ success: true, data: marketplaceProfile })
@@ -8245,6 +8361,61 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: false, error: 'confirmation_required' })
     return
   }
+  if (endpoint === 'sim:insert') {
+    mockSim = {
+      id: `development-sim-${request.body.imei}`,
+      number:
+        request.body.imei === '356938035643810' ? '5559876543' : '5551234567',
+      removable: true,
+      registered: true,
+      type: 'registered',
+    }
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'sim:eject') {
+    if (!mockSim) {
+      response.json({ success: false, error: 'no_sim' })
+      return
+    }
+    mockSim = null
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'payphone:dial') {
+    const phoneNumber = String(request.body.phoneNumber ?? '').replace(
+      /\D/g,
+      '',
+    )
+    if (phoneNumber.length !== 10) {
+      response.json({ success: false, error: 'invalid_number' })
+      return
+    }
+    if (phoneNumber === '5550000000') {
+      response.json({ success: false, error: 'busy' })
+      return
+    }
+    mockPayphoneCall = {
+      answeredAt: Math.floor(Date.now() / 1000),
+      elapsedSeconds: 0,
+      id: `payphone-${Date.now()}`,
+      otherNumber: phoneNumber,
+      state: 'connected',
+      totalCost: 0,
+    }
+    response.json({ success: true, data: mockPayphoneCall })
+    return
+  }
+  if (endpoint === 'payphone:hangup') {
+    mockPayphoneCall = null
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'payphone:close') {
+    mockPayphoneCall = null
+    response.json({ success: true })
+    return
+  }
   if (endpoint === 'notes:list') {
     response.json({ success: true, data: mockNotes })
     return
@@ -8384,9 +8555,14 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true })
     return
   }
-  response.json({ success: true })
+  console.error(`[NUI] Missing browser mock for ${endpoint}`)
+  response.json({ success: false, error: 'mock_endpoint_missing' })
 })
 
-app.listen(port, () => {
-  console.log(`Mock NUI server listening on http://localhost:${port}`)
-})
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Mock NUI server listening on http://localhost:${port}`)
+  })
+}
+
+module.exports = { app }

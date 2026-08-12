@@ -6,6 +6,7 @@ import type {
   WidgetSettings,
   WidgetSize,
 } from '@/types/widgets'
+import type { ReorderDirection } from '@/utils/keyboard'
 
 export const WIDGET_GRID_COLUMNS = 4
 export const WIDGET_HOME_ROWS = 5
@@ -294,6 +295,32 @@ export function moveWidget(
     }
   }
   return { instances: placed, version: 1 }
+}
+
+export function widgetKeyboardTarget(
+  instance: WidgetInstance,
+  direction: ReorderDirection,
+): { column: number; row: number } | null {
+  const span = WIDGET_SPANS[instance.size]
+  const maximumColumn = WIDGET_GRID_COLUMNS - span.columns
+  const maximumRow = rowsForPage(instance.page) - span.rows
+  const target = {
+    column:
+      instance.column +
+      (direction === 'left' ? -1 : direction === 'right' ? 1 : 0),
+    row:
+      instance.row +
+      (direction === 'up' ? -1 : direction === 'down' ? 1 : 0),
+  }
+  if (
+    target.column < 0 ||
+    target.column > maximumColumn ||
+    target.row < 0 ||
+    target.row > maximumRow
+  ) {
+    return null
+  }
+  return target
 }
 
 export function resizeWidget(

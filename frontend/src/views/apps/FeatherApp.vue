@@ -270,9 +270,17 @@ function moveMediaPreview(direction: number): void {
 
 function handleMediaPreviewKeydown(event: KeyboardEvent): void {
   if (!mediaPreview.value) return
-  if (event.key === 'Escape') closeMediaPreview()
-  if (event.key === 'ArrowLeft') moveMediaPreview(-1)
-  if (event.key === 'ArrowRight') moveMediaPreview(1)
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    closeMediaPreview()
+  } else if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    moveMediaPreview(-1)
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    moveMediaPreview(1)
+  }
 }
 
 function toast(path: string): void {
@@ -761,11 +769,11 @@ watch(
 onBeforeUnmount(() => {
   if (exploreSearchTimer !== undefined) window.clearTimeout(exploreSearchTimer)
   if (networkSearchTimer !== undefined) window.clearTimeout(networkSearchTimer)
-  window.removeEventListener('keydown', handleMediaPreviewKeydown)
+  window.removeEventListener('keydown', handleMediaPreviewKeydown, true)
 })
 
 onMounted(async () => {
-  window.addEventListener('keydown', handleMediaPreviewKeydown)
+  window.addEventListener('keydown', handleMediaPreviewKeydown, true)
   const selection =
     messageMedia.consumeMany<ComposerContext>('feather:composer')
   const profileSelection = messageMedia.consumeMany<ProfileMediaContext>(
@@ -4914,5 +4922,88 @@ onMounted(async () => {
 .feather-app--active .feather-report {
   color: inherit;
   background: var(--feather-panel);
+}
+@supports not (color: color-mix(in srgb, white, black)) {
+  .feather-navbar {
+    --k-navbar-bg-color: rgb(255 255 255 / 91%);
+    border-bottom-color: rgb(127 127 127 / 18%);
+  }
+  :global(.dark) .feather-navbar {
+    --k-navbar-bg-color: rgb(9 13 18 / 91%);
+  }
+  .dark.feather-app .feather-navbar {
+    --k-navbar-bg-color: rgb(0 0 0 / 90%);
+    background: rgb(0 0 0 / 88%);
+  }
+  .feather-app--active .feather-navbar {
+    --k-navbar-bg-color: rgb(18 23 27 / 91%);
+    background: rgb(18 23 27 / 88%);
+  }
+  .feather-app--active.feather-app--light .feather-navbar {
+    --k-navbar-bg-color: rgb(251 251 246 / 91%);
+    background: rgb(251 251 246 / 88%);
+  }
+  .feather-feed-tabs,
+  .feather-explore-head,
+  .feather-activity-head,
+  .feather-trend,
+  .feather-composer__tools,
+  .feather-section-title,
+  .feather-profile,
+  .feather-profile-tabs,
+  .feather-activity,
+  .feather-person {
+    border-color: rgb(127 127 127 / 18%);
+  }
+  .feather-trend:active,
+  .feather-profile__stats button,
+  .feather-report select,
+  .feather-report textarea,
+  .feather-app--active .feather-explore-search :deep(form) {
+    background: rgb(127 127 127 / 7%);
+  }
+  .feather-profile__stats button:active,
+  .feather-thread-reply__comment-target,
+  .feather-thread-title span,
+  .feather-app--active .feather-profile__stats span,
+  .feather-composer-media > header > span,
+  .feather-composer-media > header > b,
+  .feather-app--active .feather-follow-button--pending:hover,
+  .feather-app--active :deep(.feather-follow:hover),
+  .feather-composer-media__actions button:not(:disabled):hover {
+    background: rgb(29 155 240 / 13%);
+  }
+  .feather-report select,
+  .feather-report textarea,
+  .feather-app--active .feather-follow-button--following {
+    border-color: rgb(127 127 127 / 24%);
+  }
+  .feather-app--active :deep(.feather-post-glass),
+  .feather-network-list,
+  .feather-app--active .feather-thread-reply,
+  .feather-profile-suggestion,
+  .feather-edit__identity,
+  .feather-edit__photo,
+  .feather-edit__fields,
+  .feather-connections__tabs,
+  .feather-connections__list {
+    background: var(--feather-panel);
+  }
+  .feather-network-person__bio {
+    color: var(--feather-muted);
+  }
+  .feather-network-person__avatar .feather-avatar,
+  .feather-app--active .feather-follow-button--pending,
+  .feather-app--active .feather-profile__actions :deep(.k-button),
+  .feather-edit__photo-actions :deep(.k-button) {
+    border-color: var(--feather-blue);
+  }
+  .feather-compose-fab,
+  .feather-edit__avatar {
+    border-color: #70c5fa;
+  }
+  .feather-connections__remove {
+    border-color: #f04f65;
+  }
 }
 </style>
