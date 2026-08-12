@@ -92,10 +92,6 @@ const flashlightColors = computed(() =>
       }
     : inactiveGlassColors,
 )
-const easyShareColors = {
-  bgIos: 'bg-[#0a84ff]',
-  shadowIos: 'shadow-ios-dark-glass',
-}
 const brightnessStyle = computed<CSSProperties>(() => ({
   '--control-level': `${brightness.value}%`,
 }))
@@ -413,8 +409,8 @@ onBeforeUnmount(() => {
             <k-glass
               component="button"
               type="button"
-              class="control-center__round-button control-center__round-button--easyshare"
-              :colors="easyShareColors"
+              class="control-center__round-button"
+              :colors="inactiveGlassColors"
               :disabled="easySharePending || !phone.device?.sim"
               :aria-label="phone.t('ControlCenter.easyShareContact')"
               @click="shareOwnContact"
@@ -778,11 +774,6 @@ onBeforeUnmount(() => {
 
 .control-center__round-button--light {
   color: #ff453a;
-}
-
-.control-center__round-button--easyshare {
-  background: #0a84ff !important;
-  box-shadow: 0 8px 22px rgb(10 132 255 / 34%) !important;
 }
 
 .control-center__focus-button {
