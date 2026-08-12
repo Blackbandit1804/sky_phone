@@ -136,6 +136,7 @@ const offerAmount = ref('')
 const offerPanelOpen = ref(false)
 const offerSubmitting = ref(false)
 const feedback = ref('')
+const pagesSharePendingId = ref<string | null>(null)
 const sellStep = ref(1)
 const submitting = ref(false)
 const selectedPhotoIds = ref<string[]>([])
@@ -359,9 +360,12 @@ function setFeedback(key: string): void {
   }, 2600)
 }
 
-async function shareToLocalPages(): Promise<void> {
-  if (!selectedListing.value) return
-  const response = await pages.shareCityMarkt(selectedListing.value.id)
+async function shareToLocalPages(listingId?: string): Promise<void> {
+  const id = listingId ?? selectedListing.value?.id
+  if (!id || pagesSharePendingId.value) return
+  pagesSharePendingId.value = id
+  const response = await pages.shareCityMarkt(id)
+  pagesSharePendingId.value = null
   setFeedback(
     response.success
       ? 'Apps.localPages.cityMarktShared'
@@ -1028,6 +1032,13 @@ onMounted(async () => {
                   <small>{{ label('status', item.status) }}</small>
                 </div>
                 <ChevronRight :size="17" /></button
+              ><button
+                v-if="profileMode === 'own' && (item.status === 'active' || item.status === 'reserved')"
+                class="citymarkt-profile-listing__share"
+                type="button"
+                :disabled="pagesSharePendingId !== null"
+                @click="shareToLocalPages(item.id)"
+              ><Share2 :size="15" />{{ phone.t('Apps.localPages.cityMarktShare') }}</button
             ></k-glass>
           </div>
         </template>
@@ -1131,7 +1142,8 @@ onMounted(async () => {
             "
             class="citymarkt__pages-share"
             type="button"
-            @click="shareToLocalPages"
+            :disabled="pagesSharePendingId !== null"
+            @click="shareToLocalPages()"
           >
             <Share2 :size="17" /><span
               ><strong>{{ phone.t('Apps.localPages.cityMarktShare') }}</strong
@@ -1886,6 +1898,16 @@ onMounted(async () => {
   min-height: 76px;
   padding: 8px !important;
 }
+.citymarkt-profile-listing > .citymarkt-profile-listing__share {
+  min-height: 36px;
+  padding: 8px 10px !important;
+  border-top: 1px solid #ffc92826;
+  justify-content: center;
+  color: var(--yellow);
+  font-size: 11px;
+  font-weight: 800;
+}
+.citymarkt-profile-listing__share:disabled { opacity: .45 }
 .citymarkt-profile-listing > button > span {
   width: 60px !important;
   height: 60px !important;
