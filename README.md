@@ -215,6 +215,26 @@ For a fresh manual database installation, import `sky_phone/sql/install.sql`. It
 
 Framework, inventory, callback, notification, and database integrations live under `sky_phone/source/bridge`. The resource has no dependency on any other Sky resource.
 
+## Weazel News app
+
+The built-in Weazel News app publishes articles for every phone user and exposes its editorial
+desk only to server-authorized jobs. Configure the job-to-minimum-grade map in
+`sky_phone/config/weazel_news.lua`; unlisted jobs remain read-only:
+
+```lua
+AllowedJobs = {
+    weazel = 0,
+    reporter = 2,
+}
+```
+
+Every create, update, and delete request rechecks the player's current framework job and grade on
+the server. Authorized editorial jobs share the newsroom and can manage drafts and published
+articles. Cover images must come from the current phone's Gallery, changes use revision checks, and
+deletion is retained as an audit-safe soft delete. Runtime migration creates
+`sky_phone_weazel_articles` automatically; fresh installations receive the same schema through
+`sky_phone/sql/install.sql`.
+
 ## Radio app
 
 The built-in Radio app supports a primary frequency, volume, recent channels, participant lists, automatic rejoin, join/leave notifications, and an optional service number. YACA and SaltyChat support the configured secondary frequency; PMA Voice exposes one radio channel, so the secondary input is hidden automatically.

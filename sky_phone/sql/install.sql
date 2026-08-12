@@ -1138,3 +1138,28 @@ CREATE TABLE IF NOT EXISTS `sky_phone_company_audit` (
     KEY `idx_sky_phone_company_audit` (`company_id`,`created_at`,`id`),
     FOREIGN KEY (`company_id`) REFERENCES `sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_weazel_articles` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `title` VARCHAR(160) NOT NULL,
+    `body` LONGTEXT NOT NULL,
+    `excerpt` VARCHAR(240) NOT NULL,
+    `category` ENUM('official','events','jobs','news','business') NOT NULL,
+    `image_media_id` BIGINT UNSIGNED NULL,
+    `author_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `author_name` VARCHAR(120) NOT NULL,
+    `updated_by_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `status` ENUM('draft','published') NOT NULL DEFAULT 'draft',
+    `revision` INT UNSIGNED NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `published_at` DATETIME NULL,
+    `deleted_at` DATETIME NULL,
+    `deleted_by_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_weazel_public` (`status`,`deleted_at`,`published_at`,`id`),
+    KEY `idx_sky_phone_weazel_category` (`category`,`status`,`deleted_at`,`published_at`,`id`),
+    KEY `idx_sky_phone_weazel_manage` (`deleted_at`,`status`,`updated_at`,`id`),
+    KEY `idx_sky_phone_weazel_media` (`image_media_id`),
+    FOREIGN KEY (`image_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

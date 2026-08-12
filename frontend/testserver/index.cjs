@@ -2336,6 +2336,194 @@ let mockMedia = [
     url: 'https://picsum.photos/seed/sky-phone-5/800/600',
   },
 ]
+
+const weazelNewsCategoryIds = ['official', 'events', 'jobs', 'news', 'business']
+let weazelNewsSequence = 8
+let weazelNewsArticles = [
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000001',
+    title: 'Port Authority announces temporary harbor restrictions',
+    body: 'The Port Authority has announced temporary navigation restrictions around the southern harbor while maintenance crews inspect the main shipping channel. Commercial operators should follow marked diversion routes and expect short delays through the afternoon. Emergency traffic will continue without interruption.',
+    excerpt:
+      'Temporary navigation restrictions are in effect around the southern harbor while crews inspect the main shipping channel.',
+    category: 'official',
+    imageUrl: 'https://picsum.photos/seed/weazel-harbor/1200/760',
+    imageMediaId: null,
+    authorName: 'Avery Brooks',
+    createdAt: Date.now() - 35 * 60 * 1000,
+    updatedAt: Date.now() - 28 * 60 * 1000,
+    publishedAt: Date.now() - 30 * 60 * 1000,
+    status: 'published',
+    revision: 2,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000002',
+    title: 'Vinewood summer festival opens this weekend',
+    body: "Vinewood Boulevard will welcome food stands, live performers, and classic cars during this weekend's summer festival. Organizers recommend using public parking near the eastern entrance and arriving early for the evening concert. The event is free and runs from noon until late.",
+    excerpt:
+      'Food stands, live performers, and classic cars are coming to Vinewood Boulevard this weekend.',
+    category: 'events',
+    imageUrl: 'https://picsum.photos/seed/weazel-vinewood/1200/760',
+    imageMediaId: null,
+    authorName: 'Maya Chen',
+    createdAt: Date.now() - 2 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 2 * 60 * 60 * 1000,
+    publishedAt: Date.now() - 2 * 60 * 60 * 1000,
+    status: 'published',
+    revision: 1,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000003',
+    title: 'City services expand recruitment drive',
+    body: 'Several city departments have opened a coordinated recruitment drive for new staff. Positions are available across emergency response, transport, and public administration. Applicants should review individual department requirements before attending the recruitment office at City Hall.',
+    excerpt:
+      'City departments are recruiting new staff across emergency response, transport, and public administration.',
+    category: 'jobs',
+    imageUrl: null,
+    imageMediaId: null,
+    authorName: 'Jordan Hayes',
+    createdAt: Date.now() - 4 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 3 * 60 * 60 * 1000,
+    publishedAt: Date.now() - 3 * 60 * 60 * 1000,
+    status: 'published',
+    revision: 2,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000004',
+    title: 'Traffic returns to normal after Del Perro closure',
+    body: 'Traffic is moving normally again through Del Perro after crews cleared an earlier road obstruction. Police have reopened every lane and removed the temporary diversion signs. Drivers may still encounter brief congestion while the remaining queue disperses.',
+    excerpt:
+      'Every lane through Del Perro has reopened after crews cleared an earlier road obstruction.',
+    category: 'news',
+    imageUrl: 'https://picsum.photos/seed/weazel-del-perro/1200/760',
+    imageMediaId: null,
+    authorName: 'Avery Brooks',
+    createdAt: Date.now() - 7 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 6 * 60 * 60 * 1000,
+    publishedAt: Date.now() - 6 * 60 * 60 * 1000,
+    status: 'published',
+    revision: 3,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000005',
+    title: 'Downtown retailers report strong evening trade',
+    body: 'Independent retailers across downtown Los Santos reported stronger evening trade following the launch of extended opening hours. Business owners credited increased foot traffic and a busy restaurant district. The trial will continue through the end of the month before a permanent schedule is considered.',
+    excerpt:
+      'Independent downtown retailers are seeing stronger evening trade during a trial of extended opening hours.',
+    category: 'business',
+    imageUrl: 'https://picsum.photos/seed/weazel-downtown/1200/760',
+    imageMediaId: null,
+    authorName: 'Maya Chen',
+    createdAt: Date.now() - 26 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 25 * 60 * 60 * 1000,
+    publishedAt: Date.now() - 25 * 60 * 60 * 1000,
+    status: 'published',
+    revision: 2,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000006',
+    title: 'Interview: preparing for the next racing season',
+    body: 'Local racing teams are preparing new vehicles and reviewing safety procedures before the next sanctioned season begins. Weazel News spoke with organizers about the revised technical checks, route planning, and what spectators can expect at the opening round.',
+    excerpt:
+      'Local racing teams are preparing vehicles and reviewing safety procedures for the next sanctioned season.',
+    category: 'events',
+    imageUrl: 'https://picsum.photos/seed/sky-phone-3/800/600',
+    imageMediaId: 3,
+    authorName: 'Jordan Hayes',
+    createdAt: Date.now() - 55 * 60 * 1000,
+    updatedAt: Date.now() - 12 * 60 * 1000,
+    publishedAt: null,
+    status: 'draft',
+    revision: 4,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000007',
+    title: 'Draft briefing for Monday morning',
+    body: 'The editorial desk is collecting confirmed service notices and transport updates for Monday morning. This working draft will be expanded when the final statements arrive from the relevant city departments.',
+    excerpt:
+      'The editorial desk is collecting confirmed service notices and transport updates for Monday morning.',
+    category: 'official',
+    imageUrl: null,
+    imageMediaId: null,
+    authorName: 'Jordan Hayes',
+    createdAt: Date.now() - 18 * 60 * 1000,
+    updatedAt: Date.now() - 8 * 60 * 1000,
+    publishedAt: null,
+    status: 'draft',
+    revision: 2,
+  },
+]
+
+function weazelNewsExcerpt(body) {
+  const normalized = body.replace(/\s+/g, ' ').trim()
+  return normalized.length <= 240
+    ? normalized
+    : `${normalized.slice(0, 237).trimEnd()}...`
+}
+
+function weazelNewsImageUrl(imageMediaId) {
+  if (imageMediaId === null) return null
+  const media = mockMedia.find(
+    (item) => item.id === imageMediaId && item.mediaType === 'photo',
+  )
+  return media?.url ?? null
+}
+
+function validateWeazelNewsDraft(data) {
+  const title = typeof data.title === 'string' ? data.title.trim() : ''
+  const body = typeof data.body === 'string' ? data.body.trim() : ''
+  const status = data.status
+  const minimumTitleLength = 1
+  const minimumBodyLength = 1
+  if (
+    Array.from(title).length < minimumTitleLength ||
+    Array.from(title).length > 160 ||
+    Array.from(body).length < minimumBodyLength ||
+    Array.from(body).length > 12000 ||
+    !weazelNewsCategoryIds.includes(data.category) ||
+    !['draft', 'published'].includes(status)
+  ) {
+    return { error: status === 'draft' ? 'invalid_draft' : 'invalid_publish' }
+  }
+
+  let imageMediaId = null
+  if (data.imageMediaId !== null && data.imageMediaId !== undefined) {
+    imageMediaId = Number(data.imageMediaId)
+    if (
+      !Number.isSafeInteger(imageMediaId) ||
+      !weazelNewsImageUrl(imageMediaId)
+    ) {
+      return { error: 'invalid_attachment' }
+    }
+  }
+
+  return {
+    article: {
+      body,
+      category: data.category,
+      excerpt: weazelNewsExcerpt(body),
+      imageMediaId,
+      imageUrl: weazelNewsImageUrl(imageMediaId),
+      status,
+      title,
+    },
+  }
+}
+
+function pageWeazelNewsArticles(items, data) {
+  const offset = Math.max(0, Math.floor(Number(data.offset) || 0))
+  const requestedLimit = Math.floor(Number(data.limit) || 20)
+  const limit = Math.min(50, Math.max(1, requestedLimit))
+  return {
+    hasMore: offset + limit < items.length,
+    items: items.slice(offset, offset + limit).map((article) => {
+      const summary = { ...article }
+      delete summary.body
+      return summary
+    }),
+  }
+}
+
 const marketplaceInquiries = [
   {
     id: '4903b923-409a-437e-971f-b7a2b10e9e31',
@@ -4108,6 +4296,177 @@ app.post('/api/:endpoint', (request, response) => {
   const endpoint = request.params.endpoint
   const testScenario = String(request.body._testScenario ?? '')
   if (lifecycleEndpoints.has(endpoint)) {
+    response.json({ success: true })
+    return
+  }
+  const canManageWeazelNews = testScenario !== 'weazel-readonly'
+  if (endpoint === 'weazel-news:context') {
+    response.json({
+      success: true,
+      data: {
+        canManage: canManageWeazelNews,
+        categories: weazelNewsCategoryIds.map((id) => ({
+          count: weazelNewsArticles.filter(
+            (article) =>
+              article.status === 'published' && article.category === id,
+          ).length,
+          id,
+        })),
+        ...(canManageWeazelNews
+          ? { jobGradeLabel: 'Senior Reporter', jobLabel: 'Weazel News' }
+          : {}),
+      },
+    })
+    return
+  }
+  if (endpoint === 'weazel-news:list') {
+    const category = request.body.category ?? null
+    const search = String(request.body.search ?? '')
+      .trim()
+      .toLowerCase()
+    if (
+      category !== null &&
+      !weazelNewsCategoryIds.includes(String(category))
+    ) {
+      response.json({ success: false, error: 'invalid_request' })
+      return
+    }
+    const items = weazelNewsArticles
+      .filter((article) => article.status === 'published')
+      .filter((article) => category === null || article.category === category)
+      .filter(
+        (article) =>
+          !search ||
+          `${article.title} ${article.body}`.toLowerCase().includes(search),
+      )
+      .sort((left, right) => (right.publishedAt ?? 0) - (left.publishedAt ?? 0))
+    response.json({
+      success: true,
+      data: pageWeazelNewsArticles(items, request.body),
+    })
+    return
+  }
+  if (endpoint === 'weazel-news:get') {
+    if (request.body.manage === true && !canManageWeazelNews) {
+      response.json({ success: false, error: 'not_authorized' })
+      return
+    }
+    const article = weazelNewsArticles.find(
+      (item) =>
+        item.id === request.body.id &&
+        (request.body.manage === true || item.status === 'published'),
+    )
+    response.json(
+      article
+        ? { success: true, data: { article } }
+        : { success: false, error: 'not_found' },
+    )
+    return
+  }
+  if (endpoint === 'weazel-news:manage-list') {
+    if (!canManageWeazelNews) {
+      response.json({ success: false, error: 'not_authorized' })
+      return
+    }
+    const status = String(request.body.status ?? 'all')
+    const search = String(request.body.search ?? '')
+      .trim()
+      .toLowerCase()
+    if (!['all', 'published', 'draft'].includes(status)) {
+      response.json({ success: false, error: 'invalid_request' })
+      return
+    }
+    const items = weazelNewsArticles
+      .filter((article) => status === 'all' || article.status === status)
+      .filter(
+        (article) =>
+          !search ||
+          `${article.title} ${article.body}`.toLowerCase().includes(search),
+      )
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+    response.json({
+      success: true,
+      data: pageWeazelNewsArticles(items, request.body),
+    })
+    return
+  }
+  if (
+    ['weazel-news:create', 'weazel-news:update', 'weazel-news:delete'].includes(
+      endpoint,
+    ) &&
+    !canManageWeazelNews
+  ) {
+    response.json({ success: false, error: 'not_authorized' })
+    return
+  }
+  if (endpoint === 'weazel-news:create') {
+    const validation = validateWeazelNewsDraft(request.body)
+    if (!validation.article) {
+      response.json({ success: false, error: validation.error })
+      return
+    }
+    const now = Date.now()
+    const id = `34c0ec54-bfb1-4ad7-81da-${String(weazelNewsSequence).padStart(12, '0')}`
+    weazelNewsSequence += 1
+    const article = {
+      ...validation.article,
+      authorName: 'Jordan Hayes',
+      createdAt: now,
+      id,
+      publishedAt: validation.article.status === 'published' ? now : null,
+      revision: 1,
+      updatedAt: now,
+    }
+    weazelNewsArticles.unshift(article)
+    response.json({ success: true, data: { article } })
+    return
+  }
+  if (endpoint === 'weazel-news:update') {
+    const index = weazelNewsArticles.findIndex(
+      (article) => article.id === request.body.id,
+    )
+    if (index < 0) {
+      response.json({ success: false, error: 'not_found' })
+      return
+    }
+    const current = weazelNewsArticles[index]
+    if (current.revision !== Number(request.body.revision)) {
+      response.json({ success: false, error: 'revision_conflict' })
+      return
+    }
+    const validation = validateWeazelNewsDraft(request.body)
+    if (!validation.article) {
+      response.json({ success: false, error: validation.error })
+      return
+    }
+    const now = Date.now()
+    const article = {
+      ...current,
+      ...validation.article,
+      publishedAt:
+        validation.article.status === 'published'
+          ? (current.publishedAt ?? now)
+          : null,
+      revision: current.revision + 1,
+      updatedAt: now,
+    }
+    weazelNewsArticles[index] = article
+    response.json({ success: true, data: { article } })
+    return
+  }
+  if (endpoint === 'weazel-news:delete') {
+    const index = weazelNewsArticles.findIndex(
+      (article) => article.id === request.body.id,
+    )
+    if (index < 0) {
+      response.json({ success: false, error: 'not_found' })
+      return
+    }
+    if (weazelNewsArticles[index].revision !== Number(request.body.revision)) {
+      response.json({ success: false, error: 'revision_conflict' })
+      return
+    }
+    weazelNewsArticles.splice(index, 1)
     response.json({ success: true })
     return
   }

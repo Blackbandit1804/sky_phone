@@ -2499,6 +2499,38 @@ local schema = {
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
+    {
+        name = "sky_phone_weazel_articles",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "title", type = "VARCHAR(160) NOT NULL" },
+            { name = "body", type = "LONGTEXT NOT NULL" },
+            { name = "excerpt", type = "VARCHAR(240) NOT NULL" },
+            { name = "category", type = "ENUM('official','events','jobs','news','business') NOT NULL" },
+            { name = "image_media_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "author_identifier", type = "VARCHAR(80) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "author_name", type = "VARCHAR(120) NOT NULL" },
+            { name = "updated_by_identifier", type = "VARCHAR(80) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "status", type = "ENUM('draft','published') NOT NULL DEFAULT 'draft'" },
+            { name = "revision", type = "INT UNSIGNED NOT NULL DEFAULT 1" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+            { name = "published_at", type = "DATETIME NULL" },
+            { name = "deleted_at", type = "DATETIME NULL" },
+            { name = "deleted_by_identifier", type = "VARCHAR(80) NULL", characterSet = "ascii", collation = "ascii_bin" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_weazel_public", columns = "(`status`, `deleted_at`, `published_at`, `id`)" },
+            { name = "idx_sky_phone_weazel_category", columns = "(`category`, `status`, `deleted_at`, `published_at`, `id`)" },
+            { name = "idx_sky_phone_weazel_manage", columns = "(`deleted_at`, `status`, `updated_at`, `id`)" },
+            { name = "idx_sky_phone_weazel_media", columns = "(`image_media_id`)" },
+        },
+        foreignKeys = {
+            { column = "image_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
 }
 
 Bridge.Database.Migrate("sky_phone", schema)
