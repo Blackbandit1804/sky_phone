@@ -81,6 +81,7 @@ const initials = computed(() =>
 
 <style scoped>
 .message-contact-card {
+  width: min(258px, 100%);
   width: min(258px, 72cqw);
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 48%);

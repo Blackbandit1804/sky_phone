@@ -50,7 +50,8 @@ const deleteActionColors = {
   textMaterial: 'text-red-500',
 }
 const noteBodyStyle: CSSProperties = {
-  height: 'calc(100cqh - 210px)',
+  height: '617px',
+  maxHeight: 'calc(100% - 210px)',
   resize: 'none',
 }
 const currentNote = computed(() =>

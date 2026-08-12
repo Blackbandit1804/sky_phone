@@ -93,6 +93,7 @@ watch(
 
 <style scoped>
 .shared-content-card {
+  width: min(262px, 100%);
   width: min(262px, 73cqw);
   overflow: hidden;
   border: 1px solid rgb(60 60 67 / 13%);
