@@ -23,6 +23,7 @@ import {
 } from 'konsta/vue'
 import {
   AlertTriangle,
+  Camera,
   Check,
   CircleDot,
   Copy,
@@ -32,7 +33,9 @@ import {
   EyeOff,
   Flag,
   Info,
+  Images,
   LocateFixed,
+  LogOut,
   Map as MapIcon,
   MapPin,
   Navigation,
@@ -52,13 +55,7 @@ import {
   X,
   Zap,
 } from 'lucide-vue-next'
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-} from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -69,9 +66,15 @@ import {
   defaultMapWorldToPercent,
   type MapPoint,
 } from '@/features/map/defaultMapGeometry'
+import AccountLogoutDialog from '@/components/account/AccountLogoutDialog.vue'
+import AppProfileAuth from '@/components/account/AppProfileAuth.vue'
+import { useAccountStore } from '@/stores/account'
+import { useAppAuthStore } from '@/stores/app-auth'
 import { useCrewLinkStore } from '@/stores/crewlink'
 import { useEasyShareStore } from '@/stores/easyshare'
+import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
+import type { PhoneMedia } from '@/types/media'
 import type {
   CrewLinkColour,
   CrewLinkMember,
@@ -92,11 +95,24 @@ type CrewLinkSheet =
   | 'nearby'
   | 'ping'
   | 'edit-group'
+  | 'edit-profile'
   | 'member'
   | null
+type AuthMediaContext = {
+  mode: 'login' | 'register'
+  selectedPhoto: PhoneMedia | null
+  username: string
+}
+type ProfileMediaContext = {
+  selectedPhoto: PhoneMedia | null
+  username: string
+}
 
 const phone = usePhoneStore()
+const account = useAccountStore()
+const appAuth = useAppAuthStore()
 const crew = useCrewLinkStore()
+const messageMedia = useMessageMediaStore()
 const route = useRoute()
 const router = useRouter()
 const mainlandMapUrl = `${import.meta.env.BASE_URL}img/maps/gtav-map.svg`
@@ -104,6 +120,13 @@ const cayoMapUrl = `${import.meta.env.BASE_URL}img/maps/cayo-perico.svg`
 const activeTab = ref<CrewLinkTab>('map')
 const sheet = ref<CrewLinkSheet>(null)
 const username = ref('')
+const authMode = ref<'login' | 'register'>('login')
+const authUsername = ref('')
+const authProfilePhoto = ref<PhoneMedia | null>(null)
+const authPending = ref(false)
+const authError = ref('')
+const selectedProfilePhoto = ref<PhoneMedia | null>(null)
+const profileAvatarRemoved = ref(false)
 const groupName = ref('')
 const groupColour = ref<CrewLinkColour>('cyan')
 const inviteCode = ref('')
@@ -121,10 +144,15 @@ const nearbyPlayers = ref<CrewLinkNearbyPlayer[]>([])
 const selectedMember = ref<CrewLinkMember | null>(null)
 const selectedPing = ref<CrewLinkPing | null>(null)
 const formError = ref('')
+const logoutDialogOpen = ref(false)
 const toastText = ref('')
-const pendingGroupSetting = ref<'allowMemberPings' | 'overheadAllowed' | null>(null)
+const pendingGroupSetting = ref<'allowMemberPings' | 'overheadAllowed' | null>(
+  null,
+)
 const pendingVisibility = ref<'mapVisible' | 'overheadVisible' | null>(null)
-const confirmAction = ref<'delete-group' | 'leave-group' | 'remove-member' | 'transfer-owner' | null>(null)
+const confirmAction = ref<
+  'delete-group' | 'leave-group' | 'remove-member' | 'transfer-owner' | null
+>(null)
 const zoom = ref(1.45)
 const pan = ref<MapPoint>({ x: 0, y: 0 })
 const viewportRef = ref<HTMLElement | null>(null)
@@ -185,18 +213,21 @@ const ownMember = computed(() =>
 const onlineMembers = computed(
   () => activeGroup.value?.members.filter((member) => member.online) ?? [],
 )
-const visibleMapMembers = computed(
-  () => onlineMembers.value.filter((member) => Boolean(member.coords)),
+const visibleMapMembers = computed(() =>
+  onlineMembers.value.filter((member) => Boolean(member.coords)),
 )
 const canCoordinate = computed(
-  () => roleLevels[activeGroup.value?.role ?? 'guest'] >= roleLevels.coordinator,
+  () =>
+    roleLevels[activeGroup.value?.role ?? 'guest'] >= roleLevels.coordinator,
 )
 const canModerate = computed(
   () => roleLevels[activeGroup.value?.role ?? 'guest'] >= roleLevels.moderator,
 )
 const canPing = computed(
-  () =>
-    canModerate.value || Boolean(activeGroup.value?.allowMemberPings),
+  () => canModerate.value || Boolean(activeGroup.value?.allowMemberPings),
+)
+const authUsernameValid = computed(() =>
+  /^[A-Za-z0-9][A-Za-z0-9._]{1,18}[A-Za-z0-9]$/.test(authUsername.value.trim()),
 )
 const canvasStyle = computed(() => ({
   aspectRatio: String(
@@ -223,11 +254,17 @@ const mapCenterCoords = computed(() => {
   return defaultMapPercentToWorld({
     x: Math.min(
       1,
-      Math.max(0, (viewport.left + viewport.width / 2 - canvas.left) / canvas.width),
+      Math.max(
+        0,
+        (viewport.left + viewport.width / 2 - canvas.left) / canvas.width,
+      ),
     ),
     y: Math.min(
       1,
-      Math.max(0, (viewport.top + viewport.height / 2 - canvas.top) / canvas.height),
+      Math.max(
+        0,
+        (viewport.top + viewport.height / 2 - canvas.top) / canvas.height,
+      ),
     ),
   })
 })
@@ -250,6 +287,107 @@ function showToast(message: string): void {
   toastTimer = window.setTimeout(() => {
     toastText.value = ''
   }, 2400)
+}
+
+function switchAuthMode(mode: 'login' | 'register'): void {
+  authMode.value = mode
+  authProfilePhoto.value = null
+  authUsername.value =
+    mode === 'register'
+      ? (account.email.split('@')[0] ?? '')
+          .replace(/[^a-z0-9._]/gi, '_')
+          .slice(0, 20)
+      : ''
+  authError.value = ''
+}
+
+function authErrorText(code?: string): string {
+  const known = [
+    'invalid_profile_image',
+    'invalid_username',
+    'no_ifruit_account',
+    'profile_exists',
+    'profile_not_found',
+    'rate_limited',
+    'username_taken',
+  ]
+  return t(
+    `authErrors.${code && known.includes(code) ? code : 'request_failed'}`,
+  )
+}
+
+async function submitAuthentication(): Promise<void> {
+  authError.value = ''
+  if (!account.email) {
+    authError.value = authErrorText('no_ifruit_account')
+    return
+  }
+  if (!authUsernameValid.value) {
+    authError.value = authErrorText('invalid_username')
+    return
+  }
+
+  const submittedUsername = authUsername.value.trim()
+  authPending.value = true
+  const loaded = await crew.bootstrap()
+  if (!loaded) {
+    authPending.value = false
+    authError.value = authErrorText(crew.error)
+    return
+  }
+
+  if (authMode.value === 'login') {
+    authPending.value = false
+    if (!crew.profile) {
+      authError.value = authErrorText('profile_not_found')
+      return
+    }
+    if (
+      crew.profile.username.toLowerCase() !== submittedUsername.toLowerCase()
+    ) {
+      authError.value = authErrorText('invalid_username')
+      return
+    }
+  } else {
+    if (crew.profile) {
+      authPending.value = false
+      authError.value = authErrorText('profile_exists')
+      return
+    }
+    const response = await crew.createProfile(
+      submittedUsername,
+      authProfilePhoto.value?.id ?? 0,
+    )
+    authPending.value = false
+    if (!response.success) {
+      authError.value = authErrorText(response.error)
+      return
+    }
+  }
+
+  appAuth.signIn('crewlink', account.email)
+  username.value = crew.profile?.username ?? submittedUsername
+  authUsername.value = ''
+  authProfilePhoto.value = null
+  openSharedInvite()
+}
+
+function openAuthMedia(app: 'camera' | 'photos'): void {
+  messageMedia.begin(
+    'crewlink:auth-avatar',
+    'photo',
+    '/apps/crewlink?auth=register',
+    1,
+    {
+      mode: authMode.value,
+      selectedPhoto: authProfilePhoto.value,
+      username: authUsername.value,
+    } satisfies AuthMediaContext,
+  )
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
 }
 
 function shareProfile(): void {
@@ -303,7 +441,10 @@ function updateValue(
 }
 
 function colourValue(colour: CrewLinkColour): string {
-  return colours.find((candidate) => candidate.id === colour)?.value ?? colours[0].value
+  return (
+    colours.find((candidate) => candidate.id === colour)?.value ??
+    colours[0].value
+  )
 }
 
 function roleLabel(role: CrewLinkRole): string {
@@ -314,7 +455,10 @@ function memberInitials(member: CrewLinkMember): string {
   return member.username.slice(0, 2).toUpperCase()
 }
 
-function markerStyle(coords: MapPoint, offset = '-50%'): Record<string, string> {
+function markerStyle(
+  coords: MapPoint,
+  offset = '-50%',
+): Record<string, string> {
   const point = defaultMapWorldToPercent(coords)
   return {
     left: `${point.x * 100}%`,
@@ -331,7 +475,8 @@ function memberStatus(member: CrewLinkMember): string {
 
 function expiresIn(timestamp: number): string {
   const seconds = Math.max(0, Math.ceil((timestamp - Date.now()) / 1000))
-  if (seconds >= 60) return t('expiresMinutes', { count: String(Math.ceil(seconds / 60)) })
+  if (seconds >= 60)
+    return t('expiresMinutes', { count: String(Math.ceil(seconds / 60)) })
   return t('expiresSeconds', { count: String(seconds) })
 }
 
@@ -357,7 +502,40 @@ function closeSheet(): void {
   if (crew.isLoading) return
   sheet.value = null
   selectedMember.value = null
+  selectedProfilePhoto.value = null
+  profileAvatarRemoved.value = false
   formError.value = ''
+}
+
+function editOwnProfile(): void {
+  if (!crew.profile) return
+  username.value = crew.profile.username
+  selectedProfilePhoto.value = null
+  profileAvatarRemoved.value = false
+  formError.value = ''
+  sheet.value = 'edit-profile'
+}
+
+function openProfileMedia(app: 'camera' | 'photos'): void {
+  messageMedia.begin(
+    'crewlink:profile-avatar',
+    'photo',
+    '/apps/crewlink?profileEdit=1',
+    1,
+    {
+      selectedPhoto: selectedProfilePhoto.value,
+      username: username.value,
+    } satisfies ProfileMediaContext,
+  )
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
+}
+
+function removeProfilePhoto(): void {
+  selectedProfilePhoto.value = null
+  profileAvatarRemoved.value = true
 }
 
 async function createProfile(): Promise<void> {
@@ -371,7 +549,10 @@ async function createProfile(): Promise<void> {
 }
 
 async function createGroup(): Promise<void> {
-  const response = await crew.createGroup(groupName.value.trim(), groupColour.value)
+  const response = await crew.createGroup(
+    groupName.value.trim(),
+    groupColour.value,
+  )
   if (!response.success) {
     formError.value = errorText(response.error)
     return
@@ -405,13 +586,20 @@ async function switchGroup(groupId: string): Promise<void> {
 
 async function saveProfile(): Promise<void> {
   if (!crew.profile) return
+  const avatarMediaId =
+    selectedProfilePhoto.value?.id ??
+    (profileAvatarRemoved.value ? 0 : crew.profile.avatarMediaId)
   const response = await crew.updateProfile(
     username.value.trim(),
     crew.profile.mapVisible,
     crew.profile.overheadVisible,
+    avatarMediaId,
   )
   if (!response.success) formError.value = errorText(response.error)
-  else showToast(t('profileSaved'))
+  else {
+    closeSheet()
+    showToast(t('profileSaved'))
+  }
 }
 
 async function updateVisibility(
@@ -479,9 +667,7 @@ function togglePingAtMapCenter(): void {
 function copyInviteCode(): void {
   if (!activeGroup.value?.inviteCode) return
   showToast(
-    copyText(activeGroup.value.inviteCode)
-      ? t('codeCopied')
-      : errorText(),
+    copyText(activeGroup.value.inviteCode) ? t('codeCopied') : errorText(),
   )
 }
 
@@ -553,12 +739,20 @@ async function performConfirmedAction(): Promise<void> {
   confirmAction.value = null
   if (!activeGroup.value) return
   let response
-  if (action === 'delete-group') response = await crew.deleteGroup(activeGroup.value.id)
-  else if (action === 'leave-group') response = await crew.leave(activeGroup.value.id)
+  if (action === 'delete-group')
+    response = await crew.deleteGroup(activeGroup.value.id)
+  else if (action === 'leave-group')
+    response = await crew.leave(activeGroup.value.id)
   else if (action === 'remove-member' && selectedMember.value) {
-    response = await crew.removeMember(activeGroup.value.id, selectedMember.value.id)
+    response = await crew.removeMember(
+      activeGroup.value.id,
+      selectedMember.value.id,
+    )
   } else if (action === 'transfer-owner' && selectedMember.value) {
-    response = await crew.transferOwner(activeGroup.value.id, selectedMember.value.id)
+    response = await crew.transferOwner(
+      activeGroup.value.id,
+      selectedMember.value.id,
+    )
   }
   if (!response?.success) showToast(errorText(response?.error))
   else {
@@ -599,9 +793,25 @@ async function removePing(ping: CrewLinkPing): Promise<void> {
   }
 }
 
-async function routeTo(coords: { x: number; y: number; z: number }): Promise<void> {
+async function routeTo(coords: {
+  x: number
+  y: number
+  z: number
+}): Promise<void> {
   const response = await nuiCall('map:setWaypoint', { coords })
   showToast(t(response.success ? 'routeSet' : 'errors.request_failed'))
+}
+
+function routeToSelectedMember(): void {
+  if (!selectedMember.value?.coords) return
+  void routeTo(selectedMember.value.coords)
+  selectedMember.value = null
+}
+
+function routeToSelectedPing(): void {
+  if (!selectedPing.value) return
+  void routeTo(selectedPing.value.coords)
+  selectedPing.value = null
 }
 
 function centerOn(coords: MapPoint): void {
@@ -658,7 +868,10 @@ function centerOwnLocation(): void {
 }
 
 function changeZoom(direction: -1 | 1): void {
-  zoom.value = Math.max(0.85, Math.min(8, zoom.value * (direction > 0 ? 1.32 : 0.76)))
+  zoom.value = Math.max(
+    0.85,
+    Math.min(8, zoom.value * (direction > 0 ? 1.32 : 0.76)),
+  )
 }
 
 function onPointerDown(event: PointerEvent): void {
@@ -700,8 +913,30 @@ function onCrewLinkMessage(event: MessageEvent): void {
 }
 
 onMounted(async () => {
-  await crew.bootstrap()
+  const authSelection = messageMedia.consumeMany<AuthMediaContext>(
+    'crewlink:auth-avatar',
+  )
+  const profileSelection = messageMedia.consumeMany<ProfileMediaContext>(
+    'crewlink:profile-avatar',
+  )
+  if (authSelection) {
+    authMode.value = authSelection.context?.mode ?? 'register'
+    authUsername.value = authSelection.context?.username ?? ''
+    authProfilePhoto.value =
+      authSelection.media[0] ?? authSelection.context?.selectedPhoto ?? null
+  }
+  if (appAuth.isSignedIn('crewlink')) await crew.bootstrap()
   username.value = crew.profile?.username ?? ''
+  if (profileSelection && crew.profile) {
+    username.value = profileSelection.context?.username ?? crew.profile.username
+    selectedProfilePhoto.value =
+      profileSelection.media[0] ??
+      profileSelection.context?.selectedPhoto ??
+      null
+    profileAvatarRemoved.value = false
+    activeTab.value = 'profile'
+    sheet.value = 'edit-profile'
+  }
   openSharedInvite()
   await nextTick()
   fitOnlineMembers()
@@ -719,7 +954,36 @@ onBeforeUnmount(() => {
 
 <template>
   <k-page class="crewlink" :class="{ 'crewlink--dark': phone.isDarkMode }">
-    <template v-if="crew.isLoading && !crew.profile && !crew.error">
+    <template v-if="!appAuth.isSignedIn('crewlink')">
+      <div class="crewlink-onboarding crewlink-auth">
+        <AppProfileAuth
+          :mode="authMode"
+          v-model:username="authUsername"
+          :avatar-url="authProfilePhoto?.url ?? null"
+          :body="t('authBody')"
+          :camera-label="t('camera')"
+          :email="account.email"
+          :email-label="t('ifruitEmail')"
+          :error="authError"
+          :eyebrow="t('authEyebrow')"
+          :gallery-label="t('gallery')"
+          :login-label="t('login')"
+          :max-username-length="20"
+          :min-username-length="3"
+          :pending="authPending"
+          :register-label="t('register')"
+          :title="t('authTitle')"
+          :username-label="t('username')"
+          :username-placeholder="t('usernamePlaceholder')"
+          @camera="openAuthMedia('camera')"
+          @gallery="openAuthMedia('photos')"
+          @submit="submitAuthentication"
+          @update:mode="switchAuthMode"
+        />
+      </div>
+    </template>
+
+    <template v-else-if="crew.isLoading && !crew.profile && !crew.error">
       <div class="crewlink-loading">
         <span class="crewlink-logo"><Radio /></span>
         <k-preloader />
@@ -733,8 +997,8 @@ onBeforeUnmount(() => {
         <small>{{ t('privateNetwork') }}</small>
         <h1>{{ t('signInTitle') }}</h1>
         <p>{{ t('signInBody') }}</p>
-        <k-button large rounded @click="router.push('/apps/settings')">
-          {{ t('openSettings') }}
+        <k-button large rounded @click="appAuth.signOut('crewlink')">
+          {{ t('backToLogin') }}
         </k-button>
       </div>
     </template>
@@ -759,19 +1023,40 @@ onBeforeUnmount(() => {
             @keydown.enter="createProfile"
           />
         </k-list>
-        <p v-if="formError" class="crewlink-error" role="alert">{{ formError }}</p>
-        <k-button large rounded :disabled="crew.isLoading" @click="createProfile">
+        <p v-if="formError" class="crewlink-error" role="alert">
+          {{ formError }}
+        </p>
+        <k-button
+          large
+          rounded
+          :disabled="crew.isLoading"
+          @click="createProfile"
+        >
           <k-preloader v-if="crew.isLoading" />
           <template v-else>{{ t('createProfile') }}</template>
         </k-button>
-        <small class="crewlink-privacy"><ShieldCheck />{{ t('privacyNote') }}</small>
+        <k-button
+          large
+          rounded
+          outline
+          class="crewlink-logout-button"
+          @click="logoutDialogOpen = true"
+        >
+          <LogOut />{{ phone.t('Common.signOut') }}
+        </k-button>
+        <small class="crewlink-privacy"
+          ><ShieldCheck />{{ t('privacyNote') }}</small
+        >
       </div>
     </template>
 
     <template v-else>
       <k-navbar v-if="activeGroup" class="crewlink-navbar" :title="t('name')" />
 
-      <main class="crewlink-content" :class="{ 'crewlink-content--empty': !activeGroup }">
+      <main
+        class="crewlink-content"
+        :class="{ 'crewlink-content--empty': !activeGroup }"
+      >
         <section v-if="!activeGroup" class="crewlink-group-gate">
           <button type="button" @click="openSheet('create-group')">
             <span><Plus /></span>
@@ -781,6 +1066,15 @@ onBeforeUnmount(() => {
             <span><UserPlus /></span>
             <strong>{{ t('joinGroup') }}</strong>
           </button>
+          <k-button
+            large
+            rounded
+            outline
+            class="crewlink-group-gate__logout"
+            @click="logoutDialogOpen = true"
+          >
+            <LogOut />{{ phone.t('Common.signOut') }}
+          </k-button>
         </section>
 
         <template v-else>
@@ -796,8 +1090,11 @@ onBeforeUnmount(() => {
                   v-for="member in onlineMembers.slice(0, 4)"
                   :key="member.id"
                   :style="{ borderColor: activeColour }"
-                >{{ memberInitials(member) }}</span>
-                <i v-if="onlineMembers.length > 4">+{{ onlineMembers.length - 4 }}</i>
+                  >{{ memberInitials(member) }}</span
+                >
+                <i v-if="onlineMembers.length > 4"
+                  >+{{ onlineMembers.length - 4 }}</i
+                >
               </div>
             </div>
 
@@ -810,16 +1107,20 @@ onBeforeUnmount(() => {
               @pointercancel="onPointerUp"
               @wheel="onWheel"
             >
-              <div ref="canvasRef" class="crewlink-map__canvas" :style="canvasStyle">
+              <div
+                ref="canvasRef"
+                class="crewlink-map__canvas"
+                :style="canvasStyle"
+              >
                 <img
-                :src="mainlandMapUrl"
+                  :src="mainlandMapUrl"
                   alt=""
                   class="crewlink-map__mainland"
                   :style="defaultMainlandStyle"
                   draggable="false"
                 />
                 <img
-                :src="cayoMapUrl"
+                  :src="cayoMapUrl"
                   alt=""
                   class="crewlink-map__cayo"
                   :style="defaultCayoStyle"
@@ -831,7 +1132,10 @@ onBeforeUnmount(() => {
                   type="button"
                   class="crewlink-member-marker"
                   :class="{ 'is-self': member.id === crew.profile?.id }"
-                  :style="{ ...markerStyle(member.coords!), ...activeCrewStyle }"
+                  :style="{
+                    ...markerStyle(member.coords!),
+                    ...activeCrewStyle,
+                  }"
                   @pointerdown.stop
                   @click.stop="selectedMember = member"
                 >
@@ -843,7 +1147,10 @@ onBeforeUnmount(() => {
                   :key="ping.id"
                   type="button"
                   class="crewlink-ping-marker"
-                  :style="{ ...markerStyle(ping.coords, '-100%'), '--ping': pingColours[ping.type] }"
+                  :style="{
+                    ...markerStyle(ping.coords, '-100%'),
+                    '--ping': pingColours[ping.type],
+                  }"
                   @pointerdown.stop
                   @click.stop="selectedPing = ping"
                 >
@@ -851,12 +1158,38 @@ onBeforeUnmount(() => {
                   <small>{{ ping.label }}</small>
                 </button>
               </div>
-              <div v-if="pingAtMapCenter" class="crewlink-map-crosshair"><Crosshair /></div>
+              <div v-if="pingAtMapCenter" class="crewlink-map-crosshair">
+                <Crosshair />
+              </div>
               <div class="crewlink-map-controls">
-                <button type="button" :aria-label="t('zoomIn')" @click="changeZoom(1)">+</button>
-                <button type="button" :aria-label="t('zoomOut')" @click="changeZoom(-1)">−</button>
-                <button type="button" :aria-label="t('myLocation')" @click="centerOwnLocation"><LocateFixed /></button>
-                <button type="button" :aria-label="`${t('members')} · ${t('map')}`" @click="fitOnlineMembers"><Users /></button>
+                <button
+                  type="button"
+                  :aria-label="t('zoomIn')"
+                  @click="changeZoom(1)"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  :aria-label="t('zoomOut')"
+                  @click="changeZoom(-1)"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  :aria-label="t('myLocation')"
+                  @click="centerOwnLocation"
+                >
+                  <LocateFixed />
+                </button>
+                <button
+                  type="button"
+                  :aria-label="`${t('members')} · ${t('map')}`"
+                  @click="fitOnlineMembers"
+                >
+                  <Users />
+                </button>
               </div>
               <div class="crewlink-map-legend">
                 <span><i class="is-live"></i>{{ t('status.live') }}</span>
@@ -866,10 +1199,24 @@ onBeforeUnmount(() => {
 
             <div class="crewlink-map-actions">
               <button type="button" @click="activeTab = 'group'">
-                <Users /><span><strong>{{ activeGroup.memberCount }} {{ t(activeGroup.memberCount === 1 ? 'member' : 'members') }}</strong><small>{{ t('openCrew') }}</small></span>
+                <Users /><span
+                  ><strong
+                    >{{ activeGroup.memberCount }}
+                    {{
+                      t(activeGroup.memberCount === 1 ? 'member' : 'members')
+                    }}</strong
+                  ><small>{{ t('openCrew') }}</small></span
+                >
               </button>
-              <button type="button" :disabled="!canPing" @click="openSheet('ping')">
-                <MapPin /><span><strong>{{ t('newPing') }}</strong><small>{{ t('shareLocation') }}</small></span>
+              <button
+                type="button"
+                :disabled="!canPing"
+                @click="openSheet('ping')"
+              >
+                <MapPin /><span
+                  ><strong>{{ t('newPing') }}</strong
+                  ><small>{{ t('shareLocation') }}</small></span
+                >
               </button>
             </div>
           </section>
@@ -879,18 +1226,54 @@ onBeforeUnmount(() => {
               <div class="crewlink-group-hero__signal"><Radio /></div>
               <small>{{ t('activeCrew') }}</small>
               <h1>{{ activeGroup.name }}</h1>
-              <p>{{ t(activeGroup.memberCount === 1 ? 'groupSummarySingle' : 'groupSummary', { online: String(onlineMembers.length), total: String(activeGroup.memberCount) }) }}</p>
+              <p>
+                {{
+                  t(
+                    activeGroup.memberCount === 1
+                      ? 'groupSummarySingle'
+                      : 'groupSummary',
+                    {
+                      online: String(onlineMembers.length),
+                      total: String(activeGroup.memberCount),
+                    },
+                  )
+                }}
+              </p>
               <div>
-                <k-badge class="crewlink-group-badge">{{ roleLabel(activeGroup.role) }}</k-badge>
-                <k-badge class="crewlink-group-badge">{{ t('private') }}</k-badge>
+                <k-badge class="crewlink-group-badge">{{
+                  roleLabel(activeGroup.role)
+                }}</k-badge>
+                <k-badge class="crewlink-group-badge">{{
+                  t('private')
+                }}</k-badge>
               </div>
             </div>
 
             <div class="crewlink-quick-actions">
-              <button v-if="canModerate" type="button" @click="loadNearby"><UserPlus /><span>{{ t('nearby') }}</span></button>
-              <button v-if="activeGroup.inviteCode" type="button" @click="copyInviteCode"><Copy /><span>{{ t('copyCode') }}</span></button>
-              <button v-if="activeGroup.inviteCode" type="button" @click="shareGroupInvite"><Share2 /><span>{{ t('shareInvite') }}</span></button>
-              <button v-if="canCoordinate" type="button" @click="openSheet('edit-group')"><Settings2 /><span>{{ t('manage') }}</span></button>
+              <button v-if="canModerate" type="button" @click="loadNearby">
+                <UserPlus /><span>{{ t('nearby') }}</span>
+              </button>
+              <button
+                v-if="activeGroup.inviteCode"
+                type="button"
+                @click="copyInviteCode"
+              >
+                <Copy /><span>{{ t('copyCode') }}</span>
+              </button>
+              <button
+                v-if="activeGroup.inviteCode"
+                type="button"
+                @click="shareGroupInvite"
+              >
+                <Share2 /><span>{{ t('shareInvite') }}</span>
+              </button>
+              <button
+                v-if="canCoordinate"
+                type="button"
+                @click="openSheet('edit-group')"
+              >
+                <Settings2 /><span>{{ t('manage') }}</span>
+              </button>
             </div>
 
             <template v-if="crew.invitations.length">
@@ -898,16 +1281,36 @@ onBeforeUnmount(() => {
               <div class="crewlink-invitations crewlink-invitations--inline">
                 <k-card v-for="invite in crew.invitations" :key="invite.id">
                   <div class="crewlink-invite-card">
-                    <i :style="{ background: colourValue(invite.colour) }"><Users /></i>
-                    <div><strong>{{ invite.groupName }}</strong><span>{{ t('invitedBy', { username: invite.inviterUsername }) }}</span></div>
-                    <button type="button" @click="respondInvitation(invite.id, false)"><X /></button>
-                    <button type="button" class="is-accept" @click="respondInvitation(invite.id, true)"><Check /></button>
+                    <i :style="{ background: colourValue(invite.colour) }"
+                      ><Users
+                    /></i>
+                    <div>
+                      <strong>{{ invite.groupName }}</strong
+                      ><span>{{
+                        t('invitedBy', { username: invite.inviterUsername })
+                      }}</span>
+                    </div>
+                    <button
+                      type="button"
+                      @click="respondInvitation(invite.id, false)"
+                    >
+                      <X />
+                    </button>
+                    <button
+                      type="button"
+                      class="is-accept"
+                      @click="respondInvitation(invite.id, true)"
+                    >
+                      <Check />
+                    </button>
                   </div>
                 </k-card>
               </div>
             </template>
 
-            <k-block-title class="crewlink-members-title">{{ t(activeGroup.memberCount === 1 ? 'member' : 'members') }}</k-block-title>
+            <k-block-title class="crewlink-members-title">{{
+              t(activeGroup.memberCount === 1 ? 'member' : 'members')
+            }}</k-block-title>
             <k-list inset strong class="crewlink-member-list">
               <k-list-item
                 v-for="member in activeGroup.members"
@@ -915,46 +1318,144 @@ onBeforeUnmount(() => {
                 :link="member.id !== crew.profile?.id && canModerate"
                 @click="selectMember(member)"
               >
-                <template #title><span class="crewlink-member-title">{{ member.username }}</span></template>
-                <template #subtitle><span class="crewlink-member-subtitle">{{ roleLabel(member.role) }} · {{ memberStatus(member) }}</span></template>
+                <template #title
+                  ><span class="crewlink-member-title">{{
+                    member.username
+                  }}</span></template
+                >
+                <template #subtitle
+                  ><span class="crewlink-member-subtitle"
+                    >{{ roleLabel(member.role) }} ·
+                    {{ memberStatus(member) }}</span
+                  ></template
+                >
                 <template #media>
-                  <span class="crewlink-avatar" :style="{ '--crew': activeColour }">{{ memberInitials(member) }}<i :class="{ 'is-online': member.online }"></i></span>
+                  <span
+                    class="crewlink-avatar"
+                    :style="{ '--crew': activeColour }"
+                  >
+                    <img
+                      v-if="member.avatarUrl"
+                      :src="member.avatarUrl"
+                      alt=""
+                    />
+                    <template v-else>{{ memberInitials(member) }}</template>
+                    <i :class="{ 'is-online': member.online }"></i>
+                  </span>
                 </template>
                 <template #after>
-                  <component :is="roleIcons[member.role]" :size="17" :class="`role-${member.role}`" />
+                  <component
+                    :is="roleIcons[member.role]"
+                    :size="17"
+                    :class="`role-${member.role}`"
+                  />
                 </template>
               </k-list-item>
             </k-list>
           </section>
 
-          <section v-show="activeTab === 'pings'" class="crewlink-scroll-tab crewlink-pings-tab">
+          <section
+            v-show="activeTab === 'pings'"
+            class="crewlink-scroll-tab crewlink-pings-tab"
+          >
             <div class="crewlink-section-header">
               <span><MapPin /></span>
-              <div><small>{{ t('liveCoordination') }}</small><h1>{{ t('pings') }}</h1></div>
-              <button v-if="canPing" type="button" @click="openSheet('ping')"><Plus /></button>
+              <div>
+                <small>{{ t('liveCoordination') }}</small>
+                <h1>{{ t('pings') }}</h1>
+              </div>
+              <button v-if="canPing" type="button" @click="openSheet('ping')">
+                <Plus />
+              </button>
             </div>
             <div v-if="activeGroup.pings.length" class="crewlink-ping-list">
-              <k-card v-for="ping in activeGroup.pings" :key="ping.id" :content-wrap="false">
+              <k-card
+                v-for="ping in activeGroup.pings"
+                :key="ping.id"
+                :content-wrap="false"
+              >
                 <article>
-                  <i :style="{ background: pingColours[ping.type] }"><component :is="pingIcons[ping.type]" /></i>
-                  <div><small>{{ t(`pingTypes.${ping.type}`) }} · {{ expiresIn(ping.expiresAt) }}</small><strong>{{ ping.label }}</strong><span>{{ t('sharedBy', { username: ping.creatorUsername }) }}</span></div>
-                  <button type="button" :aria-label="t('setRoute')" @click="routeTo(ping.coords)"><Navigation /></button>
-                  <button v-if="ping.creatorProfileId === crew.profile?.id || canModerate" type="button" :aria-label="phone.t('Common.delete')" @click="removePing(ping)"><Trash2 /></button>
+                  <i :style="{ background: pingColours[ping.type] }"
+                    ><component :is="pingIcons[ping.type]"
+                  /></i>
+                  <div>
+                    <small
+                      >{{ t(`pingTypes.${ping.type}`) }} ·
+                      {{ expiresIn(ping.expiresAt) }}</small
+                    ><strong>{{ ping.label }}</strong
+                    ><span>{{
+                      t('sharedBy', { username: ping.creatorUsername })
+                    }}</span>
+                  </div>
+                  <button
+                    type="button"
+                    :aria-label="t('setRoute')"
+                    @click="routeTo(ping.coords)"
+                  >
+                    <Navigation />
+                  </button>
+                  <button
+                    v-if="
+                      ping.creatorProfileId === crew.profile?.id || canModerate
+                    "
+                    type="button"
+                    :aria-label="phone.t('Common.delete')"
+                    @click="removePing(ping)"
+                  >
+                    <Trash2 />
+                  </button>
                 </article>
               </k-card>
             </div>
             <div v-else class="crewlink-empty-state">
-              <span><CircleDot /></span><h2>{{ t('noPings') }}</h2><p>{{ t('noPingsBody') }}</p>
+              <span><CircleDot /></span>
+              <h2>{{ t('noPings') }}</h2>
+              <p>{{ t('noPingsBody') }}</p>
             </div>
           </section>
 
           <section v-show="activeTab === 'profile'" class="crewlink-scroll-tab">
-            <div class="crewlink-profile-card" :style="{ '--crew': activeColour }">
-              <span>{{ crew.profile.username.slice(0, 2).toUpperCase() }}</span>
-              <div><small>{{ t('yourCrewLinkId') }}</small><h1>@{{ crew.profile.username }}</h1><p>{{ activeGroup.name }} · {{ roleLabel(activeGroup.role) }}</p></div>
+            <div
+              class="crewlink-profile-card"
+              :style="{ '--crew': activeColour }"
+            >
+              <span>
+                <img
+                  v-if="crew.profile.avatarUrl"
+                  :src="crew.profile.avatarUrl"
+                  alt=""
+                />
+                <template v-else>{{
+                  crew.profile.username.slice(0, 2).toUpperCase()
+                }}</template>
+              </span>
+              <div>
+                <small>{{ t('yourCrewLinkId') }}</small>
+                <h1>@{{ crew.profile.username }}</h1>
+                <p>
+                  {{ activeGroup.name }} · {{ roleLabel(activeGroup.role) }}
+                </p>
+              </div>
             </div>
 
             <k-list inset strong>
+              <k-list-item
+                :title="t('editProfile')"
+                :subtitle="t('editProfileBody')"
+                link
+                @click="editOwnProfile"
+              >
+                <template #media>
+                  <span class="crewlink-profile-row-avatar">
+                    <img
+                      v-if="crew.profile.avatarUrl"
+                      :src="crew.profile.avatarUrl"
+                      alt=""
+                    />
+                    <UserRound v-else :size="20" />
+                  </span>
+                </template>
+              </k-list-item>
               <k-list-item
                 link
                 link-component="button"
@@ -967,13 +1468,29 @@ onBeforeUnmount(() => {
 
             <k-block-title>{{ t('privacyVisibility') }}</k-block-title>
             <k-list inset strong>
-              <k-list-item :title="t('shareOnMap')" :subtitle="t('shareOnMapBody')">
+              <k-list-item
+                :title="t('shareOnMap')"
+                :subtitle="t('shareOnMapBody')"
+              >
                 <template #media><MapIcon :size="20" /></template>
-                <template #after><k-toggle :checked="crew.profile.mapVisible" :disabled="pendingVisibility !== null" @click.stop.prevent="updateVisibility('mapVisible')" /></template>
+                <template #after
+                  ><k-toggle
+                    :checked="crew.profile.mapVisible"
+                    :disabled="pendingVisibility !== null"
+                    @click.stop.prevent="updateVisibility('mapVisible')"
+                /></template>
               </k-list-item>
-              <k-list-item :title="t('overheadLabels')" :subtitle="t('overheadLabelsBody')">
+              <k-list-item
+                :title="t('overheadLabels')"
+                :subtitle="t('overheadLabelsBody')"
+              >
                 <template #media><Eye :size="20" /></template>
-                <template #after><k-toggle :checked="crew.profile.overheadVisible" :disabled="pendingVisibility !== null" @click.stop.prevent="updateVisibility('overheadVisible')" /></template>
+                <template #after
+                  ><k-toggle
+                    :checked="crew.profile.overheadVisible"
+                    :disabled="pendingVisibility !== null"
+                    @click.stop.prevent="updateVisibility('overheadVisible')"
+                /></template>
               </k-list-item>
             </k-list>
 
@@ -987,20 +1504,60 @@ onBeforeUnmount(() => {
                 link
                 @click="switchGroup(group.id)"
               >
-                <template #media><span class="crewlink-group-dot" :style="{ background: colourValue(group.colour) }"><Users /></span></template>
-                <template #after><Check v-if="group.id === activeGroup.id" :size="18" :style="{ color: colourValue(group.colour) }" /></template>
+                <template #media
+                  ><span
+                    class="crewlink-group-dot"
+                    :style="{ background: colourValue(group.colour) }"
+                    ><Users /></span
+                ></template>
+                <template #after
+                  ><Check
+                    v-if="group.id === activeGroup.id"
+                    :size="18"
+                    :style="{ color: colourValue(group.colour) }"
+                /></template>
               </k-list-item>
-              <k-list-item :title="t('createAnotherGroup')" link @click="openSheet('create-group')"><template #media><Plus :size="20" /></template></k-list-item>
-              <k-list-item :title="t('joinWithCode')" link @click="openSheet('join-group')"><template #media><UserPlus :size="20" /></template></k-list-item>
+              <k-list-item
+                :title="t('createAnotherGroup')"
+                link
+                @click="openSheet('create-group')"
+                ><template #media><Plus :size="20" /></template
+              ></k-list-item>
+              <k-list-item
+                :title="t('joinWithCode')"
+                link
+                @click="openSheet('join-group')"
+                ><template #media><UserPlus :size="20" /></template
+              ></k-list-item>
             </k-list>
 
             <k-block-title>{{ t('account') }}</k-block-title>
             <k-list inset strong>
-              <k-list-item :title="t('username')" :subtitle="`@${crew.profile.username}`" link @click="username = crew.profile!.username; formError = ''; sheet = 'member'">
-                <template #media><UserRound :size="20" /></template>
+              <k-list-item
+                :title="t('externalApi')"
+                :subtitle="t('externalApiBody')"
+                ><template #media><Sparkles :size="20" /></template
+              ></k-list-item>
+              <k-list-item
+                :title="phone.t('Common.signOut')"
+                class="crewlink-danger-row"
+                link
+                @click="logoutDialogOpen = true"
+              >
+                <template #media><LogOut :size="20" /></template>
               </k-list-item>
-              <k-list-item :title="t('externalApi')" :subtitle="t('externalApiBody')"><template #media><Sparkles :size="20" /></template></k-list-item>
-              <k-list-item :title="activeGroup.isOwner ? t('deleteGroup') : t('leaveGroup')" class="crewlink-danger-row" link @click="confirmAction = activeGroup.isOwner ? 'delete-group' : 'leave-group'">
+              <k-list-item
+                :title="
+                  activeGroup.isOwner ? t('deleteGroup') : t('leaveGroup')
+                "
+                class="crewlink-danger-row"
+                link
+                @click="
+                  confirmAction = activeGroup.isOwner
+                    ? 'delete-group'
+                    : 'leave-group'
+                "
+              >
                 <template #media><Trash2 :size="20" /></template>
               </k-list-item>
             </k-list>
@@ -1018,51 +1575,169 @@ onBeforeUnmount(() => {
         :aria-label="t('navigation')"
       >
         <k-toolbar-pane class="crewlink-tabbar__pane">
-          <k-tabbar-link component="button" :active="activeTab === 'map'" :link-props="{ type: 'button' }" @click="activeTab = 'map'"><template #label>{{ t('map') }}</template><template #icon><k-icon><MapIcon /></k-icon></template></k-tabbar-link>
-          <k-tabbar-link component="button" :active="activeTab === 'group'" :link-props="{ type: 'button' }" @click="activeTab = 'group'"><template #label>{{ t('crew') }}</template><template #icon><k-icon><Users /></k-icon></template></k-tabbar-link>
-          <k-tabbar-link component="button" :active="activeTab === 'pings'" :link-props="{ type: 'button' }" @click="activeTab = 'pings'">
+          <k-tabbar-link
+            component="button"
+            :active="activeTab === 'map'"
+            :link-props="{ type: 'button' }"
+            @click="activeTab = 'map'"
+            ><template #label>{{ t('map') }}</template
+            ><template #icon
+              ><k-icon><MapIcon /></k-icon></template
+          ></k-tabbar-link>
+          <k-tabbar-link
+            component="button"
+            :active="activeTab === 'group'"
+            :link-props="{ type: 'button' }"
+            @click="activeTab = 'group'"
+            ><template #label>{{ t('crew') }}</template
+            ><template #icon
+              ><k-icon><Users /></k-icon></template
+          ></k-tabbar-link>
+          <k-tabbar-link
+            component="button"
+            :active="activeTab === 'pings'"
+            :link-props="{ type: 'button' }"
+            @click="activeTab = 'pings'"
+          >
             <template #label>{{ t('pings') }}</template>
             <template #icon>
               <k-icon>
                 <span class="crewlink-pings-icon">
                   <MapPin />
-                  <k-badge v-if="activeGroup.pings.length" small class="crewlink-pings-badge">{{ activeGroup.pings.length }}</k-badge>
+                  <k-badge
+                    v-if="activeGroup.pings.length"
+                    small
+                    class="crewlink-pings-badge"
+                    >{{ activeGroup.pings.length }}</k-badge
+                  >
                 </span>
               </k-icon>
             </template>
           </k-tabbar-link>
-          <k-tabbar-link component="button" :active="activeTab === 'profile'" :link-props="{ type: 'button' }" @click="activeTab = 'profile'"><template #label>{{ t('profile') }}</template><template #icon><k-icon><UserRound /></k-icon></template></k-tabbar-link>
+          <k-tabbar-link
+            component="button"
+            :active="activeTab === 'profile'"
+            :link-props="{ type: 'button' }"
+            @click="activeTab = 'profile'"
+            ><template #label>{{ t('profile') }}</template
+            ><template #icon
+              ><k-icon><UserRound /></k-icon></template
+          ></k-tabbar-link>
         </k-toolbar-pane>
       </k-tabbar>
     </template>
 
-    <k-sheet :opened="Boolean(sheet)" class="crewlink-sheet" @backdropclick="closeSheet">
-      <section v-if="sheet" class="crewlink-sheet__content" role="dialog" aria-modal="true">
-        <k-link component="button" class="crewlink-sheet__close" :link-props="{ type: 'button' }" :aria-label="phone.t('Common.close')" @click="closeSheet"><X /></k-link>
+    <k-sheet
+      :opened="Boolean(sheet)"
+      class="crewlink-sheet"
+      @backdropclick="closeSheet"
+    >
+      <section
+        v-if="sheet"
+        class="crewlink-sheet__content"
+        role="dialog"
+        aria-modal="true"
+      >
+        <k-link
+          component="button"
+          class="crewlink-sheet__close"
+          :link-props="{ type: 'button' }"
+          :aria-label="phone.t('Common.close')"
+          @click="closeSheet"
+          ><X
+        /></k-link>
 
         <template v-if="sheet === 'create-group'">
-          <span class="crewlink-sheet__icon"><Users /></span><h2>{{ t('createGroup') }}</h2><p>{{ t('createGroupBody') }}</p>
-          <k-list inset strong class="crewlink-form-list"><k-list-input input-id="crewlink-group-name" :label="t('groupName')" :placeholder="t('groupNamePlaceholder')" :value="groupName" maxlength="32" outline @input="updateValue('groupName', $event)" /></k-list>
+          <span class="crewlink-sheet__icon"><Users /></span>
+          <h2>{{ t('createGroup') }}</h2>
+          <p>{{ t('createGroupBody') }}</p>
+          <k-list inset strong class="crewlink-form-list"
+            ><k-list-input
+              input-id="crewlink-group-name"
+              :label="t('groupName')"
+              :placeholder="t('groupNamePlaceholder')"
+              :value="groupName"
+              maxlength="32"
+              outline
+              @input="updateValue('groupName', $event)"
+          /></k-list>
           <span class="crewlink-field-label">{{ t('groupColour') }}</span>
-          <div class="crewlink-colours" role="radiogroup"><button v-for="colour in colours" :key="colour.id" type="button" role="radio" :aria-checked="groupColour === colour.id" :class="{ 'is-active': groupColour === colour.id }" :style="{ background: colour.value }" @click="groupColour = colour.id"><Check /></button></div>
+          <div class="crewlink-colours" role="radiogroup">
+            <button
+              v-for="colour in colours"
+              :key="colour.id"
+              type="button"
+              role="radio"
+              :aria-checked="groupColour === colour.id"
+              :class="{ 'is-active': groupColour === colour.id }"
+              :style="{ background: colour.value }"
+              @click="groupColour = colour.id"
+            >
+              <Check />
+            </button>
+          </div>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
-          <k-button large rounded :disabled="crew.isLoading" @click="createGroup">{{ t('createCrew') }}</k-button>
+          <k-button
+            large
+            rounded
+            :disabled="crew.isLoading"
+            @click="createGroup"
+            >{{ t('createCrew') }}</k-button
+          >
         </template>
 
         <template v-else-if="sheet === 'join-group'">
-          <span class="crewlink-sheet__icon"><UserPlus /></span><h2>{{ t('joinWithCode') }}</h2><p>{{ t('joinWithCodeBody') }}</p>
-          <k-list inset strong class="crewlink-form-list"><k-list-input input-id="crewlink-invite-code" :label="t('inviteCode')" :placeholder="t('inviteCodePlaceholder')" :value="inviteCode" maxlength="8" outline @input="updateValue('inviteCode', $event)" @keydown.enter="joinGroup" /></k-list>
+          <span class="crewlink-sheet__icon"><UserPlus /></span>
+          <h2>{{ t('joinWithCode') }}</h2>
+          <p>{{ t('joinWithCodeBody') }}</p>
+          <k-list inset strong class="crewlink-form-list"
+            ><k-list-input
+              input-id="crewlink-invite-code"
+              :label="t('inviteCode')"
+              :placeholder="t('inviteCodePlaceholder')"
+              :value="inviteCode"
+              maxlength="8"
+              outline
+              @input="updateValue('inviteCode', $event)"
+              @keydown.enter="joinGroup"
+          /></k-list>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
-          <k-button large rounded :disabled="crew.isLoading" @click="joinGroup">{{ t('joinCrew') }}</k-button>
+          <k-button
+            large
+            rounded
+            :disabled="crew.isLoading"
+            @click="joinGroup"
+            >{{ t('joinCrew') }}</k-button
+          >
           <template v-if="crew.invitations.length">
-            <k-block-title class="crewlink-join-invitations-title">{{ t('pendingInvitations') }}</k-block-title>
+            <k-block-title class="crewlink-join-invitations-title">{{
+              t('pendingInvitations')
+            }}</k-block-title>
             <div class="crewlink-invitations crewlink-invitations--join">
               <k-card v-for="invite in crew.invitations" :key="invite.id">
                 <div class="crewlink-invite-card">
-                  <i :style="{ background: colourValue(invite.colour) }"><Users /></i>
-                  <div><strong>{{ invite.groupName }}</strong><span>{{ t('invitedBy', { username: invite.inviterUsername }) }}</span></div>
-                  <button type="button" @click="respondInvitation(invite.id, false)"><X /></button>
-                  <button type="button" class="is-accept" @click="respondInvitation(invite.id, true)"><Check /></button>
+                  <i :style="{ background: colourValue(invite.colour) }"
+                    ><Users
+                  /></i>
+                  <div>
+                    <strong>{{ invite.groupName }}</strong
+                    ><span>{{
+                      t('invitedBy', { username: invite.inviterUsername })
+                    }}</span>
+                  </div>
+                  <button
+                    type="button"
+                    @click="respondInvitation(invite.id, false)"
+                  >
+                    <X />
+                  </button>
+                  <button
+                    type="button"
+                    class="is-accept"
+                    @click="respondInvitation(invite.id, true)"
+                  >
+                    <Check />
+                  </button>
                 </div>
               </k-card>
             </div>
@@ -1070,9 +1745,22 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else-if="sheet === 'nearby'">
-          <span class="crewlink-sheet__icon"><Radio /></span><h2>{{ t('peopleNearby') }}</h2><p>{{ t('peopleNearbyBody', { distance: String(crew.limits?.nearbyDistance ?? 5) }) }}</p>
+          <span class="crewlink-sheet__icon"><Radio /></span>
+          <h2>{{ t('peopleNearby') }}</h2>
+          <p>
+            {{
+              t('peopleNearbyBody', {
+                distance: String(crew.limits?.nearbyDistance ?? 5),
+              })
+            }}
+          </p>
           <k-preloader v-if="crew.isLoading" />
-          <k-list v-else-if="nearbyPlayers.length" inset strong class="crewlink-nearby-list">
+          <k-list
+            v-else-if="nearbyPlayers.length"
+            inset
+            strong
+            class="crewlink-nearby-list"
+          >
             <k-list-item
               v-for="player in nearbyPlayers"
               :key="player.source"
@@ -1084,39 +1772,176 @@ onBeforeUnmount(() => {
               :title="player.username"
               :subtitle="t('metersAway', { distance: String(player.distance) })"
             >
-              <template #media><span class="crewlink-avatar" :style="{ '--crew': activeColour }">{{ player.username.slice(0, 2).toUpperCase() }}</span></template>
-              <template #after><k-button small rounded class="crewlink-nearby-invite" @click="inviteNearby(player)">{{ t('invite') }}</k-button></template>
+              <template #media
+                ><span
+                  class="crewlink-avatar"
+                  :style="{ '--crew': activeColour }"
+                  >{{ player.username.slice(0, 2).toUpperCase() }}</span
+                ></template
+              >
+              <template #after
+                ><k-button
+                  small
+                  rounded
+                  class="crewlink-nearby-invite"
+                  @click="inviteNearby(player)"
+                  >{{ t('invite') }}</k-button
+                ></template
+              >
             </k-list-item>
           </k-list>
-          <div v-else class="crewlink-sheet-empty"><EyeOff /><strong>{{ t('nobodyNearby') }}</strong><span>{{ t('nobodyNearbyBody') }}</span></div>
+          <div v-else class="crewlink-sheet-empty">
+            <EyeOff /><strong>{{ t('nobodyNearby') }}</strong
+            ><span>{{ t('nobodyNearbyBody') }}</span>
+          </div>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
-          <k-button large rounded outline class="crewlink-nearby-rescan" @click="loadNearby"><RefreshCw />{{ t('scanAgain') }}</k-button>
+          <k-button
+            large
+            rounded
+            outline
+            class="crewlink-nearby-rescan"
+            @click="loadNearby"
+            ><RefreshCw />{{ t('scanAgain') }}</k-button
+          >
         </template>
 
         <template v-else-if="sheet === 'ping'">
-          <span class="crewlink-sheet__icon"><MapPin /></span><h2 class="crewlink-ping-title">{{ t('newPing') }}</h2><p class="crewlink-ping-description">{{ t('newPingBody') }}</p>
-          <div class="crewlink-ping-types"><button v-for="(_, type) in pingIcons" :key="type" type="button" :class="{ 'is-active': pingType === type }" :style="{ '--ping': pingColours[type], '--ping-glow': `${pingColours[type]}2e` }" @click="pingType = type"><component :is="pingIcons[type]" /><span>{{ t(`pingTypes.${type}`) }}</span></button></div>
-          <k-list inset strong class="crewlink-form-list crewlink-ping-form"><k-list-input input-id="crewlink-ping-label" input-class="crewlink-ping-label-input" :label="t('pingLabel')" :placeholder="t('pingLabelPlaceholder')" :value="pingLabel" maxlength="48" outline @input="updateValue('pingLabel', $event)" /></k-list>
-          <k-list inset strong class="crewlink-ping-location-list"><k-list-item><template #media><Crosshair :size="22" /></template><template #title><span class="crewlink-ping-location-copy"><strong>{{ t('placeOnMap') }}</strong><small>{{ t('placeOnMapBody') }}</small></span></template><template #after><k-toggle :checked="pingAtMapCenter" @click.stop.prevent="togglePingAtMapCenter" /></template></k-list-item></k-list>
+          <span class="crewlink-sheet__icon"><MapPin /></span>
+          <h2 class="crewlink-ping-title">{{ t('newPing') }}</h2>
+          <p class="crewlink-ping-description">{{ t('newPingBody') }}</p>
+          <div class="crewlink-ping-types">
+            <button
+              v-for="(_, type) in pingIcons"
+              :key="type"
+              type="button"
+              :class="{ 'is-active': pingType === type }"
+              :style="{
+                '--ping': pingColours[type],
+                '--ping-glow': `${pingColours[type]}2e`,
+              }"
+              @click="pingType = type"
+            >
+              <component :is="pingIcons[type]" /><span>{{
+                t(`pingTypes.${type}`)
+              }}</span>
+            </button>
+          </div>
+          <k-list inset strong class="crewlink-form-list crewlink-ping-form"
+            ><k-list-input
+              input-id="crewlink-ping-label"
+              input-class="crewlink-ping-label-input"
+              :label="t('pingLabel')"
+              :placeholder="t('pingLabelPlaceholder')"
+              :value="pingLabel"
+              maxlength="48"
+              outline
+              @input="updateValue('pingLabel', $event)"
+          /></k-list>
+          <k-list inset strong class="crewlink-ping-location-list"
+            ><k-list-item
+              ><template #media><Crosshair :size="22" /></template
+              ><template #title
+                ><span class="crewlink-ping-location-copy"
+                  ><strong>{{ t('placeOnMap') }}</strong
+                  ><small>{{ t('placeOnMapBody') }}</small></span
+                ></template
+              ><template #after
+                ><k-toggle
+                  :checked="pingAtMapCenter"
+                  @click.stop.prevent="
+                    togglePingAtMapCenter
+                  " /></template></k-list-item
+          ></k-list>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
-          <k-button large rounded class="crewlink-share-ping" :disabled="crew.isLoading" @click="createPing"><Flag />{{ t('sharePing') }}</k-button>
+          <k-button
+            large
+            rounded
+            class="crewlink-share-ping"
+            :disabled="crew.isLoading"
+            @click="createPing"
+            ><Flag />{{ t('sharePing') }}</k-button
+          >
         </template>
 
         <template v-else-if="sheet === 'edit-group' && activeGroup">
-          <span class="crewlink-sheet__icon"><Settings2 /></span><h2>{{ t('manageCrew') }}</h2><p>{{ t('manageCrewBody') }}</p>
-          <k-list inset strong class="crewlink-form-list"><k-list-input input-id="crewlink-edit-name" :label="t('groupName')" :value="groupName" maxlength="32" outline @input="updateValue('groupName', $event)" /></k-list>
-          <span class="crewlink-field-label">{{ t('groupColour') }}</span><div class="crewlink-colours"><button v-for="colour in colours" :key="colour.id" type="button" :class="{ 'is-active': groupColour === colour.id }" :style="{ background: colour.value }" @click="groupColour = colour.id"><Check /></button></div>
+          <span class="crewlink-sheet__icon"><Settings2 /></span>
+          <h2>{{ t('manageCrew') }}</h2>
+          <p>{{ t('manageCrewBody') }}</p>
+          <k-list inset strong class="crewlink-form-list"
+            ><k-list-input
+              input-id="crewlink-edit-name"
+              :label="t('groupName')"
+              :value="groupName"
+              maxlength="32"
+              outline
+              @input="updateValue('groupName', $event)"
+          /></k-list>
+          <span class="crewlink-field-label">{{ t('groupColour') }}</span>
+          <div class="crewlink-colours">
+            <button
+              v-for="colour in colours"
+              :key="colour.id"
+              type="button"
+              :class="{ 'is-active': groupColour === colour.id }"
+              :style="{ background: colour.value }"
+              @click="groupColour = colour.id"
+            >
+              <Check />
+            </button>
+          </div>
           <k-list inset strong>
-            <k-list-item :title="t('memberPings')" :subtitle="t('memberPingsBody')"><template #after><k-toggle :checked="activeGroup.allowMemberPings" :disabled="pendingGroupSetting !== null" @click.stop.prevent="toggleGroupSetting('allowMemberPings')" /></template></k-list-item>
-            <k-list-item :title="t('allowOverhead')" :subtitle="t('allowOverheadBody')"><template #after><k-toggle :checked="activeGroup.overheadAllowed" :disabled="pendingGroupSetting !== null" @click.stop.prevent="toggleGroupSetting('overheadAllowed')" /></template></k-list-item>
+            <k-list-item
+              :title="t('memberPings')"
+              :subtitle="t('memberPingsBody')"
+              ><template #after
+                ><k-toggle
+                  :checked="activeGroup.allowMemberPings"
+                  :disabled="pendingGroupSetting !== null"
+                  @click.stop.prevent="
+                    toggleGroupSetting('allowMemberPings')
+                  " /></template
+            ></k-list-item>
+            <k-list-item
+              :title="t('allowOverhead')"
+              :subtitle="t('allowOverheadBody')"
+              ><template #after
+                ><k-toggle
+                  :checked="activeGroup.overheadAllowed"
+                  :disabled="pendingGroupSetting !== null"
+                  @click.stop.prevent="
+                    toggleGroupSetting('overheadAllowed')
+                  " /></template
+            ></k-list-item>
           </k-list>
-          <k-card v-if="activeGroup.inviteCode"><div class="crewlink-code-card"><small>{{ t('inviteCode') }}</small><strong>{{ activeGroup.inviteCode }}</strong><button type="button" @click="copyInviteCode"><Copy /></button><button type="button" @click="rotateInviteCode"><RefreshCw /></button></div></k-card>
-          <p v-if="formError" class="crewlink-error">{{ formError }}</p><k-button large rounded @click="saveGroup">{{ phone.t('Common.save') }}</k-button>
+          <k-card v-if="activeGroup.inviteCode"
+            ><div class="crewlink-code-card">
+              <small>{{ t('inviteCode') }}</small
+              ><strong>{{ activeGroup.inviteCode }}</strong
+              ><button type="button" @click="copyInviteCode"><Copy /></button
+              ><button type="button" @click="rotateInviteCode">
+                <RefreshCw />
+              </button></div
+          ></k-card>
+          <p v-if="formError" class="crewlink-error">{{ formError }}</p>
+          <k-button large rounded @click="saveGroup">{{
+            phone.t('Common.save')
+          }}</k-button>
         </template>
 
         <template v-else-if="sheet === 'member' && selectedMember">
-          <span class="crewlink-sheet__avatar" :style="{ '--crew': activeColour }">{{ memberInitials(selectedMember) }}</span><h2>@{{ selectedMember.username }}</h2><p>{{ roleLabel(selectedMember.role) }} · {{ memberStatus(selectedMember) }}</p>
-          <k-block-title class="crewlink-role-title">{{ t('assignRole') }}</k-block-title>
+          <span
+            class="crewlink-sheet__avatar"
+            :style="{ '--crew': activeColour }"
+            >{{ memberInitials(selectedMember) }}</span
+          >
+          <h2>@{{ selectedMember.username }}</h2>
+          <p>
+            {{ roleLabel(selectedMember.role) }} ·
+            {{ memberStatus(selectedMember) }}
+          </p>
+          <k-block-title class="crewlink-role-title">{{
+            t('assignRole')
+          }}</k-block-title>
           <k-list inset strong class="crewlink-role-list">
             <k-list-item
               v-for="role in editableRoles"
@@ -1131,100 +1956,1530 @@ onBeforeUnmount(() => {
               :link="role !== selectedMember.role"
               @click="setMemberRole(role)"
             >
-              <template #media><component :is="roleIcons[role]" :size="20" /></template>
-              <template #after><Check v-if="role === selectedMember.role" :size="18" /></template>
+              <template #media
+                ><component :is="roleIcons[role]" :size="20"
+              /></template>
+              <template #after
+                ><Check v-if="role === selectedMember.role" :size="18"
+              /></template>
             </k-list-item>
           </k-list>
           <div class="crewlink-member-actions">
-            <k-button v-if="activeGroup?.isOwner" large rounded outline @click="confirmAction = 'transfer-owner'"><Crown />{{ t('transferOwnership') }}</k-button>
-            <k-button large rounded tonal class="crewlink-danger-button" @click="confirmAction = 'remove-member'"><Trash2 />{{ t('removeMember') }}</k-button>
+            <k-button
+              v-if="activeGroup?.isOwner"
+              large
+              rounded
+              outline
+              @click="confirmAction = 'transfer-owner'"
+              ><Crown />{{ t('transferOwnership') }}</k-button
+            >
+            <k-button
+              large
+              rounded
+              tonal
+              class="crewlink-danger-button"
+              @click="confirmAction = 'remove-member'"
+              ><Trash2 />{{ t('removeMember') }}</k-button
+            >
           </div>
         </template>
 
-        <template v-else-if="sheet === 'member' && !selectedMember && crew.profile">
-          <span class="crewlink-sheet__icon"><UserRound /></span><h2>{{ t('editUsername') }}</h2><p>{{ t('editUsernameBody') }}</p>
-          <k-list inset strong class="crewlink-form-list"><k-list-input input-id="crewlink-edit-username" :label="t('username')" :value="username" maxlength="20" outline @input="updateValue('username', $event)" @keydown.enter="saveProfile" /></k-list>
-          <p v-if="formError" class="crewlink-error">{{ formError }}</p><k-button large rounded @click="saveProfile">{{ phone.t('Common.save') }}</k-button>
+        <template v-else-if="sheet === 'edit-profile' && crew.profile">
+          <div class="crewlink-profile-editor__avatar">
+            <img
+              v-if="selectedProfilePhoto?.url"
+              :src="selectedProfilePhoto.url"
+              alt=""
+            />
+            <img
+              v-else-if="crew.profile.avatarUrl && !profileAvatarRemoved"
+              :src="crew.profile.avatarUrl"
+              alt=""
+            />
+            <UserRound v-else />
+          </div>
+          <h2>{{ t('editProfile') }}</h2>
+          <p>{{ t('editProfileBody') }}</p>
+          <div class="crewlink-profile-editor__media-actions">
+            <k-button rounded outline @click="openProfileMedia('photos')">
+              <Images :size="16" />{{ t('gallery') }}
+            </k-button>
+            <k-button rounded outline @click="openProfileMedia('camera')">
+              <Camera :size="16" />{{ t('camera') }}
+            </k-button>
+          </div>
+          <k-button
+            v-if="
+              selectedProfilePhoto ||
+              (crew.profile.avatarUrl && !profileAvatarRemoved)
+            "
+            rounded
+            tonal
+            class="crewlink-profile-editor__remove"
+            @click="removeProfilePhoto"
+          >
+            <Trash2 :size="15" />{{ t('removeProfilePhoto') }}
+          </k-button>
+          <k-list inset strong class="crewlink-form-list"
+            ><k-list-input
+              input-id="crewlink-edit-username"
+              :label="t('username')"
+              :value="username"
+              maxlength="20"
+              outline
+              @input="updateValue('username', $event)"
+              @keydown.enter="saveProfile"
+          /></k-list>
+          <p v-if="formError" class="crewlink-error">{{ formError }}</p>
+          <k-button
+            large
+            rounded
+            :disabled="crew.isLoading"
+            @click="saveProfile"
+          >
+            <k-preloader v-if="crew.isLoading" />
+            <template v-else>{{ phone.t('Common.save') }}</template>
+          </k-button>
         </template>
       </section>
     </k-sheet>
 
-    <k-sheet :opened="Boolean(selectedMember && !sheet)" class="crewlink-sheet" @backdropclick="selectedMember = null">
-      <section v-if="selectedMember" class="crewlink-sheet__content crewlink-member-preview">
-        <k-link component="button" class="crewlink-sheet__close" :link-props="{ type: 'button' }" @click="selectedMember = null"><X /></k-link>
-        <span class="crewlink-sheet__avatar" :style="{ '--crew': activeColour }">{{ memberInitials(selectedMember) }}</span><h2>@{{ selectedMember.username }}</h2><p>{{ roleLabel(selectedMember.role) }} · {{ memberStatus(selectedMember) }}</p>
-        <k-button v-if="selectedMember.coords" large rounded @click="routeTo(selectedMember.coords); selectedMember = null"><Route />{{ t('setRoute') }}</k-button>
+    <k-sheet
+      :opened="Boolean(selectedMember && !sheet)"
+      class="crewlink-sheet"
+      @backdropclick="selectedMember = null"
+    >
+      <section
+        v-if="selectedMember"
+        class="crewlink-sheet__content crewlink-member-preview"
+      >
+        <k-link
+          component="button"
+          class="crewlink-sheet__close"
+          :link-props="{ type: 'button' }"
+          @click="selectedMember = null"
+          ><X
+        /></k-link>
+        <span
+          class="crewlink-sheet__avatar"
+          :style="{ '--crew': activeColour }"
+        >
+          <img
+            v-if="selectedMember.avatarUrl"
+            :src="selectedMember.avatarUrl"
+            alt=""
+          />
+          <template v-else>{{ memberInitials(selectedMember) }}</template>
+        </span>
+        <h2>@{{ selectedMember.username }}</h2>
+        <p>
+          {{ roleLabel(selectedMember.role) }} ·
+          {{ memberStatus(selectedMember) }}
+        </p>
+        <k-button
+          v-if="selectedMember.coords"
+          large
+          rounded
+          @click="routeToSelectedMember"
+          ><Route />{{ t('setRoute') }}</k-button
+        >
       </section>
     </k-sheet>
 
-    <k-sheet :opened="Boolean(selectedPing)" class="crewlink-sheet" @backdropclick="selectedPing = null">
-      <section v-if="selectedPing" class="crewlink-sheet__content crewlink-member-preview">
-        <k-link component="button" class="crewlink-sheet__close" :link-props="{ type: 'button' }" @click="selectedPing = null"><X /></k-link>
-        <span class="crewlink-sheet__icon" :style="{ background: pingColours[selectedPing.type] }"><component :is="pingIcons[selectedPing.type]" /></span><small>{{ t(`pingTypes.${selectedPing.type}`) }}</small><h2>{{ selectedPing.label }}</h2><p>{{ t('sharedBy', { username: selectedPing.creatorUsername }) }} · {{ expiresIn(selectedPing.expiresAt) }}</p>
-        <k-button large rounded @click="routeTo(selectedPing.coords); selectedPing = null"><Navigation />{{ t('setRoute') }}</k-button>
+    <k-sheet
+      :opened="Boolean(selectedPing)"
+      class="crewlink-sheet"
+      @backdropclick="selectedPing = null"
+    >
+      <section
+        v-if="selectedPing"
+        class="crewlink-sheet__content crewlink-member-preview"
+      >
+        <k-link
+          component="button"
+          class="crewlink-sheet__close"
+          :link-props="{ type: 'button' }"
+          @click="selectedPing = null"
+          ><X
+        /></k-link>
+        <span
+          class="crewlink-sheet__icon"
+          :style="{ background: pingColours[selectedPing.type] }"
+          ><component :is="pingIcons[selectedPing.type]" /></span
+        ><small>{{ t(`pingTypes.${selectedPing.type}`) }}</small>
+        <h2>{{ selectedPing.label }}</h2>
+        <p>
+          {{ t('sharedBy', { username: selectedPing.creatorUsername }) }} ·
+          {{ expiresIn(selectedPing.expiresAt) }}
+        </p>
+        <k-button large rounded @click="routeToSelectedPing"
+          ><Navigation />{{ t('setRoute') }}</k-button
+        >
       </section>
     </k-sheet>
 
-    <k-dialog :opened="Boolean(confirmAction)" @backdropclick="cancelConfirmation">
+    <AccountLogoutDialog
+      v-model:opened="logoutDialogOpen"
+      app-id="crewlink"
+      :app-name="t('name')"
+      @logged-out="activeTab = 'map'"
+    />
+
+    <k-dialog
+      :opened="Boolean(confirmAction)"
+      @backdropclick="cancelConfirmation"
+    >
       <template #title>{{ t(`confirm.${confirmAction}.title`) }}</template>
       <p>{{ t(`confirm.${confirmAction}.body`) }}</p>
-      <template #buttons><k-dialog-button class="crewlink-dialog-cancel" type="button" :aria-label="phone.t('Common.cancel')" @click="cancelConfirmation">{{ phone.t('Common.cancel') }}</k-dialog-button><k-dialog-button strong type="button" @click="performConfirmedAction">{{ t('confirmAction') }}</k-dialog-button></template>
+      <template #buttons
+        ><k-dialog-button
+          class="crewlink-dialog-cancel"
+          type="button"
+          :aria-label="phone.t('Common.cancel')"
+          @click="cancelConfirmation"
+          >{{ phone.t('Common.cancel') }}</k-dialog-button
+        ><k-dialog-button
+          strong
+          type="button"
+          @click="performConfirmedAction"
+          >{{ t('confirmAction') }}</k-dialog-button
+        ></template
+      >
     </k-dialog>
 
-    <k-toast :opened="Boolean(toastText)" position="center">{{ toastText }}</k-toast>
+    <k-toast :opened="Boolean(toastText)" position="center">{{
+      toastText
+    }}</k-toast>
   </k-page>
 </template>
 
 <style scoped>
-.crewlink { --cl-bg: #f2f6fa; --cl-surface: rgba(255,255,255,.84); --cl-text: #102034; --cl-muted: #6e7c8d; --k-safe-area-top:46px; --k-safe-area-bottom:25px; position:relative; height:100%; background: var(--cl-bg); color: var(--cl-text); overflow: hidden; }
-.crewlink--dark { --cl-bg: #071018; --cl-surface: rgba(17,29,40,.88); --cl-text: #f3f8fb; --cl-muted: #8fa2b3; }
-.crewlink :deep(.page-content) { background: transparent; }
-.crewlink-navbar { --k-navbar-bg-color: rgba(248,252,255,.78); position:absolute; z-index:20; inset:0 0 auto; backdrop-filter: blur(20px) saturate(1.3); }
-.crewlink--dark .crewlink-navbar { --k-navbar-bg-color: rgba(7,16,24,.8); }
-.crewlink-content { position:absolute; inset:94px 0 calc(80px + var(--k-safe-area-bottom)); overflow:hidden; }
-.crewlink-content--empty { inset:var(--k-safe-area-top) 0 var(--k-safe-area-bottom); }
-.crewlink-scroll-tab { height:100%; overflow-y:auto; padding:14px 11px 34px; }
-.crewlink-loading,.crewlink-onboarding { height:100%; padding:52px 30px 32px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:12px; background:radial-gradient(circle at 50% 32%,rgba(39,217,237,.18),transparent 36%); }
-.crewlink-logo { width:78px; height:78px; border-radius:26px; display:grid; place-items:center; color:white; background:linear-gradient(145deg,#28dbe9,#1d88ff 58%,#7050ef); box-shadow:0 18px 42px rgba(20,137,213,.3); }
-.crewlink-logo svg { width:38px; height:38px; }
-.crewlink-onboarding small { color:#168cbb; font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
-.crewlink-onboarding h1 { margin:0; font-size:27px; line-height:1.05; }
-.crewlink-onboarding p { margin:0 0 10px; color:var(--cl-muted); font-size:13px; line-height:1.5; }
-.crewlink-onboarding :deep(.button) { width:100%; }
-.crewlink-orbits { width:170px; height:170px; position:relative; margin-bottom:4px; }
-.crewlink-orbits i { position:absolute; inset:8px; border:1px solid rgba(39,217,237,.22); border-radius:50%; animation:cl-pulse 2.8s infinite; }
-.crewlink-orbits i:nth-child(2){inset:31px;animation-delay:.3s}.crewlink-orbits i:nth-child(3){inset:55px;animation-delay:.6s}
-.crewlink-orbits span { position:absolute; inset:69px; border-radius:18px; display:grid; place-items:center; color:white; background:linear-gradient(145deg,#2ce4ed,#257cff); box-shadow:0 10px 35px rgba(31,162,228,.4); }
-.crewlink-form-list { width:100%; margin:4px 0; }
-.crewlink-privacy { display:flex; gap:5px; align-items:center; color:var(--cl-muted)!important; letter-spacing:0!important; text-transform:none!important; font-weight:500!important; }
-.crewlink-privacy svg { width:14px; }
-.crewlink-group-gate { height:100%; padding:24px; display:grid; grid-template-columns:1fr 1fr; align-content:center; gap:12px; background:radial-gradient(circle at 50% 48%,rgba(39,217,237,.16),transparent 48%); }
-.crewlink-group-gate button { min-width:0; aspect-ratio:1; padding:16px 8px; border:1px solid rgba(39,160,215,.14); border-radius:24px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:var(--cl-text); background:var(--cl-surface); box-shadow:0 14px 32px rgba(11,43,65,.1); }
-.crewlink-group-gate button span { width:52px; height:52px; border-radius:18px; display:grid; place-items:center; color:white; background:linear-gradient(145deg,#2bdde9,#2e7eff); box-shadow:0 10px 24px rgba(30,150,220,.28); }
-.crewlink-group-gate button:last-child span { background:linear-gradient(145deg,#8b5cf6,#387eff); }
-.crewlink-group-gate button svg { width:25px; height:25px; }
-.crewlink-group-gate button strong { font-size:12px; line-height:1.25; }
-.crewlink-invitations { width:100%; margin-top:18px; text-align:left; }
-.crewlink-join-invitations-title{margin:18px 0 8px!important;text-align:left}.crewlink-invitations--join{display:grid;gap:7px;margin:0}.crewlink-invitations--join :deep(.k-card){margin:0}
-.crewlink-invite-card { display:grid; grid-template-columns:38px 1fr 31px 31px; gap:7px; align-items:center; }
-.crewlink-invite-card>i { width:38px;height:38px;border-radius:13px;display:grid;place-items:center;color:white}.crewlink-invite-card>i svg{width:19px}.crewlink-invite-card div{display:flex;flex-direction:column}.crewlink-invite-card div span{font-size:10px;color:var(--cl-muted)}.crewlink-invite-card button{width:29px;height:29px;border:0;border-radius:10px;display:grid;place-items:center;color:#e94662;background:rgba(255,77,103,.12)}.crewlink-invite-card button.is-accept{color:#0aa66d;background:rgba(46,204,126,.14)}.crewlink-invite-card button svg{width:15px}
-.crewlink-map-tab { height:100%; display:flex; flex-direction:column; background:#09131c; }
-.crewlink-map-summary { height:64px; padding:8px 13px; display:flex; align-items:center; justify-content:space-between; color:white; background:linear-gradient(90deg,rgba(6,24,35,.96),rgba(15,41,56,.95)); }
-.crewlink-map-summary>div:first-child{display:grid;grid-template-columns:10px auto auto;align-items:baseline;gap:7px}.crewlink-map-summary strong{font-size:26px;line-height:30px}.crewlink-map-summary small{font-size:14px;font-weight:600;line-height:18px;color:#c0ced8;white-space:nowrap}.crewlink-live-dot{width:9px;height:9px;border-radius:50%;background:#35dc80;box-shadow:0 0 0 4px rgba(53,220,128,.16)}
-.crewlink-online-faces{display:flex;align-items:center}.crewlink-online-faces span{width:27px;height:27px;margin-left:-6px;border:2px solid;border-radius:50%;display:grid;place-items:center;background:#203347;color:white;font-size:8px;font-weight:800}.crewlink-online-faces i{font-size:9px;margin-left:5px;color:#9cb0bf}
-.crewlink-map { position:relative; flex:1; overflow:hidden; touch-action:none; background:#d8e0e4; cursor:grab; }.crewlink-map:active{cursor:grabbing}
-.crewlink-map__canvas{position:absolute;left:50%;top:50%;transform-origin:center;will-change:transform}.crewlink-map__mainland,.crewlink-map__cayo{position:absolute;object-fit:fill;pointer-events:none;user-select:none}
-.crewlink-member-marker,.crewlink-ping-marker{position:absolute;border:0;background:transparent;z-index:4;display:flex;flex-direction:column;align-items:center;transform-origin:center bottom;cursor:pointer}.crewlink-member-marker>span{width:31px;height:31px;border:3px solid white;border-radius:50%;display:grid;place-items:center;color:white;background:var(--crew);box-shadow:0 4px 12px rgba(0,0,0,.35);font-size:9px;font-weight:900}.crewlink-member-marker.is-self>span{box-shadow:0 0 0 5px var(--crew-ring),0 4px 12px rgba(0,0,0,.3)}.crewlink-member-marker small,.crewlink-ping-marker small{padding:2px 5px;margin-top:2px;border-radius:6px;color:white;background:rgba(4,14,23,.82);font-size:7px;font-weight:700;white-space:nowrap}
-.crewlink-ping-marker>svg{width:28px;height:28px;padding:6px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);color:white;background:var(--ping);box-shadow:0 4px 12px rgba(0,0,0,.35)}.crewlink-ping-marker>svg :deep(*){transform:rotate(45deg);transform-origin:center}
-.crewlink-map-controls{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18)}.crewlink-map-controls button{width:34px;height:34px;border:0;border-bottom:1px solid rgba(0,0,0,.1);background:rgba(255,255,255,.9);color:#183044;font-size:19px;display:grid;place-items:center}.crewlink-map-controls svg{width:16px}.crewlink-map-legend{position:absolute;left:10px;bottom:10px;padding:6px 8px;border-radius:10px;display:flex;gap:9px;background:rgba(8,20,30,.78);backdrop-filter:blur(10px);color:white;font-size:8px}.crewlink-map-legend span{display:flex;align-items:center;gap:4px}.crewlink-map-legend i{width:6px;height:6px;border-radius:50%;background:#35dc80}.crewlink-map-legend i.is-hidden{background:#8998a4}.crewlink-map-crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#ff4d67}.crewlink-map-crosshair svg{width:32px;height:32px;filter:drop-shadow(0 2px 4px white)}
-.crewlink-map-actions{height:76px;padding:8px 10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#0c1822}.crewlink-map-actions button{border:1px solid rgba(255,255,255,.08);border-radius:15px;display:flex;align-items:center;gap:10px;padding:9px 11px;color:white;background:rgba(255,255,255,.06);text-align:left}.crewlink-map-actions button:disabled{opacity:.4}.crewlink-map-actions svg{width:23px;height:23px;flex:none;color:#28d9e8}.crewlink-map-actions span{display:flex;min-width:0;flex-direction:column;gap:2px}.crewlink-map-actions strong{font-size:15px;line-height:18px;white-space:nowrap}.crewlink-map-actions small{font-size:12px;line-height:15px;color:#a4b4c0;white-space:nowrap}
-.crewlink-group-hero{padding:22px;border-radius:25px;color:white;background:radial-gradient(circle at 82% 18%,var(--crew-aura),transparent 35%),linear-gradient(145deg,#0b2433,#0b1825);box-shadow:0 15px 35px rgba(6,20,31,.2)}.crewlink-group-hero__signal{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:var(--crew);box-shadow:0 0 28px var(--crew-glow)}.crewlink-group-hero__signal svg{width:26px}.crewlink-group-hero>small{display:block;margin-top:17px;font-size:12px;font-weight:600;line-height:16px;letter-spacing:.12em;text-transform:uppercase;color:#b5c6d0}.crewlink-group-hero h1{margin:5px 0;font-size:29px;line-height:34px}.crewlink-group-hero p{margin:0 0 14px;font-size:14px;line-height:18px;color:#d0dbe1}.crewlink-group-hero>div:last-child{display:flex;gap:7px}.crewlink-group-hero :deep(.crewlink-group-badge){min-height:24px;padding:4px 8px;font-size:13px}
-.crewlink-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:13px 0 11px}.crewlink-quick-actions button{min-height:64px;border:0;border-radius:15px;padding:11px 5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:var(--cl-text);background:var(--cl-surface);font-size:12px;font-weight:600;line-height:15px;box-shadow:0 3px 12px rgba(15,40,60,.06)}.crewlink-quick-actions svg{width:22px;height:22px;color:#138fc0}.crewlink-invitations--inline{margin:0}.crewlink-members-title{height:auto!important;min-height:34px;padding-top:8px!important;padding-bottom:6px!important;font-size:16px!important;font-weight:700!important;color:var(--cl-text)!important}.crewlink-member-list :deep(.k-list-item){min-height:70px}.crewlink-member-title{font-size:18px;font-weight:700;line-height:22px}.crewlink-member-subtitle{font-size:14px;line-height:18px;color:var(--cl-muted)}.crewlink-avatar{position:relative;width:43px;height:43px;border-radius:15px;display:grid;place-items:center;color:white;background:linear-gradient(145deg,var(--crew),#273e55);font-size:12px;font-weight:900}.crewlink-avatar i{position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border:2px solid white;border-radius:50%;background:#8998a4}.crewlink-avatar i.is-online{background:#35d880}.role-owner{color:#ffb020}.role-coordinator{color:#8b5cf6}.role-moderator{color:#2d9cff}.role-member{color:#22b77a}.role-guest{color:#8998a4}
-.crewlink-section-header{display:flex;align-items:center;gap:13px;margin:5px 2px 16px}.crewlink-section-header>span{width:52px;height:52px;border-radius:17px;display:grid;place-items:center;color:white;background:linear-gradient(145deg,#27d9ed,#287cff)}.crewlink-section-header>span svg{width:26px;height:26px}.crewlink-section-header div{flex:1}.crewlink-section-header small{font-size:13px;font-weight:700;line-height:16px;color:#29b8e8;text-transform:uppercase;letter-spacing:.09em}.crewlink-section-header h1{margin:2px 0 0;font-size:29px;line-height:34px}.crewlink-section-header button{width:42px;height:42px;border:0;border-radius:14px;display:grid;place-items:center;color:white;background:#168dc2}.crewlink-section-header button svg{width:22px;height:22px}.crewlink-pings-tab{padding-top:12px}.crewlink-pings-tab .crewlink-section-header{margin-bottom:12px}.crewlink-ping-list{display:flex;flex-direction:column;gap:8px}.crewlink-ping-list :deep(.k-card){margin:0}.crewlink-ping-list article{display:grid;grid-template-columns:47px 1fr 32px 32px;gap:9px;align-items:center;padding:11px}.crewlink-ping-list article>i{width:47px;height:47px;border-radius:16px;display:grid;place-items:center;color:white}.crewlink-ping-list article>i svg{width:23px}.crewlink-ping-list article>div{display:flex;flex-direction:column;gap:2px;min-width:0}.crewlink-ping-list small{font-size:11px;line-height:14px;color:var(--cl-muted);text-transform:uppercase}.crewlink-ping-list strong{font-size:15px;line-height:19px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.crewlink-ping-list span{font-size:12px;line-height:15px;color:var(--cl-muted)}.crewlink-ping-list button{border:0;background:transparent;color:#238fbd;display:grid;place-items:center}.crewlink-ping-list button:last-child{color:#ed5268}.crewlink-ping-list button svg{width:20px}.crewlink-empty-state{padding:68px 22px;text-align:center;display:flex;flex-direction:column;align-items:center}.crewlink-empty-state>span{width:70px;height:70px;border-radius:23px;display:grid;place-items:center;color:#168dbd;background:rgba(39,191,230,.12)}.crewlink-empty-state>span svg{width:29px;height:29px}.crewlink-empty-state h2{margin:17px 0 7px;font-size:21px;line-height:26px}.crewlink-empty-state p{max-width:280px;margin:0;color:var(--cl-muted);font-size:14px;line-height:20px}
-.crewlink-profile-card{display:flex;align-items:center;gap:13px;padding:17px;border-radius:23px;color:white;background:linear-gradient(145deg,var(--crew),#183a5a)}.crewlink-profile-card>span{width:54px;height:54px;border:3px solid rgba(255,255,255,.72);border-radius:19px;display:grid;place-items:center;font-size:15px;font-weight:900;background:rgba(8,25,40,.22)}.crewlink-profile-card div{min-width:0}.crewlink-profile-card small{font-size:8px;letter-spacing:.1em;text-transform:uppercase;opacity:.75}.crewlink-profile-card h1{margin:2px 0;font-size:19px}.crewlink-profile-card p{margin:0;font-size:10px;opacity:.82}.crewlink-group-dot{width:35px;height:35px;border-radius:13px;display:grid;place-items:center;color:white}.crewlink-group-dot svg{width:18px}.crewlink-danger-row{--k-list-item-title-text-color:#e44760}.crewlink-danger-button{color:#e44760!important}.crewlink-role-title{margin:16px 0 8px!important;padding-inline:4px!important}.crewlink-role-list{margin:0!important}.crewlink-role-list :deep(.crewlink-role-item__content){min-height:68px;align-items:center}.crewlink-role-list :deep(.crewlink-role-item__media){width:28px;margin-right:10px;justify-content:center;color:#9ca8b3}.crewlink-role-list :deep(.crewlink-role-item__inner){min-width:0;padding-top:9px;padding-bottom:9px;text-align:left}.crewlink-role-list :deep(.crewlink-role-item__title){min-height:22px;font-size:14px;line-height:18px}.crewlink-role-list :deep(.crewlink-role-item__title+div){max-width:230px;color:var(--cl-muted);font-size:10px;line-height:14px;text-align:left}.crewlink-role-list :deep(.crewlink-role-item__title svg){color:#aab5bf}.crewlink-member-actions{display:grid;gap:8px;margin-top:12px}.crewlink-member-actions :deep(.k-button){margin-top:0}
-.crewlink-sheet__content{position:relative;max-height:82vh;overflow-y:auto;padding:26px 18px 24px;text-align:center;color:var(--cl-text);background:var(--cl-bg);border-radius:24px 24px 0 0}.crewlink-sheet__close{position:absolute;right:14px;top:12px;width:31px;height:31px;border-radius:50%;display:grid;place-items:center;color:var(--cl-muted);background:rgba(125,145,160,.15)}.crewlink-sheet__close svg{width:17px}.crewlink-sheet__icon,.crewlink-sheet__avatar{width:56px;height:56px;margin:0 auto 9px;border-radius:20px;display:grid;place-items:center;color:white;background:linear-gradient(145deg,#27d9ed,#287cff);box-shadow:0 10px 25px rgba(31,139,205,.22)}.crewlink-sheet__avatar{background:linear-gradient(145deg,var(--crew),#29415a);font-weight:900}.crewlink-sheet__icon svg{width:26px}.crewlink-sheet__content h2{margin:4px 0;font-size:23px;line-height:1.2}.crewlink-sheet__content>p{margin:0 10px 13px;color:var(--cl-muted);font-size:13px;line-height:1.45}.crewlink-sheet__content :deep(.button){width:100%;margin-top:9px;font-size:13px}.crewlink-nearby-list{margin:10px 0 0!important}.crewlink-nearby-list :deep(.crewlink-nearby-item__content){min-height:66px;align-items:center}.crewlink-nearby-list :deep(.crewlink-nearby-item__media){width:38px;margin-right:12px;justify-content:center}.crewlink-nearby-list :deep(.crewlink-nearby-item__inner){min-width:0;padding-top:9px;padding-bottom:9px;text-align:left}.crewlink-nearby-list :deep(.crewlink-nearby-item__title){min-height:22px;gap:8px;font-size:14px;line-height:18px}.crewlink-nearby-list :deep(.crewlink-nearby-item__title+div){color:var(--cl-muted);font-size:10px;line-height:14px;text-align:left}.crewlink-nearby-list :deep(.crewlink-nearby-invite){width:auto;margin-top:0;padding-inline:13px;flex:none}.crewlink-field-label{display:block;margin:8px 0;text-align:left;font-size:12px;font-weight:700;color:var(--cl-muted)}.crewlink-colours{display:flex;justify-content:center;gap:9px;margin:8px 0 14px}.crewlink-colours button{width:35px;height:35px;border:3px solid transparent;border-radius:50%;display:grid;place-items:center;color:white}.crewlink-colours button.is-active{border-color:white;box-shadow:0 0 0 2px currentColor}.crewlink-colours svg{width:15px;opacity:0}.crewlink-colours button.is-active svg{opacity:1}.crewlink-error{color:#df3e58!important;font-size:12px!important;margin:8px!important}.crewlink-sheet-empty{padding:25px;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--cl-muted)}.crewlink-sheet-empty svg{width:34px}.crewlink-sheet-empty strong{color:var(--cl-text)}.crewlink-sheet-empty span{font-size:11px}.crewlink-ping-title{font-size:25px!important;line-height:30px!important}.crewlink-sheet__content>.crewlink-ping-description{font-size:14px;line-height:19px}.crewlink-ping-types{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:15px 0}.crewlink-ping-types button{min-width:0;border:1px solid transparent;border-radius:13px;padding:10px 2px;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--cl-muted);background:var(--cl-surface);font-size:12px;font-weight:600;line-height:15px}.crewlink-ping-types button.is-active{border-color:var(--ping);color:var(--ping);box-shadow:0 3px 12px var(--ping-glow)}.crewlink-ping-types svg{width:22px;height:22px}.crewlink-ping-form :deep(.k-list-input .text-xs){font-size:14px!important;font-weight:600;line-height:18px}.crewlink-ping-form :deep(.crewlink-ping-label-input){font-size:16px!important;line-height:20px}.crewlink-ping-location-list :deep(.k-list-item){min-height:70px}.crewlink-ping-location-copy{display:flex;flex-direction:column;gap:3px;text-align:left}.crewlink-ping-location-copy strong{font-size:17px;line-height:21px}.crewlink-ping-location-copy small{max-width:205px;color:var(--cl-muted);font-size:14px;line-height:18px}.crewlink-sheet__content :deep(.crewlink-share-ping){font-size:16px}.crewlink-code-card{display:grid;grid-template-columns:1fr auto 30px 30px;align-items:center;gap:5px;text-align:left}.crewlink-code-card small{font-size:9px;color:var(--cl-muted)}.crewlink-code-card strong{font-family:monospace;letter-spacing:.12em}.crewlink-code-card button{border:0;background:transparent;color:#168dbd}.crewlink-code-card svg{width:16px}.crewlink-member-preview{padding-top:34px}.crewlink-tabbar{z-index:20}.crewlink-tabbar :deep(.crewlink-tabbar__inner){width:100%!important;max-width:none!important;padding-inline:4px!important}.crewlink-tabbar :deep(.crewlink-tabbar__pane){width:100%!important;max-width:none!important;gap:2px;padding:0}.crewlink-tabbar :deep(.crewlink-tabbar__pane>.k-link){min-width:0!important;max-width:none!important;flex:1 1 25%!important;padding-inline:2px!important}.crewlink-tabbar :deep(.k-tabbar-link-label){font-size:9px;line-height:11px}.crewlink-tabbar :deep(.k-icon){width:23px;height:23px}.crewlink-tabbar :deep(.badge){position:absolute;top:-3px;right:-7px;font-size:7px}
-.crewlink-pings-icon{position:relative;width:23px;height:23px;display:grid;place-items:center}.crewlink-pings-icon>svg{width:23px;height:23px}.crewlink-tabbar :deep(.crewlink-pings-badge){position:absolute!important;z-index:2;top:-6px!important;right:-9px!important;min-width:15px;height:15px;padding:0 4px;border:2px solid #071018;border-radius:999px;font-size:7px;line-height:11px;pointer-events:none}
-.crewlink-sheet__content :deep(.crewlink-nearby-rescan){margin-top:16px;margin-bottom:10px}
-.crewlink :deep(.crewlink-dialog-cancel){color:#f3f8fb!important;background:#173247!important}
-@keyframes cl-pulse{0%,100%{opacity:.25;transform:scale(.96)}50%{opacity:.75;transform:scale(1.02)}}
+.crewlink {
+  --cl-bg: #f2f6fa;
+  --cl-surface: rgba(255, 255, 255, 0.84);
+  --cl-text: #102034;
+  --cl-muted: #6e7c8d;
+  --k-safe-area-top: 46px;
+  --k-safe-area-bottom: 25px;
+  position: relative;
+  height: 100%;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  overflow: hidden;
+}
+.crewlink--dark {
+  --cl-bg: #071018;
+  --cl-surface: rgba(17, 29, 40, 0.88);
+  --cl-text: #f3f8fb;
+  --cl-muted: #8fa2b3;
+}
+.crewlink :deep(.page-content) {
+  background: transparent;
+}
+.crewlink-navbar {
+  --k-navbar-bg-color: rgba(248, 252, 255, 0.78);
+  position: absolute;
+  z-index: 20;
+  inset: 0 0 auto;
+  backdrop-filter: blur(20px) saturate(1.3);
+}
+.crewlink--dark .crewlink-navbar {
+  --k-navbar-bg-color: rgba(7, 16, 24, 0.8);
+}
+.crewlink-content {
+  position: absolute;
+  inset: 94px 0 calc(80px + var(--k-safe-area-bottom));
+  overflow: hidden;
+}
+.crewlink-content--empty {
+  inset: var(--k-safe-area-top) 0 var(--k-safe-area-bottom);
+}
+.crewlink-scroll-tab {
+  height: 100%;
+  overflow-y: auto;
+  padding: 14px 11px 34px;
+}
+.crewlink-loading,
+.crewlink-onboarding {
+  height: 100%;
+  padding: 52px 30px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  background: radial-gradient(
+    circle at 50% 32%,
+    rgba(39, 217, 237, 0.18),
+    transparent 36%
+  );
+}
+.crewlink-auth {
+  --auth-accent: #20bde0;
+  --panel: rgba(18, 39, 53, 0.92);
+  padding: 60px 18px 30px;
+  color: #f3f8fb;
+  background:
+    radial-gradient(circle at 82% 8%, rgba(39, 217, 237, 0.2), transparent 34%),
+    linear-gradient(180deg, #07131d, #091923);
+  overflow-y: auto;
+}
+.crewlink-auth :deep(.app-profile-auth) {
+  margin: auto;
+}
+.crewlink-logo {
+  width: 78px;
+  height: 78px;
+  border-radius: 26px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(145deg, #28dbe9, #1d88ff 58%, #7050ef);
+  box-shadow: 0 18px 42px rgba(20, 137, 213, 0.3);
+}
+.crewlink-logo svg {
+  width: 38px;
+  height: 38px;
+}
+.crewlink-onboarding small {
+  color: #168cbb;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.crewlink-onboarding h1 {
+  margin: 0;
+  font-size: 27px;
+  line-height: 1.05;
+}
+.crewlink-onboarding p {
+  margin: 0 0 10px;
+  color: var(--cl-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.crewlink-onboarding :deep(.button) {
+  width: 100%;
+}
+.crewlink-orbits {
+  width: 170px;
+  height: 170px;
+  position: relative;
+  margin-bottom: 4px;
+}
+.crewlink-orbits i {
+  position: absolute;
+  inset: 8px;
+  border: 1px solid rgba(39, 217, 237, 0.22);
+  border-radius: 50%;
+  animation: cl-pulse 2.8s infinite;
+}
+.crewlink-orbits i:nth-child(2) {
+  inset: 31px;
+  animation-delay: 0.3s;
+}
+.crewlink-orbits i:nth-child(3) {
+  inset: 55px;
+  animation-delay: 0.6s;
+}
+.crewlink-orbits span {
+  position: absolute;
+  inset: 69px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(145deg, #2ce4ed, #257cff);
+  box-shadow: 0 10px 35px rgba(31, 162, 228, 0.4);
+}
+.crewlink-form-list {
+  width: 100%;
+  margin: 4px 0;
+}
+.crewlink-privacy {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--cl-muted) !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  font-weight: 500 !important;
+}
+.crewlink-privacy svg {
+  width: 14px;
+}
+.crewlink-group-gate {
+  height: 100%;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: center;
+  gap: 12px;
+  background: radial-gradient(
+    circle at 50% 48%,
+    rgba(39, 217, 237, 0.16),
+    transparent 48%
+  );
+}
+.crewlink-group-gate button {
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 16px 8px;
+  border: 1px solid rgba(39, 160, 215, 0.14);
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--cl-text);
+  background: var(--cl-surface);
+  box-shadow: 0 14px 32px rgba(11, 43, 65, 0.1);
+}
+.crewlink-group-gate button span {
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(145deg, #2bdde9, #2e7eff);
+  box-shadow: 0 10px 24px rgba(30, 150, 220, 0.28);
+}
+.crewlink-group-gate button:last-child span {
+  background: linear-gradient(145deg, #8b5cf6, #387eff);
+}
+.crewlink-group-gate button svg {
+  width: 25px;
+  height: 25px;
+}
+.crewlink-group-gate button strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+.crewlink-group-gate :deep(.crewlink-group-gate__logout) {
+  grid-column: 1/-1;
+  width: 100%;
+  min-height: 46px;
+  aspect-ratio: auto;
+  border-color: rgba(228, 71, 96, 0.55);
+  border-radius: 23px;
+  flex-direction: row;
+  color: #e44760;
+}
+.crewlink-logout-button {
+  width: 100%;
+  color: #e44760;
+}
+.crewlink-invitations {
+  width: 100%;
+  margin-top: 18px;
+  text-align: left;
+}
+.crewlink-join-invitations-title {
+  margin: 18px 0 8px !important;
+  text-align: left;
+}
+.crewlink-invitations--join {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+.crewlink-invitations--join :deep(.k-card) {
+  margin: 0;
+}
+.crewlink-invite-card {
+  display: grid;
+  grid-template-columns: 38px 1fr 31px 31px;
+  gap: 7px;
+  align-items: center;
+}
+.crewlink-invite-card > i {
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: white;
+}
+.crewlink-invite-card > i svg {
+  width: 19px;
+}
+.crewlink-invite-card div {
+  display: flex;
+  flex-direction: column;
+}
+.crewlink-invite-card div span {
+  font-size: 10px;
+  color: var(--cl-muted);
+}
+.crewlink-invite-card button {
+  width: 29px;
+  height: 29px;
+  border: 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #e94662;
+  background: rgba(255, 77, 103, 0.12);
+}
+.crewlink-invite-card button.is-accept {
+  color: #0aa66d;
+  background: rgba(46, 204, 126, 0.14);
+}
+.crewlink-invite-card button svg {
+  width: 15px;
+}
+.crewlink-map-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #09131c;
+}
+.crewlink-map-summary {
+  height: 64px;
+  padding: 8px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: white;
+  background: linear-gradient(
+    90deg,
+    rgba(6, 24, 35, 0.96),
+    rgba(15, 41, 56, 0.95)
+  );
+}
+.crewlink-map-summary > div:first-child {
+  display: grid;
+  grid-template-columns: 10px auto auto;
+  align-items: baseline;
+  gap: 7px;
+}
+.crewlink-map-summary strong {
+  font-size: 26px;
+  line-height: 30px;
+}
+.crewlink-map-summary small {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  color: #c0ced8;
+  white-space: nowrap;
+}
+.crewlink-live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #35dc80;
+  box-shadow: 0 0 0 4px rgba(53, 220, 128, 0.16);
+}
+.crewlink-online-faces {
+  display: flex;
+  align-items: center;
+}
+.crewlink-online-faces span {
+  width: 27px;
+  height: 27px;
+  margin-left: -6px;
+  border: 2px solid;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #203347;
+  color: white;
+  font-size: 8px;
+  font-weight: 800;
+}
+.crewlink-online-faces i {
+  font-size: 9px;
+  margin-left: 5px;
+  color: #9cb0bf;
+}
+.crewlink-map {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  touch-action: none;
+  background: #d8e0e4;
+  cursor: grab;
+}
+.crewlink-map:active {
+  cursor: grabbing;
+}
+.crewlink-map__canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+  will-change: transform;
+}
+.crewlink-map__mainland,
+.crewlink-map__cayo {
+  position: absolute;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+}
+.crewlink-member-marker,
+.crewlink-ping-marker {
+  position: absolute;
+  border: 0;
+  background: transparent;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: center bottom;
+  cursor: pointer;
+}
+.crewlink-member-marker > span {
+  width: 31px;
+  height: 31px;
+  border: 3px solid white;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: var(--crew);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  font-size: 9px;
+  font-weight: 900;
+}
+.crewlink-member-marker.is-self > span {
+  box-shadow:
+    0 0 0 5px var(--crew-ring),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.crewlink-member-marker small,
+.crewlink-ping-marker small {
+  padding: 2px 5px;
+  margin-top: 2px;
+  border-radius: 6px;
+  color: white;
+  background: rgba(4, 14, 23, 0.82);
+  font-size: 7px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.crewlink-ping-marker > svg {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 50% 50% 50% 4px;
+  transform: rotate(-45deg);
+  color: white;
+  background: var(--ping);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.crewlink-ping-marker > svg :deep(*) {
+  transform: rotate(45deg);
+  transform-origin: center;
+}
+.crewlink-map-controls {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+}
+.crewlink-map-controls button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+  color: #183044;
+  font-size: 19px;
+  display: grid;
+  place-items: center;
+}
+.crewlink-map-controls svg {
+  width: 16px;
+}
+.crewlink-map-legend {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  display: flex;
+  gap: 9px;
+  background: rgba(8, 20, 30, 0.78);
+  backdrop-filter: blur(10px);
+  color: white;
+  font-size: 8px;
+}
+.crewlink-map-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.crewlink-map-legend i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #35dc80;
+}
+.crewlink-map-legend i.is-hidden {
+  background: #8998a4;
+}
+.crewlink-map-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #ff4d67;
+}
+.crewlink-map-crosshair svg {
+  width: 32px;
+  height: 32px;
+  filter: drop-shadow(0 2px 4px white);
+}
+.crewlink-map-actions {
+  height: 76px;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: #0c1822;
+}
+.crewlink-map-actions button {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  color: white;
+  background: rgba(255, 255, 255, 0.06);
+  text-align: left;
+}
+.crewlink-map-actions button:disabled {
+  opacity: 0.4;
+}
+.crewlink-map-actions svg {
+  width: 23px;
+  height: 23px;
+  flex: none;
+  color: #28d9e8;
+}
+.crewlink-map-actions span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.crewlink-map-actions strong {
+  font-size: 15px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.crewlink-map-actions small {
+  font-size: 12px;
+  line-height: 15px;
+  color: #a4b4c0;
+  white-space: nowrap;
+}
+.crewlink-group-hero {
+  padding: 22px;
+  border-radius: 25px;
+  color: white;
+  background:
+    radial-gradient(circle at 82% 18%, var(--crew-aura), transparent 35%),
+    linear-gradient(145deg, #0b2433, #0b1825);
+  box-shadow: 0 15px 35px rgba(6, 20, 31, 0.2);
+}
+.crewlink-group-hero__signal {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: var(--crew);
+  box-shadow: 0 0 28px var(--crew-glow);
+}
+.crewlink-group-hero__signal svg {
+  width: 26px;
+}
+.crewlink-group-hero > small {
+  display: block;
+  margin-top: 17px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #b5c6d0;
+}
+.crewlink-group-hero h1 {
+  margin: 5px 0;
+  font-size: 29px;
+  line-height: 34px;
+}
+.crewlink-group-hero p {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 18px;
+  color: #d0dbe1;
+}
+.crewlink-group-hero > div:last-child {
+  display: flex;
+  gap: 7px;
+}
+.crewlink-group-hero :deep(.crewlink-group-badge) {
+  min-height: 24px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.crewlink-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 13px 0 11px;
+}
+.crewlink-quick-actions button {
+  min-height: 64px;
+  border: 0;
+  border-radius: 15px;
+  padding: 11px 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--cl-text);
+  background: var(--cl-surface);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 15px;
+  box-shadow: 0 3px 12px rgba(15, 40, 60, 0.06);
+}
+.crewlink-quick-actions svg {
+  width: 22px;
+  height: 22px;
+  color: #138fc0;
+}
+.crewlink-invitations--inline {
+  margin: 0;
+}
+.crewlink-members-title {
+  height: auto !important;
+  min-height: 34px;
+  padding-top: 8px !important;
+  padding-bottom: 6px !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: var(--cl-text) !important;
+}
+.crewlink-member-list :deep(.k-list-item) {
+  min-height: 70px;
+}
+.crewlink-member-title {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 22px;
+}
+.crewlink-member-subtitle {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--cl-muted);
+}
+.crewlink-avatar {
+  position: relative;
+  width: 43px;
+  height: 43px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(145deg, var(--crew), #273e55);
+  font-size: 12px;
+  font-weight: 900;
+}
+.crewlink-avatar i {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #8998a4;
+}
+.crewlink-avatar i.is-online {
+  background: #35d880;
+}
+.role-owner {
+  color: #ffb020;
+}
+.role-coordinator {
+  color: #8b5cf6;
+}
+.role-moderator {
+  color: #2d9cff;
+}
+.role-member {
+  color: #22b77a;
+}
+.role-guest {
+  color: #8998a4;
+}
+.crewlink-section-header {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 5px 2px 16px;
+}
+.crewlink-section-header > span {
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(145deg, #27d9ed, #287cff);
+}
+.crewlink-section-header > span svg {
+  width: 26px;
+  height: 26px;
+}
+.crewlink-section-header div {
+  flex: 1;
+}
+.crewlink-section-header small {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  color: #29b8e8;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+.crewlink-section-header h1 {
+  margin: 2px 0 0;
+  font-size: 29px;
+  line-height: 34px;
+}
+.crewlink-section-header button {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: #168dc2;
+}
+.crewlink-section-header button svg {
+  width: 22px;
+  height: 22px;
+}
+.crewlink-pings-tab {
+  padding-top: 12px;
+}
+.crewlink-pings-tab .crewlink-section-header {
+  margin-bottom: 12px;
+}
+.crewlink-ping-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.crewlink-ping-list :deep(.k-card) {
+  margin: 0;
+}
+.crewlink-ping-list article {
+  display: grid;
+  grid-template-columns: 47px 1fr 32px 32px;
+  gap: 9px;
+  align-items: center;
+  padding: 11px;
+}
+.crewlink-ping-list article > i {
+  width: 47px;
+  height: 47px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: white;
+}
+.crewlink-ping-list article > i svg {
+  width: 23px;
+}
+.crewlink-ping-list article > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.crewlink-ping-list small {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--cl-muted);
+  text-transform: uppercase;
+}
+.crewlink-ping-list strong {
+  font-size: 15px;
+  line-height: 19px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crewlink-ping-list span {
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--cl-muted);
+}
+.crewlink-ping-list button {
+  border: 0;
+  background: transparent;
+  color: #238fbd;
+  display: grid;
+  place-items: center;
+}
+.crewlink-ping-list button:last-child {
+  color: #ed5268;
+}
+.crewlink-ping-list button svg {
+  width: 20px;
+}
+.crewlink-empty-state {
+  padding: 68px 22px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.crewlink-empty-state > span {
+  width: 70px;
+  height: 70px;
+  border-radius: 23px;
+  display: grid;
+  place-items: center;
+  color: #168dbd;
+  background: rgba(39, 191, 230, 0.12);
+}
+.crewlink-empty-state > span svg {
+  width: 29px;
+  height: 29px;
+}
+.crewlink-empty-state h2 {
+  margin: 17px 0 7px;
+  font-size: 21px;
+  line-height: 26px;
+}
+.crewlink-empty-state p {
+  max-width: 280px;
+  margin: 0;
+  color: var(--cl-muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+.crewlink-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 17px;
+  border-radius: 23px;
+  color: white;
+  background: linear-gradient(145deg, var(--crew), #183a5a);
+}
+.crewlink-profile-card > span {
+  width: 54px;
+  height: 54px;
+  border: 3px solid rgba(255, 255, 255, 0.72);
+  border-radius: 19px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 900;
+  background: rgba(8, 25, 40, 0.22);
+}
+.crewlink-profile-card div {
+  min-width: 0;
+}
+.crewlink-profile-card small {
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.crewlink-profile-card h1 {
+  margin: 2px 0;
+  font-size: 19px;
+}
+.crewlink-profile-card p {
+  margin: 0;
+  font-size: 10px;
+  opacity: 0.82;
+}
+.crewlink-group-dot {
+  width: 35px;
+  height: 35px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: white;
+}
+.crewlink-group-dot svg {
+  width: 18px;
+}
+.crewlink-danger-row {
+  --k-list-item-title-text-color: #e44760;
+}
+.crewlink-danger-button {
+  color: #e44760 !important;
+}
+.crewlink-role-title {
+  margin: 16px 0 8px !important;
+  padding-inline: 4px !important;
+}
+.crewlink-role-list {
+  margin: 0 !important;
+}
+.crewlink-role-list :deep(.crewlink-role-item__content) {
+  min-height: 68px;
+  align-items: center;
+}
+.crewlink-role-list :deep(.crewlink-role-item__media) {
+  width: 28px;
+  margin-right: 10px;
+  justify-content: center;
+  color: #9ca8b3;
+}
+.crewlink-role-list :deep(.crewlink-role-item__inner) {
+  min-width: 0;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  text-align: left;
+}
+.crewlink-role-list :deep(.crewlink-role-item__title) {
+  min-height: 22px;
+  font-size: 14px;
+  line-height: 18px;
+}
+.crewlink-role-list :deep(.crewlink-role-item__title + div) {
+  max-width: 230px;
+  color: var(--cl-muted);
+  font-size: 10px;
+  line-height: 14px;
+  text-align: left;
+}
+.crewlink-role-list :deep(.crewlink-role-item__title svg) {
+  color: #aab5bf;
+}
+.crewlink-member-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.crewlink-member-actions :deep(.k-button) {
+  margin-top: 0;
+}
+.crewlink-sheet__content {
+  position: relative;
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 26px 18px 24px;
+  text-align: center;
+  color: var(--cl-text);
+  background: var(--cl-bg);
+  border-radius: 24px 24px 0 0;
+}
+.crewlink-sheet__close {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--cl-muted);
+  background: rgba(125, 145, 160, 0.15);
+}
+.crewlink-sheet__close svg {
+  width: 17px;
+}
+.crewlink-sheet__icon,
+.crewlink-sheet__avatar {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 9px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(145deg, #27d9ed, #287cff);
+  box-shadow: 0 10px 25px rgba(31, 139, 205, 0.22);
+}
+.crewlink-sheet__avatar {
+  background: linear-gradient(145deg, var(--crew), #29415a);
+  font-weight: 900;
+}
+.crewlink-sheet__icon svg {
+  width: 26px;
+}
+.crewlink-sheet__content h2 {
+  margin: 4px 0;
+  font-size: 23px;
+  line-height: 1.2;
+}
+.crewlink-sheet__content > p {
+  margin: 0 10px 13px;
+  color: var(--cl-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.crewlink-sheet__content :deep(.button) {
+  width: 100%;
+  margin-top: 9px;
+  font-size: 13px;
+}
+.crewlink-nearby-list {
+  margin: 10px 0 0 !important;
+}
+.crewlink-nearby-list :deep(.crewlink-nearby-item__content) {
+  min-height: 66px;
+  align-items: center;
+}
+.crewlink-nearby-list :deep(.crewlink-nearby-item__media) {
+  width: 38px;
+  margin-right: 12px;
+  justify-content: center;
+}
+.crewlink-nearby-list :deep(.crewlink-nearby-item__inner) {
+  min-width: 0;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  text-align: left;
+}
+.crewlink-nearby-list :deep(.crewlink-nearby-item__title) {
+  min-height: 22px;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 18px;
+}
+.crewlink-nearby-list :deep(.crewlink-nearby-item__title + div) {
+  color: var(--cl-muted);
+  font-size: 10px;
+  line-height: 14px;
+  text-align: left;
+}
+.crewlink-nearby-list :deep(.crewlink-nearby-invite) {
+  width: auto;
+  margin-top: 0;
+  padding-inline: 13px;
+  flex: none;
+}
+.crewlink-field-label {
+  display: block;
+  margin: 8px 0;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cl-muted);
+}
+.crewlink-colours {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  margin: 8px 0 14px;
+}
+.crewlink-colours button {
+  width: 35px;
+  height: 35px;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: white;
+}
+.crewlink-colours button.is-active {
+  border-color: white;
+  box-shadow: 0 0 0 2px currentColor;
+}
+.crewlink-colours svg {
+  width: 15px;
+  opacity: 0;
+}
+.crewlink-colours button.is-active svg {
+  opacity: 1;
+}
+.crewlink-error {
+  color: #df3e58 !important;
+  font-size: 12px !important;
+  margin: 8px !important;
+}
+.crewlink-sheet-empty {
+  padding: 25px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  color: var(--cl-muted);
+}
+.crewlink-sheet-empty svg {
+  width: 34px;
+}
+.crewlink-sheet-empty strong {
+  color: var(--cl-text);
+}
+.crewlink-sheet-empty span {
+  font-size: 11px;
+}
+.crewlink-ping-title {
+  font-size: 25px !important;
+  line-height: 30px !important;
+}
+.crewlink-sheet__content > .crewlink-ping-description {
+  font-size: 14px;
+  line-height: 19px;
+}
+.crewlink-ping-types {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  margin: 15px 0;
+}
+.crewlink-ping-types button {
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  padding: 10px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--cl-muted);
+  background: var(--cl-surface);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 15px;
+}
+.crewlink-ping-types button.is-active {
+  border-color: var(--ping);
+  color: var(--ping);
+  box-shadow: 0 3px 12px var(--ping-glow);
+}
+.crewlink-ping-types svg {
+  width: 22px;
+  height: 22px;
+}
+.crewlink-ping-form :deep(.k-list-input .text-xs) {
+  font-size: 14px !important;
+  font-weight: 600;
+  line-height: 18px;
+}
+.crewlink-ping-form :deep(.crewlink-ping-label-input) {
+  font-size: 16px !important;
+  line-height: 20px;
+}
+.crewlink-ping-location-list :deep(.k-list-item) {
+  min-height: 70px;
+}
+.crewlink-ping-location-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+}
+.crewlink-ping-location-copy strong {
+  font-size: 17px;
+  line-height: 21px;
+}
+.crewlink-ping-location-copy small {
+  max-width: 205px;
+  color: var(--cl-muted);
+  font-size: 14px;
+  line-height: 18px;
+}
+.crewlink-sheet__content :deep(.crewlink-share-ping) {
+  font-size: 16px;
+}
+.crewlink-code-card {
+  display: grid;
+  grid-template-columns: 1fr auto 30px 30px;
+  align-items: center;
+  gap: 5px;
+  text-align: left;
+}
+.crewlink-code-card small {
+  font-size: 9px;
+  color: var(--cl-muted);
+}
+.crewlink-code-card strong {
+  font-family: monospace;
+  letter-spacing: 0.12em;
+}
+.crewlink-code-card button {
+  border: 0;
+  background: transparent;
+  color: #168dbd;
+}
+.crewlink-code-card svg {
+  width: 16px;
+}
+.crewlink-member-preview {
+  padding-top: 34px;
+}
+.crewlink-tabbar {
+  z-index: 20;
+}
+.crewlink-tabbar :deep(.crewlink-tabbar__inner) {
+  width: 100% !important;
+  max-width: none !important;
+  padding-inline: 4px !important;
+}
+.crewlink-tabbar :deep(.crewlink-tabbar__pane) {
+  width: 100% !important;
+  max-width: none !important;
+  gap: 2px;
+  padding: 0;
+}
+.crewlink-tabbar :deep(.crewlink-tabbar__pane > .k-link) {
+  min-width: 0 !important;
+  max-width: none !important;
+  flex: 1 1 25% !important;
+  padding-inline: 2px !important;
+}
+.crewlink-tabbar :deep(.k-tabbar-link-label) {
+  font-size: 9px;
+  line-height: 11px;
+}
+.crewlink-tabbar :deep(.k-icon) {
+  width: 23px;
+  height: 23px;
+}
+.crewlink-tabbar :deep(.badge) {
+  position: absolute;
+  top: -3px;
+  right: -7px;
+  font-size: 7px;
+}
+.crewlink-pings-icon {
+  position: relative;
+  width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+}
+.crewlink-pings-icon > svg {
+  width: 23px;
+  height: 23px;
+}
+.crewlink-tabbar :deep(.crewlink-pings-badge) {
+  position: absolute !important;
+  z-index: 2;
+  top: -6px !important;
+  right: -9px !important;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border: 2px solid #071018;
+  border-radius: 999px;
+  font-size: 7px;
+  line-height: 11px;
+  pointer-events: none;
+}
+.crewlink-sheet__content :deep(.crewlink-nearby-rescan) {
+  margin-top: 16px;
+  margin-bottom: 10px;
+}
+.crewlink :deep(.crewlink-dialog-cancel) {
+  color: #f3f8fb !important;
+  background: #173247 !important;
+}
+.crewlink-avatar {
+  overflow: hidden;
+}
+.crewlink-avatar > img,
+.crewlink-profile-card > span img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.crewlink-avatar > i {
+  z-index: 1;
+}
+.crewlink-profile-card > span {
+  overflow: hidden;
+}
+.crewlink-profile-row-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #168dbd;
+  background: rgba(39, 191, 230, 0.12);
+}
+.crewlink-profile-row-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.crewlink-sheet__avatar {
+  overflow: hidden;
+}
+.crewlink-sheet__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.crewlink-profile-editor__avatar {
+  width: 92px;
+  height: 92px;
+  margin: 4px auto 12px;
+  border: 3px solid rgba(39, 217, 237, 0.7);
+  border-radius: 30px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #20bde0;
+  background: var(--cl-surface);
+  box-shadow: 0 12px 30px rgba(17, 137, 189, 0.2);
+}
+.crewlink-profile-editor__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.crewlink-profile-editor__avatar svg {
+  width: 36px;
+  height: 36px;
+}
+.crewlink-profile-editor__media-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+.crewlink-profile-editor__media-actions :deep(.k-button) {
+  min-width: 0;
+  margin-top: 0;
+  gap: 6px;
+}
+.crewlink-profile-editor__remove {
+  width: 100%;
+  margin: 0 0 6px !important;
+  color: #e44760;
+}
+@keyframes cl-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.02);
+  }
+}
 </style>

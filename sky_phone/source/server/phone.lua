@@ -24,6 +24,7 @@ local allowed_device_namespaces = {
     notifications = true,
     wallpaper = true,
     alarms = true,
+    appAuth = true,
     apps = true,
     games = true,
     widgets = true,

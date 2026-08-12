@@ -897,6 +897,7 @@ CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_profiles` (
     `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `account_id` BIGINT UNSIGNED NOT NULL,
     `username` VARCHAR(20) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    `avatar_media_id` BIGINT UNSIGNED NULL,
     `active_group_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
     `map_visible` TINYINT(1) NOT NULL DEFAULT 1,
     `overhead_visible` TINYINT(1) NOT NULL DEFAULT 0,
@@ -906,7 +907,9 @@ CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_profiles` (
     UNIQUE KEY `uniq_sky_phone_crewlink_account` (`account_id`),
     UNIQUE KEY `uniq_sky_phone_crewlink_username` (`username`),
     KEY `idx_sky_phone_crewlink_active` (`active_group_id`),
-    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
+    KEY `idx_sky_phone_crewlink_avatar` (`avatar_media_id`),
+    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`avatar_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_groups` (

@@ -2098,6 +2098,7 @@ local schema = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "account_id", type = "BIGINT UNSIGNED NOT NULL" },
             { name = "username", type = "VARCHAR(20) NOT NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "avatar_media_id", type = "BIGINT UNSIGNED NULL" },
             { name = "active_group_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "map_visible", type = "TINYINT(1) NOT NULL DEFAULT 1" },
             { name = "overhead_visible", type = "TINYINT(1) NOT NULL DEFAULT 0" },
@@ -2111,9 +2112,11 @@ local schema = {
         },
         indexes = {
             { name = "idx_sky_phone_crewlink_active", columns = "(`active_group_id`)" },
+            { name = "idx_sky_phone_crewlink_avatar", columns = "(`avatar_media_id`)" },
         },
         foreignKeys = {
             { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+            { column = "avatar_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },

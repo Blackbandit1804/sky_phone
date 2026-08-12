@@ -18,6 +18,7 @@ import {
   Inbox,
   Laptop,
   LayoutGrid,
+  LogOut,
   MapPin,
   MessageCircle,
   MoreHorizontal,
@@ -50,7 +51,10 @@ import { useRoute, useRouter } from 'vue-router'
 import CityMarktSelect from '@/components/citymarkt/CityMarktSelect.vue'
 import CityMarktGallery from '@/components/citymarkt/CityMarktGallery.vue'
 import CityMarktOfferCard from '@/components/citymarkt/CityMarktOfferCard.vue'
+import CityMarktAuth from '@/components/citymarkt/CityMarktAuth.vue'
+import AccountLogoutDialog from '@/components/account/AccountLogoutDialog.vue'
 import { useAccountStore } from '@/stores/account'
+import { useAppAuthStore } from '@/stores/app-auth'
 import { useAppStoreStore } from '@/stores/app-store'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { useMarketplaceStore } from '@/stores/marketplace'
@@ -105,7 +109,10 @@ type MediaContext = {
   photos: SelectedPhoto[]
   sellStep: number
 }
-type ProfileMediaContext = { draft: MarketplaceProfileDraft }
+type ProfileMediaContext = {
+  authMode?: 'login' | 'register'
+  draft: MarketplaceProfileDraft
+}
 
 const phone = usePhoneStore()
 const detailActionColors = computed(() => ({
@@ -115,11 +122,15 @@ const detailActionColors = computed(() => ({
 const route = useRoute()
 const router = useRouter()
 const account = useAccountStore()
+const appAuth = useAppAuthStore()
 const appStore = useAppStoreStore()
 const easyShare = useEasyShareStore()
 const marketplace = useMarketplaceStore()
 const messageMedia = useMessageMediaStore()
 const pages = usePagesStore()
+const logoutDialogOpen = ref(false)
+const authMode = ref<'login' | 'register'>('login')
+const authError = ref('')
 const tab = ref<Tab>('discover')
 const screen = ref<Screen>('main')
 const selectedListing = ref<MarketplaceListing | null>(null)
@@ -239,7 +250,7 @@ const tabs = [
   { icon: UserRound, id: 'profile' },
 ] as const
 
-const isAuthenticated = computed(() => account.email !== '')
+const isAuthenticated = computed(() => appAuth.isSignedIn('citymarkt'))
 const localPagesInstalled = computed(
   () =>
     appStore.isInstalled('local-pages') &&
@@ -529,6 +540,80 @@ async function selectTab(next: Tab): Promise<void> {
   }
 }
 
+async function finishAuthentication(): Promise<void> {
+  await marketplace.loadProfile()
+  syncProfileDraft()
+  profileEditing.value = !marketplace.profile?.exists
+  await Promise.all([
+    marketplace.loadOwn(),
+    marketplace.load({ favorites: true }),
+  ])
+  tab.value = 'profile'
+  screen.value = 'main'
+}
+
+function switchAuthMode(mode: 'login' | 'register'): void {
+  authMode.value = mode
+  authError.value = ''
+  profileDraft.value.displayName =
+    mode === 'login'
+      ? (marketplace.profile?.display_name ?? '')
+      : account.email.split('@')[0] ?? ''
+  if (mode === 'login') selectedProfilePhoto.value = null
+}
+
+async function submitCityMarktAuth(): Promise<void> {
+  const username = profileDraft.value.displayName.trim()
+  authError.value = ''
+  if (!account.email) {
+    authError.value = phone.t('Apps.citymarkt.authErrors.no_ifruit_account')
+    return
+  }
+  if (username.length < 2 || username.length > 40) {
+    authError.value = phone.t('Apps.citymarkt.authErrors.invalid_username')
+    return
+  }
+
+  profilePending.value = true
+  await marketplace.loadProfile()
+  if (authMode.value === 'login') {
+    profilePending.value = false
+    if (!marketplace.profile?.exists) {
+      authError.value = phone.t('Apps.citymarkt.authErrors.profile_not_found')
+      return
+    }
+    if (
+      marketplace.profile.display_name.trim().toLocaleLowerCase(phone.lang) !==
+      username.toLocaleLowerCase(phone.lang)
+    ) {
+      authError.value = phone.t('Apps.citymarkt.authErrors.invalid_username')
+      return
+    }
+  } else {
+    if (marketplace.profile?.exists) {
+      profilePending.value = false
+      authError.value = phone.t('Apps.citymarkt.authErrors.profile_exists')
+      return
+    }
+    const response = await marketplace.saveProfile({
+      avatarMediaId:
+        selectedProfilePhoto.value?.id ?? profileDraft.value.avatarMediaId,
+      bio: '',
+      displayName: username,
+    })
+    profilePending.value = false
+    if (!response.success) {
+      authError.value = phone.t(
+        `Apps.citymarkt.errors.${response.error ?? 'default'}`,
+      )
+      return
+    }
+  }
+
+  appAuth.signIn('citymarkt', account.email)
+  await finishAuthentication()
+}
+
 async function openListing(
   item: Pick<MarketplaceListingSummary, 'id'>,
 ): Promise<void> {
@@ -578,9 +663,12 @@ function openProfileMedia(app: 'camera' | 'photos'): void {
     'photo',
     '/apps/citymarkt?profileEdit=1',
     1,
-    { draft: { ...profileDraft.value } } satisfies ProfileMediaContext,
+    {
+      authMode: isAuthenticated.value ? undefined : authMode.value,
+      draft: { ...profileDraft.value },
+    } satisfies ProfileMediaContext,
   )
-  void router.push(app === 'photos' ? '/apps/photos?picker=1' : '/apps/camera?picker=1')
+  void router.push(`/apps/${app}?mediaAttachment=photo`)
 }
 
 function removeProfilePhoto(): void {
@@ -905,11 +993,13 @@ onMounted(async () => {
   }
   if (profileSelection?.context) {
     profileDraft.value = profileSelection.context.draft
+    if (profileSelection.context.authMode)
+      authMode.value = profileSelection.context.authMode
     if (profileSelection.media[0]) {
       selectedProfilePhoto.value = profileSelection.media[0]
       profileDraft.value.avatarMediaId = profileSelection.media[0].id
     }
-    profileEditing.value = true
+    profileEditing.value = isAuthenticated.value
     tab.value = 'profile'
     screen.value = 'main'
   }
@@ -932,6 +1022,8 @@ onMounted(async () => {
     }
     await marketplace.loadCounts()
   } else {
+    await marketplace.loadProfile()
+    switchAuthMode(marketplace.profile?.exists ? 'login' : 'register')
     tab.value = 'profile'
     screen.value = 'main'
   }
@@ -1127,6 +1219,9 @@ onMounted(async () => {
           <UserRound :size="40" />
           <h2>{{ phone.t('Apps.citymarkt.signInTitle') }}</h2>
           <p>{{ phone.t('Apps.citymarkt.signInBody') }}</p>
+          <k-button rounded @click="tab = 'profile'">
+            {{ phone.t('Apps.citymarkt.login') }}
+          </k-button>
         </div>
         <div v-else-if="!marketplace.inquiries.length" class="citymarkt__empty">
           <MessageCircle :size="36" /><strong>{{
@@ -1156,9 +1251,17 @@ onMounted(async () => {
 
       <template v-else-if="tab === 'profile'">
         <div v-if="!isAuthenticated" class="citymarkt__auth">
-          <UserRound :size="40" />
-          <h2>{{ phone.t('Apps.citymarkt.signInTitle') }}</h2>
-          <p>{{ phone.t('Apps.citymarkt.signInBody') }}</p>
+          <CityMarktAuth
+            v-model:mode="authMode"
+            v-model:username="profileDraft.displayName"
+            :avatar-url="selectedProfilePhoto?.url ?? null"
+            :email="account.email"
+            :error="authError"
+            :pending="profilePending"
+            @camera="openProfileMedia('camera')"
+            @gallery="openProfileMedia('photos')"
+            @submit="submitCityMarktAuth"
+          />
         </div>
         <template v-else>
           <section v-if="profileEditing || !marketplace.profile?.exists" class="citymarkt__profile-editor">
@@ -1255,6 +1358,10 @@ onMounted(async () => {
             ></k-glass>
           </div>
           </template>
+          <k-button large rounded outline class="citymarkt__logout" @click="logoutDialogOpen = true">
+            <LogOut :size="17" />
+            {{ phone.t('Common.signOut') }}
+          </k-button>
         </template>
       </template>
     </section>
@@ -1849,6 +1956,11 @@ onMounted(async () => {
         </k-tabbar-link>
       </k-toolbar-pane>
     </k-tabbar>
+    <AccountLogoutDialog
+      v-model:opened="logoutDialogOpen"
+      app-id="citymarkt"
+      :app-name="phone.t('Apps.citymarkt.name')"
+    />
     <Transition name="toast"
       ><div v-if="feedback" class="citymarkt__toast">
         {{ feedback }}
@@ -2502,6 +2614,11 @@ onMounted(async () => {
 }
 .citymarkt__profile-actions button:disabled {
   opacity: .4;
+}
+.citymarkt__logout {
+  width: 100%;
+  margin-top: 12px;
+  color: #ff796f;
 }
 :global(.citymarkt--light) .citymarkt__profile-editor {
   border-color: #00000012;
