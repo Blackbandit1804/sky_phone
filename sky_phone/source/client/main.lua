@@ -217,6 +217,7 @@ local server_callbacks = {
     "messages:delete",
     "messages:gifs",
     "easyshare:bootstrap",
+    "easyshare:own-contact",
     "easyshare:set-visibility",
     "easyshare:request",
     "easyshare:respond",

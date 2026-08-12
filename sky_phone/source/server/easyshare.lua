@@ -604,25 +604,36 @@ local function sanitize_payload(source, device, data)
 
     local condition, owner_params = owner_condition(device)
     if data.kind == "contact" and type(payload.id) == "string" then
-        local params = { payload.id }
-        append_params(params, owner_params)
-        local rows = Bridge.Database.Query(([[
-            SELECT `name`, `phone_number`, `organization`, `notes`
-            FROM `sky_phone_contacts` WHERE `contact_id` = ? AND %s LIMIT 1
-        ]]):format(condition), params)
-        local contact = rows[1]
-        if not contact then
-            return nil, "not_owned"
+        if app_id == "phone" and payload.id == "self" then
+            local contact = canonical_own_contact(source, device)
+            if not contact then
+                return nil, "sim_required"
+            end
+            payload.title = contact.title
+            payload.subtitle = contact.subtitle
+            payload.copyText = contact.copyText
+            payload.meta = contact.meta
+        else
+            local params = { payload.id }
+            append_params(params, owner_params)
+            local rows = Bridge.Database.Query(([[
+                SELECT `name`, `phone_number`, `organization`, `notes`
+                FROM `sky_phone_contacts` WHERE `contact_id` = ? AND %s LIMIT 1
+            ]]):format(condition), params)
+            local contact = rows[1]
+            if not contact then
+                return nil, "not_owned"
+            end
+            payload.title = contact.name
+            payload.subtitle = contact.phone_number
+            payload.copyText = ("%s\n%s"):format(contact.name, contact.phone_number)
+            payload.meta = {
+                name = contact.name,
+                notes = contact.notes,
+                organization = contact.organization,
+                phoneNumber = contact.phone_number,
+            }
         end
-        payload.title = contact.name
-        payload.subtitle = contact.phone_number
-        payload.copyText = ("%s\n%s"):format(contact.name, contact.phone_number)
-        payload.meta = {
-            name = contact.name,
-            notes = contact.notes,
-            organization = contact.organization,
-            phoneNumber = contact.phone_number,
-        }
     elseif data.kind == "note" and type(payload.id) == "string" then
         local params = { payload.id }
         append_params(params, owner_params)
@@ -808,6 +819,25 @@ local function apply_received_payload(transfer)
     return true
 end
 
+local function canonical_own_contact(source, device)
+    if not device.phone_number then
+        return nil
+    end
+    local name = display_name(source)
+    return {
+        appId = "phone",
+        kind = "contact",
+        id = "self",
+        title = name,
+        subtitle = device.phone_number,
+        copyText = ("%s\n%s"):format(name, device.phone_number),
+        meta = {
+            name = name,
+            phoneNumber = device.phone_number,
+        },
+    }
+end
+
 local function advance_transfer(id)
     local transfer = active_transfers[id]
     if not transfer or transfer.status ~= "transferring" then
@@ -888,6 +918,24 @@ Bridge.Callbacks.Register("sky_phone:easyshare:bootstrap", function(source)
             visibility = visibility_for(device.imei),
         },
     }
+end)
+
+Bridge.Callbacks.Register("sky_phone:easyshare:own-contact", function(source)
+    if not Config.EasyShare.Enabled then
+        return { success = false, error = "disabled" }
+    end
+    if not SkyPhone.AllowOperation(source, "easyshare_own_contact", Config.EasyShare.BootstrapRequestsPerMinute, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local device, error_response = current_device(source)
+    if not device then
+        return error_response
+    end
+    local payload = canonical_own_contact(source, device)
+    if not payload then
+        return { success = false, error = "sim_required" }
+    end
+    return { success = true, data = payload }
 end)
 
 Bridge.Callbacks.Register("sky_phone:easyshare:set-visibility", function(source, data)

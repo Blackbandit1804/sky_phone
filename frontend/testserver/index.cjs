@@ -6868,6 +6868,21 @@ app.post('/api/:endpoint', (request, response) => {
     })
     return
   }
+  if (endpoint === 'easyshare:own-contact') {
+    response.json({
+      success: true,
+      data: {
+        appId: 'phone',
+        copyText: 'Alex Morgan\n5551234567',
+        id: 'self',
+        kind: 'contact',
+        meta: { name: 'Alex Morgan', phoneNumber: '5551234567' },
+        subtitle: '5551234567',
+        title: 'Alex Morgan',
+      },
+    })
+    return
+  }
   if (endpoint === 'easyshare:set-visibility') {
     easyShareVisibility = request.body.visibility
     response.json({ success: true, data: { visibility: easyShareVisibility } })

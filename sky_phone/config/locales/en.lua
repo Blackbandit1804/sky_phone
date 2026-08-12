@@ -72,7 +72,7 @@ Locales["en"] = {
         },
         ControlCenter = {
             airplaneMode = "Airplane Mode", bluetooth = "Bluetooth", brightness = "Brightness", calculator = "Calculator",
-            camera = "Camera", cellular = "Cellular Data", close = "Close Control Center", flashlight = "Flashlight",
+            camera = "Camera", cellular = "Cellular Data", close = "Close Control Center", easyShareContact = "Share my contact with nearby players", flashlight = "Flashlight",
             focus = "Focus", label = "Control Center", media = "Media", muteRingtone = "Mute ringtone and notifications", next = "Next track", notPlaying = "Not Playing",
             open = "Open Control Center", play = "Play", previous = "Previous track", quickActions = "Quick actions",
             timer = "Timer", unmuteRingtone = "Unmute ringtone and notifications", volume = "Volume", wifi = "Wi-Fi",

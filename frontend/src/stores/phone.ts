@@ -3375,6 +3375,7 @@ const defaultLocales: LocaleTree = {
     camera: 'Camera',
     cellular: 'Cellular Data',
     close: 'Close Control Center',
+    easyShareContact: 'Share my contact with nearby players',
     flashlight: 'Flashlight',
     focus: 'Focus',
     label: 'Control Center',
