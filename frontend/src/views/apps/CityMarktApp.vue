@@ -6,6 +6,7 @@ import {
   Camera,
   CarFront,
   ChevronRight,
+  CircleCheck,
   CirclePlus,
   Gift,
   Hammer,
@@ -34,7 +35,6 @@ import {
 import {
   kBadge,
   kButton,
-  kFab,
   kGlass,
   kIcon,
   kNavbar,
@@ -51,6 +51,7 @@ import CityMarktSelect from '@/components/citymarkt/CityMarktSelect.vue'
 import CityMarktGallery from '@/components/citymarkt/CityMarktGallery.vue'
 import CityMarktOfferCard from '@/components/citymarkt/CityMarktOfferCard.vue'
 import { useAccountStore } from '@/stores/account'
+import { useAppStoreStore } from '@/stores/app-store'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { useMarketplaceStore } from '@/stores/marketplace'
 import { useMessageMediaStore } from '@/stores/messageMedia'
@@ -70,12 +71,6 @@ import type {
   MarketplaceProfileDraft,
 } from '@/types/marketplace'
 import type { PhoneMedia } from '@/types/media'
-
-const glassActionColors = {
-  bgIos: 'bg-ios-light-glass/75 dark:bg-ios-dark-glass/75',
-  activeBgIos: 'active:bg-white/90 dark:active:bg-white/20',
-  textIos: 'text-black/80 dark:text-white/80',
-}
 
 type Tab = 'discover' | 'search' | 'sell' | 'inbox' | 'profile'
 type Screen = 'main' | 'detail' | 'sell' | 'chat' | 'report'
@@ -113,9 +108,14 @@ type MediaContext = {
 type ProfileMediaContext = { draft: MarketplaceProfileDraft }
 
 const phone = usePhoneStore()
+const detailActionColors = computed(() => ({
+  bgIos: phone.isDarkMode ? 'bg-ios-dark-glass' : 'bg-ios-light-glass',
+  shadowIos: phone.isDarkMode ? 'shadow-ios-dark-glass' : 'shadow-ios-light-glass',
+}))
 const route = useRoute()
 const router = useRouter()
 const account = useAccountStore()
+const appStore = useAppStoreStore()
 const easyShare = useEasyShareStore()
 const marketplace = useMarketplaceStore()
 const messageMedia = useMessageMediaStore()
@@ -141,7 +141,6 @@ const offerAmount = ref('')
 const offerPanelOpen = ref(false)
 const offerSubmitting = ref(false)
 const feedback = ref('')
-const pagesSharePendingId = ref<string | null>(null)
 const sellStep = ref(1)
 const submitting = ref(false)
 const selectedPhotoIds = ref<string[]>([])
@@ -241,6 +240,11 @@ const tabs = [
 ] as const
 
 const isAuthenticated = computed(() => account.email !== '')
+const localPagesInstalled = computed(
+  () =>
+    appStore.isInstalled('local-pages') &&
+    !appStore.homeLayout.hidden.includes('local-pages'),
+)
 const canSaveProfile = computed(() => {
   const nameLength = profileDraft.value.displayName.trim().length
   return nameLength >= 2 && nameLength <= 40 && profileDraft.value.bio.trim().length <= 160
@@ -371,21 +375,65 @@ function setFeedback(key: string): void {
 
 async function shareToLocalPages(listingId?: string): Promise<void> {
   const id = listingId ?? selectedListing.value?.id
-  if (!id || pagesSharePendingId.value) return
-  pagesSharePendingId.value = id
-  const response = await pages.shareCityMarkt(id)
-  pagesSharePendingId.value = null
-  if (response.success && response.data?.id) {
+  if (!id) return
+  if (!localPagesInstalled.value) {
+    setFeedback('Apps.localPages.cityMarktAppMissing')
+    return
+  }
+  if (!pages.profile?.exists) {
+    setFeedback('Apps.localPages.cityMarktAccountMissing')
+    return
+  }
+  const existingPost = pages.ownItems.find(
+    (item) => item.citymarkt_listing_id === id,
+  )
+  if (existingPost) {
     await router.push({
       path: '/apps/local-pages',
       query: {
-        easyShareId: response.data.id,
+        easyShareId: existingPost.id,
         easyShareKind: 'post',
       },
     })
     return
   }
-  setFeedback(`Apps.localPages.errors.${response.error ?? 'default'}`)
+  await router.push({
+    path: '/apps/local-pages',
+    query: {
+      cityMarktListingId: id,
+      compose: '1',
+    },
+  })
+}
+
+function localPagesShareLabel(listingId: string): string {
+  if (!localPagesInstalled.value)
+    return phone.t('Apps.localPages.cityMarktAppMissing')
+  if (!pages.profile?.exists)
+    return phone.t('Apps.localPages.cityMarktAccountMissing')
+  return phone.t(
+    hasLocalPagesPost(listingId)
+      ? 'Apps.localPages.cityMarktAlreadyShared'
+      : 'Apps.localPages.cityMarktShare',
+  )
+}
+
+function localPagesShareHint(listingId: string): string {
+  if (!localPagesInstalled.value)
+    return phone.t('Apps.localPages.cityMarktInstallHint')
+  if (!pages.profile?.exists)
+    return phone.t('Apps.localPages.cityMarktAccountHint')
+  return phone.t(
+    hasLocalPagesPost(listingId)
+      ? 'Apps.localPages.cityMarktOpenSharedHint'
+      : 'Apps.localPages.cityMarktShareHint',
+  )
+}
+
+function hasLocalPagesPost(listingId: string): boolean {
+  return pages.ownItems.some(
+    (item) => item.citymarkt_listing_id === listingId,
+  )
 }
 
 function shareListing(): void {
@@ -870,7 +918,10 @@ onMounted(async () => {
     screen.value = 'sell'
   }
   if (isAuthenticated.value) {
-    await marketplace.loadProfile()
+    await Promise.all([
+      marketplace.loadProfile(),
+      localPagesInstalled.value ? pages.loadProfile() : Promise.resolve(false),
+    ])
     if (!marketplace.profile?.exists) {
       if (!profileSelection) syncProfileDraft()
       profileEditing.value = true
@@ -1196,9 +1247,11 @@ onMounted(async () => {
                 v-if="profileMode === 'own' && (item.status === 'active' || item.status === 'reserved')"
                 class="citymarkt-profile-listing__share"
                 type="button"
-                :disabled="pagesSharePendingId !== null"
                 @click="shareToLocalPages(item.id)"
-              ><Share2 :size="15" />{{ phone.t('Apps.localPages.cityMarktShare') }}</button
+              ><CircleCheck
+                v-if="hasLocalPagesPost(item.id)"
+                :size="15"
+              /><Share2 v-else :size="15" />{{ localPagesShareLabel(item.id) }}</button
             ></k-glass>
           </div>
           </template>
@@ -1211,39 +1264,40 @@ onMounted(async () => {
       class="citymarkt__detail"
     >
       <div class="citymarkt__glass-actions">
-        <k-fab
+        <k-glass
           component="button"
           type="button"
-          :colors="glassActionColors"
           class="citymarkt-detail-action"
+          :colors="detailActionColors"
           :aria-label="phone.t('Common.back')"
           @click="screen = 'main'"
-          ><template #icon><ArrowLeft :size="19" /></template
-        ></k-fab>
+          ><ArrowLeft :size="19" /></k-glass
+        >
         <div>
-          <k-fab
+          <k-glass
             v-if="!selectedListing.is_owner"
             component="button"
             type="button"
-            :colors="glassActionColors"
             class="citymarkt-detail-action"
+            :colors="detailActionColors"
+            :class="{ active: selectedListing.is_favorite }"
+            :aria-label="phone.t(selectedListing.is_favorite ? 'Apps.citymarkt.removeFavorite' : 'Apps.citymarkt.addFavorite')"
             @click="toggleListingFavorite(selectedListing)"
-            ><template #icon
-              ><Heart
-                :size="19"
-                :fill="
-                  selectedListing.is_favorite ? 'currentColor' : 'none'
-                " /></template
-          ></k-fab>
-          <k-fab
+            ><Heart
+              :size="19"
+              :fill="selectedListing.is_favorite ? 'currentColor' : 'none'"
+            /></k-glass
+          >
+          <k-glass
             v-if="!selectedListing.is_owner"
             component="button"
             type="button"
-            :colors="glassActionColors"
             class="citymarkt-detail-action"
+            :colors="detailActionColors"
+            :aria-label="phone.t('Apps.citymarkt.reportListing')"
             @click="screen = 'report'"
-            ><template #icon><MoreHorizontal :size="20" /></template
-          ></k-fab>
+            ><MoreHorizontal :size="20" /></k-glass
+          >
         </div>
       </div>
       <CityMarktGallery
@@ -1306,14 +1360,14 @@ onMounted(async () => {
             "
             class="citymarkt__pages-share"
             type="button"
-            :disabled="pagesSharePendingId !== null"
             @click="shareToLocalPages()"
           >
-            <Share2 :size="17" /><span
-              ><strong>{{ phone.t('Apps.localPages.cityMarktShare') }}</strong
-              ><small>{{
-                phone.t('Apps.localPages.cityMarktShareHint')
-              }}</small></span
+            <CircleCheck
+              v-if="hasLocalPagesPost(selectedListing.id)"
+              :size="17"
+            /><Share2 v-else :size="17" /><span
+              ><strong>{{ localPagesShareLabel(selectedListing.id) }}</strong
+              ><small>{{ localPagesShareHint(selectedListing.id) }}</small></span
             >
           </button>
           <div class="citymarkt__owner-actions">
@@ -1922,10 +1976,17 @@ onMounted(async () => {
   gap: 6px;
 }
 .citymarkt-detail-action {
-  box-shadow:
-    inset 0 0 0 0.5px #ffffff26,
-    inset 0 1px 0 #ffffff1a,
-    0 6px 16px #0007 !important;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.citymarkt-detail-action.active {
+  color: var(--yellow);
 }
 .citymarkt__glass-list > .k-glass {
   width: 100%;
@@ -1975,8 +2036,10 @@ onMounted(async () => {
   color: inherit;
 }
 .citymarkt-listing-card {
+  isolation: isolate;
   min-width: 0;
   border-radius: 16px;
+  display: grid !important;
   overflow: hidden;
   transition:
     filter 0.18s ease,
@@ -1987,6 +2050,7 @@ onMounted(async () => {
   transform: translateY(-1px);
 }
 .citymarkt-listing-card > .citymarkt-listing-card__open {
+  grid-area: 1 / 1;
   width: 100%;
   min-width: 0;
   padding: 0;
@@ -1997,24 +2061,34 @@ onMounted(async () => {
   text-align: left;
 }
 .citymarkt-listing-card__favorite {
-  position: absolute;
+  position: relative;
   z-index: 2;
-  top: 7px;
-  right: 7px;
+  grid-area: 1 / 1;
+  align-self: start;
+  justify-self: end;
   width: 30px;
   height: 30px;
+  margin: 7px;
   padding: 0;
   border: 1px solid #ffffff12;
   border-radius: 50%;
-  display: grid;
+  display: grid !important;
   place-items: center;
   background: #161714d9;
-  color: #d0d1cb;
+  color: #f8f8f4;
   box-shadow: 0 3px 10px #0005;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
   transition:
     color 0.16s ease,
     background 0.16s ease,
     transform 0.16s ease;
+}
+.citymarkt-listing-card__favorite > svg {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 .citymarkt-listing-card__favorite:hover {
   background: #242520e6;
@@ -2080,6 +2154,10 @@ onMounted(async () => {
 .citymarkt__grid--wide .citymarkt-listing-card .citymarkt__card-image {
   width: 116px;
   height: 116px;
+}
+.citymarkt__grid--wide .citymarkt-listing-card__favorite {
+  justify-self: start;
+  margin-left: 79px;
 }
 .citymarkt__grid--wide .citymarkt-listing-card__body {
   min-height: 116px;

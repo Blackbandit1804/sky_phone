@@ -40,8 +40,10 @@ import CityMarktGallery from '@/components/citymarkt/CityMarktGallery.vue'
 import { useAccountStore } from '@/stores/account'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { useEasyShareStore } from '@/stores/easyshare'
+import { useMarketplaceStore } from '@/stores/marketplace'
 import { usePagesStore } from '@/stores/pages'
 import { usePhoneStore } from '@/stores/phone'
+import type { MarketplaceListing } from '@/types/marketplace'
 import type { PagesCategory, PagesPost, PagesProfileDraft } from '@/types/pages'
 import type { PhoneMedia } from '@/types/media'
 import {
@@ -68,6 +70,7 @@ const phone = usePhoneStore()
 const account = useAccountStore()
 const messageMedia = useMessageMediaStore()
 const easyShare = useEasyShareStore()
+const marketplace = useMarketplaceStore()
 const pages = usePagesStore()
 const route = useRoute()
 const router = useRouter()
@@ -91,6 +94,8 @@ const profilePending = ref(false)
 const profileDraft = ref<PagesProfileDraft>({ avatarMediaId: 0, bio: '', handle: '' })
 const selectedProfilePhoto = ref<PhoneMedia | null>(null)
 const pickedPhotos = ref<SelectedPhoto[]>([])
+const cityMarktListing = ref<MarketplaceListing | null>(null)
+const cityMarktListingId = ref<string | null>(null)
 const draft = ref<ComposeDraft>({
   body: '',
   category: 'recommendation' as Exclude<PagesCategory, 'citymarkt'>,
@@ -274,7 +279,14 @@ function syncProfileDraft(): void {
 
 function ensureBrowserProfile(): void {
   const onboardingScenario = new URLSearchParams(window.location.search).get('testScenario')
-  if (!import.meta.env.DEV || onboardingScenario === 'local-pages-onboarding' || pages.profile) return
+  if (
+    !import.meta.env.DEV ||
+    ['local-pages-onboarding', 'citymarkt-local-pages-account-missing'].includes(
+      onboardingScenario ?? '',
+    ) ||
+    pages.profile
+  )
+    return
   const handle = account.email.split('@')[0].toLowerCase()
   pages.profile = {
     avatar_media_id: null,
@@ -387,22 +399,43 @@ async function publish(): Promise<void> {
     showFeedback('Apps.localPages.errors.invalid_post')
     return
   }
-  const response = await pages.create({
-    body: draft.value.body.trim(),
-    category: draft.value.category,
-    district: draft.value.district,
-    images: draft.value.images.map((id) => ({ id })),
-    title: draft.value.title.trim(),
-  })
+  const response = cityMarktListingId.value
+    ? await pages.shareCityMarkt(cityMarktListingId.value)
+    : await pages.create({
+        body: draft.value.body.trim(),
+        category: draft.value.category,
+        district: draft.value.district,
+        images: draft.value.images.map((id) => ({ id })),
+        title: draft.value.title.trim(),
+      })
   if (!response.success) {
     showFeedback(`Apps.localPages.errors.${response.error ?? 'default'}`)
     return
   }
   draft.value = { body: '', category: 'recommendation', district: 'los_santos', images: [], title: '' }
   pickedPhotos.value = []
+  cityMarktListing.value = null
+  cityMarktListingId.value = null
   tab.value = 'feed'
   screen.value = 'main'
+  await router.replace('/apps/local-pages')
+  await Promise.all([pages.load(), pages.loadProfile()])
   showFeedback('Apps.localPages.published')
+}
+
+function closeCompose(): void {
+  draft.value = {
+    body: '',
+    category: 'recommendation',
+    district: 'los_santos',
+    images: [],
+    title: '',
+  }
+  pickedPhotos.value = []
+  cityMarktListing.value = null
+  cityMarktListingId.value = null
+  screen.value = 'main'
+  void router.replace('/apps/local-pages')
 }
 
 async function react(kind: 'like' | 'save'): Promise<void> {
@@ -511,7 +544,34 @@ onMounted(async () => {
     screen.value = 'main'
   }
   onboardingReady.value = true
-  if (route.query.compose === '1' && pages.profile?.exists) screen.value = 'compose'
+  if (route.query.compose === '1' && pages.profile?.exists) {
+    const listingId = String(route.query.cityMarktListingId ?? '')
+    if (listingId) {
+      const response = await marketplace.get(listingId)
+      if (
+        response.success &&
+        response.data?.is_owner &&
+        ['active', 'reserved'].includes(response.data.status)
+      ) {
+        cityMarktListing.value = response.data
+        cityMarktListingId.value = response.data.id
+        draft.value = {
+          body: response.data.description,
+          category: 'recommendation',
+          district: response.data.district ?? 'los_santos',
+          images: response.data.images.map((image) => image.media_id),
+          title: response.data.title,
+        }
+        pickedPhotos.value = response.data.images.map((image) => ({
+          background: image.gradient,
+          id: image.media_id,
+        }))
+      } else {
+        showFeedback('Apps.localPages.errors.citymarkt_not_found')
+      }
+    }
+    if (!listingId || cityMarktListingId.value) screen.value = 'compose'
+  }
   const easyShareId = String(route.query.easyShareId ?? '')
   if (pages.profile?.exists && easyShareId && route.query.easyShareKind === 'post') {
     const response = await pages.get(easyShareId)
@@ -752,18 +812,22 @@ onMounted(async () => {
       </k-glass>
     </section>
 
-    <section v-else class="pages__compose">
+    <section
+      v-else
+      class="pages__compose"
+      :class="{ 'pages__compose--citymarkt': cityMarktListing }"
+    >
       <k-navbar
         class="pages-create-navbar"
         center-title
-        left-class="pages-create-action pages-create-action--close !w-11 !min-w-11 !max-w-11 !h-11 !p-0 !rounded-full"
+        left-class="pages-create-action pages-create-action--close !min-w-[58px] !h-11 !p-0 !rounded-full"
         right-class="pages-create-action pages-create-action--publish !min-w-[58px] !h-11 !p-0 !rounded-full"
-        :title="phone.t('Apps.localPages.shareWithCity')"
-        :subtitle="phone.t('Apps.localPages.newPost')"
+        :title="phone.t(cityMarktListing ? 'Apps.localPages.cityMarktComposeNavTitle' : 'Apps.localPages.shareWithCity')"
+        :subtitle="phone.t(cityMarktListing ? 'Apps.localPages.categories.citymarkt' : 'Apps.localPages.newPost')"
       >
         <template #left>
-          <button class="pages-create-close" type="button" :aria-label="phone.t('Common.close')" @click="screen = 'main'">
-            <X :size="20" />
+          <button class="pages-create-close" type="button" :aria-label="phone.t('Common.close')" @click="closeCompose">
+            {{ phone.t('Common.close') }}
           </button>
         </template>
         <template #right>
@@ -773,13 +837,20 @@ onMounted(async () => {
         </template>
       </k-navbar>
       <div class="pages__compose-scroll">
+        <k-glass v-if="cityMarktListing" class="pages__citymarkt-source">
+          <Store :size="19" />
+          <span
+            ><strong>{{ phone.t('Apps.localPages.cityMarktComposeTitle') }}</strong
+            ><small>{{ phone.t('Apps.localPages.cityMarktComposeHint') }}</small></span
+          >
+        </k-glass>
         <label>{{ phone.t('Apps.localPages.title') }} <span :class="{ valid: draft.title.trim().length >= 5 }">{{ draft.title.trim().length }}/80 · {{ phone.t('Apps.citymarkt.minimumCharacters', { minimum: '5' }) }}</span><k-glass class="pages__field-glass"><input v-model="draft.title" maxlength="80" :placeholder="phone.t('Apps.localPages.titlePlaceholder')" /></k-glass></label>
         <label>{{ phone.t('Apps.localPages.body') }} <span :class="{ valid: draft.body.trim().length >= 10 }">{{ draft.body.trim().length }}/1500 · {{ phone.t('Apps.citymarkt.minimumCharacters', { minimum: '10' }) }}</span><k-glass class="pages__field-glass pages__field-glass--textarea"><textarea v-model="draft.body" maxlength="1500" :placeholder="phone.t('Apps.localPages.bodyPlaceholder')" /></k-glass></label>
         <div class="pages__form-row"><label>{{ phone.t('Apps.localPages.category') }}<CityMarktSelect :model-value="draft.category" :options="composeCategoryOptions" @change="(value) => draft.category = value as typeof draft.category" /></label><label>{{ phone.t('Apps.localPages.location') }}<CityMarktSelect :model-value="draft.district" :options="districtOptions" @change="(value) => draft.district = value" /></label></div>
         <section class="pages__photos">
           <ImagePlus :size="30" />
           <h2>{{ phone.t('Apps.citymarkt.addPhotos') }}</h2>
-          <p>{{ phone.t('Apps.citymarkt.addPhotosBody') }}</p>
+          <p>{{ phone.t(cityMarktListing ? 'Apps.localPages.cityMarktPhotosHint' : 'Apps.citymarkt.addPhotosBody') }}</p>
           <div class="pages__photo-actions">
             <k-glass><button type="button" @click="openMediaApp('photos')">
               <span><Images :size="20" /></span>
@@ -981,9 +1052,7 @@ onMounted(async () => {
   height: 44px;
   border-radius: 9999px;
 }
-.pages-create-action--close {
-  width: 44px;
-}
+.pages-create-action--close,
 .pages-create-action--publish {
   min-width: 58px;
 }
@@ -997,10 +1066,7 @@ onMounted(async () => {
   background: transparent;
   color: inherit;
 }
-.pages-create-close {
-  display: grid;
-  place-items: center;
-}
+.pages-create-close,
 .pages-create-publish {
   min-width: 58px;
   padding: 0 13px;
@@ -1020,6 +1086,43 @@ onMounted(async () => {
   left: 0;
   height: auto;
   padding-bottom: 35px;
+}
+.pages__citymarkt-source {
+  margin-bottom: 14px;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 13px;
+  color: var(--yellow);
+}
+.pages__citymarkt-source span {
+  min-width: 0;
+}
+.pages__citymarkt-source strong,
+.pages__citymarkt-source small {
+  display: block;
+}
+.pages__citymarkt-source strong {
+  font-size: 12px;
+}
+.pages__citymarkt-source small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.pages__compose--citymarkt .pages__compose-scroll > label input,
+.pages__compose--citymarkt .pages__compose-scroll > label textarea {
+  pointer-events: none;
+}
+.pages__compose--citymarkt .pages__form-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+.pages__compose--citymarkt .pages__form-row > label:first-child,
+.pages__compose--citymarkt .pages__photo-actions,
+.pages__compose--citymarkt .pages__selected-strip {
+  display: none;
 }
 .pages__field-glass {
   min-height: 44px;
