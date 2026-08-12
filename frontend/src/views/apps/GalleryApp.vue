@@ -12,12 +12,13 @@ import {
   kSegmentedButton,
   kToast,
 } from 'konsta/vue'
-import { Play, RotateCcw, Trash2, ZoomIn, ZoomOut } from 'lucide-vue-next'
+import { Play, RotateCcw, Share2, Trash2, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
+import { useEasyShareStore } from '@/stores/easyshare'
 import type { DeleteResult, GalleryFilter, PhoneMedia } from '@/types/media'
 import {
   hasNextMediaPage,
@@ -38,6 +39,7 @@ const filterItems = [
   { id: 'video', label: 'videos' },
 ] as const
 const phone = usePhoneStore()
+const easyShare = useEasyShareStore()
 const messageMedia = useMessageMediaStore()
 const route = useRoute()
 const router = useRouter()
@@ -256,6 +258,21 @@ function closeMedia(): void {
   stopDragging()
 }
 
+function shareSelected(): void {
+  if (!selected.value) return
+  const mediaKind = selected.value.mediaType
+  easyShare.open({
+    appId: 'photos',
+    copyText: selected.value.url,
+    id: selected.value.id,
+    imageUrl: selected.value.url,
+    kind: mediaKind,
+    link: `skyphone://media/${selected.value.id}`,
+    subtitle: formatDate(selected.value.createdAt),
+    title: phone.t(mediaKind === 'video' ? 'Apps.photos.video' : 'Apps.photos.photo'),
+  })
+}
+
 function orientToMedia(event: Event): void {
   const mediaElement = event.currentTarget as
     | HTMLImageElement
@@ -334,6 +351,10 @@ async function deleteSelected(): Promise<void> {
 function onMessage(event: MessageEvent): void {
   if (!isTrustedRootMessageSource(event.source, window)) return
   const message = event.data as { data?: DeleteResult; type?: string }
+  if (message.type === 'gallery:changed') {
+    void loadGallery()
+    return
+  }
   if (
     message.type !== 'media:deleteResult' ||
     message.data?.correlationId !== pendingDeleteCorrelation
@@ -519,6 +540,15 @@ onBeforeUnmount(() => {
         </k-link>
         <k-link
           v-else
+          component="button"
+          icon-only
+          :aria-label="phone.t('Apps.easyShare.name')"
+          @click="shareSelected"
+        >
+          <Share2 :size="20" />
+        </k-link>
+        <k-link
+          v-if="!requestedMessageMedia"
           component="button"
           icon-only
           class="text-red-500"

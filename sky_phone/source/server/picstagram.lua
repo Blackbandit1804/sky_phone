@@ -466,6 +466,35 @@ Bridge.Callbacks.Register("sky_phone:picstagram:feed", function(source, data)
     return result and { success = true, data = result } or { success = false, error = list_error }
 end)
 
+Bridge.Callbacks.Register("sky_phone:picstagram:post", function(source, data)
+    local profile, error_response = profile_for_session(source)
+    if not profile then
+        return error_response
+    end
+    if not SkyPhone.AllowOperation(source, "picstagram:post", 60, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local post_id = type(data) == "table" and data.id or nil
+    if not valid_id(post_id) then
+        return { success = false, error = "post_not_found" }
+    end
+    local result, list_error = list_posts(
+        profile.id,
+        [[post.`id` = ? AND (profile.`private` = 0 OR post.`profile_id` = ? OR EXISTS(
+            SELECT 1 FROM `sky_phone_picstagram_follows` follow
+            WHERE follow.`follower_id` = ? AND follow.`following_id` = post.`profile_id`
+                AND follow.`status` = 'accepted'))]],
+        { post_id, profile.id, profile.id },
+        nil
+    )
+    if not result then
+        return { success = false, error = list_error }
+    end
+    return result.items[1]
+        and { success = true, data = result.items[1] }
+        or { success = false, error = "post_not_found" }
+end)
+
 Bridge.Callbacks.Register("sky_phone:picstagram:explore", function(source, data)
     local profile, error_response = profile_for_session(source)
     if not profile then

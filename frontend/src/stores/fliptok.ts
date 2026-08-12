@@ -114,6 +114,10 @@ export const useFlipTokStore = defineStore('fliptok', {
       this.feed = response.data.items
       return true
     },
+    async loadVideo(id: string): Promise<FlipTokVideo | null> {
+      const response = await nuiCall<FlipTokVideo>('fliptok:video', { id })
+      return response.success && response.data ? response.data : null
+    },
     async discover(search: string): Promise<FlipTokVideo[]> {
       const response = await nuiCall<FlipTokVideo[]>('fliptok:discover', {
         search,

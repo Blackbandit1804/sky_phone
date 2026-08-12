@@ -13,6 +13,7 @@ import {
   Plus,
   Rows3,
   Search,
+  Share2,
   Trash2,
   UserRound,
   X,
@@ -22,6 +23,7 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 
 import { useAccountStore } from '@/stores/account'
 import { useCalendarStore } from '@/stores/calendar'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type { CalendarEvent, CalendarEventDraft } from '@/types/calendar'
 
@@ -42,6 +44,7 @@ type YearOverview = {
 const phone = usePhoneStore()
 const account = useAccountStore()
 const calendar = useCalendarStore()
+const easyShare = useEasyShareStore()
 const today = new Date()
 const visibleYear = ref(today.getFullYear())
 const selectedDate = ref(dateKey(today))
@@ -356,6 +359,19 @@ function openEdit(): void {
   if (!selectedEvent.value) return
   resetDraft(selectedEvent.value)
   screen.value = 'form'
+}
+
+function shareEvent(): void {
+  if (!selectedEvent.value) return
+  easyShare.open({
+    appId: 'calendar',
+    copyText: `${selectedEvent.value.title}\n${selectedEvent.value.note}`,
+    id: selectedEvent.value.id,
+    kind: 'document',
+    link: `skyphone://calendar/event/${selectedEvent.value.id}`,
+    subtitle: formatLongDate(selectedEvent.value.startsAt),
+    title: selectedEvent.value.title,
+  })
 }
 
 function closeForm(): void {
@@ -781,6 +797,10 @@ onMounted(async () => {
             <p>{{ selectedEvent.note }}</p>
           </div>
         </section>
+        <button class="calendar__delete calendar__share" type="button" @click="shareEvent">
+          <Share2 :size="18" />
+          {{ phone.t('Apps.easyShare.share') }}
+        </button>
         <button class="calendar__delete" type="button" @click="deleteEvent">
           <Trash2 :size="18" />
           {{ phone.t('Apps.calendar.deleteEvent') }}
@@ -1737,6 +1757,10 @@ onMounted(async () => {
   background: var(--elevated);
   color: var(--accent) !important;
   font-size: 14px !important;
+}
+
+.calendar__share {
+  color: #0a84ff !important;
 }
 
 .calendar__group--fields input,

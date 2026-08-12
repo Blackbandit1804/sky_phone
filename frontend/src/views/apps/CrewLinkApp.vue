@@ -41,6 +41,7 @@ import {
   RefreshCw,
   Route,
   Settings2,
+  Share2,
   Shield,
   ShieldCheck,
   Sparkles,
@@ -58,7 +59,7 @@ import {
   onMounted,
   ref,
 } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import {
   defaultCayoStyle,
@@ -69,6 +70,7 @@ import {
   type MapPoint,
 } from '@/features/map/defaultMapGeometry'
 import { useCrewLinkStore } from '@/stores/crewlink'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type {
   CrewLinkColour,
@@ -79,6 +81,7 @@ import type {
   CrewLinkRole,
 } from '@/types/crewlink'
 import { copyText } from '@/utils/clipboard'
+import { easyShareCrewLinkInviteCode } from '@/utils/easyshare'
 import { nuiCall } from '@/utils/nui'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
@@ -94,6 +97,7 @@ type CrewLinkSheet =
 
 const phone = usePhoneStore()
 const crew = useCrewLinkStore()
+const route = useRoute()
 const router = useRouter()
 const mainlandMapUrl = `${import.meta.env.BASE_URL}img/maps/gtav-map.svg`
 const cayoMapUrl = `${import.meta.env.BASE_URL}img/maps/cayo-perico.svg`
@@ -103,6 +107,13 @@ const username = ref('')
 const groupName = ref('')
 const groupColour = ref<CrewLinkColour>('cyan')
 const inviteCode = ref('')
+const sharedInviteCode = ref(
+  easyShareCrewLinkInviteCode(
+    route.query.easyShareKind,
+    route.query.easyShareLink,
+    route.query.easyShareId,
+  ),
+)
 const pingType = ref<CrewLinkPingType>('meeting')
 const pingLabel = ref('')
 const pingAtMapCenter = ref(false)
@@ -241,6 +252,44 @@ function showToast(message: string): void {
   }, 2400)
 }
 
+function shareProfile(): void {
+  const profile = crew.profile
+  if (!profile) return
+  useEasyShareStore().open({
+    appId: 'crewlink',
+    copyText: `@${profile.username}`,
+    id: profile.id,
+    kind: 'profile',
+    link: `skyphone://crewlink/profile/${profile.id}`,
+    subtitle: activeGroup.value?.name,
+    title: `@${profile.username}`,
+  })
+}
+
+function shareGroupInvite(): void {
+  const group = activeGroup.value
+  if (!group?.inviteCode) return
+  useEasyShareStore().open({
+    appId: 'crewlink',
+    copyText: t('shareInviteBody', {
+      code: group.inviteCode,
+      group: group.name,
+    }),
+    id: group.inviteCode,
+    kind: 'link',
+    link: `skyphone://crewlink/invite/${group.inviteCode}`,
+    subtitle: group.inviteCode,
+    title: t('shareInviteTitle', { group: group.name }),
+  })
+}
+
+function openSharedInvite(): void {
+  if (!sharedInviteCode.value || !crew.profile) return
+  openSheet('join-group')
+  inviteCode.value = sharedInviteCode.value
+  sharedInviteCode.value = null
+}
+
 function updateValue(
   target: 'username' | 'groupName' | 'inviteCode' | 'pingLabel',
   event: Event,
@@ -318,6 +367,7 @@ async function createProfile(): Promise<void> {
     return
   }
   showToast(t('profileCreated'))
+  openSharedInvite()
 }
 
 async function createGroup(): Promise<void> {
@@ -652,6 +702,7 @@ function onCrewLinkMessage(event: MessageEvent): void {
 onMounted(async () => {
   await crew.bootstrap()
   username.value = crew.profile?.username ?? ''
+  openSharedInvite()
   await nextTick()
   fitOnlineMembers()
   liveTimer = window.setInterval(() => void crew.refreshLive(), 3000)
@@ -838,6 +889,7 @@ onBeforeUnmount(() => {
             <div class="crewlink-quick-actions">
               <button v-if="canModerate" type="button" @click="loadNearby"><UserPlus /><span>{{ t('nearby') }}</span></button>
               <button v-if="activeGroup.inviteCode" type="button" @click="copyInviteCode"><Copy /><span>{{ t('copyCode') }}</span></button>
+              <button v-if="activeGroup.inviteCode" type="button" @click="shareGroupInvite"><Share2 /><span>{{ t('shareInvite') }}</span></button>
               <button v-if="canCoordinate" type="button" @click="openSheet('edit-group')"><Settings2 /><span>{{ t('manage') }}</span></button>
             </div>
 
@@ -901,6 +953,17 @@ onBeforeUnmount(() => {
               <span>{{ crew.profile.username.slice(0, 2).toUpperCase() }}</span>
               <div><small>{{ t('yourCrewLinkId') }}</small><h1>@{{ crew.profile.username }}</h1><p>{{ activeGroup.name }} · {{ roleLabel(activeGroup.role) }}</p></div>
             </div>
+
+            <k-list inset strong>
+              <k-list-item
+                link
+                link-component="button"
+                :title="phone.t('Apps.easyShare.shareProfile')"
+                @click="shareProfile"
+              >
+                <template #media><Share2 :size="20" /></template>
+              </k-list-item>
+            </k-list>
 
             <k-block-title>{{ t('privacyVisibility') }}</k-block-title>
             <k-list inset strong>
@@ -1156,7 +1219,7 @@ onBeforeUnmount(() => {
 .crewlink-map-controls{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18)}.crewlink-map-controls button{width:34px;height:34px;border:0;border-bottom:1px solid rgba(0,0,0,.1);background:rgba(255,255,255,.9);color:#183044;font-size:19px;display:grid;place-items:center}.crewlink-map-controls svg{width:16px}.crewlink-map-legend{position:absolute;left:10px;bottom:10px;padding:6px 8px;border-radius:10px;display:flex;gap:9px;background:rgba(8,20,30,.78);backdrop-filter:blur(10px);color:white;font-size:8px}.crewlink-map-legend span{display:flex;align-items:center;gap:4px}.crewlink-map-legend i{width:6px;height:6px;border-radius:50%;background:#35dc80}.crewlink-map-legend i.is-hidden{background:#8998a4}.crewlink-map-crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#ff4d67}.crewlink-map-crosshair svg{width:32px;height:32px;filter:drop-shadow(0 2px 4px white)}
 .crewlink-map-actions{height:76px;padding:8px 10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#0c1822}.crewlink-map-actions button{border:1px solid rgba(255,255,255,.08);border-radius:15px;display:flex;align-items:center;gap:10px;padding:9px 11px;color:white;background:rgba(255,255,255,.06);text-align:left}.crewlink-map-actions button:disabled{opacity:.4}.crewlink-map-actions svg{width:23px;height:23px;flex:none;color:#28d9e8}.crewlink-map-actions span{display:flex;min-width:0;flex-direction:column;gap:2px}.crewlink-map-actions strong{font-size:15px;line-height:18px;white-space:nowrap}.crewlink-map-actions small{font-size:12px;line-height:15px;color:#a4b4c0;white-space:nowrap}
 .crewlink-group-hero{padding:22px;border-radius:25px;color:white;background:radial-gradient(circle at 82% 18%,var(--crew-aura),transparent 35%),linear-gradient(145deg,#0b2433,#0b1825);box-shadow:0 15px 35px rgba(6,20,31,.2)}.crewlink-group-hero__signal{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:var(--crew);box-shadow:0 0 28px var(--crew-glow)}.crewlink-group-hero__signal svg{width:26px}.crewlink-group-hero>small{display:block;margin-top:17px;font-size:12px;font-weight:600;line-height:16px;letter-spacing:.12em;text-transform:uppercase;color:#b5c6d0}.crewlink-group-hero h1{margin:5px 0;font-size:29px;line-height:34px}.crewlink-group-hero p{margin:0 0 14px;font-size:14px;line-height:18px;color:#d0dbe1}.crewlink-group-hero>div:last-child{display:flex;gap:7px}.crewlink-group-hero :deep(.crewlink-group-badge){min-height:24px;padding:4px 8px;font-size:13px}
-.crewlink-quick-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:13px 0 11px}.crewlink-quick-actions button{min-height:64px;border:0;border-radius:15px;padding:11px 5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:var(--cl-text);background:var(--cl-surface);font-size:12px;font-weight:600;line-height:15px;box-shadow:0 3px 12px rgba(15,40,60,.06)}.crewlink-quick-actions svg{width:22px;height:22px;color:#138fc0}.crewlink-invitations--inline{margin:0}.crewlink-members-title{height:auto!important;min-height:34px;padding-top:8px!important;padding-bottom:6px!important;font-size:16px!important;font-weight:700!important;color:var(--cl-text)!important}.crewlink-member-list :deep(.k-list-item){min-height:70px}.crewlink-member-title{font-size:18px;font-weight:700;line-height:22px}.crewlink-member-subtitle{font-size:14px;line-height:18px;color:var(--cl-muted)}.crewlink-avatar{position:relative;width:43px;height:43px;border-radius:15px;display:grid;place-items:center;color:white;background:linear-gradient(145deg,var(--crew),#273e55);font-size:12px;font-weight:900}.crewlink-avatar i{position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border:2px solid white;border-radius:50%;background:#8998a4}.crewlink-avatar i.is-online{background:#35d880}.role-owner{color:#ffb020}.role-coordinator{color:#8b5cf6}.role-moderator{color:#2d9cff}.role-member{color:#22b77a}.role-guest{color:#8998a4}
+.crewlink-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:13px 0 11px}.crewlink-quick-actions button{min-height:64px;border:0;border-radius:15px;padding:11px 5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:var(--cl-text);background:var(--cl-surface);font-size:12px;font-weight:600;line-height:15px;box-shadow:0 3px 12px rgba(15,40,60,.06)}.crewlink-quick-actions svg{width:22px;height:22px;color:#138fc0}.crewlink-invitations--inline{margin:0}.crewlink-members-title{height:auto!important;min-height:34px;padding-top:8px!important;padding-bottom:6px!important;font-size:16px!important;font-weight:700!important;color:var(--cl-text)!important}.crewlink-member-list :deep(.k-list-item){min-height:70px}.crewlink-member-title{font-size:18px;font-weight:700;line-height:22px}.crewlink-member-subtitle{font-size:14px;line-height:18px;color:var(--cl-muted)}.crewlink-avatar{position:relative;width:43px;height:43px;border-radius:15px;display:grid;place-items:center;color:white;background:linear-gradient(145deg,var(--crew),#273e55);font-size:12px;font-weight:900}.crewlink-avatar i{position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border:2px solid white;border-radius:50%;background:#8998a4}.crewlink-avatar i.is-online{background:#35d880}.role-owner{color:#ffb020}.role-coordinator{color:#8b5cf6}.role-moderator{color:#2d9cff}.role-member{color:#22b77a}.role-guest{color:#8998a4}
 .crewlink-section-header{display:flex;align-items:center;gap:13px;margin:5px 2px 16px}.crewlink-section-header>span{width:52px;height:52px;border-radius:17px;display:grid;place-items:center;color:white;background:linear-gradient(145deg,#27d9ed,#287cff)}.crewlink-section-header>span svg{width:26px;height:26px}.crewlink-section-header div{flex:1}.crewlink-section-header small{font-size:13px;font-weight:700;line-height:16px;color:#29b8e8;text-transform:uppercase;letter-spacing:.09em}.crewlink-section-header h1{margin:2px 0 0;font-size:29px;line-height:34px}.crewlink-section-header button{width:42px;height:42px;border:0;border-radius:14px;display:grid;place-items:center;color:white;background:#168dc2}.crewlink-section-header button svg{width:22px;height:22px}.crewlink-pings-tab{padding-top:12px}.crewlink-pings-tab .crewlink-section-header{margin-bottom:12px}.crewlink-ping-list{display:flex;flex-direction:column;gap:8px}.crewlink-ping-list :deep(.k-card){margin:0}.crewlink-ping-list article{display:grid;grid-template-columns:47px 1fr 32px 32px;gap:9px;align-items:center;padding:11px}.crewlink-ping-list article>i{width:47px;height:47px;border-radius:16px;display:grid;place-items:center;color:white}.crewlink-ping-list article>i svg{width:23px}.crewlink-ping-list article>div{display:flex;flex-direction:column;gap:2px;min-width:0}.crewlink-ping-list small{font-size:11px;line-height:14px;color:var(--cl-muted);text-transform:uppercase}.crewlink-ping-list strong{font-size:15px;line-height:19px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.crewlink-ping-list span{font-size:12px;line-height:15px;color:var(--cl-muted)}.crewlink-ping-list button{border:0;background:transparent;color:#238fbd;display:grid;place-items:center}.crewlink-ping-list button:last-child{color:#ed5268}.crewlink-ping-list button svg{width:20px}.crewlink-empty-state{padding:68px 22px;text-align:center;display:flex;flex-direction:column;align-items:center}.crewlink-empty-state>span{width:70px;height:70px;border-radius:23px;display:grid;place-items:center;color:#168dbd;background:rgba(39,191,230,.12)}.crewlink-empty-state>span svg{width:29px;height:29px}.crewlink-empty-state h2{margin:17px 0 7px;font-size:21px;line-height:26px}.crewlink-empty-state p{max-width:280px;margin:0;color:var(--cl-muted);font-size:14px;line-height:20px}
 .crewlink-profile-card{display:flex;align-items:center;gap:13px;padding:17px;border-radius:23px;color:white;background:linear-gradient(145deg,var(--crew),#183a5a)}.crewlink-profile-card>span{width:54px;height:54px;border:3px solid rgba(255,255,255,.72);border-radius:19px;display:grid;place-items:center;font-size:15px;font-weight:900;background:rgba(8,25,40,.22)}.crewlink-profile-card div{min-width:0}.crewlink-profile-card small{font-size:8px;letter-spacing:.1em;text-transform:uppercase;opacity:.75}.crewlink-profile-card h1{margin:2px 0;font-size:19px}.crewlink-profile-card p{margin:0;font-size:10px;opacity:.82}.crewlink-group-dot{width:35px;height:35px;border-radius:13px;display:grid;place-items:center;color:white}.crewlink-group-dot svg{width:18px}.crewlink-danger-row{--k-list-item-title-text-color:#e44760}.crewlink-danger-button{color:#e44760!important}.crewlink-role-title{margin:16px 0 8px!important;padding-inline:4px!important}.crewlink-role-list{margin:0!important}.crewlink-role-list :deep(.crewlink-role-item__content){min-height:68px;align-items:center}.crewlink-role-list :deep(.crewlink-role-item__media){width:28px;margin-right:10px;justify-content:center;color:#9ca8b3}.crewlink-role-list :deep(.crewlink-role-item__inner){min-width:0;padding-top:9px;padding-bottom:9px;text-align:left}.crewlink-role-list :deep(.crewlink-role-item__title){min-height:22px;font-size:14px;line-height:18px}.crewlink-role-list :deep(.crewlink-role-item__title+div){max-width:230px;color:var(--cl-muted);font-size:10px;line-height:14px;text-align:left}.crewlink-role-list :deep(.crewlink-role-item__title svg){color:#aab5bf}.crewlink-member-actions{display:grid;gap:8px;margin-top:12px}.crewlink-member-actions :deep(.k-button){margin-top:0}
 .crewlink-sheet__content{position:relative;max-height:82vh;overflow-y:auto;padding:26px 18px 24px;text-align:center;color:var(--cl-text);background:var(--cl-bg);border-radius:24px 24px 0 0}.crewlink-sheet__close{position:absolute;right:14px;top:12px;width:31px;height:31px;border-radius:50%;display:grid;place-items:center;color:var(--cl-muted);background:rgba(125,145,160,.15)}.crewlink-sheet__close svg{width:17px}.crewlink-sheet__icon,.crewlink-sheet__avatar{width:56px;height:56px;margin:0 auto 9px;border-radius:20px;display:grid;place-items:center;color:white;background:linear-gradient(145deg,#27d9ed,#287cff);box-shadow:0 10px 25px rgba(31,139,205,.22)}.crewlink-sheet__avatar{background:linear-gradient(145deg,var(--crew),#29415a);font-weight:900}.crewlink-sheet__icon svg{width:26px}.crewlink-sheet__content h2{margin:4px 0;font-size:23px;line-height:1.2}.crewlink-sheet__content>p{margin:0 10px 13px;color:var(--cl-muted);font-size:13px;line-height:1.45}.crewlink-sheet__content :deep(.button){width:100%;margin-top:9px;font-size:13px}.crewlink-nearby-list{margin:10px 0 0!important}.crewlink-nearby-list :deep(.crewlink-nearby-item__content){min-height:66px;align-items:center}.crewlink-nearby-list :deep(.crewlink-nearby-item__media){width:38px;margin-right:12px;justify-content:center}.crewlink-nearby-list :deep(.crewlink-nearby-item__inner){min-width:0;padding-top:9px;padding-bottom:9px;text-align:left}.crewlink-nearby-list :deep(.crewlink-nearby-item__title){min-height:22px;gap:8px;font-size:14px;line-height:18px}.crewlink-nearby-list :deep(.crewlink-nearby-item__title+div){color:var(--cl-muted);font-size:10px;line-height:14px;text-align:left}.crewlink-nearby-list :deep(.crewlink-nearby-invite){width:auto;margin-top:0;padding-inline:13px;flex:none}.crewlink-field-label{display:block;margin:8px 0;text-align:left;font-size:12px;font-weight:700;color:var(--cl-muted)}.crewlink-colours{display:flex;justify-content:center;gap:9px;margin:8px 0 14px}.crewlink-colours button{width:35px;height:35px;border:3px solid transparent;border-radius:50%;display:grid;place-items:center;color:white}.crewlink-colours button.is-active{border-color:white;box-shadow:0 0 0 2px currentColor}.crewlink-colours svg{width:15px;opacity:0}.crewlink-colours button.is-active svg{opacity:1}.crewlink-error{color:#df3e58!important;font-size:12px!important;margin:8px!important}.crewlink-sheet-empty{padding:25px;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--cl-muted)}.crewlink-sheet-empty svg{width:34px}.crewlink-sheet-empty strong{color:var(--cl-text)}.crewlink-sheet-empty span{font-size:11px}.crewlink-ping-title{font-size:25px!important;line-height:30px!important}.crewlink-sheet__content>.crewlink-ping-description{font-size:14px;line-height:19px}.crewlink-ping-types{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:15px 0}.crewlink-ping-types button{min-width:0;border:1px solid transparent;border-radius:13px;padding:10px 2px;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--cl-muted);background:var(--cl-surface);font-size:12px;font-weight:600;line-height:15px}.crewlink-ping-types button.is-active{border-color:var(--ping);color:var(--ping);box-shadow:0 3px 12px var(--ping-glow)}.crewlink-ping-types svg{width:22px;height:22px}.crewlink-ping-form :deep(.k-list-input .text-xs){font-size:14px!important;font-weight:600;line-height:18px}.crewlink-ping-form :deep(.crewlink-ping-label-input){font-size:16px!important;line-height:20px}.crewlink-ping-location-list :deep(.k-list-item){min-height:70px}.crewlink-ping-location-copy{display:flex;flex-direction:column;gap:3px;text-align:left}.crewlink-ping-location-copy strong{font-size:17px;line-height:21px}.crewlink-ping-location-copy small{max-width:205px;color:var(--cl-muted);font-size:14px;line-height:18px}.crewlink-sheet__content :deep(.crewlink-share-ping){font-size:16px}.crewlink-code-card{display:grid;grid-template-columns:1fr auto 30px 30px;align-items:center;gap:5px;text-align:left}.crewlink-code-card small{font-size:9px;color:var(--cl-muted)}.crewlink-code-card strong{font-family:monospace;letter-spacing:.12em}.crewlink-code-card button{border:0;background:transparent;color:#168dbd}.crewlink-code-card svg{width:16px}.crewlink-member-preview{padding-top:34px}.crewlink-tabbar{z-index:20}.crewlink-tabbar :deep(.crewlink-tabbar__inner){width:100%!important;max-width:none!important;padding-inline:4px!important}.crewlink-tabbar :deep(.crewlink-tabbar__pane){width:100%!important;max-width:none!important;gap:2px;padding:0}.crewlink-tabbar :deep(.crewlink-tabbar__pane>.k-link){min-width:0!important;max-width:none!important;flex:1 1 25%!important;padding-inline:2px!important}.crewlink-tabbar :deep(.k-tabbar-link-label){font-size:9px;line-height:11px}.crewlink-tabbar :deep(.k-icon){width:23px;height:23px}.crewlink-tabbar :deep(.badge){position:absolute;top:-3px;right:-7px;font-size:7px}

@@ -127,6 +127,10 @@ export const usePicstagramStore = defineStore('picstagram', {
       this.feedCursor = response.data.nextCursor
       return true
     },
+    async loadPost(id: string): Promise<PicstagramPost | null> {
+      const response = await nuiCall<PicstagramPost>('picstagram:post', { id })
+      return response.success && response.data ? response.data : null
+    },
     async loadExplore(append = false): Promise<boolean> {
       const response = await nuiCall<PicstagramPage>('picstagram:explore', {
         cursor: append ? this.exploreCursor : undefined,

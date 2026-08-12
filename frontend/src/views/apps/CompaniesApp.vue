@@ -56,6 +56,7 @@ import {
   Plus,
   RefreshCw,
   Send,
+  Share2,
   Settings2,
   Trash2,
   UserRound,
@@ -75,6 +76,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useCallsStore } from '@/stores/calls'
 import { useCompaniesStore } from '@/stores/companies'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { useMessagesStore } from '@/stores/messages'
 import { usePhoneStore } from '@/stores/phone'
@@ -130,6 +132,7 @@ const phone = usePhoneStore()
 const calls = useCallsStore()
 const messages = useMessagesStore()
 const companies = useCompaniesStore()
+const easyShare = useEasyShareStore()
 const mediaPicker = useMessageMediaStore()
 const route = useRoute()
 const router = useRouter()
@@ -492,6 +495,19 @@ async function setRoute(company: CompanySummary): Promise<void> {
     return
   }
   showToast(phone.t('Apps.companies.routeSet'))
+}
+
+function shareCompany(company: Company): void {
+  easyShare.open({
+    appId: 'companies',
+    copyText: `${company.name}\n${company.description}`,
+    id: company.id,
+    imageUrl: company.logoUrl,
+    kind: 'profile',
+    link: `skyphone://companies/profile/${company.id}`,
+    subtitle: company.phoneNumber ?? company.categoryName,
+    title: company.name,
+  })
 }
 
 function openRequestComposer(company: Company): void {
@@ -1617,6 +1633,9 @@ onBeforeUnmount(() => {
             <ClipboardList :size="17" />{{
               phone.t('Apps.companies.profile.request')
             }}
+          </k-button>
+          <k-button rounded outline @click="shareCompany(activeCompany)">
+            <Share2 :size="17" />{{ phone.t('Apps.easyShare.share') }}
           </k-button>
         </k-glass>
       </template>

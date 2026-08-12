@@ -580,19 +580,25 @@ RegisterNetEvent("sky_phone:media:delete", function(data)
         delete_result(src, correlation_id, false, "not_found", media_id)
         return
     end
-    if pending_deletes[media_id] then
+    if pending_deletes[row.remote_id] then
         delete_result(src, correlation_id, false, "operation_in_progress", media_id)
         return
     end
-    pending_deletes[media_id] = src
-    local deleted, delete_error = delete_remote_file(row.remote_id)
-    if not deleted then
-        pending_deletes[media_id] = nil
-        delete_result(src, correlation_id, false, delete_error, media_id)
-        return
+    pending_deletes[row.remote_id] = src
+    local references = Bridge.Database.Query(
+        "SELECT COUNT(*) AS `count` FROM `sky_phone_media` WHERE `remote_id` = ?",
+        { row.remote_id }
+    )
+    if (tonumber(references[1] and references[1].count) or 0) <= 1 then
+        local deleted, delete_error = delete_remote_file(row.remote_id)
+        if not deleted then
+            pending_deletes[row.remote_id] = nil
+            delete_result(src, correlation_id, false, delete_error, media_id)
+            return
+        end
     end
     Bridge.Database.Query(("DELETE FROM `sky_phone_media` WHERE `id` = ? AND %s"):format(condition), query_params)
-    pending_deletes[media_id] = nil
+    pending_deletes[row.remote_id] = nil
     delete_result(src, correlation_id, true, nil, media_id)
 end)
 
@@ -606,8 +612,18 @@ end
 
 function SkyPhoneMedia.CleanupRemoteFiles(rows)
     CreateThread(function()
+        local checked = {}
         for _, row in ipairs(rows) do
-            local deleted, delete_error = delete_remote_file(row.remote_id)
+            local references = checked[row.remote_id] and { { count = 1 } } or Bridge.Database.Query(
+                "SELECT COUNT(*) AS `count` FROM `sky_phone_media` WHERE `remote_id` = ?",
+                { row.remote_id }
+            )
+            checked[row.remote_id] = true
+            local in_use = (tonumber(references[1] and references[1].count) or 0) > 0
+            local deleted, delete_error = true, nil
+            if not in_use then
+                deleted, delete_error = delete_remote_file(row.remote_id)
+            end
             if not deleted then
                 Bridge.Debug(
                     "warn",

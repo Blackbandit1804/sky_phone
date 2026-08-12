@@ -50,10 +50,11 @@ import {
   kToggle,
 } from 'konsta/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import flipTokIcon from '@/assets/img/app-icons/fliptok.webp'
 import { useFlipTokStore } from '@/stores/fliptok'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import type {
@@ -70,6 +71,7 @@ type AuthMode = 'login' | 'register'
 const phone = usePhoneStore()
 const store = useFlipTokStore()
 const messageMedia = useMessageMediaStore()
+const route = useRoute()
 const router = useRouter()
 const authMode = ref<AuthMode>('login')
 const authHandle = ref('')
@@ -604,8 +606,30 @@ function openActions(video: FlipTokVideo): void {
 async function shareVideo(video: FlipTokVideo): Promise<void> {
   const response = await nuiCall('fliptok:share', { id: video.id })
   if (response.success) video.share_count += 1
-  await navigator.clipboard?.writeText(`fliptok://video/${video.id}`)
-  notify(t('linkCopied'))
+  useEasyShareStore().open({
+    appId: 'fliptok',
+    copyText: `@${video.handle}: ${video.caption}`,
+    id: video.id,
+    imageUrl: video.url,
+    kind: 'post',
+    link: `skyphone://fliptok/video/${video.id}`,
+    subtitle: `@${video.handle}`,
+    title: video.caption || video.display_name,
+  })
+}
+
+function shareCurrentProfile(): void {
+  const profile = currentProfile.value
+  if (!profile) return
+  useEasyShareStore().open({
+    appId: 'fliptok',
+    copyText: `@${profile.handle}`,
+    id: profile.id,
+    kind: 'profile',
+    link: `skyphone://fliptok/profile/${profile.id}`,
+    subtitle: `@${profile.handle}`,
+    title: profile.display_name,
+  })
 }
 
 async function reportVideo(): Promise<void> {
@@ -753,6 +777,18 @@ onMounted(async () => {
     composeOpen.value = true
   }
   await store.bootstrap()
+  const easyShareId = String(route.query.easyShareId ?? '')
+  if (easyShareId && route.query.easyShareKind === 'profile') {
+    const profileId = Number(easyShareId)
+    if (Number.isInteger(profileId) && profileId > 0)
+      await openProfile(profileId)
+  } else if (easyShareId && route.query.easyShareKind === 'post') {
+    const video = await store.loadVideo(easyShareId)
+    if (video) {
+      store.feed = [video]
+      tab.value = 'feed'
+    }
+  }
   await nextTick()
   observeVideos()
 })
@@ -1160,6 +1196,10 @@ onBeforeUnmount(() => {
               >{{ t('block') }}</k-button
             >
           </template>
+          <k-button rounded tonal @click="shareCurrentProfile">
+            <Share2 :size="17" />
+            {{ phone.t('Apps.easyShare.shareProfile') }}
+          </k-button>
         </div>
         <div class="profile-video-grid">
           <button

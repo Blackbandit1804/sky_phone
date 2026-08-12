@@ -17,6 +17,7 @@ import {
   MapPinPlus,
   Route,
   Satellite,
+  Share2,
   Trash2,
   X,
 } from 'lucide-vue-next'
@@ -32,6 +33,7 @@ import {
   type MapPoint,
 } from '@/features/map/defaultMapGeometry'
 import { useMapStore } from '@/stores/map'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type { MapMarker, MapMarkerColor } from '@/types/map'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
@@ -40,6 +42,7 @@ type MapStyle = 'default' | 'satellite' | 'atlas' | 'roads'
 
 const phone = usePhoneStore()
 const mapStore = useMapStore()
+const easyShare = useEasyShareStore()
 const mapStyle = ref<MapStyle>('default')
 const zoom = ref(1.1)
 const pan = ref<MapPoint>({ x: 0, y: 0 })
@@ -462,6 +465,16 @@ async function loadCurrentLocation(center: boolean): Promise<void> {
   }
 }
 
+function shareCurrentLocation(): void {
+  easyShare.open({
+    appId: 'map',
+    copyText: phone.t('Apps.map.currentLocation'),
+    kind: 'location',
+    link: 'skyphone://location/current',
+    title: phone.t('Apps.map.currentLocation'),
+  })
+}
+
 onMounted(() => {
   void loadCurrentLocation(false)
   void mapStore.load()
@@ -552,6 +565,18 @@ onBeforeUnmount(() => {
     </div>
 
     <nav class="map-controls" :aria-label="phone.t('Apps.map.controls')">
+      <k-fab
+        component="button"
+        type="button"
+        class="map-control map-control--share"
+        :colors="locationControlColors"
+        :aria-label="phone.t('Apps.easyShare.name')"
+        @click="shareCurrentLocation"
+      >
+        <template #icon>
+          <Share2 aria-hidden="true" />
+        </template>
+      </k-fab>
       <k-fab
         component="button"
         type="button"

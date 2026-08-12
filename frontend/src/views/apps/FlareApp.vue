@@ -45,6 +45,7 @@ import {
   RotateCcw,
   Search,
   Settings2,
+  Share2,
   Star,
   SlidersHorizontal,
   UserRound,
@@ -59,12 +60,15 @@ import {
   onMounted,
   reactive,
   ref,
+  watch,
 } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import profilesSprite from '@/assets/img/flare/profiles-source.png'
 import FullEmojiPicker from '@/components/FullEmojiPicker.vue'
 import MessageAttachmentBubble from '@/components/MessageAttachmentBubble.vue'
+import SharedContentCard from '@/components/SharedContentCard.vue'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { useFlareStore } from '@/stores/flare'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { useMessagesStore } from '@/stores/messages'
@@ -78,6 +82,7 @@ import type {
   FlareProfileDraft,
 } from '@/types/flare'
 import type { PhoneMedia } from '@/types/media'
+import type { EasySharePayload } from '@/types/easyshare'
 import type { GifSearchResult, SmsAttachmentType } from '@/types/messages'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
 
@@ -97,6 +102,7 @@ type FlareMediaContext = {
 type FlareChatMediaContext = { matchId: string }
 
 const phone = usePhoneStore()
+const easyShare = useEasyShareStore()
 const flare = useFlareStore()
 const messageMedia = useMessageMediaStore()
 const messages = useMessagesStore()
@@ -105,6 +111,7 @@ const router = useRouter()
 const activeTab = ref<FlareTab>('discover')
 const activeMatch = ref<FlareMatch | null>(null)
 const draft = ref('')
+const shareDraft = ref<EasySharePayload | null>(null)
 const matchReveal = ref<FlareMatch | null>(null)
 const cardOffset = ref(0)
 const currentPhotoIndex = ref(0)
@@ -128,6 +135,21 @@ const gifResults = ref<GifSearchResult[]>([])
 const gifLoading = ref(false)
 const gifError = ref<string | null>(null)
 const gifHasMore = ref(true)
+
+function shareProfile(): void {
+  const profile = flare.profile
+  if (!profile) return
+  easyShare.open({
+    appId: 'flare',
+    copyText: `${profile.name}, ${profile.age}\n${profile.bio}`,
+    id: profile.id,
+    imageUrl: profile.photoUrls[0],
+    kind: 'profile',
+    link: `skyphone://flare/profile/${profile.id}`,
+    subtitle: phone.t(`Apps.flare.lookingFor.${profile.lookingFor}`),
+    title: `${profile.name}, ${profile.age}`,
+  })
+}
 const gifNextOffset = ref(0)
 const draftPhotos = ref<FlareDraftPhoto[]>([])
 const activeChoiceField = ref<FlareChoiceField>('gender')
@@ -568,9 +590,26 @@ async function openMatch(match: FlareMatch): Promise<void> {
   messageScroll.value?.scrollTo({ top: messageScroll.value.scrollHeight })
 }
 
+async function openEasyShareDraft(): Promise<boolean> {
+  const shared = easyShare.consumeChatDraft('flare')
+  if (!shared?.targetId) return false
+  const match = flare.matches.find((item) => item.id === shared.targetId)
+  if (!match) {
+    showActionError()
+    return true
+  }
+  await openMatch(match)
+  if (activeMatch.value?.id === match.id) {
+    draft.value = ''
+    shareDraft.value = shared.payload
+  }
+  return true
+}
+
 function closeMatch(): void {
   activeMatch.value = null
   draft.value = ''
+  shareDraft.value = null
   emojiOpen.value = false
   attachmentMenuOpen.value = false
   attachmentPicker.value = null
@@ -585,18 +624,23 @@ async function openRevealedMatch(): Promise<void> {
 
 async function sendMessage(): Promise<void> {
   const body = draft.value.trim()
-  if (!body || !activeMatch.value || flare.sending) return
+  if ((!body && !shareDraft.value) || !activeMatch.value || flare.sending) return
+  const shared = shareDraft.value
   draft.value = ''
+  shareDraft.value = null
   emojiOpen.value = false
   attachmentMenuOpen.value = false
   attachmentPicker.value = null
   if (
-    !(await flare.send(activeMatch.value.id, {
-      body,
-      messageType: 'text',
-    }))
+    !(await flare.send(
+      activeMatch.value.id,
+      shared
+        ? { body, messageType: 'share', sharePayload: shared }
+        : { body, messageType: 'text' },
+    ))
   ) {
     draft.value = body
+    shareDraft.value = shared
     showActionError()
   }
   await nextTick()
@@ -739,6 +783,7 @@ function messageTime(value: DatabaseDateValue): string {
 
 onMounted(async () => {
   await flare.bootstrap()
+  await openEasyShareDraft()
   const selection = messageMedia.consumeMany<FlareMediaContext>(
     'flare:profile-photos',
   )
@@ -789,6 +834,13 @@ onMounted(async () => {
     if (route.query.match) void router.replace('/apps/flare')
   }
 })
+
+watch(
+  () => easyShare.chatDraft,
+  (shared) => {
+    if (shared?.appId === 'flare') void openEasyShareDraft()
+  },
+)
 
 onBeforeUnmount(() => {
   if (gifSearchTimer) clearTimeout(gifSearchTimer)
@@ -987,7 +1039,12 @@ onBeforeUnmount(() => {
             :text-footer="messageTime(message.createdAt)"
           >
             <template v-if="message.messageType !== 'text'" #text>
-              <MessageAttachmentBubble :message="attachmentMessage(message)" />
+              <SharedContentCard
+                v-if="message.messageType === 'share' && message.sharePayload"
+                :payload="message.sharePayload"
+                variant="flare"
+              />
+              <MessageAttachmentBubble v-else :message="attachmentMessage(message)" />
             </template>
           </k-message>
         </k-messages>
@@ -1075,6 +1132,13 @@ onBeforeUnmount(() => {
         @pick="appendEmoji"
       />
 
+      <div v-if="shareDraft" class="shared-composer-preview">
+        <SharedContentCard compact :payload="shareDraft" variant="flare" />
+        <button type="button" :aria-label="phone.t('Common.close')" @click="shareDraft = null">
+          <X :size="15" />
+        </button>
+      </div>
+
       <k-messagebar
         class="flare-messagebar messages-messagebar"
         :placeholder="phone.t('Apps.flare.messagePlaceholder')"
@@ -1103,7 +1167,7 @@ onBeforeUnmount(() => {
             <k-link
               component="button"
               icon-only
-              :disabled="!draft.trim() || flare.sending"
+              :disabled="(!draft.trim() && !shareDraft) || flare.sending"
               @click="sendMessage"
             >
               <ArrowUpCircle :size="29" />
@@ -1538,6 +1602,10 @@ onBeforeUnmount(() => {
           <button type="button" class="primary" @click="profileEditing = true">
             <span><Pencil /></span>
             {{ phone.t('Apps.flare.editProfile') }}
+          </button>
+          <button type="button" @click="shareProfile">
+            <span><Share2 /></span>
+            {{ phone.t('Apps.easyShare.shareProfile') }}
           </button>
         </div>
         <k-card :content-wrap="false" class="flare-profile-card">

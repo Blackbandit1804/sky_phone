@@ -4499,22 +4499,28 @@ button {
     inset 0 1px 0 rgb(255 255 255 / 30%),
     0 3px 12px rgb(0 0 0 / 12%);
   overflow: hidden;
+  background: linear-gradient(145deg, #5b91c2, #22527d);
   color: #fff;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
 }
-.messages-avatar__glyph {
-  padding-top: 6px;
-  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
-  font-size: 34px;
+.messages-avatar__initials {
   line-height: 1;
-  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 15%));
+}
+.messages-avatar__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  object-fit: cover;
 }
 .messages-avatar--small {
   width: 38px;
   height: 38px;
 }
-.messages-avatar--small .messages-avatar__glyph {
-  padding-top: 5px;
-  font-size: 27px;
+.messages-avatar--small .messages-avatar__initials {
+  font-size: 15px;
 }
 .messages-empty-state {
   min-height: 72%;
@@ -4582,6 +4588,9 @@ button {
 .messages-thread-page--emoji {
   padding-bottom: 288px !important;
 }
+.messages-thread-page--share {
+  padding-bottom: 260px !important;
+}
 .messages-chat-header {
   position: fixed;
   z-index: 35;
@@ -4628,9 +4637,8 @@ button {
     0 0 0 1px rgb(0 0 0 / 5%),
     0 8px 22px rgb(0 0 0 / 12%);
 }
-.messages-avatar--header .messages-avatar__glyph {
-  padding-top: 7px;
-  font-size: 42px;
+.messages-avatar--header .messages-avatar__initials {
+  font-size: 23px;
 }
 .messages-chat-header__name {
   max-width: 205px;
@@ -4660,6 +4668,11 @@ button {
 .messages-bubbles {
   min-height: calc(100% - 12px);
   padding: 10px 12px 20px;
+}
+.messages-thread-bottom {
+  display: block;
+  width: 100%;
+  height: 1px;
 }
 .messages-bubbles [class*='message-bubble'] {
   max-width: 248px;
@@ -4898,6 +4911,53 @@ button {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 7px;
+  overflow-y: auto;
+}
+.shared-composer-preview {
+  position: fixed;
+  z-index: 43;
+  right: 12px;
+  bottom: 89px;
+  left: 12px;
+  padding: 7px;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 19px;
+  background: rgb(242 242 247 / 90%);
+  box-shadow: 0 10px 28px rgb(20 44 76 / 18%);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+}
+.shared-composer-preview > button {
+  position: absolute;
+  z-index: 2;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: rgb(60 60 67 / 78%);
+}
+.shared-composer-preview--dark {
+  position: relative;
+  inset: auto;
+  z-index: 2;
+  margin: 0 8px 7px;
+  flex: 0 0 auto;
+  border-color: rgb(255 255 255 / 10%);
+  background: rgb(20 18 27 / 94%);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 28%);
+}
+.phone-app.dark .shared-composer-preview {
+  border-color: rgb(255 255 255 / 10%);
+  background: rgb(36 36 40 / 92%);
+}
+.messages-media-picker__contacts {
+  height: 270px;
+  margin: 0;
+  padding: 8px 0 18px;
   overflow-y: auto;
 }
 .messages-media-picker__gifs button {
@@ -5276,9 +5336,8 @@ button {
   width: 78px;
   height: 78px;
 }
-.messages-avatar--contact .messages-avatar__glyph {
-  padding-top: 10px;
-  font-size: 57px;
+.messages-avatar--contact .messages-avatar__initials {
+  font-size: 32px;
 }
 .messages-contact-details__hero h2 {
   margin: 10px 0 2px;
@@ -6112,6 +6171,18 @@ button {
   display: block;
   margin: 0;
 }
+.messages-thread-page .messages-attachment-menu > button:nth-child(4) > span {
+  background: #e9f9ed;
+  color: #28a745;
+}
+.messages-thread-page .messages-attachment-menu > button:nth-child(5) > span {
+  background: #f6eefe;
+  color: #af52de;
+}
+.messages-thread-page .messages-attachment-menu > button:nth-child(6) > span {
+  background: #fff0ef;
+  color: #ff3b30;
+}
 .messages-thread-page
   .messages-messagebar
   > .k-toolbar
@@ -6271,9 +6342,8 @@ button {
   width: 50px;
   height: 50px;
 }
-.messages-inbox-page .messages-avatar__glyph {
-  padding-top: 6px;
-  font-size: 34px;
+.messages-inbox-page .messages-avatar__initials {
+  font-size: 19px;
 }
 .messages-inbox-page .messages-conversation__body {
   gap: 3px;

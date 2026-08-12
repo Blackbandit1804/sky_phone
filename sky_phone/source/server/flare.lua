@@ -2,7 +2,7 @@ Bridge.Database.AfterMigration("sky_phone", function()
 local genders = { woman = true, man = true, nonbinary = true }
 local interests = { woman = true, man = true, nonbinary = true, everyone = true }
 local looking_for = { longTerm = true, dates = true, friends = true }
-local message_types = { text = true, image = true, gif = true, video = true }
+local message_types = { text = true, image = true, gif = true, video = true, share = true }
 
 local function allowed_gif_url(value)
     if type(value) ~= "string" or #value == 0 or #value > Config.Media.UrlMaxLength then
@@ -386,6 +386,22 @@ local function validate_message(source, data)
         return { body = body, message_type = message_type }
     end
 
+    if message_type == "share" then
+        local share, share_error, encoded = SkyPhoneEasyShare.SanitizeChatPayload(source, data.sharePayload)
+        if not share then
+            return nil, share_error or "invalid_payload"
+        end
+        local body = trim(data.body) or ""
+        if #body > 1000 then
+            return nil, "invalid_message"
+        end
+        return {
+            body = body ~= "" and body or share.title,
+            message_type = message_type,
+            share_payload = encoded,
+        }
+    end
+
     if type(data.mediaAssetId) ~= "string" then
         return nil, "invalid_attachment"
     end
@@ -427,6 +443,10 @@ local function validate_message(source, data)
 end
 
 local function message_payload(row, account_id)
+    local share_payload = row.message_type == "share" and json.decode(row.share_payload or "") or nil
+    if row.message_type == "share" and type(share_payload) ~= "table" then
+        error(("[sky_phone] Flare message %s has an invalid share payload."):format(tostring(row.id)))
+    end
     return {
         id = row.id,
         direction = tonumber(row.sender_account_id) == tonumber(account_id) and "sent" or "received",
@@ -435,6 +455,7 @@ local function message_payload(row, account_id)
         messageType = row.message_type or "text",
         mediaUrl = row.media_url,
         mediaDurationMs = tonumber(row.media_duration_ms),
+        sharePayload = share_payload,
     }
 end
 
@@ -670,7 +691,7 @@ Bridge.Callbacks.Register("sky_phone:flare:thread", function(source, data)
         WHERE `match_id` = ? AND `sender_account_id` <> ? AND `read_at` IS NULL
     ]], { match.id, account.id })
     local rows = Bridge.Database.Query([[
-        SELECT `id`, `sender_account_id`, `body`, `message_type`, `media_url`,
+        SELECT `id`, `sender_account_id`, `body`, `message_type`, `media_url`, `share_payload`,
             `media_duration_ms`, UNIX_TIMESTAMP(`created_at`) * 1000 AS `created_at_ms`
         FROM `sky_phone_flare_messages`
         WHERE `match_id` = ?
@@ -705,11 +726,11 @@ Bridge.Callbacks.Register("sky_phone:flare:send", function(source, data)
     Bridge.Database.Query([[
         INSERT INTO `sky_phone_flare_messages`
             (`id`, `match_id`, `sender_account_id`, `body`, `message_type`, `media_url`,
-                `media_duration_ms`)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+                `media_duration_ms`, `share_payload`)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ]], {
         id, match.id, account.id, message.body, message.message_type, message.media_url,
-        message.media_duration_ms,
+        message.media_duration_ms, message.share_payload,
     })
     local recipient_account_id = tonumber(match.account_a_id) == tonumber(account.id)
         and tonumber(match.account_b_id) or tonumber(match.account_a_id)
@@ -728,6 +749,7 @@ Bridge.Callbacks.Register("sky_phone:flare:send", function(source, data)
             message_type = message.message_type,
             media_url = message.media_url,
             media_duration_ms = message.media_duration_ms,
+            share_payload = message.share_payload,
         }, account.id),
     }
 end)

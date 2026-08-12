@@ -17,6 +17,7 @@ import {
   Plus,
   Search,
   Send,
+  Share2,
   ShieldAlert,
   Trash2,
   UserRound,
@@ -54,10 +55,11 @@ import {
   kToggle,
 } from 'konsta/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import picstagramIcon from '@/assets/img/app-icons/picstagram.webp'
 import { useMessageMediaStore } from '@/stores/messageMedia'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import { usePicstagramStore } from '@/stores/picstagram'
 import type { PhoneMedia } from '@/types/media'
@@ -78,6 +80,7 @@ type ProfileSection = 'photos' | 'saved'
 const phone = usePhoneStore()
 const store = usePicstagramStore()
 const mediaPicker = useMessageMediaStore()
+const route = useRoute()
 const router = useRouter()
 
 const tab = ref<Tab>('home')
@@ -453,6 +456,35 @@ function showPostActions(post: PicstagramPost): void {
   actionsOpen.value = true
 }
 
+function sharePost(post: PicstagramPost): void {
+  useEasyShareStore().open({
+    appId: 'picstagram',
+    copyText: `@${post.handle}: ${post.caption}`,
+    id: post.id,
+    imageUrl: post.media[0]?.url,
+    kind: 'post',
+    link: `skyphone://picstagram/post/${post.id}`,
+    subtitle: `@${post.handle}`,
+    title: post.caption || post.display_name,
+  })
+}
+
+function shareCurrentProfile(): void {
+  const profile = currentProfile.value
+  if (!profile) return
+  actionsOpen.value = false
+  useEasyShareStore().open({
+    appId: 'picstagram',
+    copyText: `@${profile.handle}`,
+    id: profile.id,
+    imageUrl: profile.avatar_url,
+    kind: 'profile',
+    link: `skyphone://picstagram/profile/${profile.id}`,
+    subtitle: `@${profile.handle}`,
+    title: profile.display_name,
+  })
+}
+
 function startReport(
   type: PicstagramReportTarget,
   id: string,
@@ -598,6 +630,16 @@ watch(profileSection, (section) => {
 
 onMounted(async () => {
   await store.bootstrap()
+  const easyShareId = String(route.query.easyShareId ?? '')
+  if (easyShareId && route.query.easyShareKind === 'profile') {
+    await openProfile(easyShareId)
+  } else if (easyShareId && route.query.easyShareKind === 'post') {
+    const post = await store.loadPost(easyShareId)
+    if (post) {
+      tab.value = 'home'
+      selectedPost.value = post
+    }
+  }
   const composeSelection = mediaPicker.consumeMany<{
     caption?: string
     commentsEnabled?: boolean
@@ -871,6 +913,9 @@ onBeforeUnmount(() => {
                 @click="openComments(selectedPost)"
                 ><MessageCircle
               /></k-link>
+              <k-link component="button" icon-only :aria-label="phone.t('Apps.easyShare.name')" @click="sharePost(selectedPost)">
+                <Share2 />
+              </k-link>
             </span>
             <k-link
               component="button"
@@ -1022,6 +1067,9 @@ onBeforeUnmount(() => {
                 @click="openComments(post)"
                 ><MessageCircle
               /></k-link>
+              <k-link component="button" icon-only :aria-label="phone.t('Apps.easyShare.name')" @click="sharePost(post)">
+                <Share2 />
+              </k-link>
             </span>
             <k-link
               component="button"
@@ -1811,6 +1859,7 @@ onBeforeUnmount(() => {
         </template>
       </k-actions-group>
       <k-actions-group v-else-if="currentProfile && !currentProfile.is_owner">
+        <k-actions-button @click="shareCurrentProfile">{{ phone.t('Apps.easyShare.name') }}</k-actions-button>
         <k-actions-button @click="reportCurrentProfile">{{
           t('report')
         }}</k-actions-button>
@@ -1819,6 +1868,7 @@ onBeforeUnmount(() => {
         }}</k-actions-button>
       </k-actions-group>
       <k-actions-group v-else-if="currentProfile?.is_owner">
+        <k-actions-button @click="shareCurrentProfile">{{ phone.t('Apps.easyShare.name') }}</k-actions-button>
         <k-actions-button @click="editProfileFromActions">{{
           t('editProfile')
         }}</k-actions-button>

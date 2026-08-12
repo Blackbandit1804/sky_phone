@@ -235,6 +235,23 @@ From `frontend/`, run `pnpm dev` for browser development. The phone opens automa
 - Profile onboarding: `http://localhost:5174/?apiPort=3002&testScenario=feather-onboarding#/apps/feather`
 - Empty states: `http://localhost:5174/?apiPort=3002&testScenario=feather-empty#/apps/feather`
 
+EasyShare browser data is available from every app that exposes a share action. Open the seeded
+Gallery directly, share an item, and then use the EasyShare and History actions in the sheet:
+
+- Full data, including incoming, transferring, accepted, completed, declined, cancelled, expired,
+  and failed transfers: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-full#/apps/photos`
+- Incoming request only: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-incoming#/apps/photos`
+- Transfer history without active requests: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-history#/apps/photos`
+- Complete content catalog with contact, document, link, location, note, photo, playlist, post,
+  profile, text, track, and video: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-catalog#/apps/photos`
+- Empty nearby and history states: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-empty#/apps/photos`
+
+In the full scenario, sending to Mia or Jamie creates a pending transfer. Sending to Noah creates a
+transfer at 58 percent so the progress and cancel states can be tested. Visibility changes and
+accepting or declining the seeded incoming request are kept in memory until the mock server restarts.
+The catalog also contains source examples from Companies, Mail, Garage, and House; completed history
+rows and rich chat cards can be clicked to verify app/deep-link navigation.
+
 The full-data scenario includes posts, replies, quotes, media grids, profiles, ranked hashtags, network search results, and every notification type. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before packaging.
 
 `pnpm build` uses `build.cjs` to replace `sky_phone/source/html` deterministically with the Vite output. Production assets use relative paths so they work through the FiveM NUI protocol.
