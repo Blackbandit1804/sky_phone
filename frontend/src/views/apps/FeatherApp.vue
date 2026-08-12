@@ -89,6 +89,10 @@ type ComposerContext = {
   photos: SelectedPhoto[]
   replyTo?: FeatherPost
 }
+type ProfileMediaContext = {
+  editing: { bio: string; displayName: string }
+  selectedPhoto: SelectedPhoto | null
+}
 
 const phone = usePhoneStore()
 const account = useAccountStore()
@@ -122,12 +126,18 @@ const reportDetails = ref('')
 const mediaPreview = ref<{ index: number; items: FeatherMedia[] } | null>(null)
 const onboarding = ref({ bio: '', displayName: '', handle: '' })
 const editing = ref({ bio: '', displayName: '' })
+const selectedProfilePhoto = ref<SelectedPhoto | null>(null)
 const authMode = ref<'login' | 'register'>('login')
 const authForm = ref({ confirm: '', email: '', password: '' })
 const authBusy = ref(false)
 const authAttempted = ref(false)
 const authError = ref('')
 const authPasswordVisible = ref(false)
+const composeFabColors = {
+  activeBgIos: 'active:!bg-[#2778dc] dark:active:!bg-[#2778dc]',
+  bgIos: '!bg-[#58a6ff] dark:!bg-[#58a6ff]',
+  textIos: '!text-white dark:!text-white',
+}
 let exploreSearchTimer: number | undefined
 let networkSearchTimer: number | undefined
 
@@ -203,6 +213,9 @@ const canSaveProfile = computed(
     editing.value.displayName.trim().length > 0 &&
     editing.value.displayName.length <= 50 &&
     editing.value.bio.length <= 160,
+)
+const editProfileAvatarUrl = computed(
+  () => selectedProfilePhoto.value?.url ?? feather.profile?.avatar_url,
 )
 const canCreateProfile = computed(
   () =>
@@ -595,19 +608,49 @@ function openEdit(): void {
     bio: feather.profile.bio,
     displayName: feather.profile.display_name,
   }
+  selectedProfilePhoto.value = null
   screen.value = 'edit'
+}
+
+function openProfileMedia(app: 'camera' | 'photos'): void {
+  messageMedia.begin(
+    'feather:profile-avatar',
+    'photo',
+    '/apps/feather?profileEdit=1',
+    1,
+    {
+      editing: { ...editing.value },
+      selectedPhoto: selectedProfilePhoto.value,
+    } satisfies ProfileMediaContext,
+  )
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
+}
+
+function closeProfileEdit(): void {
+  tab.value = 'profile'
+  screen.value = 'main'
+  feather.viewedProfile = null
+  selectedProfilePhoto.value = null
+  if (route.query.profileEdit === '1')
+    void router.replace({ path: '/apps/feather' })
 }
 
 async function saveProfile(): Promise<void> {
   busy.value = true
-  const response = await feather.updateProfile(editing.value)
+  const response = await feather.updateProfile({
+    ...editing.value,
+    avatarId: selectedProfilePhoto.value?.id,
+  })
   busy.value = false
   if (!response.success) {
     errorToast(response.error)
     return
   }
   if (feather.profile) await feather.loadProfile(feather.profile.id)
-  screen.value = 'profile'
+  closeProfileEdit()
 }
 
 async function deletePost(): Promise<void> {
@@ -646,7 +689,7 @@ function goBack(): void {
     return
   }
   if (screen.value === 'edit') {
-    screen.value = 'profile'
+    closeProfileEdit()
     return
   }
   if (screen.value === 'thread' || screen.value === 'profile') {
@@ -695,6 +738,8 @@ onMounted(async () => {
   window.addEventListener('keydown', handleMediaPreviewKeydown)
   const selection =
     messageMedia.consumeMany<ComposerContext>('feather:composer')
+  const profileSelection =
+    messageMedia.consumeMany<ProfileMediaContext>('feather:profile-avatar')
   if (selection) {
     if (selection.context) {
       composerBody.value = selection.context.body
@@ -706,8 +751,21 @@ onMounted(async () => {
       photos.value.push({ id: media.id, url: media.url })
     }
   }
+  if (profileSelection) {
+    if (profileSelection.context) {
+      editing.value = profileSelection.context.editing
+      selectedProfilePhoto.value = profileSelection.context.selectedPhoto
+    }
+    if (profileSelection.media[0]) {
+      selectedProfilePhoto.value = {
+        id: profileSelection.media[0].id,
+        url: profileSelection.media[0].url,
+      }
+    }
+  }
   if (route.query.compose === '1') screen.value = 'composer'
   await feather.bootstrap()
+  if (route.query.profileEdit === '1' && feather.profile) screen.value = 'edit'
   if (feather.onboarded) {
     const easyShareId = String(route.query.easyShareId ?? '')
     if (easyShareId && route.query.easyShareKind === 'profile') {
@@ -1126,8 +1184,8 @@ onMounted(async () => {
         <div class="feather-edit__identity">
           <div class="feather-edit__avatar">
             <img
-              v-if="feather.profile?.avatar_url"
-              :src="feather.profile.avatar_url"
+              v-if="editProfileAvatarUrl"
+              :src="editProfileAvatarUrl"
               alt=""
             />
             <UserRound v-else :size="28" />
@@ -1137,6 +1195,20 @@ onMounted(async () => {
             <span>@{{ feather.profile?.handle }}</span>
           </div>
           <span class="feather-edit__badge"><PencilLine :size="14" /></span>
+        </div>
+
+        <div class="feather-edit__photo">
+          <strong>{{ t('chooseAvatar') }}</strong>
+          <div class="feather-edit__photo-actions">
+            <kButton tonal rounded @click="openProfileMedia('photos')">
+              <Images :size="16" />
+              <span>{{ t('chooseGallery') }}</span>
+            </kButton>
+            <kButton tonal rounded @click="openProfileMedia('camera')">
+              <Camera :size="16" />
+              <span>{{ t('takePhoto') }}</span>
+            </kButton>
+          </div>
         </div>
 
         <kList strong inset class="feather-edit__fields">
@@ -1163,16 +1235,6 @@ onMounted(async () => {
           </kListInput>
         </kList>
 
-        <kButton
-          large
-          rounded
-          :disabled="!canSaveProfile"
-          class="feather-primary feather-edit__save"
-          @click="saveProfile"
-        >
-          <PencilLine :size="16" />
-          <span>{{ busy ? t('loading') : t('saveProfile') }}</span>
-        </kButton>
       </section>
 
       <section
@@ -2014,6 +2076,7 @@ onMounted(async () => {
         component="button"
         type="button"
         class="feather-compose-fab"
+        :colors="composeFabColors"
         :aria-label="t('newPost')"
         @click="openComposer()"
       >
@@ -3761,7 +3824,7 @@ onMounted(async () => {
 }
 .feather-network-person :deep(.feather-network-person__inner) {
   min-width: 0;
-  padding-block: 0;
+  padding-block: 0 7px;
 }
 .feather-network-person :deep(.feather-network-person__title-wrap) {
   align-items: center;
@@ -3803,9 +3866,12 @@ onMounted(async () => {
 }
 .feather-network-person__name {
   display: flex;
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
   align-items: center;
   gap: 4px;
+  overflow: hidden;
   border: 0;
   padding: 0;
   color: inherit;
@@ -3816,6 +3882,10 @@ onMounted(async () => {
   text-align: left;
 }
 .feather-network-person__name span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4141,22 +4211,26 @@ onMounted(async () => {
   z-index: 12;
   right: 14px;
   bottom: 91px;
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  border: 1px solid color-mix(in srgb, var(--feather-blue) 72%, #fff);
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  border: 1px solid color-mix(in srgb, var(--feather-blue) 55%, #fff);
   color: #fff;
-  background: var(--feather-blue);
   box-shadow:
-    0 7px 20px rgb(29 155 240 / 32%),
-    0 2px 7px rgb(0 0 0 / 18%);
+    0 9px 24px rgb(29 155 240 / 38%),
+    0 3px 8px rgb(0 0 0 / 22%),
+    inset 0 1px 0 rgb(255 255 255 / 32%);
   transition:
     transform 150ms ease,
-    box-shadow 150ms ease;
+    box-shadow 150ms ease,
+    filter 150ms ease;
 }
 .feather-compose-fab:active {
-  transform: scale(0.93);
-  box-shadow: 0 3px 10px rgb(29 155 240 / 25%);
+  filter: brightness(0.94);
+  transform: scale(0.94);
+  box-shadow:
+    0 4px 12px rgb(29 155 240 / 28%),
+    inset 0 1px 0 rgb(255 255 255 / 22%);
 }
 .feather-tab-icon b {
   position: absolute;
@@ -4705,6 +4779,34 @@ onMounted(async () => {
   background: var(--feather-blue);
   box-shadow: 0 5px 14px rgb(29 155 240 / 25%);
 }
+.feather-edit__photo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--feather-border);
+  border-radius: 18px;
+  padding: 11px 12px 12px;
+  background: color-mix(in srgb, var(--feather-panel) 96%, transparent);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 7%);
+}
+.feather-edit__photo > strong {
+  font-size: 11px;
+  font-weight: 800;
+}
+.feather-edit__photo-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.feather-edit__photo-actions :deep(.k-button) {
+  min-width: 0;
+  min-height: 35px;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--feather-blue) 24%, transparent);
+  color: var(--feather-blue);
+  font-size: 10px;
+  font-weight: 800;
+}
 .feather-edit__fields {
   overflow: hidden;
   margin: 0 !important;
@@ -4731,17 +4833,6 @@ onMounted(async () => {
   color: var(--feather-muted);
   font-size: 9px;
 }
-.feather-edit__save {
-  width: 100%;
-  min-height: 43px;
-  margin-top: 1px;
-  font-size: 12px;
-  font-weight: 800;
-  box-shadow: 0 8px 20px rgb(29 155 240 / 22%);
-}
-.feather-edit__save :deep(.k-icon) {
-  margin-right: 7px;
-}
 .feather-connections {
   padding-top: 10px !important;
 }
@@ -4755,6 +4846,7 @@ onMounted(async () => {
 }
 .feather-connections__tabs :deep(button) {
   min-height: 31px;
+  border-radius: 11px !important;
   font-size: 10px;
   font-weight: 800;
 }
