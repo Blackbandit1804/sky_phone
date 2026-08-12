@@ -8,6 +8,44 @@ export type PhoneMedia = {
   url: string
 }
 
+export type MediaImportSource = {
+  id: string
+  label: string
+  mediaTypes: MediaType[]
+}
+
+export type MediaImportSources = {
+  maxSelection: number
+  sources: MediaImportSource[]
+}
+
+export type ExternalMedia = {
+  externalId: string
+  filename: string
+  imported: boolean
+  mediaType: MediaType
+  size: number
+  sourceId: string
+  url: string
+}
+
+export type MediaImportPage = {
+  hasMore: boolean
+  items: ExternalMedia[]
+  page: number
+  total: number
+}
+
+export type MediaImportFailure = {
+  error: string
+  externalId: string
+}
+
+export type MediaImportResult = {
+  failed: MediaImportFailure[]
+  imported: PhoneMedia[]
+}
+
 export type UploadReady = {
   captureToken: string
   correlationId: string

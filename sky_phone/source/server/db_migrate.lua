@@ -377,6 +377,14 @@ local schema = {
             { name = "url", type = "TEXT NOT NULL" },
             { name = "remote_id", type = "VARCHAR(128) NOT NULL" },
             { name = "media_type", type = "ENUM('photo', 'video') NOT NULL" },
+            { name = "origin", type = "ENUM('phone_upload', 'website_import') NOT NULL DEFAULT 'phone_upload'" },
+            {
+                name = "source_id",
+                type = "VARCHAR(64) NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            { name = "verified_at", type = "DATETIME NULL" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
         },
         primaryKey = "id",
@@ -2436,4 +2444,16 @@ Bridge.Database.EnsureIndex("sky_phone_devices", "uniq_sky_phone_devices_sim", "
 Bridge.Database.Query("UPDATE `sky_phone_contacts` SET `contact_id` = `id` WHERE `contact_id` IS NULL", {})
 Bridge.Database.EnsureIndex("sky_phone_contacts", "uniq_sky_phone_contacts_account_contact", "(`account_id`, `contact_id`)", { unique = true })
 Bridge.Database.EnsureIndex("sky_phone_contacts", "uniq_sky_phone_contacts_device_contact", "(`device_imei`, `contact_id`)", { unique = true })
+Bridge.Database.EnsureIndex(
+    "sky_phone_media",
+    "uniq_sky_phone_media_account_source",
+    "(`account_id`, `source_id`, `remote_id`, `origin`)",
+    { unique = true }
+)
+Bridge.Database.EnsureIndex(
+    "sky_phone_media",
+    "uniq_sky_phone_media_device_source",
+    "(`device_imei`, `source_id`, `remote_id`, `origin`)",
+    { unique = true }
+)
 Bridge.Database.CompleteMigration("sky_phone")

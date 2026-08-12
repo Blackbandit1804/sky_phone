@@ -37,14 +37,40 @@ export function formatRecordingDuration(elapsedMs: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
+export function formatMediaSize(bytes: number, locale: string): string {
+  const safeBytes = Math.max(0, bytes)
+  if (safeBytes < 1024) return `${safeBytes} B`
+  const units = ['KB', 'MB', 'GB']
+  let value = safeBytes / 1024
+  let unit = units[0]
+  for (let index = 1; index < units.length && value >= 1024; index += 1) {
+    value /= 1024
+    unit = units[index]
+  }
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)} ${unit}`
+}
+
 export function mediaErrorKey(error?: string): string {
   const known = new Set([
     'cancelled',
     'capture_failed',
     'invalid_media_type',
+    'invalid_import_request',
+    'invalid_import_media',
+    'invalid_import_url',
     'invalid_upload',
     'invalid_upload_token',
     'missing_config',
+    'import_media_not_allowed',
+    'import_media_too_large',
+    'import_media_unavailable',
+    'import_provider_failed',
+    'import_provider_unauthorized',
+    'import_source_not_found',
+    'import_source_unavailable',
+    'import_url_not_allowed',
+    'import_url_unavailable',
+    'import_size_unavailable',
     'not_found',
     'operation_in_progress',
     'owner_changed',

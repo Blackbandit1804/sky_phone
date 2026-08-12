@@ -4,6 +4,9 @@ import {
   kButton,
   kDialog,
   kLink,
+  kList,
+  kListInput,
+  kListItem,
   kNavbar,
   kNavbarBackLink,
   kPage,
@@ -12,13 +15,28 @@ import {
   kSegmentedButton,
   kToast,
 } from 'konsta/vue'
-import { Play, RotateCcw, Trash2, ZoomIn, ZoomOut } from 'lucide-vue-next'
+import {
+  ChevronRight,
+  Globe2,
+  Link2,
+  Play,
+  RotateCcw,
+  Trash2,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
-import type { DeleteResult, GalleryFilter, PhoneMedia } from '@/types/media'
+import type {
+  DeleteResult,
+  GalleryFilter,
+  MediaImportSource,
+  MediaImportSources,
+  PhoneMedia,
+} from '@/types/media'
 import {
   hasNextMediaPage,
   MEDIA_PAGE_SIZE,
@@ -58,6 +76,12 @@ const fetching = ref(false)
 const hasMore = ref(true)
 const loadError = ref('')
 const selected = ref<PhoneMedia | null>(null)
+const importMode = ref<'form' | 'gallery' | 'sources'>('gallery')
+const importSources = ref<MediaImportSource[]>([])
+const importSource = ref<MediaImportSource | null>(null)
+const importUrl = ref('')
+const importError = ref('')
+const importing = ref(false)
 const deleteDialogOpened = ref(false)
 const cancelButtonColors = {
   fillBgIos: 'bg-[#8e8e93] active:bg-[#7a7a7f]',
@@ -141,6 +165,71 @@ function showToast(text: string): void {
   toastTimer = window.setTimeout(() => {
     toastOpened.value = false
   }, 3000)
+}
+
+async function loadImportSources(): Promise<void> {
+  const response = await nuiCall<MediaImportSources>('media:import:sources')
+  if (!response.success || !response.data) return
+  importSources.value = response.data.sources
+}
+
+function selectImportSource(source: MediaImportSource): void {
+  importSource.value = source
+  importMode.value = 'form'
+  importUrl.value = ''
+  importError.value = ''
+}
+
+function openImport(): void {
+  if (importSources.value.length === 1) {
+    selectImportSource(importSources.value[0])
+    return
+  }
+  importMode.value = 'sources'
+}
+
+function closeImport(): void {
+  importMode.value = 'gallery'
+  importSource.value = null
+  importUrl.value = ''
+  importError.value = ''
+}
+
+function backFromImportForm(): void {
+  if (importSources.value.length > 1) {
+    importMode.value = 'sources'
+    importSource.value = null
+    importUrl.value = ''
+    importError.value = ''
+    return
+  }
+  closeImport()
+}
+
+function updateImportUrl(event: Event): void {
+  importUrl.value = (event.target as HTMLInputElement).value
+  importError.value = ''
+}
+
+async function commitUrlImport(): Promise<void> {
+  const url = importUrl.value.trim()
+  if (!importSource.value || !url || importing.value) return
+  importing.value = true
+  importError.value = ''
+  const response = await nuiCall<PhoneMedia>('media:import:url', {
+    sourceId: importSource.value.id,
+    url,
+  })
+  importing.value = false
+  if (!response.success || !response.data) {
+    importError.value = phone.t(
+      `Apps.photos.errors.${mediaErrorKey(response.error)}`,
+    )
+    return
+  }
+  media.value = mergeMedia(media.value, [response.data])
+  closeImport()
+  showToast(phone.t('Apps.photos.import.linkCompleted'))
 }
 
 function formatDate(timestamp: number): string {
@@ -358,6 +447,7 @@ watch(hasMore, () => void nextTick().then(observeMore))
 onMounted(() => {
   window.addEventListener('message', onMessage)
   void loadGallery()
+  void loadImportSources()
 })
 
 onBeforeUnmount(() => {
@@ -371,12 +461,105 @@ onBeforeUnmount(() => {
 
 <template>
   <k-page
-    v-if="!selected"
+    v-if="importMode === 'sources'"
+    class="gallery-import-page !pt-[44px]"
+    :aria-label="phone.t('Apps.photos.import.chooseSource')"
+  >
+    <k-navbar :title="phone.t('Apps.photos.import.title')">
+      <template #left>
+        <k-navbar-back-link
+          component="button"
+          :text="phone.t('Common.back')"
+          @click="closeImport"
+        />
+      </template>
+    </k-navbar>
+    <k-block class="gallery-import-intro">
+      {{ phone.t('Apps.photos.import.chooseSource') }}
+    </k-block>
+    <k-list inset strong>
+      <k-list-item
+        v-for="source in importSources"
+        :key="source.id"
+        link
+        :chevron="false"
+        :title="source.label"
+        :subtitle="
+          source.mediaTypes
+            .map((type) =>
+              phone.t(
+                type === 'photo'
+                  ? 'Apps.photos.filters.photos'
+                  : 'Apps.photos.filters.videos',
+              ),
+            )
+            .join(' · ')
+        "
+        @click="selectImportSource(source)"
+      >
+        <template #media><Globe2 :size="22" /></template>
+        <template #after><ChevronRight :size="18" /></template>
+      </k-list-item>
+    </k-list>
+  </k-page>
+
+  <k-page
+    v-else-if="importMode === 'form' && importSource"
+    class="gallery-import-page !pt-[44px]"
+    :aria-label="phone.t('Apps.photos.import.title')"
+  >
+    <k-navbar :title="importSource.label">
+      <template #left>
+        <k-navbar-back-link
+          component="button"
+          :text="phone.t('Common.back')"
+          @click="backFromImportForm"
+        />
+      </template>
+    </k-navbar>
+
+    <div class="gallery-import-form">
+      <div class="gallery-import-form-icon"><Link2 :size="34" /></div>
+      <h2>{{ phone.t('Apps.photos.import.linkTitle') }}</h2>
+      <p>{{ phone.t('Apps.photos.import.linkBody') }}</p>
+      <k-list inset strong class="gallery-import-url-list">
+        <k-list-input
+          outline
+          input-id="gallery-import-url"
+          inputmode="url"
+          maxlength="2048"
+          :error="importError || undefined"
+          :label="phone.t('Apps.photos.import.linkLabel')"
+          :placeholder="phone.t('Apps.photos.import.linkPlaceholder')"
+          type="url"
+          :value="importUrl"
+          @input="updateImportUrl"
+          @keyup.enter="commitUrlImport"
+        />
+      </k-list>
+      <k-button
+        class="gallery-import-submit"
+        large
+        rounded
+        :disabled="!importUrl.trim() || importing"
+        @click="commitUrlImport"
+      >
+        <k-preloader v-if="importing" class="mr-2" />
+        {{ phone.t('Apps.photos.import.action') }}
+      </k-button>
+    </div>
+  </k-page>
+
+  <k-page
+    v-else-if="!selected"
     class="gallery-page !pt-[44px]"
     :aria-label="phone.t('Apps.photos.name')"
   >
-    <k-navbar :title="phone.t('Apps.photos.name')">
-      <template v-if="requestedMessageMedia" #left>
+    <k-navbar
+      v-if="requestedMessageMedia"
+      :title="phone.t('Apps.photos.name')"
+    >
+      <template #left>
         <k-navbar-back-link
           component="button"
           :text="phone.t('Common.back')"
@@ -390,6 +573,17 @@ onBeforeUnmount(() => {
           @click="completeMultipleSelection"
         >
           {{ phone.t('Common.done') }}
+        </k-link>
+      </template>
+    </k-navbar>
+    <k-navbar
+      v-else
+      :title="phone.t('Apps.photos.name')"
+      right-class="!ms-auto"
+    >
+      <template v-if="importSources.length" #right>
+        <k-link component="button" @click="openImport">
+          {{ phone.t('Apps.photos.import.action') }}
         </k-link>
       </template>
     </k-navbar>
@@ -620,6 +814,54 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+.gallery-import-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.gallery-import-intro {
+  margin-bottom: 0;
+  color: #8e8e93;
+}
+.gallery-import-form {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 16px 24px;
+  text-align: center;
+}
+.gallery-import-form-icon {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: #0a84ff;
+  color: #fff;
+  box-shadow: 0 10px 28px #0a84ff4d;
+}
+.gallery-import-form h2 {
+  margin: 20px 0 7px;
+  font-size: 21px;
+  font-weight: 700;
+}
+.gallery-import-form p {
+  max-width: 280px;
+  margin: 0;
+  color: #8e8e93;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.gallery-import-url-list {
+  width: 100%;
+  margin-top: 26px;
+}
+.gallery-import-submit {
+  width: calc(100% - 32px);
+  margin-top: 14px;
 }
 .gallery-content {
   min-height: 0;
