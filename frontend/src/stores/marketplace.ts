@@ -7,6 +7,8 @@ import type {
   MarketplaceListing,
   MarketplaceListingDraft,
   MarketplaceListingSummary,
+  MarketplaceProfile,
+  MarketplaceProfileDraft,
 } from '@/types/marketplace'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
 
@@ -23,8 +25,19 @@ export const useMarketplaceStore = defineStore('marketplace', {
     isLoading: false,
     items: [] as MarketplaceListingSummary[],
     ownItems: [] as MarketplaceListingSummary[],
+    profile: null as MarketplaceProfile | null,
   }),
   actions: {
+    async loadProfile(): Promise<boolean> {
+      const response = await nuiCall<MarketplaceProfile>('marketplace:profile')
+      if (response.success && response.data) this.profile = response.data
+      return response.success
+    },
+    async saveProfile(draft: MarketplaceProfileDraft): Promise<NuiResponse<MarketplaceProfile>> {
+      const response = await nuiCall<MarketplaceProfile>('marketplace:profile-save', draft)
+      if (response.success && response.data) this.profile = response.data
+      return response
+    },
     async load(filters: Record<string, unknown> = {}): Promise<boolean> {
       this.isLoading = true
       const response = await nuiCall<ListingPage>('marketplace:list', filters)
