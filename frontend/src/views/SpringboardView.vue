@@ -1026,49 +1026,50 @@ watch(isEditablePage, (visible) => {
       </k-button>
     </nav>
 
-    <k-sheet
-      :opened="widgetActionId !== null"
-      class="widget-action-sheet"
-      @backdropclick="widgetActionId = null"
-    >
-      <div class="widget-sheet-handle" />
-      <h3>
-        {{
-          activeWidget
-            ? phone.t(`Home.widgetSystem.${activeWidget.kind}.name`)
-            : phone.t('Home.widgets.label')
-        }}
-      </h3>
-      <k-list inset strong class="widget-action-list">
-        <k-list-item
-          link
-          link-component="button"
-          content-class="w-full"
-          :title="phone.t('Home.widgetSystem.editWidget')"
-          @click="openWidgetConfig"
-        >
-          <template #media><Pencil :size="20" /></template>
-        </k-list-item>
-        <k-list-item
-          link
-          link-component="button"
-          content-class="w-full"
-          class="widget-action-remove"
-          :title="phone.t('Home.widgetSystem.removeWidget')"
-          @click="activeWidget && removeWidget(activeWidget.id)"
-        >
-          <template #media><Trash2 :size="20" /></template>
-        </k-list-item>
-      </k-list>
-      <k-button
-        large
-        rounded
-        class="widget-action-cancel"
-        @click="widgetActionId = null"
+    <div class="widget-action-sheet">
+      <k-sheet
+        :opened="widgetActionId !== null"
+        @backdropclick="widgetActionId = null"
       >
-        {{ phone.t('Common.cancel') }}
-      </k-button>
-    </k-sheet>
+        <div class="widget-sheet-handle" />
+        <h3>
+          {{
+            activeWidget
+              ? phone.t(`Home.widgetSystem.${activeWidget.kind}.name`)
+              : phone.t('Home.widgets.label')
+          }}
+        </h3>
+        <k-list inset strong class="widget-action-list">
+          <k-list-item
+            link
+            link-component="button"
+            content-class="w-full"
+            :title="phone.t('Home.widgetSystem.editWidget')"
+            @click="openWidgetConfig"
+          >
+            <template #media><Pencil :size="20" /></template>
+          </k-list-item>
+          <k-list-item
+            link
+            link-component="button"
+            content-class="w-full"
+            class="widget-action-remove"
+            :title="phone.t('Home.widgetSystem.removeWidget')"
+            @click="activeWidget && removeWidget(activeWidget.id)"
+          >
+            <template #media><Trash2 :size="20" /></template>
+          </k-list-item>
+        </k-list>
+        <k-button
+          large
+          rounded
+          class="widget-action-cancel"
+          @click="widgetActionId = null"
+        >
+          {{ phone.t('Common.cancel') }}
+        </k-button>
+      </k-sheet>
+    </div>
 
     <WidgetPickerSheet
       :opened="widgetPickerOpened"
@@ -1085,7 +1086,11 @@ watch(isEditablePage, (visible) => {
 </template>
 
 <style scoped>
-:global(.widget-action-sheet) {
+.widget-action-sheet {
+  display: contents;
+}
+
+.widget-action-sheet :deep(.k-sheet) {
   z-index: 105;
   padding: 9px 0 30px;
   border-radius: 25px 25px 0 0;

@@ -1848,11 +1848,8 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <k-sheet
-      :opened="choiceOpened"
-      class="flare-choice-sheet"
-      @backdropclick="closeChoice"
-    >
+    <div class="flare-choice-sheet">
+      <k-sheet :opened="choiceOpened" @backdropclick="closeChoice">
       <section
         id="flare-choice-sheet"
         ref="choiceSheetContent"
@@ -1911,7 +1908,8 @@ onBeforeUnmount(() => {
           </k-list-item>
         </k-list>
       </section>
-    </k-sheet>
+      </k-sheet>
+    </div>
 
     <k-dialog :opened="unmatchDialog" @backdropclick="unmatchDialog = false">
       <template #title>{{ phone.t('Apps.flare.unmatchTitle') }}</template>
@@ -2855,7 +2853,7 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 
-:global(.flare-choice-sheet) {
+.flare-choice-sheet :deep(.k-sheet) {
   z-index: 70;
   max-height: min(62%, 420px);
   overflow-y: auto !important;

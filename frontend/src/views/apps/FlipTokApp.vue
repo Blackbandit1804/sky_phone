@@ -1630,13 +1630,12 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <k-sheet
-      v-if="commentsOpen"
-      :opened="commentsOpen"
-      class="fliptok-sheet"
-      :colors="darkSheetColors"
-      @backdropclick="commentsOpen = false"
-    >
+    <div v-if="commentsOpen" class="fliptok-sheet">
+      <k-sheet
+        :opened="commentsOpen"
+        :colors="darkSheetColors"
+        @backdropclick="commentsOpen = false"
+      >
       <div class="sheet-handle" />
       <div class="comments-sheet">
         <header>
@@ -1698,15 +1697,15 @@ onBeforeUnmount(() => {
           </template>
         </k-messagebar>
       </div>
-    </k-sheet>
+      </k-sheet>
+    </div>
 
-    <k-sheet
-      v-if="actionsOpen"
-      :opened="actionsOpen"
-      class="fliptok-sheet"
-      :colors="darkSheetColors"
-      @backdropclick="actionsOpen = false"
-      ><div class="sheet-handle" />
+    <div v-if="actionsOpen" class="fliptok-sheet">
+      <k-sheet
+        :opened="actionsOpen"
+        :colors="darkSheetColors"
+        @backdropclick="actionsOpen = false"
+        ><div class="sheet-handle" />
       <div class="action-sheet">
         <k-list inset strong
           ><k-list-item
@@ -1724,15 +1723,15 @@ onBeforeUnmount(() => {
         ><k-button large rounded tonal @click="actionsOpen = false">{{
           t('cancel')
         }}</k-button>
-      </div></k-sheet
-    >
-    <k-sheet
-      v-if="reportSheetOpen"
-      :opened="reportSheetOpen"
-      class="fliptok-sheet"
-      :colors="darkSheetColors"
-      @backdropclick="reportSheetOpen = false"
-    >
+        </div></k-sheet
+      >
+    </div>
+    <div v-if="reportSheetOpen" class="fliptok-sheet">
+      <k-sheet
+        :opened="reportSheetOpen"
+        :colors="darkSheetColors"
+        @backdropclick="reportSheetOpen = false"
+      >
       <div class="sheet-handle" />
       <div class="selection-sheet report-sheet">
         <h3>{{ t('report') }}</h3>
@@ -1770,14 +1769,14 @@ onBeforeUnmount(() => {
           t('cancel')
         }}</k-button>
       </div>
-    </k-sheet>
-    <k-sheet
-      v-if="musicSheetOpen"
-      :opened="musicSheetOpen"
-      class="fliptok-sheet"
-      :colors="darkSheetColors"
-      @backdropclick="musicSheetOpen = false"
-    >
+      </k-sheet>
+    </div>
+    <div v-if="musicSheetOpen" class="fliptok-sheet">
+      <k-sheet
+        :opened="musicSheetOpen"
+        :colors="darkSheetColors"
+        @backdropclick="musicSheetOpen = false"
+      >
       <div class="sheet-handle" />
       <div class="selection-sheet">
         <h3>{{ t('chooseSound') }}</h3>
@@ -1820,14 +1819,14 @@ onBeforeUnmount(() => {
           t('cancel')
         }}</k-button>
       </div>
-    </k-sheet>
-    <k-sheet
-      v-if="visibilitySheetOpen"
-      :opened="visibilitySheetOpen"
-      class="fliptok-sheet"
-      :colors="darkSheetColors"
-      @backdropclick="visibilitySheetOpen = false"
-      ><div class="sheet-handle" />
+      </k-sheet>
+    </div>
+    <div v-if="visibilitySheetOpen" class="fliptok-sheet">
+      <k-sheet
+        :opened="visibilitySheetOpen"
+        :colors="darkSheetColors"
+        @backdropclick="visibilitySheetOpen = false"
+        ><div class="sheet-handle" />
       <div class="selection-sheet">
         <h3>{{ t('whoCanWatch') }}</h3>
         <k-list inset strong
@@ -1853,15 +1852,15 @@ onBeforeUnmount(() => {
         ><k-button large rounded tonal @click="visibilitySheetOpen = false">{{
           t('cancel')
         }}</k-button>
-      </div></k-sheet
-    >
-    <k-sheet
-      v-if="accountTypeSheetOpen"
-      :opened="accountTypeSheetOpen"
-      class="fliptok-sheet"
-      :colors="darkSheetColors"
-      @backdropclick="accountTypeSheetOpen = false"
-      ><div class="sheet-handle" />
+        </div></k-sheet
+      >
+    </div>
+    <div v-if="accountTypeSheetOpen" class="fliptok-sheet">
+      <k-sheet
+        :opened="accountTypeSheetOpen"
+        :colors="darkSheetColors"
+        @backdropclick="accountTypeSheetOpen = false"
+        ><div class="sheet-handle" />
       <div class="selection-sheet">
         <h3>{{ t('accountType') }}</h3>
         <k-list inset strong
@@ -1881,8 +1880,9 @@ onBeforeUnmount(() => {
         ><k-button large rounded tonal @click="accountTypeSheetOpen = false">{{
           t('cancel')
         }}</k-button>
-      </div></k-sheet
-    >
+        </div></k-sheet
+      >
+    </div>
     <k-dialog
       :opened="logoutDialogOpen"
       @backdropclick="!logoutSubmitting && (logoutDialogOpen = false)"
@@ -2720,7 +2720,7 @@ onBeforeUnmount(() => {
 .done-button {
   font-weight: 650;
 }
-.fliptok-sheet {
+.fliptok-sheet :deep(.k-sheet) {
   color: #f5f5f7;
 }
 .sheet-handle {

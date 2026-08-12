@@ -633,11 +633,11 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <k-sheet
-      :opened="Boolean(draftCoords || selectedMarker)"
-      class="map-marker-sheet"
-      @backdropclick="closeMarkerSheet"
-    >
+    <div class="map-marker-sheet">
+      <k-sheet
+        :opened="Boolean(draftCoords || selectedMarker)"
+        @backdropclick="closeMarkerSheet"
+      >
       <section
         v-if="draftCoords"
         class="map-marker-sheet__content"
@@ -740,7 +740,8 @@ onBeforeUnmount(() => {
           </template>
         </k-button>
       </section>
-    </k-sheet>
+      </k-sheet>
+    </div>
 
     <k-toast :opened="Boolean(toastText)" position="center">
       {{ toastText }}

@@ -1456,11 +1456,11 @@ onBeforeUnmount(() => {
     </template>
   </k-page>
 
-  <k-sheet
-    :opened="editorOpened"
-    class="phone-contact-editor-sheet"
-    @backdropclick="editorOpened = false"
-  >
+  <div class="phone-contact-editor-sheet">
+    <k-sheet
+      :opened="editorOpened"
+      @backdropclick="editorOpened = false"
+    >
     <section
       class="phone-contact-editor"
       :class="{ 'phone-contact-editor--light': !phone.isDarkMode }"
@@ -1629,7 +1629,8 @@ onBeforeUnmount(() => {
         </k-button>
       </div>
     </section>
-  </k-sheet>
+    </k-sheet>
+  </div>
 
   <k-dialog
     :opened="blockDialogOpened"
@@ -3310,7 +3311,7 @@ onBeforeUnmount(() => {
   color: rgba(255, 255, 255, 0.62);
 }
 
-.phone-contact-editor-sheet {
+.phone-contact-editor-sheet :deep(.k-sheet) {
   width: 100%;
   height: calc(100% - 52px);
   max-height: calc(100% - 52px);

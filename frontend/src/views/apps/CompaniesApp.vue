@@ -2167,11 +2167,11 @@ onBeforeUnmount(() => {
       </k-toolbar-pane>
     </k-tabbar>
 
-    <k-sheet
-      :opened="requestSheetOpened"
-      class="companies-sheet"
-      @backdropclick="requestSheetOpened = false"
-    >
+    <div class="companies-sheet">
+      <k-sheet
+        :opened="requestSheetOpened"
+        @backdropclick="requestSheetOpened = false"
+      >
       <section
         v-if="requestSheetOpened && activeCompany"
         ref="requestSheetContent"
@@ -2312,7 +2312,8 @@ onBeforeUnmount(() => {
           <span v-else>{{ phone.t('Apps.companies.composer.send') }}</span>
         </k-button>
       </section>
-    </k-sheet>
+      </k-sheet>
+    </div>
 
     <k-actions
       v-if="workActionsOpened"
@@ -2357,11 +2358,11 @@ onBeforeUnmount(() => {
       </k-actions-group>
     </k-actions>
 
-    <k-sheet
-      :opened="assignmentSheetOpened"
-      class="companies-sheet companies-assignment-sheet"
-      @backdropclick="assignmentSheetOpened = false"
-    >
+    <div class="companies-sheet companies-assignment-sheet">
+      <k-sheet
+        :opened="assignmentSheetOpened"
+        @backdropclick="assignmentSheetOpened = false"
+      >
       <section
         v-if="assignmentSheetOpened"
         class="companies-sheet__content"
@@ -2422,7 +2423,8 @@ onBeforeUnmount(() => {
           {{ phone.t('Apps.companies.assignment.confirm') }}
         </k-button>
       </section>
-    </k-sheet>
+      </k-sheet>
+    </div>
 
     <k-dialog
       :opened="cancelDialogOpened"
@@ -3144,7 +3146,7 @@ onBeforeUnmount(() => {
   background: var(--company-red);
 }
 
-.companies-sheet :deep(> div:last-child) {
+.companies-sheet :deep(.k-sheet) {
   max-height: 88%;
   border-radius: 24px 24px 0 0;
   overflow: hidden;

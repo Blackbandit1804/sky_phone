@@ -1192,7 +1192,13 @@ onMounted(() => {
 watch(
   () => route.params.appId,
   (appId) => {
-    if (typeof appId === 'string' && isPhoneAppId(appId)) {
+    if (
+      phone.isOpen &&
+      phone.device?.imei &&
+      appStore.hydrated &&
+      typeof appId === 'string' &&
+      isPhoneAppId(appId)
+    ) {
       appStore.recordLaunch(appId)
     }
   },

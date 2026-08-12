@@ -1789,7 +1789,7 @@ onBeforeUnmount(() => {
   background: rgb(255 255 255 / 8%);
 }
 
-.dc-action-sheet {
+.dc-action-sheet :deep(.k-sheet) {
   max-height: 72%;
   padding: 7px 0 32px;
   overflow-y: auto;
@@ -1798,7 +1798,7 @@ onBeforeUnmount(() => {
   background: #111113;
 }
 
-.dc-selection-sheet {
+.dc-selection-sheet :deep(.k-sheet) {
   z-index: 1300;
   padding-top: 9px;
 }
@@ -2852,12 +2852,12 @@ onBeforeUnmount(() => {
       >
     </k-dialog>
 
-    <k-sheet
-      :opened="Boolean(selectedMessage)"
-      class="dc-action-sheet"
-      :colors="darkSheetColors"
-      @backdropclick="selectedMessage = null"
-    >
+    <div class="dc-action-sheet">
+      <k-sheet
+        :opened="Boolean(selectedMessage)"
+        :colors="darkSheetColors"
+        @backdropclick="selectedMessage = null"
+      >
       <template v-if="selectedMessage">
         <div class="dc-sheet-handle" />
         <div class="dc-reaction-row">
@@ -2935,7 +2935,8 @@ onBeforeUnmount(() => {
           >{{ phone.t('Common.cancel') }}</k-button
         >
       </template>
-    </k-sheet>
+      </k-sheet>
+    </div>
 
     <k-dialog
       :opened="reportOpen"
@@ -2982,12 +2983,12 @@ onBeforeUnmount(() => {
       >
     </k-dialog>
 
-    <k-sheet
-      :opened="selectionSheet !== null"
-      class="dc-action-sheet dc-selection-sheet"
-      :colors="darkSheetColors"
-      @backdropclick="selectionSheet = null"
-    >
+    <div class="dc-action-sheet dc-selection-sheet">
+      <k-sheet
+        :opened="selectionSheet !== null"
+        :colors="darkSheetColors"
+        @backdropclick="selectionSheet = null"
+      >
       <div class="dc-sheet-handle" />
       <h3>{{ selectionTitle }}</h3>
       <k-list inset strong class="dc-action-list dc-selection-list">
@@ -3015,7 +3016,8 @@ onBeforeUnmount(() => {
         @click="selectionSheet = null"
         >{{ phone.t('Common.cancel') }}</k-button
       >
-    </k-sheet>
+      </k-sheet>
+    </div>
     <k-toast :opened="Boolean(toast)" position="center" class="dc-toast">{{
       toast
     }}</k-toast>
