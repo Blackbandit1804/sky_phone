@@ -16,6 +16,7 @@ export type EasyShareKind =
 
 export type EasyShareVisibility = 'contacts' | 'everyone' | 'hidden'
 export type EasyShareChatApp = 'darkchat' | 'flare' | 'messages'
+export type EasyShareDestinationApp = EasyShareChatApp | 'notes'
 export type EasyShareChatDraft = {
   appId: EasyShareChatApp
   body: string

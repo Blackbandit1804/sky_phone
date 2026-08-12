@@ -24,10 +24,14 @@ import { useNotesStore } from '@/stores/notes'
 import { usePhoneStore } from '@/stores/phone'
 import type {
   EasyShareChatApp,
+  EasyShareDestinationApp,
   EasyShareTransfer,
   EasyShareVisibility,
 } from '@/types/easyshare'
-import { openEasySharePayload } from '@/utils/easyshare'
+import {
+  easyShareDestinationAppIds,
+  openEasySharePayload,
+} from '@/utils/easyshare'
 
 const phone = usePhoneStore()
 const appStore = useAppStoreStore()
@@ -45,7 +49,6 @@ let dragPointerId: number | null = null
 let dragStartTime = 0
 let dragStartY = 0
 const visibilityOptions: EasyShareVisibility[] = ['everyone', 'contacts', 'hidden']
-type EasyShareDestinationAppId = 'darkchat' | 'flare' | 'messages' | 'notes'
 const app = computed(() =>
   easyShare.payload ? getPhoneApp(easyShare.payload.appId) : undefined,
 )
@@ -105,14 +108,8 @@ const sharePeople = computed(() => {
 
   return people
 })
-const shareAppIds: EasyShareDestinationAppId[] = [
-  'messages',
-  'darkchat',
-  'flare',
-  'notes',
-]
 const shareApps = computed(() =>
-  shareAppIds
+  (easyShare.payload ? easyShareDestinationAppIds(easyShare.payload) : [])
     .filter((id) => !appStore.homeLayout.hidden.includes(id))
     .flatMap((id) => {
       const app = getPhoneApp(id)
@@ -201,7 +198,7 @@ function openChatApp(kind: EasyShareChatApp): void {
   void router.push(`/apps/${kind}`)
 }
 
-function openShareApp(appId: EasyShareDestinationAppId): void {
+function openShareApp(appId: EasyShareDestinationApp): void {
   if (appId === 'messages' || appId === 'darkchat' || appId === 'flare') {
     openChatApp(appId)
     return
@@ -211,8 +208,12 @@ function openShareApp(appId: EasyShareDestinationAppId): void {
 
 function saveAsNote(): void {
   if (!easyShare.payload) return
+  const body = [easyShare.payload.copyText.trim(), easyShare.payload.link?.trim()]
+    .filter((part): part is string => Boolean(part))
+    .filter((part, index, parts) => parts.indexOf(part) === index)
+    .join('\n')
   notes.createNote({
-    body: easyShare.payload.copyText,
+    body,
     title: easyShare.payload.title,
   })
   feedback.value = label('savedToNotes')

@@ -1,12 +1,39 @@
 import type { Router } from 'vue-router'
 
 import { getPhoneApp } from '@/config/apps'
-import type { EasySharePayload } from '@/types/easyshare'
+import type {
+  EasyShareDestinationApp,
+  EasyShareKind,
+  EasySharePayload,
+} from '@/types/easyshare'
+
+const chatDestinations: EasyShareDestinationApp[] = [
+  'messages',
+  'darkchat',
+  'flare',
+]
+const noteCompatibleKinds = new Set<EasyShareKind>([
+  'document',
+  'link',
+  'location',
+  'note',
+  'text',
+])
 
 const schemeRoutes: Record<string, string> = {
   location: '/apps/map',
   media: '/apps/photos',
   phone: '/apps/phone',
+}
+
+export function easyShareDestinationAppIds(
+  payload: EasySharePayload,
+): EasyShareDestinationApp[] {
+  const destinations = [...chatDestinations]
+  if (payload.appId !== 'notes' && noteCompatibleKinds.has(payload.kind)) {
+    destinations.push('notes')
+  }
+  return destinations
 }
 
 export function easyShareRoute(payload: EasySharePayload): {

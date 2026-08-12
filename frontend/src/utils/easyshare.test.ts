@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import type { EasySharePayload } from '@/types/easyshare'
-import { easyShareRoute } from '@/utils/easyshare'
+import {
+  easyShareDestinationAppIds,
+  easyShareRoute,
+} from '@/utils/easyshare'
 
 function payload(overrides: Partial<EasySharePayload>): EasySharePayload {
   return {
@@ -70,5 +73,43 @@ describe('EasyShare deep links', () => {
       path,
       query: { easyShareId: id, easyShareKind: kind },
     })
+  })
+})
+
+describe('EasyShare destination suggestions', () => {
+  it.each([
+    'document',
+    'link',
+    'location',
+    'note',
+    'text',
+  ] as const)('offers Notes for %s content from another app', (kind) => {
+    expect(
+      easyShareDestinationAppIds(payload({ appId: 'calendar', kind })),
+    ).toEqual(['messages', 'darkchat', 'flare', 'notes'])
+  })
+
+  it.each([
+    'contact',
+    'photo',
+    'playlist',
+    'post',
+    'profile',
+    'track',
+    'video',
+  ] as const)('does not suggest lossy Notes conversion for %s content', (kind) => {
+    expect(easyShareDestinationAppIds(payload({ kind }))).toEqual([
+      'messages',
+      'darkchat',
+      'flare',
+    ])
+  })
+
+  it('does not suggest saving a Notes item back into Notes', () => {
+    expect(easyShareDestinationAppIds(payload({}))).toEqual([
+      'messages',
+      'darkchat',
+      'flare',
+    ])
   })
 })
