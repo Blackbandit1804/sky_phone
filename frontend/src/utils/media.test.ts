@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   filterMedia,
+  formatMediaSize,
   formatRecordingDuration,
   hasNextMediaPage,
   mediaErrorKey,
@@ -44,8 +45,19 @@ describe('media utilities', () => {
     expect(formatRecordingDuration(3_725_000)).toBe('62:05')
   })
 
+  it('formats imported media sizes with the active locale', () => {
+    expect(formatMediaSize(512, 'en')).toBe('512 B')
+    expect(formatMediaSize(1_572_864, 'en')).toBe('1.5 MB')
+  })
+
   it('maps unknown server failures to the localized default', () => {
     expect(mediaErrorKey('upload_timeout')).toBe('upload_timeout')
+    expect(mediaErrorKey('import_media_too_large')).toBe(
+      'import_media_too_large',
+    )
+    expect(mediaErrorKey('import_url_not_allowed')).toBe(
+      'import_url_not_allowed',
+    )
     expect(mediaErrorKey('private_provider_error')).toBe('request_failed')
   })
 })

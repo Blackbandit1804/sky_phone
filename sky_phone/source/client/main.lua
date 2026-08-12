@@ -265,6 +265,10 @@ local server_callbacks = {
     "flare:send",
     "gallery:list",
     "media:config",
+    "media:import:sources",
+    "media:import:list",
+    "media:import:commit",
+    "media:import:url",
 }
 
 local function get_locale()
@@ -637,6 +641,15 @@ for _, callback_name in ipairs(server_callbacks) do
             return
         end
         local result = Bridge.Callbacks.Trigger("sky_phone:" .. callback_name, data)
+        if callback_name:match("^media:import:") and (not result or not result.success) then
+            Bridge.Debug(
+                "warn",
+                "[sky_phone] NUI callback '%s' failed: %s.",
+                callback_name,
+                tostring(result and result.error or "no server response"),
+                { always = true }
+            )
+        end
         if type(result) == "table" then
             cb(result)
             return

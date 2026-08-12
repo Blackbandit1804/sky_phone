@@ -209,7 +209,11 @@ Database migrations run automatically. Existing `sky_phone_mail_accounts` instal
 Camera and Gallery media is stored in `sky_phone_media`. Signed-out captures belong to the current
 IMEI; linking an iFruit account moves those rows into the account gallery so every linked phone sees
 them. Signing out hides cloud media without deleting it. Factory reset removes device-local media
-and attempts to delete its remote FiveManage files, while account-owned media remains in the cloud.
+and attempts to delete only Phone-created remote FiveManage files. Media imported from a website is
+removed locally but never deleted at its source. Register import websites under
+`Config.Media.Import.Websites` in `sky_phone/config/media.lua`; built-in adapters support FiveManage
+files and version-1 JSON manifests. The Gallery import form accepts direct HTTPS image/video links
+only when their hostname matches the selected website's `AllowedMediaHosts`.
 
 For a fresh manual database installation, import `sky_phone/sql/install.sql`. It contains the complete current table, key, index, collation, and foreign-key schema. Runtime migrations remain authoritative for upgrading an existing installation and must stay enabled.
 

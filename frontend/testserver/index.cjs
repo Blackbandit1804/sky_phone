@@ -2336,7 +2336,6 @@ let mockMedia = [
     url: 'https://picsum.photos/seed/sky-phone-5/800/600',
   },
 ]
-
 const weazelNewsCategoryIds = ['official', 'events', 'jobs', 'news', 'business']
 let weazelNewsSequence = 8
 let weazelNewsArticles = [
@@ -2524,6 +2523,52 @@ function pageWeazelNewsArticles(items, data) {
   }
 }
 
+const mockImportSources = [
+  {
+    id: 'media_archive',
+    label: 'Media Archive',
+    mediaTypes: ['photo', 'video'],
+  },
+  { id: 'event_cdn', label: 'Event CDN', mediaTypes: ['photo'] },
+]
+const mockImportMedia = [
+  {
+    externalId: 'archive-photo-1',
+    filename: 'Vespucci Sunset.jpg',
+    imported: false,
+    mediaType: 'photo',
+    size: 2_481_152,
+    sourceId: 'media_archive',
+    url: 'https://picsum.photos/seed/sky-import-1/900/1200',
+  },
+  {
+    externalId: 'archive-photo-2',
+    filename: 'Downtown Meet.jpg',
+    imported: false,
+    mediaType: 'photo',
+    size: 3_114_205,
+    sourceId: 'media_archive',
+    url: 'https://picsum.photos/seed/sky-import-2/1200/900',
+  },
+  {
+    externalId: 'archive-video-1',
+    filename: 'Flower Clip.mp4',
+    imported: false,
+    mediaType: 'video',
+    size: 8_241_152,
+    sourceId: 'media_archive',
+    url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+  },
+  {
+    externalId: 'event-photo-1',
+    filename: 'Opening Night.jpg',
+    imported: false,
+    mediaType: 'photo',
+    size: 1_824_331,
+    sourceId: 'event_cdn',
+    url: 'https://picsum.photos/seed/sky-event-1/900/1200',
+  },
+]
 const marketplaceInquiries = [
   {
     id: '4903b923-409a-437e-971f-b7a2b10e9e31',
@@ -7875,6 +7920,79 @@ app.post('/api/:endpoint', (request, response) => {
     if (!media.url) {
       response.json({ success: false, error: 'unsupported' })
       return
+    }
+    mockMedia.unshift(media)
+    response.json({ success: true, data: media })
+    return
+  }
+  if (endpoint === 'media:import:sources') {
+    response.json({
+      success: true,
+      data: { maxSelection: 10, sources: mockImportSources },
+    })
+    return
+  }
+  if (endpoint === 'media:import:list') {
+    const page = Math.max(1, Number(request.body.page) || 1)
+    const limit = 30
+    const filtered = mockImportMedia.filter(
+      (item) =>
+        item.sourceId === request.body.sourceId &&
+        item.mediaType === request.body.mediaType,
+    )
+    const offset = (page - 1) * limit
+    response.json({
+      success: true,
+      data: {
+        hasMore: offset + limit < filtered.length,
+        items: filtered.slice(offset, offset + limit),
+        page,
+        total: filtered.length,
+      },
+    })
+    return
+  }
+  if (endpoint === 'media:import:commit') {
+    const externalIds = Array.isArray(request.body.externalIds)
+      ? request.body.externalIds
+      : []
+    const imported = []
+    const failed = []
+    for (const externalId of externalIds) {
+      const item = mockImportMedia.find(
+        (candidate) =>
+          candidate.externalId === externalId &&
+          candidate.sourceId === request.body.sourceId,
+      )
+      if (!item) {
+        failed.push({ error: 'import_media_unavailable', externalId })
+        continue
+      }
+      item.imported = true
+      const media = {
+        createdAt: Date.now(),
+        id: Math.max(0, ...mockMedia.map((entry) => Number(entry.id) || 0)) + 1,
+        mediaType: item.mediaType,
+        url: item.url,
+      }
+      mockMedia.unshift(media)
+      imported.push(media)
+    }
+    response.json({ success: true, data: { failed, imported } })
+    return
+  }
+  if (endpoint === 'media:import:url') {
+    const url = String(request.body.url || '').trim()
+    if (!url.startsWith('https://')) {
+      response.json({ success: false, error: 'invalid_import_url' })
+      return
+    }
+    const mediaType = /\.(mp4|webm)(?:[?#]|$)/i.test(url) ? 'video' : 'photo'
+    const media = {
+      createdAt: Date.now(),
+      id: Math.max(0, ...mockMedia.map((entry) => Number(entry.id) || 0)) + 1,
+      mediaType,
+      url,
     }
     mockMedia.unshift(media)
     response.json({ success: true, data: media })
