@@ -46,11 +46,13 @@ import {
 } from 'lucide-vue-next'
 import type { CSSProperties } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { useMusicStore } from '@/stores/music'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type { MusicPlaylist, MusicTrack } from '@/types/music'
+import { easyShareMusicTarget } from '@/utils/easyshare'
 
 type MusicTab = 'library' | 'playlists' | 'search'
 type MusicSheet =
@@ -69,6 +71,7 @@ const MUSIC_SHEET_TRANSITION_MS = 420
 const music = useMusicStore()
 const easyShare = useEasyShareStore()
 const phone = usePhoneStore()
+const route = useRoute()
 const activeTab = ref<MusicTab>('library')
 const activePlaylist = ref<MusicPlaylist | null>(null)
 const addMenuOpened = ref(false)
@@ -273,10 +276,11 @@ function openTrackMenu(event: MouseEvent, track: MusicTrack): void {
   actionMenuOpened.value = true
 }
 
-function shareTrack(): void {
-  const track = actionTrack.value
+function shareTrack(selectedTrack: MusicTrack | null = actionTrack.value): void {
+  const track = selectedTrack
   if (!track) return
   closeMenus()
+  playerOpened.value = false
   easyShare.open({
     appId: 'music',
     copyText: `${track.title} — ${track.artist}`,
@@ -505,8 +509,24 @@ watch(
   },
 )
 
-onMounted(() => {
-  void music.load()
+onMounted(async () => {
+  await music.load()
+  const target = easyShareMusicTarget(
+    route.query.easyShareKind,
+    route.query.easyShareLink,
+  )
+  if (!target) return
+  if (target.kind === 'playlist') {
+    const playlist = music.playlists.find((entry) => entry.id === target.id)
+    if (playlist) openPlaylist(playlist)
+    return
+  }
+  const track = music.allTracks.find(
+    (entry) => entry.id === target.id && entry.source === target.source,
+  )
+  if (!track) return
+  await playTrack(track)
+  playerOpened.value = true
 })
 
 onBeforeUnmount(() => {
@@ -1271,14 +1291,24 @@ onBeforeUnmount(() => {
             <X :size="20" />
           </k-link>
           <span>{{ phone.t('Apps.music.nowPlaying') }}</span>
-          <k-link
-            component="button"
-            icon-only
-            :aria-label="phone.t('Apps.music.addToPlaylist')"
-            @click="openCurrentTrackPlaylistPicker"
-          >
-            <CirclePlus :size="21" />
-          </k-link>
+          <div class="music-player-header-actions">
+            <k-link
+              component="button"
+              icon-only
+              :aria-label="phone.t('Apps.easyShare.share')"
+              @click="shareTrack(music.currentTrack)"
+            >
+              <Share2 :size="20" />
+            </k-link>
+            <k-link
+              component="button"
+              icon-only
+              :aria-label="phone.t('Apps.music.addToPlaylist')"
+              @click="openCurrentTrackPlaylistPicker"
+            >
+              <CirclePlus :size="21" />
+            </k-link>
+          </div>
         </header>
         <div
           class="music-player-art"
@@ -1977,8 +2007,11 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
-.music-player > header > :last-child {
+.music-player-header-actions {
   justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .music-player-art {

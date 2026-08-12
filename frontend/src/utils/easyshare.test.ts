@@ -4,6 +4,7 @@ import type { EasySharePayload } from '@/types/easyshare'
 import {
   easyShareCrewLinkInviteCode,
   easyShareDestinationAppIds,
+  easyShareMusicTarget,
   easyShareRoute,
 } from '@/utils/easyshare'
 
@@ -93,6 +94,35 @@ describe('EasyShare deep links', () => {
     ).toBeNull()
     expect(
       easyShareCrewLinkInviteCode('link', '', 'invalid-code'),
+    ).toBeNull()
+  })
+
+  it.each([
+    [
+      'track',
+      'skyphone://music/server/city-after-dark',
+      { id: 'city-after-dark', kind: 'track', source: 'server' },
+    ],
+    [
+      'track',
+      'skyphone://music/youtube/music-youtube-1',
+      { id: 'music-youtube-1', kind: 'track', source: 'youtube' },
+    ],
+    [
+      'playlist',
+      'skyphone://music/playlist/music-playlist-1',
+      { id: 'music-playlist-1', kind: 'playlist' },
+    ],
+  ] as const)('extracts the exact shared music target', (kind, link, target) => {
+    expect(easyShareMusicTarget(kind, link)).toEqual(target)
+  })
+
+  it('rejects mismatched music share kinds', () => {
+    expect(
+      easyShareMusicTarget(
+        'playlist',
+        'skyphone://music/server/city-after-dark',
+      ),
     ).toBeNull()
   })
 })

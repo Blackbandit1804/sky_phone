@@ -75,6 +75,34 @@ export function easyShareCrewLinkInviteCode(
   return null
 }
 
+export type EasyShareMusicTarget =
+  | { id: string; kind: 'playlist' }
+  | { id: string; kind: 'track'; source: 'server' | 'youtube' }
+
+export function easyShareMusicTarget(
+  kind: unknown,
+  link: unknown,
+): EasyShareMusicTarget | null {
+  if (typeof link !== 'string') return null
+  if (kind === 'track') {
+    const match = link.match(
+      /^skyphone:\/\/music\/(server|youtube)\/([^/?#]+)$/,
+    )
+    if (match) {
+      return {
+        id: match[2],
+        kind: 'track',
+        source: match[1] as 'server' | 'youtube',
+      }
+    }
+  }
+  if (kind === 'playlist') {
+    const match = link.match(/^skyphone:\/\/music\/playlist\/([^/?#]+)$/)
+    if (match) return { id: match[1], kind: 'playlist' }
+  }
+  return null
+}
+
 export async function openEasySharePayload(
   router: Router,
   payload: EasySharePayload,
