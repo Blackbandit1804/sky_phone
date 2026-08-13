@@ -85,13 +85,13 @@ existing playlist entries can no longer resolve the track.
 
 Players can add public YouTube video links to their own library. Metadata is requested through
 YouTube's oEmbed endpoint on the server, while playback uses the embedded YouTube player only on
-that player's NUI. Personal songs and playlists are stored per linked iFruit account, or per phone
+that player's NUI. Personal songs and playlists are stored per linked Sky Cloud account, or per phone
 IMEI while signed out, in the `sky_phone_music_*` tables. Limits and rate controls are configured in
 `config/music.lua`.
 
 ## FlipTok accounts
 
-FlipTok profiles use their own username and password login. Registration requires a linked iFruit
+FlipTok profiles use their own username and password login. Registration requires a linked Sky Cloud
 account once so an existing creator profile, videos, followers, and verification can be claimed
 without data loss. Login sessions are stored per phone IMEI and survive resource or server restarts;
 signing out removes only that device session.
@@ -106,7 +106,7 @@ set sky_phone_fliptok_password_pepper "replace-with-a-long-random-secret"
 Passwords are stored as salted hashes. The pepper is read server-side from the convar and is never
 included in the NUI bundle.
 
-Standalone FiveM phone built with Vue 3, TypeScript, Pinia, Vue Router, Konsta UI 5, and Tailwind CSS 4. The phone opens through the usable item; `/phone` is disabled unless `Config.Phone.DevelopmentCommand` is enabled explicitly. Phone identity and SIM-card behavior are selected independently through `Config.Phone.Unique` and `Config.Sim.Enabled`.
+Standalone FiveM phone built with Vue 3, TypeScript, Pinia, Vue Router, the Sky-owned FiveM UI system, and Tailwind CSS 4. Konsta UI remains only for screens that have not yet completed their migration. The phone opens through the usable item; `/phone` is disabled unless `Config.Phone.DevelopmentCommand` is enabled explicitly. Phone identity and SIM-card behavior are selected independently through `Config.Phone.Unique` and `Config.Sim.Enabled`.
 
 ### Ingame test data
 
@@ -114,7 +114,7 @@ On development servers, enable `Config.TestData.Enabled` and run `/phonetestdata
 owns the phone. The command creates or refreshes idempotent, player-scoped fixtures for contacts,
 calls, messages, mail, notes, gallery, banking history, billing, calendar, map markers, music, radio,
 EasyShare, CityMarkt, Local Pages, Picstagram, FlipTok, Feather, Flare, DarkChat, CrewLink, SkyRide,
-and company requests. It also creates a linked iFruit account and a registered SIM when the selected
+and company requests. It also creates a linked Sky Cloud account and a registered SIM when the selected
 phone does not have them yet. Reopen the phone after the command completes.
 
 Garage and Housing intentionally continue to use the real configured provider data. Apps without
@@ -122,7 +122,7 @@ persistent content, such as Calculator, Camera, Clock, Weather, Settings, and Pa
 database fixtures. Set `Config.TestData.AdminOnly = true` to restrict the command to the configured
 framework admin groups, and disable the feature outside development environments.
 
-An iFruit account is optional. Unlinked devices retain local settings, alarms, media, apps, notes, contacts, and recent calls. Linking from Mail or Settings moves local data into an empty cloud account; an existing cloud dataset wins over local contacts and recents. Signing out keeps an editable local snapshot without deleting cloud data.
+A Sky Cloud account is optional. Unlinked devices retain local settings, alarms, media, apps, notes, contacts, and recent calls. Linking from Mail or Settings moves local data into an empty Sky Cloud account; an existing Sky Cloud dataset wins over local contacts and recents. Signing out keeps an editable local snapshot without deleting Sky Cloud data.
 
 ## Phone identity and SIM modes
 
@@ -136,7 +136,7 @@ Config.Sim.Enabled = true
 For backwards compatibility, an omitted switch is also treated as `true`.
 
 With `Config.Phone.Unique = true`, every phone item is one transferable physical Device. Its unique
-15-digit IMEI is stored in item metadata, so its settings, PIN, local app data, linked iFruit
+15-digit IMEI is stored in item metadata, so its settings, PIN, local app data, linked Sky Cloud
 account, and installed SIM travel with that item. The item must be non-stackable.
 
 With `Config.Phone.Unique = false`, the server assigns each framework character one persistent
@@ -204,16 +204,17 @@ set sky_phone_giphy_api_key "replace-with-your-giphy-api-key"
 GIPHY provides trending and searched GIFs through a paginated server-side proxy. Only the server
 reads the key. Photo and video actions in Messages use media captured by the Camera app.
 
-Database migrations run automatically. Existing `sky_phone_mail_accounts` installations are renamed to `sky_phone_accounts` while preserving account IDs and mail foreign keys. The migration also creates `sky_phone_character_devices` for persistent non-unique phone mappings and marks automatic SIMs through `sky_phone_sims.is_virtual`. iFruit passwords are intentional in-character credentials and remain plaintext `VARCHAR(64)` values; registration screens warn players never to reuse a real password.
+Database migrations run automatically. Existing `sky_phone_mail_accounts` installations are renamed to `sky_phone_accounts` while preserving account IDs and mail foreign keys. The migration also creates `sky_phone_character_devices` for persistent non-unique phone mappings and marks automatic SIMs through `sky_phone_sims.is_virtual`. Sky Cloud passwords are intentional in-character credentials and remain plaintext `VARCHAR(64)` values; registration screens warn players never to reuse a real password.
 
 Camera and Gallery media is stored in `sky_phone_media`. Signed-out captures belong to the current
-IMEI; linking an iFruit account moves those rows into the account gallery so every linked phone sees
-them. Signing out hides cloud media without deleting it. Factory reset removes device-local media
-and attempts to delete only Phone-created remote FiveManage files. Media imported from a website is
-removed locally but never deleted at its source. Register import websites under
-`Config.Media.Import.Websites` in `sky_phone/config/media.lua`; built-in adapters support FiveManage
-files and version-1 JSON manifests. The Gallery import form accepts direct HTTPS image/video links
-only when their hostname matches the selected website's `AllowedMediaHosts`.
+IMEI; linking a Sky Cloud account moves those rows into the account gallery so every linked phone sees
+them. Signing out hides Sky Cloud media without deleting it. Factory reset removes device-local media
+and attempts to delete only remote FiveManage files created by `sky_phone`; account-owned media
+remains in Sky Cloud. Media imported from a website is removed locally but never deleted at its
+source. Register import websites under `Config.Media.Import.Websites` in
+`sky_phone/config/media.lua`; built-in adapters support FiveManage files and version-1 JSON
+manifests. The Gallery import form accepts direct HTTPS image/video links only when their hostname
+matches the selected website's `AllowedMediaHosts`.
 
 For a fresh manual database installation, import `sky_phone/sql/install.sql`. It contains the complete current table, key, index, collation, and foreign-key schema. Runtime migrations remain authoritative for upgrading an existing installation and must stay enabled.
 
@@ -249,7 +250,7 @@ Radio profiles are stored in `sky_phone_radio_profiles`. Runtime migration creat
 
 Inventory metadata has no framework-wide standard: providers differ in export names, callback payloads, slot handling, and whether metadata is called `metadata` or `info`. For that reason, `sky_phone` uses explicit provider adapters instead of guessing exports at runtime. Every supported adapter implements slot lookup, item lookup, metadata replacement, capacity handling, add/remove operations, and usable-item registration. Providers without a separate capacity export use their authoritative add operation as the final capacity gate. Phone item metadata is authoritative only when `Config.Phone.Unique = true`; in non-unique mode the persistent character mapping is authoritative instead.
 
-When physical SIMs are enabled and a SIM is ejected or replaced, the returned inventory item is rebuilt from the authoritative `sky_phone_sims` row. Its metadata contains `sim_metadata_version`, `sim_id`, `phone_number`, `formatted_number`, and `sim_type`. Registered SIMs additionally contain `firstname`, `lastname`, `birthdate`, and `registered_at`. The internal framework owner identifier remains database-only. Inserting the item again resolves the SIM by `sim_id`; contacts and device/cloud data remain attached to their existing Device or cloud persistence instead of being copied into inventory metadata. Automatically created virtual SIMs remain database-only and never become inventory items.
+When physical SIMs are enabled and a SIM is ejected or replaced, the returned inventory item is rebuilt from the authoritative `sky_phone_sims` row. Its metadata contains `sim_metadata_version`, `sim_id`, `phone_number`, `formatted_number`, and `sim_type`. Registered SIMs additionally contain `firstname`, `lastname`, `birthdate`, and `registered_at`. The internal framework owner identifier remains database-only. Inserting the item again resolves the SIM by `sim_id`; contacts and device/Sky Cloud data remain attached to their existing Device or Sky Cloud persistence instead of being copied into inventory metadata. Automatically created virtual SIMs remain database-only and never become inventory items.
 
 For `ox_inventory`, configure the phone with `stack = false` when `Config.Phone.Unique = true`; it may use `stack = true` in non-unique mode. Physical SIM items always use `stack = false` and are only needed when `Config.Sim.Enabled = true`. Every usable item should use `consume = 0`. Do not configure a client event or export. Ox then completes its normal server-authoritative use flow and emits `ox_inventory:usedItem`; the bridge resolves the authoritative slot again and only opens the matching Device or SIM. A client export would return before Ox calls `useItem` and therefore prevent `ox_inventory:usedItem` from being emitted.
 

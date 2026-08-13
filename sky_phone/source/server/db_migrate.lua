@@ -12,7 +12,7 @@ end
 if account_tables.sky_phone_mail_accounts and not account_tables.sky_phone_accounts then
     Bridge.Database.Query("RENAME TABLE `sky_phone_mail_accounts` TO `sky_phone_accounts`", {})
 elseif account_tables.sky_phone_mail_accounts and account_tables.sky_phone_accounts then
-    error("[sky_phone] Both legacy and current iFruit account tables exist; refusing an ambiguous migration.")
+    error("[sky_phone] Both legacy and current Sky Cloud account tables exist; refusing an ambiguous migration.")
 end
 
 local schema = {

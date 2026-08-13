@@ -869,7 +869,7 @@ local function seed_for_source(source)
         )
         account = rows[1]
         if not account then
-            error("[sky_phone] Test data found a device with a missing iFruit account.")
+            error("[sky_phone] Test data found a device with a missing Sky Cloud account.")
         end
         account.id = tonumber(account.id)
     else
