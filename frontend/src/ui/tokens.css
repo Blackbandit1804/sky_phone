@@ -20,6 +20,11 @@
   --sky-font-body: 15px;
   --sky-font-title: 17px;
   --sky-font-large-title: 28px;
+  --sky-widget-label-gap: 5px;
+  --sky-widget-label-height: 15px;
+  --sky-widget-radius-small: 23px;
+  --sky-widget-radius-medium: 25px;
+  --sky-widget-radius-large: 28px;
 }
 
 .sky-app-page {
