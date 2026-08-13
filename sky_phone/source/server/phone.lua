@@ -517,6 +517,7 @@ local function bootstrap(source, security, security_loaded)
             devices = account_devices(device.account_id, device.imei),
         } or nil,
         notes = SkyPhoneNotes.List(device.account_id, device.imei),
+        memos = SkyPhoneMemos.List(device.account_id, device.imei),
     }
 end
 

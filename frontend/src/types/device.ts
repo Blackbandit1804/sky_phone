@@ -1,4 +1,5 @@
 import type { Note } from '@/utils/notes'
+import type { MemoDto } from '@/types/memos'
 import type { PhoneSim } from '@/types/phone'
 
 export type DeviceDataEntry<T = unknown> = {
@@ -42,6 +43,7 @@ export type IfruitAccount = {
 export type DeviceBootstrap = {
   account: IfruitAccount | null
   device: PhoneDevice
+  memos: MemoDto[]
   notes: Note[]
   security: DeviceSecurity
   token: string

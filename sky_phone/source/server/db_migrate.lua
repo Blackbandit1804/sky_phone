@@ -376,7 +376,7 @@ local schema = {
             },
             { name = "url", type = "TEXT NOT NULL" },
             { name = "remote_id", type = "VARCHAR(128) NOT NULL" },
-            { name = "media_type", type = "ENUM('photo', 'video') NOT NULL" },
+            { name = "media_type", type = "ENUM('photo', 'video', 'audio') NOT NULL" },
             { name = "mime_type", type = "VARCHAR(120) NULL" },
             { name = "origin", type = "ENUM('phone_upload', 'website_import') NOT NULL DEFAULT 'phone_upload'" },
             {
@@ -402,6 +402,36 @@ local schema = {
                 column = "device_imei",
                 references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE",
             },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_voice_memos",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "media_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "title", type = "VARCHAR(120) NOT NULL" },
+            { name = "note", type = "VARCHAR(2000) NOT NULL DEFAULT ''" },
+            { name = "duration_ms", type = "INT UNSIGNED NOT NULL" },
+            { name = "size_bytes", type = "INT UNSIGNED NOT NULL" },
+            { name = "waveform", type = "TEXT NOT NULL" },
+            { name = "pinned", type = "TINYINT(1) NOT NULL DEFAULT 0" },
+            { name = "revision", type = "INT UNSIGNED NOT NULL DEFAULT 1" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            {
+                name = "updated_at",
+                type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_voice_memos_media", columns = "(`media_id`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_voice_memos_list", columns = "(`pinned`, `updated_at`, `id`)" },
+        },
+        foreignKeys = {
+            { column = "media_id", references = "`sky_phone_media` (`id`) ON DELETE CASCADE" },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
@@ -2567,6 +2597,10 @@ Bridge.Database.Query([[
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_darkchat_messages`
     MODIFY COLUMN `message_type` ENUM('text', 'emoji', 'gif', 'voice', 'image', 'video', 'share', 'system') NOT NULL DEFAULT 'text'
+]], {})
+Bridge.Database.Query([[
+    ALTER TABLE `sky_phone_media`
+    MODIFY COLUMN `media_type` ENUM('photo', 'video', 'audio') NOT NULL
 ]], {})
 Bridge.Database.Query([[
     UPDATE `sky_phone_media`

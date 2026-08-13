@@ -184,25 +184,26 @@ and restart the resource after updating the configuration.
 - When `Config.Sim.Enabled = true`, two unique, non-stackable inventory items named `sky_phone_sim_registered` and `sky_phone_sim_anonymous`. Their metadata is initialized automatically on first use, so shops and crafting recipes add plain items without supplying a number. These item definitions are not required when SIM cards are disabled.
 - `oxmysql` with MySQL/MariaDB.
 - `pma-voice` when `Config.Calls.VoiceProvider` is set to `"pma"`.
-- A FiveManage V3 Media API token for Camera photo/video uploads and Gallery deletion. Set it as a
-  server-only convar; the token is never sent to NUI because clients receive temporary presigned
-  upload URLs instead:
+- A FiveManage V3 Media API token for Camera photo/video uploads, Voice Memo audio uploads, and Gallery deletion. Set it in the
+  server-only `sky_phone/config/media.lua`; the token is never sent to NUI because clients receive
+  temporary presigned upload URLs instead:
 
-```cfg
-set sky_phone_fivemanage_api_key "replace-with-your-media-token"
+```lua
+Config.Media.FiveManage.ApiKey = "replace-with-your-media-token"
 ```
 - `yaca-voice`, `pma-voice`, or `saltychat` when the Radio app is enabled. `Config.Radio.VoiceProvider = "auto"` selects the first running provider in that order.
 
 ## Messages GIF provider
 
-Configure GIF search as a server-only convar:
+Configure GIF search directly in the server-only `sky_phone/config/media.lua`:
 
-```cfg
-set sky_phone_giphy_api_key "replace-with-your-giphy-api-key"
+```lua
+Config.Media.GiphyApiKey = "replace-with-your-giphy-api-key"
 ```
 
 GIPHY provides trending and searched GIFs through a paginated server-side proxy. Only the server
-reads the key. Photo and video actions in Messages use media captured by the Camera app.
+reads the key. Never expose it to the client or NUI. Photo and video actions in Messages use media
+captured by the Camera app.
 
 Database migrations run automatically. Existing `sky_phone_mail_accounts` installations are renamed to `sky_phone_accounts` while preserving account IDs and mail foreign keys. The migration also creates `sky_phone_character_devices` for persistent non-unique phone mappings and marks automatic SIMs through `sky_phone_sims.is_virtual`. Sky Cloud passwords are intentional in-character credentials and remain plaintext `VARCHAR(64)` values; registration screens warn players never to reuse a real password.
 
