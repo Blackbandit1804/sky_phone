@@ -7,6 +7,8 @@ import {
   springboardEdgeDirection,
   springboardPageDragCompensation,
   springboardSwipeIntent,
+  springboardViewportDeltaToLocal,
+  springboardViewportToLocal,
 } from '@/utils/springboardDrag'
 
 describe('springboard widget drag', () => {
@@ -56,5 +58,17 @@ describe('springboard widget drag', () => {
     expect(springboardPageDragCompensation(3, 2, 368)).toBe(-368)
     expect(springboardPageDragCompensation(2, 3, 368)).toBe(368)
     expect(springboardPageDragCompensation(2, 2, 368)).toBe(0)
+  })
+
+  it('converts viewport coordinates into local phone coordinates under zoom', () => {
+    expect(
+      springboardViewportToLocal(169, 238, 100, 100, 253.92, 582.36, 368, 844),
+    ).toEqual({ x: 100, y: 200 })
+    expect(
+      springboardViewportToLocal(200, 250, 100, 50, 0, 0, 368, 844),
+    ).toEqual({ x: 100, y: 200 })
+    expect(
+      springboardViewportDeltaToLocal(69, 138, 253.92, 582.36, 368, 844),
+    ).toEqual({ x: 100, y: 200 })
   })
 })

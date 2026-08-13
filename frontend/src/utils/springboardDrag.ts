@@ -11,6 +11,42 @@ export type SpringboardHomeEdgeTurn = SpringboardEdgeTurn & {
 
 export type SpringboardSwipeIntent = 'horizontal' | 'pending' | 'vertical'
 
+export type SpringboardLocalPoint = {
+  x: number
+  y: number
+}
+
+export function springboardViewportToLocal(
+  clientX: number,
+  clientY: number,
+  viewportLeft: number,
+  viewportTop: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  layoutWidth: number,
+  layoutHeight: number,
+): SpringboardLocalPoint {
+  const scaleX = viewportWidth > 0 ? layoutWidth / viewportWidth : 1
+  const scaleY = viewportHeight > 0 ? layoutHeight / viewportHeight : 1
+  return {
+    x: (clientX - viewportLeft) * scaleX,
+    y: (clientY - viewportTop) * scaleY,
+  }
+}
+
+export function springboardViewportDeltaToLocal(
+  deltaX: number,
+  deltaY: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  layoutWidth: number,
+  layoutHeight: number,
+): SpringboardLocalPoint {
+  const scaleX = viewportWidth > 0 ? layoutWidth / viewportWidth : 1
+  const scaleY = viewportHeight > 0 ? layoutHeight / viewportHeight : 1
+  return { x: deltaX * scaleX, y: deltaY * scaleY }
+}
+
 export function springboardPageDragCompensation(
   startPage: number,
   currentPage: number,

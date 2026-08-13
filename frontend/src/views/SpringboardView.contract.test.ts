@@ -43,15 +43,39 @@ describe('Springboard page swipe contract', () => {
     expect(folderIconSource).toContain(':style="dragPointerStyle"')
   })
 
-  it('keeps the held app visible while its source page moves away', () => {
-    expect(viewSource).toContain(
-      "'springboard--home-dragging': draggingHomeApp !== null",
+  it('keeps a phone-wide drag ghost outside the moving page track', () => {
+    const trackStart = viewSource.indexOf('class="springboard-track"')
+    const dragLayerStart = viewSource.indexOf('ref="homeDragLayer"')
+
+    expect(trackStart).toBeGreaterThan(-1)
+    expect(dragLayerStart).toBeGreaterThan(trackStart)
+    expect(viewSource.slice(trackStart, dragLayerStart)).toContain('</div>')
+    expect(viewSource).toContain('source.cloneNode(true)')
+    expect(viewSource).toContain("ghost.classList.add('home-drag-ghost')")
+    expect(viewSource).toContain('springboardViewportToLocal')
+    expect(viewSource).toContain('springboardViewportDeltaToLocal')
+    expect(viewSource).toContain('event.target instanceof Element')
+    expect(viewSource).toContain('dropGhost?.getBoundingClientRect()')
+    expect(viewSource.match(/:external-drag-visual/g)).toHaveLength(4)
+    expect(viewSource.match(/startHomeDrag\([^\n]+\$event\)/g)).toHaveLength(4)
+    expect(appIconSource).toContain('externalDragVisual?: boolean')
+    expect(folderIconSource).toContain('externalDragVisual?: boolean')
+    expect(appIconSource).toContain("'app-icon-item--drag-source'")
+    expect(folderIconSource).toContain("'app-icon-item--drag-source'")
+    expect(mainCss).toMatch(
+      /\.home-drag-layer\s*\{[^}]*z-index:\s*70;[^}]*pointer-events:\s*none;/s,
     )
     expect(mainCss).toMatch(
-      /\.springboard--home-dragging\s+\.springboard-page--apps,?[\s\S]*?\{\s*overflow:\s*visible;/,
+      /\.home-drag-ghost\s*\{[^}]*position:\s*absolute;[^}]*will-change:\s*transform;/s,
     )
+    expect(mainCss).toMatch(
+      /\.app-icon-item--drag-source\s*\{[^}]*opacity:\s*0;/s,
+    )
+    expect(mainCss).not.toContain('.springboard--home-dragging')
     expect(mainCss).toMatch(/\.springboard\s*\{[\s\S]*?overflow:\s*hidden;/)
-    expect(mainCss).toMatch(/\.app-icon-item--dragging\s*\{[^}]*opacity:\s*1;/)
+    expect(mainCss).toMatch(
+      /\.springboard-page--apps\s*\{[^}]*overflow:\s*hidden;/s,
+    )
   })
 
   it('targets the active visual page and lets grid or dock drags turn pages', () => {

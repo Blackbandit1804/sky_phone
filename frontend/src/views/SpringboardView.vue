@@ -35,6 +35,8 @@ import {
   resolveSpringboardEdgeTurn,
   resolveSpringboardHomeEdgeTurn,
   springboardSwipeIntent,
+  springboardViewportDeltaToLocal,
+  springboardViewportToLocal,
 } from '@/utils/springboardDrag'
 import {
   deleteWidgetPage as previewWidgetPageDelete,
@@ -77,6 +79,8 @@ const draggingHomeApp = ref<{
   area: HomeArea
   index: number
 } | null>(null)
+const homeDragLayer = ref<HTMLElement | null>(null)
+const homeDragVisualActive = ref(false)
 const temporaryHomePage = ref<number | null>(null)
 const openedFolderId = ref<string | null>(null)
 const renameFolderOnOpenId = ref<string | null>(null)
@@ -95,6 +99,8 @@ let edgePageDirection = 0
 let edgePageLocked = false
 let folderHoverTimer: number | undefined
 let lastHomePointer: { clientX: number; clientY: number } | null = null
+let homeDragGhost: HTMLElement | null = null
+let homeDragGrip: { x: number; y: number } | null = null
 
 const installedApps = computed(() =>
   PHONE_APPS.filter((app) => appStore.isInstalled(app.id)),
@@ -663,10 +669,122 @@ async function saveWidgetConfig(
   if (configured) changePage(configured.page)
 }
 
-function startHomeDrag(area: HomeArea, index: number): void {
+function homeDragLocalPoint(
+  clientX: number,
+  clientY: number,
+): {
+  x: number
+  y: number
+} | null {
+  const layer = homeDragLayer.value
+  if (!layer) return null
+  const bounds = layer.getBoundingClientRect()
+  return springboardViewportToLocal(
+    clientX,
+    clientY,
+    bounds.left,
+    bounds.top,
+    bounds.width,
+    bounds.height,
+    layer.offsetWidth,
+    layer.offsetHeight,
+  )
+}
+
+function clearHomeDragGhost(expectedGhost?: HTMLElement | null): void {
+  if (expectedGhost && homeDragGhost !== expectedGhost) return
+  homeDragGhost?.remove()
+  homeDragGhost = null
+  homeDragGrip = null
+  homeDragVisualActive.value = false
+}
+
+function updateHomeDragGhost(event: {
+  clientX: number
+  clientY: number
+}): void {
+  const point = homeDragLocalPoint(event.clientX, event.clientY)
+  if (!homeDragGhost || !homeDragGrip || !point) return
+  homeDragGhost.style.transform = `translate3d(${point.x - homeDragGrip.x}px, ${point.y - homeDragGrip.y}px, 0)`
+}
+
+function createHomeDragGhost(event: PointerEvent): void {
+  clearHomeDragGhost()
+  const eventTarget =
+    event.currentTarget instanceof Element
+      ? event.currentTarget
+      : event.target instanceof Element
+        ? event.target
+        : null
+  const source = eventTarget?.closest<HTMLElement>('.app-icon-item')
+  const layer = homeDragLayer.value
+  if (!source || !layer) return
+
+  const layerBounds = layer.getBoundingClientRect()
+  const sourceBounds = source.getBoundingClientRect()
+  const sourceOrigin = springboardViewportToLocal(
+    sourceBounds.left,
+    sourceBounds.top,
+    layerBounds.left,
+    layerBounds.top,
+    layerBounds.width,
+    layerBounds.height,
+    layer.offsetWidth,
+    layer.offsetHeight,
+  )
+  const pointer = homeDragLocalPoint(event.clientX, event.clientY)
+  if (!pointer) return
+
+  const ghost = source.cloneNode(true) as HTMLElement
+  ghost.classList.remove(
+    'app-icon-item--dragging',
+    'app-icon-item--editing',
+    'app-icon-item--drag-source',
+    'app-icon-item--drop-settling',
+    'home-folder-item--dragging',
+    'home-item--folder-hover',
+  )
+  ghost.classList.add('home-drag-ghost')
+  ghost.removeAttribute('style')
+  ghost.setAttribute('aria-hidden', 'true')
+  ghost.querySelector('.app-icon-remove')?.remove()
+  for (const element of [ghost, ...Array.from(ghost.querySelectorAll('*'))]) {
+    element.removeAttribute('id')
+    for (const attribute of element.getAttributeNames()) {
+      if (attribute.startsWith('data-home-')) element.removeAttribute(attribute)
+    }
+  }
+  for (const control of ghost.querySelectorAll<HTMLElement>(
+    'a, button, input, select, textarea, [tabindex]',
+  )) {
+    control.tabIndex = -1
+  }
+
+  const localScaleX =
+    layerBounds.width > 0 ? layer.offsetWidth / layerBounds.width : 1
+  const localScaleY =
+    layerBounds.height > 0 ? layer.offsetHeight / layerBounds.height : 1
+  ghost.style.width = `${sourceBounds.width * localScaleX}px`
+  ghost.style.height = `${sourceBounds.height * localScaleY}px`
+  homeDragGhost = ghost
+  homeDragGrip = {
+    x: pointer.x - sourceOrigin.x,
+    y: pointer.y - sourceOrigin.y,
+  }
+  layer.appendChild(ghost)
+  homeDragVisualActive.value = true
+  updateHomeDragGhost(event)
+}
+
+function startHomeDrag(
+  area: HomeArea,
+  index: number,
+  event: PointerEvent,
+): void {
   clearTemporaryHomePage()
   lastHomePointer = null
   draggingHomeApp.value = { area, index }
+  createHomeDragGhost(event)
 }
 
 function clearFolderHover(): void {
@@ -752,6 +870,7 @@ function queueFolderHover(event: PointerEvent): void {
     if (folderId) {
       draggingHomeApp.value = null
       lastHomePointer = null
+      clearHomeDragGhost()
       clearTemporaryHomePage()
       openedFolderId.value = folderId
     }
@@ -762,6 +881,7 @@ function queueFolderHover(event: PointerEvent): void {
 function moveHomeDrag(event: PointerEvent): void {
   if (!draggingHomeApp.value) return
   lastHomePointer = { clientX: event.clientX, clientY: event.clientY }
+  updateHomeDragGhost(event)
   if (resolveHomeEdgeTurn(event)) {
     clearFolderHover()
     queueEdgePageTurn(event, 'app')
@@ -792,8 +912,14 @@ async function animateHomeItemDrop(
   if (!appElement) return
 
   const target = appElement.getBoundingClientRect()
-  const offsetX = from.left - target.left
-  const offsetY = from.top - target.top
+  const { x: offsetX, y: offsetY } = springboardViewportDeltaToLocal(
+    from.left - target.left,
+    from.top - target.top,
+    target.width,
+    target.height,
+    appElement.offsetWidth,
+    appElement.offsetHeight,
+  )
   if (Math.hypot(offsetX, offsetY) < 1) return
 
   appElement.style.setProperty('--home-app-drop-x', `${offsetX}px`)
@@ -920,12 +1046,13 @@ function finishHomeDrag(event: PointerEvent): void {
   clearEdgePageTurn()
   clearFolderHover()
   const dragged = draggingHomeApp.value
-  if (!dragged) return
+  if (!dragged) {
+    clearHomeDragGhost()
+    return
+  }
   const draggedItem = appStore.homeLayout[dragged.area][dragged.index]
-  const draggedElement = (event.currentTarget as HTMLElement | null)?.closest(
-    '.app-icon-item',
-  )
-  const dropOrigin = draggedElement?.getBoundingClientRect()
+  const dropGhost = homeDragGhost
+  const dropOrigin = dropGhost?.getBoundingClientRect()
   const dockTarget = nearestDockDropTarget(event)
   const gridTarget = dockTarget ? null : nearestGridDropTarget(event)
   let dropArea = dragged.area
@@ -963,7 +1090,14 @@ function finishHomeDrag(event: PointerEvent): void {
   lastHomePointer = null
   clearTemporaryHomePage(moved && gridTarget !== null)
   if (moved && draggedItem && dropOrigin) {
-    void animateHomeItemDrop(draggedItem, dropArea, dropIndex, dropOrigin)
+    void animateHomeItemDrop(
+      draggedItem,
+      dropArea,
+      dropIndex,
+      dropOrigin,
+    ).finally(() => clearHomeDragGhost(dropGhost))
+  } else {
+    clearHomeDragGhost()
   }
 }
 
@@ -972,6 +1106,7 @@ function stopHomeDrag(): void {
   clearFolderHover()
   draggingHomeApp.value = null
   lastHomePointer = null
+  clearHomeDragGhost()
   clearTemporaryHomePage()
 }
 
@@ -1142,6 +1277,7 @@ onBeforeUnmount(() => {
   pendingWidgetPointer = null
   lastWidgetPointer = null
   lastHomePointer = null
+  clearHomeDragGhost()
   temporaryHomePage.value = null
   draggingHomeApp.value = null
   draggingWidgetId.value = null
@@ -1157,7 +1293,6 @@ onBeforeUnmount(() => {
         'springboard--dragging': dragging,
         'springboard--editing': editMode,
         'springboard--folder-open': openedFolder !== null,
-        'springboard--home-dragging': draggingHomeApp !== null,
         'springboard--widget-dragging': draggingWidgetId !== null,
       },
     ]"
@@ -1232,6 +1367,7 @@ onBeforeUnmount(() => {
               :data-home-index="cell.sourceIndex"
               :data-home-target-offset="cell.targetOffset"
               :edit-mode="editMode"
+              :external-drag-visual="homeDragVisualActive"
               :class="{
                 'home-item--folder-hover':
                   folderHoverTarget === `grid:${cell.sourceIndex}`,
@@ -1239,7 +1375,7 @@ onBeforeUnmount(() => {
               @dragcancel="stopHomeDrag"
               @dragend="finishHomeDrag"
               @dragmove="moveHomeDrag"
-              @dragstart="startHomeDrag('grid', cell.sourceIndex)"
+              @dragstart="startHomeDrag('grid', cell.sourceIndex, $event)"
               @edit="enterEditMode"
               @remove="removeHomeApp(cell.app.id)"
               @reorder="reorderHomeApp('grid', cell.sourceIndex, $event)"
@@ -1254,6 +1390,7 @@ onBeforeUnmount(() => {
               :data-home-index="cell.sourceIndex"
               :data-home-target-offset="cell.targetOffset"
               :edit-mode="editMode"
+              :external-drag-visual="homeDragVisualActive"
               :folder="cell.folder"
               :class="{
                 'home-item--folder-hover':
@@ -1262,7 +1399,7 @@ onBeforeUnmount(() => {
               @dragcancel="stopHomeDrag"
               @dragend="finishHomeDrag"
               @dragmove="moveHomeDrag"
-              @dragstart="startHomeDrag('grid', cell.sourceIndex)"
+              @dragstart="startHomeDrag('grid', cell.sourceIndex, $event)"
               @edit="enterEditMode"
               @open="openFolder(cell.folder.id)"
               @reorder="reorderHomeApp('grid', cell.sourceIndex, $event)"
@@ -1413,6 +1550,8 @@ onBeforeUnmount(() => {
       </section>
     </div>
 
+    <div ref="homeDragLayer" class="home-drag-layer" aria-hidden="true"></div>
+
     <Transition name="edit-done">
       <k-glass
         v-if="editMode && isEditablePage && !openedFolder"
@@ -1458,6 +1597,7 @@ onBeforeUnmount(() => {
             :data-home-item-key="`app-${slot.app.id}`"
             :data-home-index="slot.index"
             :edit-mode="editMode"
+            :external-drag-visual="homeDragVisualActive"
             :show-label="false"
             :class="{
               'home-item--folder-hover':
@@ -1466,7 +1606,7 @@ onBeforeUnmount(() => {
             @dragcancel="stopHomeDrag"
             @dragend="finishHomeDrag"
             @dragmove="moveHomeDrag"
-            @dragstart="startHomeDrag('dock', slot.index)"
+            @dragstart="startHomeDrag('dock', slot.index, $event)"
             @edit="enterEditMode"
             @remove="removeHomeApp(slot.app.id)"
             @reorder="reorderHomeApp('dock', slot.index, $event)"
@@ -1480,6 +1620,7 @@ onBeforeUnmount(() => {
             :data-home-item-key="slot.folder.id"
             :data-home-index="slot.index"
             :edit-mode="editMode"
+            :external-drag-visual="homeDragVisualActive"
             :folder="slot.folder"
             :show-label="false"
             :class="{
@@ -1489,7 +1630,7 @@ onBeforeUnmount(() => {
             @dragcancel="stopHomeDrag"
             @dragend="finishHomeDrag"
             @dragmove="moveHomeDrag"
-            @dragstart="startHomeDrag('dock', slot.index)"
+            @dragstart="startHomeDrag('dock', slot.index, $event)"
             @edit="enterEditMode"
             @open="openFolder(slot.folder.id)"
             @reorder="reorderHomeApp('dock', slot.index, $event)"
