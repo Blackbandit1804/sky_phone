@@ -35,6 +35,20 @@ function mergeById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
   return [...merged.values()]
 }
 
+function sameDirectoryFilters(
+  current: CompanyDirectoryFilters,
+  requested: CompanyDirectoryFilters,
+): boolean {
+  return (
+    current.acceptsRequests === requested.acceptsRequests &&
+    current.availability === requested.availability &&
+    current.categoryId === requested.categoryId &&
+    current.hasLocation === requested.hasLocation &&
+    current.search === requested.search &&
+    current.sort === requested.sort
+  )
+}
+
 export const useCompaniesStore = defineStore('companies', {
   state: () => ({
     categories: [] as CompanyDirectoryPage['categories'],
@@ -49,11 +63,13 @@ export const useCompaniesStore = defineStore('companies', {
       search: '',
       sort: 'relevance',
     } as CompanyDirectoryFilters,
+    directoryAppendError: '',
     directoryError: '',
     directoryLoaded: false,
     directoryLoading: false,
     directoryLoadingMore: false,
     directoryNextCursor: null as string | null,
+    directoryRequestGeneration: 0,
     deviceScopeKey: '',
     deviceScopeVersion: 0,
     members: [] as CompanyMember[],
@@ -61,12 +77,14 @@ export const useCompaniesStore = defineStore('companies', {
     mutationError: '',
     mutating: false,
     myRequests: [] as CompanyRequestSummary[],
+    myRequestsAppendError: '',
     myRequestsList: 'open' as CompanyRequestList,
     myRequestsError: '',
     myRequestsLoaded: false,
     myRequestsLoading: false,
     myRequestsLoadingMore: false,
     myRequestsNextCursor: null as string | null,
+    myRequestsRequestGeneration: 0,
     request: null as CompanyRequest | null,
     requestError: '',
     requestLoading: false,
@@ -151,30 +169,58 @@ export const useCompaniesStore = defineStore('companies', {
       filters: CompanyDirectoryFilters,
       append = false,
     ): Promise<boolean> {
-      if (append && (!this.directoryNextCursor || this.directoryLoadingMore)) {
+      const requestFilters = { ...filters }
+      if (
+        append &&
+        (this.directoryLoading ||
+          this.directoryLoadingMore ||
+          !this.directoryNextCursor ||
+          !sameDirectoryFilters(this.directoryFilters, requestFilters))
+      ) {
         return false
       }
-      if (append) this.directoryLoadingMore = true
-      else this.directoryLoading = true
+      if (append) {
+        this.directoryLoadingMore = true
+      } else {
+        this.directoryRequestGeneration += 1
+        this.directoryLoading = true
+        this.directoryLoadingMore = false
+        this.directoryAppendError = ''
+        this.directoryError = ''
+        this.directoryFilters = requestFilters
+      }
       this.directoryLoaded = true
-      this.directoryFilters = { ...filters }
+      const requestGeneration = this.directoryRequestGeneration
+      const requestCursor = append ? this.directoryNextCursor : null
       const response = await nuiCall<CompanyDirectoryPage>('companies:list', {
-        acceptsRequests: filters.acceptsRequests,
-        availability: filters.availability,
-        categoryId: filters.categoryId,
-        cursor: append ? this.directoryNextCursor : null,
-        hasLocation: filters.hasLocation,
-        search: filters.search,
-        sort: filters.sort,
+        acceptsRequests: requestFilters.acceptsRequests,
+        availability: requestFilters.availability,
+        categoryId: requestFilters.categoryId,
+        cursor: requestCursor,
+        hasLocation: requestFilters.hasLocation,
+        search: requestFilters.search,
+        sort: requestFilters.sort,
       })
-      this.directoryLoading = false
-      this.directoryLoadingMore = false
-      if (!response.success || !response.data) {
-        this.directoryError = response.error ?? 'request_failed'
-        if (!append) {
-          this.directory = []
-          this.directoryNextCursor = null
+      const isCurrentRequest =
+        requestGeneration === this.directoryRequestGeneration &&
+        sameDirectoryFilters(this.directoryFilters, requestFilters)
+      if (!isCurrentRequest) {
+        if (requestGeneration === this.directoryRequestGeneration) {
+          if (append) this.directoryLoadingMore = false
+          else this.directoryLoading = false
         }
+        return false
+      }
+      if (append) this.directoryLoadingMore = false
+      else this.directoryLoading = false
+      if (!response.success || !response.data) {
+        if (append) {
+          this.directoryAppendError = response.error ?? 'request_failed'
+          return false
+        }
+        this.directoryError = response.error ?? 'request_failed'
+        this.directory = []
+        this.directoryNextCursor = null
         return false
       }
       this.categories = response.data.categories ?? this.categories
@@ -182,7 +228,8 @@ export const useCompaniesStore = defineStore('companies', {
         ? mergeById(this.directory, response.data.companies)
         : response.data.companies
       this.directoryNextCursor = response.data.nextCursor
-      this.directoryError = ''
+      if (append) this.directoryAppendError = ''
+      else this.directoryError = ''
       return true
     },
     async loadCompany(companyId: string): Promise<boolean> {
@@ -206,37 +253,64 @@ export const useCompaniesStore = defineStore('companies', {
     ): Promise<boolean> {
       if (
         append &&
-        (!this.myRequestsNextCursor || this.myRequestsLoadingMore)
+        (this.myRequestsLoading ||
+          this.myRequestsLoadingMore ||
+          !this.myRequestsNextCursor ||
+          list !== this.myRequestsList)
       ) {
         return false
       }
-      if (append) this.myRequestsLoadingMore = true
-      else this.myRequestsLoading = true
+      if (append) {
+        this.myRequestsLoadingMore = true
+      } else {
+        this.myRequestsRequestGeneration += 1
+        this.myRequestsLoading = true
+        this.myRequestsLoadingMore = false
+        this.myRequestsAppendError = ''
+        this.myRequestsError = ''
+        this.myRequestsList = list
+      }
       this.myRequestsLoaded = true
-      this.myRequestsList = list
       const deviceScopeVersion = this.deviceScopeVersion
+      const requestGeneration = this.myRequestsRequestGeneration
+      const requestCursor = append ? this.myRequestsNextCursor : null
       const response = await nuiCall<CompanyRequestPage>(
         'companies:my-requests',
         {
-          cursor: append ? this.myRequestsNextCursor : null,
+          cursor: requestCursor,
           list,
         },
       )
-      this.myRequestsLoading = false
-      this.myRequestsLoadingMore = false
-      if (deviceScopeVersion !== this.deviceScopeVersion) return false
+      const isCurrentRequest =
+        deviceScopeVersion === this.deviceScopeVersion &&
+        requestGeneration === this.myRequestsRequestGeneration &&
+        list === this.myRequestsList
+      if (!isCurrentRequest) {
+        if (
+          deviceScopeVersion === this.deviceScopeVersion &&
+          requestGeneration === this.myRequestsRequestGeneration
+        ) {
+          if (append) this.myRequestsLoadingMore = false
+          else this.myRequestsLoading = false
+        }
+        return false
+      }
+      if (append) this.myRequestsLoadingMore = false
+      else this.myRequestsLoading = false
       if (!response.success || !response.data) {
+        if (append) {
+          this.myRequestsAppendError = response.error ?? 'request_failed'
+          return false
+        }
         this.myRequestsError = response.error ?? 'request_failed'
-        if (!append) {
-          this.myRequests = []
-          this.myRequestsNextCursor = null
-          if (
-            response.error === 'anonymous_sim' ||
-            response.error === 'device_not_found' ||
-            response.error === 'no_sim'
-          ) {
-            this.customerUnreadCount = 0
-          }
+        this.myRequests = []
+        this.myRequestsNextCursor = null
+        if (
+          response.error === 'anonymous_sim' ||
+          response.error === 'device_not_found' ||
+          response.error === 'no_sim'
+        ) {
+          this.customerUnreadCount = 0
         }
         return false
       }
@@ -245,7 +319,8 @@ export const useCompaniesStore = defineStore('companies', {
         : response.data.requests
       this.myRequestsNextCursor = response.data.nextCursor
       this.customerUnreadCount = Math.max(0, response.data.unreadCount)
-      this.myRequestsError = ''
+      if (append) this.myRequestsAppendError = ''
+      else this.myRequestsError = ''
       return true
     },
     async loadRequest(requestId: string): Promise<boolean> {
@@ -524,8 +599,10 @@ export const useCompaniesStore = defineStore('companies', {
     },
     resetDeviceScope(): void {
       this.deviceScopeVersion += 1
+      this.myRequestsRequestGeneration += 1
       this.customerUnreadCount = 0
       this.myRequests = []
+      this.myRequestsAppendError = ''
       this.myRequestsError = ''
       this.myRequestsLoaded = false
       this.myRequestsLoading = false

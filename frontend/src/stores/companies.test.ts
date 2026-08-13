@@ -5,10 +5,12 @@ import { useCompaniesStore } from '@/stores/companies'
 import type {
   Company,
   CompanyDirectoryFilters,
+  CompanyDirectoryPage,
   CompanyRequest,
+  CompanyRequestPage,
   CompanySummary,
 } from '@/types/companies'
-import { nuiCall } from '@/utils/nui'
+import { nuiCall, type NuiResponse } from '@/utils/nui'
 
 vi.mock('@/utils/nui', () => ({ nuiCall: vi.fn() }))
 
@@ -84,6 +86,17 @@ const filters: CompanyDirectoryFilters = {
   sort: 'relevance',
 }
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 describe('companies store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -130,6 +143,208 @@ describe('companies store', () => {
       search: '',
       sort: 'relevance',
     })
+  })
+
+  it('ignores an older directory response after the filters change', async () => {
+    const firstResponse = deferred<NuiResponse<CompanyDirectoryPage>>()
+    const secondResponse = deferred<NuiResponse<CompanyDirectoryPage>>()
+    mockNuiCall
+      .mockReturnValueOnce(firstResponse.promise)
+      .mockReturnValueOnce(secondResponse.promise)
+    const store = useCompaniesStore()
+    const searchedFilters = { ...filters, search: 'medical' }
+    const medical = {
+      ...summary,
+      id: 'medical',
+      name: 'Los Santos Medical',
+    }
+
+    const firstLoad = store.loadCompanies(filters)
+    const secondLoad = store.loadCompanies(searchedFilters)
+    secondResponse.resolve({
+      data: { categories: [], companies: [medical], nextCursor: null },
+      success: true,
+    })
+
+    await expect(secondLoad).resolves.toBe(true)
+    firstResponse.resolve({
+      data: { categories: [], companies: [summary], nextCursor: null },
+      success: true,
+    })
+
+    await expect(firstLoad).resolves.toBe(false)
+    expect(store.directory).toEqual([medical])
+    expect(store.directoryFilters).toEqual(searchedFilters)
+    expect(store.directoryLoading).toBe(false)
+  })
+
+  it('ignores an older customer request response after the list changes', async () => {
+    const firstResponse = deferred<NuiResponse<CompanyRequestPage>>()
+    const secondResponse = deferred<NuiResponse<CompanyRequestPage>>()
+    mockNuiCall
+      .mockReturnValueOnce(firstResponse.promise)
+      .mockReturnValueOnce(secondResponse.promise)
+    const store = useCompaniesStore()
+    const closedRequest = { ...request, id: 'request-closed' }
+
+    const firstLoad = store.loadMyRequests('open')
+    const secondLoad = store.loadMyRequests('closed')
+    secondResponse.resolve({
+      data: { nextCursor: null, requests: [closedRequest], unreadCount: 1 },
+      success: true,
+    })
+
+    await expect(secondLoad).resolves.toBe(true)
+    firstResponse.resolve({
+      data: { nextCursor: null, requests: [request], unreadCount: 7 },
+      success: true,
+    })
+
+    await expect(firstLoad).resolves.toBe(false)
+    expect(store.myRequests).toEqual([closedRequest])
+    expect(store.myRequestsList).toBe('closed')
+    expect(store.customerUnreadCount).toBe(1)
+    expect(store.myRequestsLoading).toBe(false)
+  })
+
+  it('keeps directory data and its initial error when an append fails', async () => {
+    mockNuiCall
+      .mockResolvedValueOnce({
+        error: 'temporarily_unavailable',
+        success: false,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          categories: [],
+          companies: [
+            { ...summary, id: 'medical', name: 'Los Santos Medical' },
+          ],
+          nextCursor: null,
+        },
+        success: true,
+      })
+    const store = useCompaniesStore()
+    store.directory = [summary]
+    store.directoryError = 'initial_error'
+    store.directoryFilters = { ...filters }
+    store.directoryNextCursor = 'page-2'
+
+    expect(await store.loadCompanies(filters, true)).toBe(false)
+    expect(store.directory).toEqual([summary])
+    expect(store.directoryNextCursor).toBe('page-2')
+    expect(store.directoryError).toBe('initial_error')
+    expect(store.directoryAppendError).toBe('temporarily_unavailable')
+
+    expect(await store.loadCompanies(filters, true)).toBe(true)
+    expect(store.directory.map((item) => item.id)).toEqual([
+      'police',
+      'medical',
+    ])
+    expect(store.directoryError).toBe('initial_error')
+    expect(store.directoryAppendError).toBe('')
+  })
+
+  it('keeps customer requests and their initial error when an append fails', async () => {
+    mockNuiCall
+      .mockResolvedValueOnce({
+        error: 'temporarily_unavailable',
+        success: false,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          nextCursor: null,
+          requests: [{ ...request, id: 'request-2' }],
+          unreadCount: 2,
+        },
+        success: true,
+      })
+    const store = useCompaniesStore()
+    store.customerUnreadCount = 1
+    store.myRequests = [request]
+    store.myRequestsError = 'initial_error'
+    store.myRequestsList = 'open'
+    store.myRequestsNextCursor = 'page-2'
+
+    expect(await store.loadMyRequests('open', true)).toBe(false)
+    expect(store.myRequests).toEqual([request])
+    expect(store.myRequestsNextCursor).toBe('page-2')
+    expect(store.customerUnreadCount).toBe(1)
+    expect(store.myRequestsError).toBe('initial_error')
+    expect(store.myRequestsAppendError).toBe('temporarily_unavailable')
+
+    expect(await store.loadMyRequests('open', true)).toBe(true)
+    expect(store.myRequests.map((item) => item.id)).toEqual([
+      'request-1',
+      'request-2',
+    ])
+    expect(store.customerUnreadCount).toBe(2)
+    expect(store.myRequestsError).toBe('initial_error')
+    expect(store.myRequestsAppendError).toBe('')
+  })
+
+  it('invalidates an in-flight customer page when the device scope is cleared', async () => {
+    const response = deferred<NuiResponse<CompanyRequestPage>>()
+    mockNuiCall.mockReturnValueOnce(response.promise)
+    const store = useCompaniesStore()
+    store.bindDeviceScope('device-a', 'sim-a')
+    store.myRequests = [request]
+    store.myRequestsList = 'open'
+    store.myRequestsNextCursor = 'page-2'
+
+    const load = store.loadMyRequests('open', true)
+    store.resetDeviceScope()
+    response.resolve({
+      data: {
+        nextCursor: null,
+        requests: [{ ...request, id: 'request-stale' }],
+        unreadCount: 8,
+      },
+      success: true,
+    })
+
+    await expect(load).resolves.toBe(false)
+    expect(store.myRequests).toEqual([])
+    expect(store.customerUnreadCount).toBe(0)
+    expect(store.myRequestsLoaded).toBe(false)
+    expect(store.myRequestsLoadingMore).toBe(false)
+  })
+
+  it('guards directory appends by loading state, cursor and exact filters', async () => {
+    const store = useCompaniesStore()
+    store.directoryFilters = { ...filters }
+    store.directoryNextCursor = 'page-2'
+    store.directoryLoading = true
+
+    expect(await store.loadCompanies(filters, true)).toBe(false)
+    store.directoryLoading = false
+    expect(
+      await store.loadCompanies({ ...filters, categoryId: 'public' }, true),
+    ).toBe(false)
+    store.directoryNextCursor = null
+    expect(await store.loadCompanies(filters, true)).toBe(false)
+    store.directoryNextCursor = 'page-2'
+    store.directoryLoadingMore = true
+    expect(await store.loadCompanies(filters, true)).toBe(false)
+
+    expect(mockNuiCall).not.toHaveBeenCalled()
+  })
+
+  it('guards customer appends by loading state, cursor and exact list', async () => {
+    const store = useCompaniesStore()
+    store.myRequestsList = 'open'
+    store.myRequestsNextCursor = 'page-2'
+    store.myRequestsLoading = true
+
+    expect(await store.loadMyRequests('open', true)).toBe(false)
+    store.myRequestsLoading = false
+    expect(await store.loadMyRequests('closed', true)).toBe(false)
+    store.myRequestsNextCursor = null
+    expect(await store.loadMyRequests('open', true)).toBe(false)
+    store.myRequestsNextCursor = 'page-2'
+    store.myRequestsLoadingMore = true
+    expect(await store.loadMyRequests('open', true)).toBe(false)
+
+    expect(mockNuiCall).not.toHaveBeenCalled()
   })
 
   it('uses server-provided unread counts for the app badge', async () => {

@@ -1,42 +1,47 @@
 <script setup lang="ts">
 import {
-  kActions,
-  kActionsButton,
-  kActionsGroup,
-  kBadge,
-  kBlock,
-  kBlockTitle,
-  kButton,
-  kCard,
-  kChip,
-  kDialog,
-  kDialogButton,
-  kGlass,
-  kIcon,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kMessage,
-  kMessagebar,
-  kMessages,
-  kMessagesTitle,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kProgressbar,
-  kRadio,
-  kSearchbar,
-  kSegmented,
-  kSegmentedButton,
-  kSheet,
-  kTabbar,
-  kTabbarLink,
-  kToast,
-  kToggle,
-  kToolbarPane,
-} from 'konsta/vue'
+  SkyActionSheet,
+  SkyActionButton,
+  SkyActionGroup,
+  SkyBadge,
+  SkyBlock,
+  SkyBlockTitle,
+  SkyButton,
+  SkyCard,
+  SkyChip,
+  SkyDialog,
+  SkyDialogButton,
+  SkyEmptyState,
+  SkySurface,
+  SkyIcon,
+  SkyInfiniteLoader,
+  SkyLink,
+  SkyList,
+  SkyListCard,
+  SkyField,
+  SkyListItem,
+  SkyMessage,
+  SkyMessagebar,
+  SkyMessages,
+  SkyMessagesTitle,
+  SkySpinner,
+  SkyProgress,
+  SkyRadio,
+  SkySearchbar,
+  SkySegmented,
+  SkySegmentedButton,
+  SkyAppPage,
+  SkyNavbar,
+  SkyScrollArea,
+  SkyScrollRail,
+  SkySection,
+  SkySheet,
+  SkyTabButton,
+  SkyTabBar,
+  SkyToast,
+  SkyToggle,
+  SkyToolbarPane,
+} from '@/ui'
 import {
   BadgeCheck,
   BriefcaseBusiness,
@@ -183,9 +188,6 @@ const directoryFilters = computed<CompanyDirectoryFilters>(() => ({
   search: search.value.trim(),
   sort: 'relevance',
 }))
-const availableCompanies = computed(() =>
-  companies.directory.filter((company) => company.availability === 'available'),
-)
 const filtersActive = computed(
   () => Boolean(search.value.trim()) || Boolean(selectedCategory.value),
 )
@@ -354,6 +356,15 @@ function companyInitials(company: CompanySummary): string {
     .toUpperCase()
 }
 
+function companySubtitle(company: CompanySummary): string {
+  return [
+    company.location?.district,
+    company.serviceSummary || company.description,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 function categoryLabel(categoryId: string, fallback: string): string {
   const key = `Apps.companies.categories.${categoryId}`
   const translated = phone.t(key)
@@ -395,9 +406,12 @@ function eventLabel(event: CompanyRequestEvent): string {
 }
 
 function resetDirectoryFilters(): void {
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+    searchTimer = undefined
+  }
   search.value = ''
   selectedCategory.value = null
-  void companies.loadCompanies(directoryFilters.value)
 }
 
 function queueDirectoryLoad(): void {
@@ -916,8 +930,17 @@ async function reloadConflict(): Promise<void> {
   if (companies.request) await companies.loadRequest(companies.request.id)
 }
 
-watch(search, queueDirectoryLoad)
-watch(selectedCategory, () => companies.loadCompanies(directoryFilters.value))
+watch([search, selectedCategory], ([, category], [, previousCategory]) => {
+  if (category === previousCategory) {
+    queueDirectoryLoad()
+    return
+  }
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+    searchTimer = undefined
+  }
+  void companies.loadCompanies(directoryFilters.value)
+})
 watch(requestList, () => {
   if (activeTab.value === 'requests')
     void companies.loadMyRequests(requestList.value)
@@ -927,6 +950,7 @@ watch(requestSheetOpened, async (opened) => {
   await nextTick()
   requestSheetContent.value?.scrollTo({ top: 0 })
 })
+
 watch(
   () => route.query.requestId,
   async (requestId) => {
@@ -1000,179 +1024,131 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
-    component="main"
+  <SkyAppPage
     class="companies-app"
-    :class="{ 'companies-app--dark': phone.isDarkMode }"
-    :colors="{ bgIos: 'bg-transparent' }"
-    :aria-label="phone.t('Apps.companies.name')"
+    :dark="phone.isDarkMode"
+    :label="phone.t('Apps.companies.name')"
   >
-    <div class="companies-backdrop" aria-hidden="true"></div>
-
-    <k-navbar :title="navbarTitle" class="companies-navbar">
-      <template v-if="screen !== 'root'" #left>
-        <k-navbar-back-link
-          :text="phone.t('Apps.companies.back')"
-          :show-text="false"
-          @click="goBack"
-        />
-      </template>
+    <SkyNavbar
+      :title="navbarTitle"
+      :show-back="screen !== 'root'"
+      :back-label="phone.t('Apps.companies.back')"
+      @back="goBack"
+    >
       <template
         v-if="
           screen === 'request' && requestOrigin === 'work' && companies.request
         "
         #right
       >
-        <k-link
+        <SkyLink
           component="button"
           icon-only
           :aria-label="phone.t('Apps.companies.actions')"
-          :link-props="{ type: 'button' }"
+          type="button"
           @click="workActionsOpened = true"
         >
           <MoreHorizontal :size="24" />
-        </k-link>
+        </SkyLink>
       </template>
-    </k-navbar>
+    </SkyNavbar>
 
-    <section
+    <SkyScrollArea
       v-if="screen === 'root' && activeTab === 'directory'"
       class="companies-content companies-directory"
+      with-tabbar
     >
       <div class="companies-search-wrap">
-        <k-searchbar
+        <SkySearchbar
           :value="search"
+          :clear-label="phone.t('Apps.companies.directory.resetFilters')"
           :placeholder="phone.t('Apps.companies.directory.searchPlaceholder')"
-          :disable-button="true"
           @input="search = eventValue($event)"
           @clear="search = ''"
         />
       </div>
 
-      <div
+      <SkyScrollRail
         class="companies-chip-row"
-        :aria-label="phone.t('Apps.companies.directory.categories')"
+        :label="phone.t('Apps.companies.directory.categories')"
       >
-        <k-chip
+        <SkyChip
           component="button"
           type="button"
-          :class="{ 'is-selected': selectedCategory === null }"
+          :selected="selectedCategory === null"
           @click="selectCategory(null)"
         >
           {{ phone.t('Apps.companies.directory.allCategories') }}
-        </k-chip>
-        <k-chip
+        </SkyChip>
+        <SkyChip
           v-for="category in companies.categories"
           :key="category.id"
           component="button"
           type="button"
-          :class="{ 'is-selected': selectedCategory === category.id }"
+          :selected="selectedCategory === category.id"
           @click="selectCategory(category.id)"
         >
           {{ categoryLabel(category.id, category.name) }}
-        </k-chip>
-      </div>
+        </SkyChip>
+      </SkyScrollRail>
 
-      <k-block
+      <SkyEmptyState
         v-if="companies.directoryLoading"
-        inset
-        strong
-        class="companies-state"
+        :title="phone.t('Apps.companies.loading.directory')"
       >
-        <k-preloader />
-        <span>{{ phone.t('Apps.companies.loading.directory') }}</span>
-      </k-block>
-      <k-block
+        <template #icon><SkySpinner /></template>
+      </SkyEmptyState>
+      <SkyEmptyState
         v-else-if="companies.directoryError"
-        inset
-        strong
-        class="companies-state"
+        tone="danger"
+        :title="phone.t('Apps.companies.states.directoryError')"
+        :body="errorText(companies.directoryError)"
       >
-        <CircleAlert :size="34" />
-        <strong>{{ phone.t('Apps.companies.states.directoryError') }}</strong>
-        <p>{{ errorText(companies.directoryError) }}</p>
-        <k-button rounded @click="companies.loadCompanies(directoryFilters)">
-          <RefreshCw :size="16" />
-          {{ phone.t('Apps.companies.tryAgain') }}
-        </k-button>
-      </k-block>
-      <k-block
-        v-else-if="!companies.directory.length"
-        inset
-        strong
-        class="companies-state"
-      >
-        <Building2 :size="36" />
-        <strong>
-          {{
-            phone.t(
-              filtersActive
-                ? 'Apps.companies.states.noResults'
-                : 'Apps.companies.states.noCompanies',
-            )
-          }}
-        </strong>
-        <p>
-          {{
-            phone.t(
-              filtersActive
-                ? 'Apps.companies.states.noResultsBody'
-                : 'Apps.companies.states.noCompaniesBody',
-            )
-          }}
-        </p>
-        <k-button v-if="filtersActive" rounded @click="resetDirectoryFilters">
-          {{ phone.t('Apps.companies.directory.resetFilters') }}
-        </k-button>
-      </k-block>
-      <template v-else>
-        <template v-if="availableCompanies.length">
-          <k-block-title>{{
-            phone.t('Apps.companies.directory.availableSection')
-          }}</k-block-title>
-          <div class="companies-featured-row">
-            <k-card
-              v-for="company in availableCompanies.slice(0, 4)"
-              :key="`available-${company.id}`"
-              component="button"
-              type="button"
-              class="company-feature-card"
-              @click="openCompany(company.id)"
-            >
-              <span class="company-logo company-logo--small">
-                <img
-                  v-if="company.logoUrl"
-                  :src="company.logoUrl"
-                  :alt="company.name"
-                />
-                <span v-else>{{ companyInitials(company) }}</span>
-              </span>
-              <strong>{{ company.name }}</strong>
-              <span>{{
-                company.location?.district ??
-                categoryLabel(company.categoryId, company.categoryName)
-              }}</span>
-              <k-badge :class="statusClass(company.availability)">
-                {{
-                  phone.t(`Apps.companies.availability.${company.availability}`)
-                }}
-              </k-badge>
-            </k-card>
-          </div>
+        <template #icon><CircleAlert :size="34" /></template>
+        <template #actions>
+          <SkyButton rounded @click="companies.loadCompanies(directoryFilters)">
+            <RefreshCw :size="16" />
+            {{ phone.t('Apps.companies.tryAgain') }}
+          </SkyButton>
         </template>
-
-        <k-block-title>{{
-          phone.t('Apps.companies.directory.allCompanies')
-        }}</k-block-title>
-        <k-list inset strong class="company-list">
-          <k-list-item
+      </SkyEmptyState>
+      <SkyEmptyState
+        v-else-if="!companies.directory.length"
+        :title="
+          phone.t(
+            filtersActive
+              ? 'Apps.companies.states.noResults'
+              : 'Apps.companies.states.noCompanies',
+          )
+        "
+        :body="
+          phone.t(
+            filtersActive
+              ? 'Apps.companies.states.noResultsBody'
+              : 'Apps.companies.states.noCompaniesBody',
+          )
+        "
+      >
+        <template #icon><Building2 :size="36" /></template>
+        <template v-if="filtersActive" #actions>
+          <SkyButton rounded @click="resetDirectoryFilters">
+            {{ phone.t('Apps.companies.directory.resetFilters') }}
+          </SkyButton>
+        </template>
+      </SkyEmptyState>
+      <SkySection
+        v-else
+        :title="phone.t('Apps.companies.directory.allCompanies')"
+      >
+        <SkyListCard class="company-list">
+          <SkyListItem
             v-for="company in companies.directory"
             :key="company.id"
             link
             link-component="button"
             :link-props="{ type: 'button' }"
             :title="company.name"
-            :subtitle="company.serviceSummary || company.description"
+            :subtitle="companySubtitle(company)"
             @click="openCompany(company.id)"
           >
             <template #media>
@@ -1187,101 +1163,89 @@ onBeforeUnmount(() => {
             </template>
             <template #after>
               <span class="company-row-after">
-                <k-badge :class="statusClass(company.availability)">
+                <SkyBadge :class="statusClass(company.availability)">
                   {{
                     phone.t(
                       `Apps.companies.availability.${company.availability}`,
                     )
                   }}
-                </k-badge>
-                <small>{{
-                  company.location?.district ??
-                  categoryLabel(company.categoryId, company.categoryName)
-                }}</small>
+                </SkyBadge>
               </span>
             </template>
-          </k-list-item>
-        </k-list>
-        <k-button
-          v-if="companies.directoryNextCursor"
-          outline
-          rounded
-          class="companies-load-more"
-          :disabled="companies.directoryLoadingMore"
-          @click="companies.loadCompanies(directoryFilters, true)"
-        >
-          <k-preloader v-if="companies.directoryLoadingMore" />
-          <span v-else>{{ phone.t('Apps.companies.loadMore') }}</span>
-        </k-button>
-      </template>
-    </section>
+          </SkyListItem>
+        </SkyListCard>
+        <SkyInfiniteLoader
+          :has-more="Boolean(companies.directoryNextCursor)"
+          :loading="companies.directoryLoadingMore"
+          :error="companies.directoryAppendError"
+          :load-key="companies.directoryNextCursor"
+          :loading-label="phone.t('Apps.companies.loading.directory')"
+          :retry-label="phone.t('Apps.companies.tryAgain')"
+          @load="companies.loadCompanies(directoryFilters, true)"
+          @retry="companies.loadCompanies(directoryFilters, true)"
+        />
+      </SkySection>
+    </SkyScrollArea>
 
-    <section
+    <SkyScrollArea
       v-else-if="screen === 'root' && activeTab === 'requests'"
       class="companies-content"
+      with-tabbar
     >
       <div class="companies-segment-wrap">
-        <k-segmented strong rounded>
-          <k-segmented-button
+        <SkySegmented>
+          <SkySegmentedButton
             :active="requestList === 'open'"
             @click="requestList = 'open'"
           >
             {{ phone.t('Apps.companies.requests.open') }}
-          </k-segmented-button>
-          <k-segmented-button
+          </SkySegmentedButton>
+          <SkySegmentedButton
             :active="requestList === 'closed'"
             @click="requestList = 'closed'"
           >
             {{ phone.t('Apps.companies.requests.closed') }}
-          </k-segmented-button>
-        </k-segmented>
+          </SkySegmentedButton>
+        </SkySegmented>
       </div>
 
-      <k-block
+      <SkyEmptyState
         v-if="companies.myRequestsLoading"
-        inset
-        strong
-        class="companies-state"
+        :title="phone.t('Apps.companies.loading.requests')"
       >
-        <k-preloader />
-        <span>{{ phone.t('Apps.companies.loading.requests') }}</span>
-      </k-block>
-      <k-block
+        <template #icon><SkySpinner /></template>
+      </SkyEmptyState>
+      <SkyEmptyState
         v-else-if="companies.myRequestsError"
-        inset
-        strong
-        class="companies-state"
+        tone="danger"
+        :title="phone.t('Apps.companies.states.requestsError')"
+        :body="errorText(companies.myRequestsError)"
       >
-        <CircleAlert :size="34" />
-        <strong>{{ phone.t('Apps.companies.states.requestsError') }}</strong>
-        <p>{{ errorText(companies.myRequestsError) }}</p>
-        <k-button rounded @click="companies.loadMyRequests(requestList)">
-          {{ phone.t('Apps.companies.tryAgain') }}
-        </k-button>
-      </k-block>
-      <k-block
+        <template #icon><CircleAlert :size="34" /></template>
+        <template #actions>
+          <SkyButton rounded @click="companies.loadMyRequests(requestList)">
+            {{ phone.t('Apps.companies.tryAgain') }}
+          </SkyButton>
+        </template>
+      </SkyEmptyState>
+      <SkyEmptyState
         v-else-if="!companies.myRequests.length"
-        inset
-        strong
-        class="companies-state"
-      >
-        <ClipboardList :size="36" />
-        <strong>{{
+        :title="
           phone.t(
             `Apps.companies.states.no${requestList === 'open' ? 'Open' : 'Closed'}Requests`,
           )
-        }}</strong>
-        <p>{{ phone.t('Apps.companies.states.noRequestsBody') }}</p>
-        <k-button
-          v-if="requestList === 'open'"
-          rounded
-          @click="selectTab('directory')"
-        >
-          {{ phone.t('Apps.companies.requests.findCompany') }}
-        </k-button>
-      </k-block>
-      <k-list v-else inset strong class="company-request-list">
-        <k-list-item
+        "
+        :body="phone.t('Apps.companies.states.noRequestsBody')"
+      >
+        <template #icon><ClipboardList :size="36" /></template>
+        <template v-if="requestList === 'open'" #actions>
+          <SkyButton rounded @click="selectTab('directory')">
+            {{ phone.t('Apps.companies.requests.findCompany') }}
+          </SkyButton>
+        </template>
+      </SkyEmptyState>
+      <SkyListCard v-else class="company-request-list">
+        <SkyListItem
           v-for="item in companies.myRequests"
           :key="item.id"
           link
@@ -1299,66 +1263,66 @@ onBeforeUnmount(() => {
           </template>
           <template #after>
             <span class="request-row-after">
-              <k-badge v-if="item.unreadCount" class="is-unread">{{
+              <SkyBadge v-if="item.unreadCount" class="is-unread">{{
                 item.unreadCount
-              }}</k-badge>
-              <k-badge :class="statusClass(item.status)">
+              }}</SkyBadge>
+              <SkyBadge :class="statusClass(item.status)">
                 {{ phone.t(`Apps.companies.requestStatuses.${item.status}`) }}
-              </k-badge>
+              </SkyBadge>
             </span>
           </template>
-        </k-list-item>
-      </k-list>
-      <k-button
-        v-if="companies.myRequestsNextCursor"
-        outline
-        rounded
-        class="companies-load-more"
-        :disabled="companies.myRequestsLoadingMore"
-        @click="companies.loadMyRequests(requestList, true)"
-      >
-        {{ phone.t('Apps.companies.loadMore') }}
-      </k-button>
-    </section>
+        </SkyListItem>
+      </SkyListCard>
+      <SkyInfiniteLoader
+        v-if="
+          !companies.myRequestsLoading &&
+          !companies.myRequestsError &&
+          companies.myRequests.length
+        "
+        :has-more="Boolean(companies.myRequestsNextCursor)"
+        :loading="companies.myRequestsLoadingMore"
+        :error="companies.myRequestsAppendError"
+        :load-key="companies.myRequestsNextCursor"
+        :loading-label="phone.t('Apps.companies.loading.requests')"
+        :retry-label="phone.t('Apps.companies.tryAgain')"
+        @load="companies.loadMyRequests(requestList, true)"
+        @retry="companies.loadMyRequests(requestList, true)"
+      />
+    </SkyScrollArea>
 
-    <section
+    <SkyScrollArea
       v-else-if="screen === 'root' && activeTab === 'work'"
       class="companies-content companies-work"
+      with-tabbar
     >
-      <k-block
+      <SkyEmptyState
         v-if="companies.workContextLoading"
-        inset
-        strong
-        class="companies-state"
+        :title="phone.t('Apps.companies.loading.work')"
       >
-        <k-preloader />
-        <span>{{ phone.t('Apps.companies.loading.work') }}</span>
-      </k-block>
-      <k-block
+        <template #icon><SkySpinner /></template>
+      </SkyEmptyState>
+      <SkyEmptyState
         v-else-if="companies.workContextError"
-        inset
-        strong
-        class="companies-state"
+        tone="danger"
+        :title="phone.t('Apps.companies.states.workError')"
+        :body="errorText(companies.workContextError)"
       >
-        <CircleAlert :size="34" />
-        <strong>{{ phone.t('Apps.companies.states.workError') }}</strong>
-        <p>{{ errorText(companies.workContextError) }}</p>
-        <k-button rounded @click="selectTab('work')">
-          {{ phone.t('Apps.companies.tryAgain') }}
-        </k-button>
-      </k-block>
-      <k-block
+        <template #icon><CircleAlert :size="34" /></template>
+        <template #actions>
+          <SkyButton rounded @click="selectTab('work')">
+            {{ phone.t('Apps.companies.tryAgain') }}
+          </SkyButton>
+        </template>
+      </SkyEmptyState>
+      <SkyEmptyState
         v-else-if="!companies.workContext?.authorized"
-        inset
-        strong
-        class="companies-state"
+        :title="phone.t('Apps.companies.work.notAuthorized')"
+        :body="phone.t('Apps.companies.work.notAuthorizedBody')"
       >
-        <BriefcaseBusiness :size="38" />
-        <strong>{{ phone.t('Apps.companies.work.notAuthorized') }}</strong>
-        <p>{{ phone.t('Apps.companies.work.notAuthorizedBody') }}</p>
-      </k-block>
+        <template #icon><BriefcaseBusiness :size="38" /></template>
+      </SkyEmptyState>
       <template v-else-if="companies.workContext && workCompany">
-        <k-card class="work-identity-card">
+        <SkyCard class="work-identity-card">
           <span class="company-logo company-logo--large">
             <img
               v-if="workCompany.logoUrl"
@@ -1374,112 +1338,111 @@ onBeforeUnmount(() => {
               phone.t(`Apps.companies.roles.${companies.workContext.role}`)
             }}</span>
           </span>
-          <k-badge :class="statusClass(workCompany.availability)">
+          <SkyBadge :class="statusClass(workCompany.availability)">
             {{
               phone.t(`Apps.companies.availability.${workCompany.availability}`)
             }}
-          </k-badge>
-        </k-card>
+          </SkyBadge>
+        </SkyCard>
 
-        <k-block-title>{{
-          phone.t('Apps.companies.work.publicAvailability')
-        }}</k-block-title>
-        <k-segmented strong rounded class="availability-segmented">
-          <k-segmented-button
-            v-for="availability in availabilityValues"
-            :key="availability"
-            :active="workCompany.availability === availability"
-            :disabled="
-              !companies.workContext.permissions.canSetAvailability ||
-              companies.mutating
-            "
-            @click="setCompanyAvailability(availability)"
-          >
-            {{ phone.t(`Apps.companies.availability.${availability}`) }}
-          </k-segmented-button>
-        </k-segmented>
+        <section class="work-control-card">
+          <SkyBlockTitle>{{
+            phone.t('Apps.companies.work.publicAvailability')
+          }}</SkyBlockTitle>
+          <SkySegmented class="availability-segmented">
+            <SkySegmentedButton
+              v-for="availability in availabilityValues"
+              :key="availability"
+              :active="workCompany.availability === availability"
+              :disabled="
+                !companies.workContext.permissions.canSetAvailability ||
+                companies.mutating
+              "
+              @click="setCompanyAvailability(availability)"
+            >
+              {{ phone.t(`Apps.companies.availability.${availability}`) }}
+            </SkySegmentedButton>
+          </SkySegmented>
 
-        <k-list inset strong>
-          <k-list-item
-            v-if="companies.workContext.permissions.canTakeCalls"
-            :title="phone.t('Apps.companies.work.takeCalls')"
-            :subtitle="phone.t('Apps.companies.work.takeCallsBody')"
-          >
-            <template #media><PhoneCall :size="20" /></template>
-            <template #after>
-              <k-toggle
-                :checked="companies.workContext.callAvailable"
-                :disabled="companies.mutating"
-                :aria-label="phone.t('Apps.companies.work.takeCalls')"
-                @change="toggleCallAvailability"
-              />
-            </template>
-          </k-list-item>
-          <k-list-item
-            v-if="companies.workContext.role === 'manager'"
-            link
-            link-component="button"
-            :link-props="{ type: 'button' }"
-            :title="phone.t('Apps.companies.manager.title')"
-            :subtitle="phone.t('Apps.companies.manager.subtitle')"
-            @click="openManager"
-          >
-            <template #media><Settings2 :size="20" /></template>
-          </k-list-item>
-        </k-list>
+          <SkyList inset strong class="work-action-list">
+            <SkyListItem
+              v-if="companies.workContext.permissions.canTakeCalls"
+              :title="phone.t('Apps.companies.work.takeCalls')"
+              :subtitle="phone.t('Apps.companies.work.takeCallsBody')"
+            >
+              <template #media><PhoneCall :size="20" /></template>
+              <template #after>
+                <SkyToggle
+                  :checked="companies.workContext.callAvailable"
+                  :disabled="companies.mutating"
+                  :aria-label="phone.t('Apps.companies.work.takeCalls')"
+                  @change="toggleCallAvailability"
+                />
+              </template>
+            </SkyListItem>
+            <SkyListItem
+              v-if="companies.workContext.role === 'manager'"
+              link
+              link-component="button"
+              :link-props="{ type: 'button' }"
+              :title="phone.t('Apps.companies.manager.title')"
+              :subtitle="phone.t('Apps.companies.manager.subtitle')"
+              @click="openManager"
+            >
+              <template #media><Settings2 :size="20" /></template>
+            </SkyListItem>
+          </SkyList>
+        </section>
 
-        <k-block-title>{{
+        <SkyBlockTitle>{{
           phone.t('Apps.companies.work.overview')
-        }}</k-block-title>
+        }}</SkyBlockTitle>
         <div class="work-metrics">
-          <k-glass :highlight="false" class="work-metric">
+          <SkySurface :highlight="false" class="work-metric">
             <strong>{{ companies.workContext.metrics.new }}</strong>
             <span>{{ phone.t('Apps.companies.work.metrics.new') }}</span>
-          </k-glass>
-          <k-glass :highlight="false" class="work-metric">
+          </SkySurface>
+          <SkySurface :highlight="false" class="work-metric">
             <strong>{{ companies.workContext.metrics.assigned }}</strong>
             <span>{{ phone.t('Apps.companies.work.metrics.assigned') }}</span>
-          </k-glass>
-          <k-glass :highlight="false" class="work-metric">
+          </SkySurface>
+          <SkySurface :highlight="false" class="work-metric">
             <strong>{{ companies.workContext.metrics.waiting }}</strong>
             <span>{{ phone.t('Apps.companies.work.metrics.waiting') }}</span>
-          </k-glass>
-          <k-glass :highlight="false" class="work-metric">
+          </SkySurface>
+          <SkySurface :highlight="false" class="work-metric">
             <strong>{{ companies.workContext.metrics.completedToday }}</strong>
             <span>{{
               phone.t('Apps.companies.work.metrics.completedToday')
             }}</span>
-          </k-glass>
+          </SkySurface>
         </div>
       </template>
-    </section>
+    </SkyScrollArea>
 
-    <section
+    <SkyScrollArea
       v-else-if="screen === 'company'"
       class="companies-content company-profile"
     >
-      <k-block
+      <SkyEmptyState
         v-if="companies.directoryLoading && !activeCompany"
-        inset
-        strong
-        class="companies-state"
+        :title="phone.t('Apps.companies.loading.profile')"
       >
-        <k-preloader />
-        <span>{{ phone.t('Apps.companies.loading.profile') }}</span>
-      </k-block>
-      <k-block
+        <template #icon><SkySpinner /></template>
+      </SkyEmptyState>
+      <SkyEmptyState
         v-else-if="companies.directoryError || !activeCompany"
-        inset
-        strong
-        class="companies-state"
+        tone="danger"
+        :title="phone.t('Apps.companies.states.profileError')"
+        :body="errorText(companies.directoryError)"
       >
-        <CircleAlert :size="34" />
-        <strong>{{ phone.t('Apps.companies.states.profileError') }}</strong>
-        <p>{{ errorText(companies.directoryError) }}</p>
-        <k-button rounded @click="goBack">{{
-          phone.t('Apps.companies.back')
-        }}</k-button>
-      </k-block>
+        <template #icon><CircleAlert :size="34" /></template>
+        <template #actions>
+          <SkyButton rounded @click="goBack">
+            {{ phone.t('Apps.companies.back') }}
+          </SkyButton>
+        </template>
+      </SkyEmptyState>
       <template v-else>
         <div
           class="company-cover"
@@ -1498,7 +1461,7 @@ onBeforeUnmount(() => {
             <span v-else>{{ companyInitials(activeCompany) }}</span>
           </span>
         </div>
-        <k-block class="company-profile-heading">
+        <SkyBlock class="company-profile-heading">
           <span class="company-profile-heading__eyebrow">
             {{
               categoryLabel(
@@ -1513,13 +1476,13 @@ onBeforeUnmount(() => {
             />
           </span>
           <h1>{{ activeCompany.name }}</h1>
-          <k-badge :class="statusClass(activeCompany.availability)">
+          <SkyBadge :class="statusClass(activeCompany.availability)">
             {{
               phone.t(
                 `Apps.companies.availability.${activeCompany.availability}`,
               )
             }}
-          </k-badge>
+          </SkyBadge>
           <small>
             {{
               phone.t('Apps.companies.profile.updated', {
@@ -1528,9 +1491,9 @@ onBeforeUnmount(() => {
             }}
           </small>
           <p>{{ activeCompany.description }}</p>
-        </k-block>
+        </SkyBlock>
 
-        <k-card v-if="activeCompany.announcement" class="company-announcement">
+        <SkyCard v-if="activeCompany.announcement" class="company-announcement">
           <Megaphone :size="20" />
           <span>
             <strong>{{
@@ -1538,32 +1501,32 @@ onBeforeUnmount(() => {
             }}</strong>
             <span>{{ activeCompany.announcement.body }}</span>
           </span>
-        </k-card>
+        </SkyCard>
 
-        <k-block-title>{{
+        <SkyBlockTitle>{{
           phone.t('Apps.companies.profile.location')
-        }}</k-block-title>
-        <k-list inset strong>
-          <k-list-item
+        }}</SkyBlockTitle>
+        <SkyList inset strong>
+          <SkyListItem
             v-if="activeCompany.location"
             :title="activeCompany.location.label"
             :subtitle="`${activeCompany.location.address} · ${activeCompany.location.district}`"
           >
             <template #media><MapPin :size="20" /></template>
-          </k-list-item>
-          <k-list-item
+          </SkyListItem>
+          <SkyListItem
             v-else
             :title="phone.t('Apps.companies.profile.noLocation')"
           >
             <template #media><MapPin :size="20" /></template>
-          </k-list-item>
-        </k-list>
+          </SkyListItem>
+        </SkyList>
 
-        <k-block-title>{{
+        <SkyBlockTitle>{{
           phone.t('Apps.companies.profile.hours')
-        }}</k-block-title>
-        <k-list inset strong>
-          <k-list-item
+        }}</SkyBlockTitle>
+        <SkyList inset strong>
+          <SkyListItem
             v-for="hours in activeCompany.hours"
             :key="hours.day"
             :title="phone.t(`Apps.companies.days.${weekdayKeys[hours.day]}`)"
@@ -1574,18 +1537,18 @@ onBeforeUnmount(() => {
             "
           >
             <template #media><Clock3 :size="19" /></template>
-          </k-list-item>
-          <k-list-item
+          </SkyListItem>
+          <SkyListItem
             v-if="!activeCompany.hours.length"
             :title="phone.t('Apps.companies.profile.byAvailability')"
           />
-        </k-list>
+        </SkyList>
 
-        <k-block-title>{{
+        <SkyBlockTitle>{{
           phone.t('Apps.companies.profile.services')
-        }}</k-block-title>
-        <k-list inset strong>
-          <k-list-item
+        }}</SkyBlockTitle>
+        <SkyList inset strong>
+          <SkyListItem
             v-for="service in activeCompany.services.filter(
               (item) => item.active,
             )"
@@ -1594,21 +1557,21 @@ onBeforeUnmount(() => {
             :subtitle="service.description"
             :after="service.priceText ?? undefined"
           />
-          <k-list-item
+          <SkyListItem
             v-if="!activeCompany.services.some((service) => service.active)"
             :title="phone.t('Apps.companies.profile.noServices')"
           />
-        </k-list>
+        </SkyList>
 
-        <k-glass :highlight="false" class="company-profile-actions">
-          <k-button
+        <SkySurface :highlight="false" class="company-profile-actions">
+          <SkyButton
             rounded
             :disabled="!activeCompany.canCall || !activeCompany.phoneNumber"
             @click="callNumber(activeCompany.phoneNumber)"
           >
             <Phone :size="17" />{{ phone.t('Apps.companies.profile.call') }}
-          </k-button>
-          <k-button
+          </SkyButton>
+          <SkyButton
             rounded
             outline
             :disabled="!activeCompany.canMessage || !activeCompany.phoneNumber"
@@ -1617,16 +1580,16 @@ onBeforeUnmount(() => {
             <MessageCircle :size="17" />{{
               phone.t('Apps.companies.profile.message')
             }}
-          </k-button>
-          <k-button
+          </SkyButton>
+          <SkyButton
             rounded
             outline
             :disabled="!activeCompany.location"
             @click="setRoute(activeCompany)"
           >
             <MapPin :size="17" />{{ phone.t('Apps.companies.profile.route') }}
-          </k-button>
-          <k-button
+          </SkyButton>
+          <SkyButton
             rounded
             :disabled="!activeCompany.acceptsRequests"
             @click="openRequestComposer(activeCompany)"
@@ -1634,54 +1597,51 @@ onBeforeUnmount(() => {
             <ClipboardList :size="17" />{{
               phone.t('Apps.companies.profile.request')
             }}
-          </k-button>
-          <k-button rounded outline @click="shareCompany(activeCompany)">
+          </SkyButton>
+          <SkyButton rounded outline @click="shareCompany(activeCompany)">
             <Share2 :size="17" />{{ phone.t('Apps.easyShare.share') }}
-          </k-button>
-        </k-glass>
+          </SkyButton>
+        </SkySurface>
       </template>
-    </section>
+    </SkyScrollArea>
 
-    <section
+    <SkyScrollArea
       v-else-if="screen === 'request'"
       class="companies-content request-thread"
     >
-      <k-block
+      <SkyEmptyState
         v-if="companies.requestLoading"
-        inset
-        strong
-        class="companies-state"
+        :title="phone.t('Apps.companies.loading.request')"
       >
-        <k-preloader />
-        <span>{{ phone.t('Apps.companies.loading.request') }}</span>
-      </k-block>
-      <k-block
+        <template #icon><SkySpinner /></template>
+      </SkyEmptyState>
+      <SkyEmptyState
         v-else-if="companies.requestError || !companies.request"
-        inset
-        strong
-        class="companies-state"
+        tone="danger"
+        :title="phone.t('Apps.companies.states.requestError')"
+        :body="errorText(companies.requestError)"
       >
-        <CircleAlert :size="34" />
-        <strong>{{ phone.t('Apps.companies.states.requestError') }}</strong>
-        <p>{{ errorText(companies.requestError) }}</p>
-        <k-button rounded @click="goBack">{{
-          phone.t('Apps.companies.back')
-        }}</k-button>
-      </k-block>
+        <template #icon><CircleAlert :size="34" /></template>
+        <template #actions>
+          <SkyButton rounded @click="goBack">
+            {{ phone.t('Apps.companies.back') }}
+          </SkyButton>
+        </template>
+      </SkyEmptyState>
       <template v-else>
         <div class="request-thread-scroll">
-          <k-card class="request-summary-card">
+          <SkyCard class="request-summary-card">
             <span>
               <small>{{ companies.request.companyName }}</small>
               <strong>{{ companies.request.subject }}</strong>
             </span>
-            <k-badge :class="statusClass(companies.request.status)">
+            <SkyBadge :class="statusClass(companies.request.status)">
               {{
                 phone.t(
                   `Apps.companies.requestStatuses.${companies.request.status}`,
                 )
               }}
-            </k-badge>
+            </SkyBadge>
             <p>{{ companies.request.description }}</p>
             <span class="request-summary-card__meta">
               {{
@@ -1690,7 +1650,7 @@ onBeforeUnmount(() => {
               }}
               · {{ formatDate(companies.request.createdAt) }}
             </span>
-          </k-card>
+          </SkyCard>
 
           <div
             v-if="companies.request.media.length"
@@ -1708,9 +1668,9 @@ onBeforeUnmount(() => {
             />
           </div>
 
-          <k-block-title>{{
+          <SkyBlockTitle>{{
             phone.t('Apps.companies.requests.timeline')
-          }}</k-block-title>
+          }}</SkyBlockTitle>
           <div class="request-timeline">
             <div v-for="event in companies.request.events" :key="event.id">
               <span><Check :size="12" /></span>
@@ -1721,14 +1681,14 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <k-block-title>{{
+          <SkyBlockTitle>{{
             phone.t('Apps.companies.requests.conversation')
-          }}</k-block-title>
-          <k-messages class="company-messages">
-            <k-messages-title v-if="!companies.request.messages.length">
+          }}</SkyBlockTitle>
+          <SkyMessages class="company-messages">
+            <SkyMessagesTitle v-if="!companies.request.messages.length">
               {{ phone.t('Apps.companies.requests.noMessages') }}
-            </k-messages-title>
-            <k-message
+            </SkyMessagesTitle>
+            <SkyMessage
               v-for="message in companies.request.messages"
               :key="message.id"
               :type="message.isMine ? 'sent' : 'received'"
@@ -1736,18 +1696,18 @@ onBeforeUnmount(() => {
               :text="message.body"
               :text-footer="formatDate(message.createdAt)"
             />
-          </k-messages>
+          </SkyMessages>
 
           <div class="request-thread-actions">
-            <k-button
+            <SkyButton
               v-if="companies.request.actions.canCall"
               outline
               rounded
               @click="callRequestParty"
             >
               <Phone :size="16" />{{ phone.t('Apps.companies.requests.call') }}
-            </k-button>
-            <k-button
+            </SkyButton>
+            <SkyButton
               v-if="companies.request.actions.canCancel"
               outline
               rounded
@@ -1755,10 +1715,10 @@ onBeforeUnmount(() => {
               @click="cancelDialogOpened = true"
             >
               <X :size="16" />{{ phone.t('Apps.companies.requests.cancel') }}
-            </k-button>
+            </SkyButton>
           </div>
         </div>
-        <k-messagebar
+        <SkyMessagebar
           v-if="companies.request.actions.canReply"
           class="company-messagebar"
           :disabled="companies.mutating"
@@ -1768,28 +1728,28 @@ onBeforeUnmount(() => {
           @keydown.enter.exact="handleEnterAction($event, sendThreadMessage)"
         >
           <template #right>
-            <k-toolbar-pane class="ios:h-10">
-              <k-link
+            <SkyToolbarPane class="ios:h-10">
+              <SkyLink
                 component="button"
                 icon-only
                 :disabled="!canSendThreadMessage"
                 :aria-label="phone.t('Apps.companies.requests.sendReply')"
-                :link-props="{ type: 'button' }"
+                type="button"
                 @click="sendThreadMessage"
               >
                 <Send :size="22" />
-              </k-link>
-            </k-toolbar-pane>
+              </SkyLink>
+            </SkyToolbarPane>
           </template>
-        </k-messagebar>
+        </SkyMessagebar>
       </template>
-    </section>
+    </SkyScrollArea>
 
-    <section
+    <SkyScrollArea
       v-else-if="screen === 'manager' && workCompany"
       class="companies-content manager-screen"
     >
-      <k-card class="manager-intro">
+      <SkyCard class="manager-intro">
         <Settings2 :size="24" />
         <span>
           <strong>{{ workCompany.name }}</strong>
@@ -1799,13 +1759,13 @@ onBeforeUnmount(() => {
             })
           }}</span>
         </span>
-      </k-card>
+      </SkyCard>
 
-      <k-block-title>{{
+      <SkyBlockTitle>{{
         phone.t('Apps.companies.manager.availability')
-      }}</k-block-title>
-      <k-segmented strong rounded class="availability-segmented">
-        <k-segmented-button
+      }}</SkyBlockTitle>
+      <SkySegmented class="availability-segmented">
+        <SkySegmentedButton
           v-for="availability in availabilityValues"
           :key="availability"
           :active="workCompany.availability === availability"
@@ -1816,16 +1776,16 @@ onBeforeUnmount(() => {
           @click="setCompanyAvailability(availability)"
         >
           {{ phone.t(`Apps.companies.availability.${availability}`) }}
-        </k-segmented-button>
-      </k-segmented>
+        </SkySegmentedButton>
+      </SkySegmented>
 
       <template v-if="companies.workContext?.permissions.canManageProfile">
-        <k-block-title>{{
+        <SkyBlockTitle>{{
           phone.t('Apps.companies.manager.profile')
-        }}</k-block-title>
+        }}</SkyBlockTitle>
         <div class="manager-media-grid">
-          <k-button
-            tonal
+          <SkyButton
+            variant="secondary"
             rounded
             large
             class="manager-media-button"
@@ -1839,9 +1799,9 @@ onBeforeUnmount(() => {
             />
             <span v-else><ImagePlus :size="22" /></span>
             <small>{{ phone.t('Apps.companies.manager.chooseCover') }}</small>
-          </k-button>
-          <k-button
-            tonal
+          </SkyButton>
+          <SkyButton
+            variant="secondary"
             rounded
             large
             class="manager-media-button"
@@ -1855,11 +1815,10 @@ onBeforeUnmount(() => {
             />
             <span v-else><ImagePlus :size="22" /></span>
             <small>{{ phone.t('Apps.companies.manager.chooseLogo') }}</small>
-          </k-button>
+          </SkyButton>
         </div>
-        <k-list inset strong class="manager-form-list">
-          <k-list-input
-            outline
+        <SkyList inset strong class="manager-form-list">
+          <SkyField
             type="textarea"
             maxlength="500"
             :label="phone.t('Apps.companies.manager.description')"
@@ -1869,44 +1828,40 @@ onBeforeUnmount(() => {
             :value="profileDraft.description"
             @input="profileDraft.description = eventValue($event)"
           />
-          <k-list-input
-            outline
+          <SkyField
             type="tel"
             readonly
             :label="phone.t('Apps.companies.manager.phoneNumber')"
-            :info="phone.t('Apps.companies.manager.phoneNumberManaged')"
+            :help="phone.t('Apps.companies.manager.phoneNumberManaged')"
             :value="
               workCompany.phoneNumber ??
               phone.t('Apps.companies.manager.noPhoneNumber')
             "
           />
-          <k-list-input
-            outline
+          <SkyField
             maxlength="80"
             :label="phone.t('Apps.companies.manager.locationLabel')"
             :value="profileDraft.locationLabel"
             @input="profileDraft.locationLabel = eventValue($event)"
           />
-          <k-list-input
-            outline
+          <SkyField
             maxlength="120"
             :label="phone.t('Apps.companies.manager.address')"
             :value="profileDraft.address"
             @input="profileDraft.address = eventValue($event)"
           />
-          <k-list-input
-            outline
+          <SkyField
             maxlength="80"
             :label="phone.t('Apps.companies.manager.district')"
             :value="profileDraft.district"
             @input="profileDraft.district = eventValue($event)"
           />
-          <k-list-item
+          <SkyListItem
             :title="phone.t('Apps.companies.manager.acceptRequests')"
             :subtitle="phone.t('Apps.companies.manager.acceptRequestsBody')"
           >
             <template #after>
-              <k-toggle
+              <SkyToggle
                 :checked="profileDraft.acceptsRequests"
                 :aria-label="phone.t('Apps.companies.manager.acceptRequests')"
                 @change="
@@ -1914,9 +1869,9 @@ onBeforeUnmount(() => {
                 "
               />
             </template>
-          </k-list-item>
-        </k-list>
-        <k-button
+          </SkyListItem>
+        </SkyList>
+        <SkyButton
           outline
           rounded
           class="manager-location"
@@ -1926,118 +1881,113 @@ onBeforeUnmount(() => {
           <Compass :size="16" />{{
             phone.t('Apps.companies.manager.useCurrentLocation')
           }}
-        </k-button>
+        </SkyButton>
         <small v-if="profileCoords" class="manager-location-status">
           {{ phone.t('Apps.companies.manager.locationReady') }}
         </small>
-        <k-button
+        <SkyButton
           rounded
           class="manager-save"
           :disabled="companies.mutating"
           @click="saveProfile"
         >
           {{ phone.t('Apps.companies.manager.saveProfile') }}
-        </k-button>
+        </SkyButton>
       </template>
 
       <template v-if="companies.workContext?.permissions.canManageHours">
-        <k-block-title>{{
+        <SkyBlockTitle>{{
           phone.t('Apps.companies.manager.hours')
-        }}</k-block-title>
-        <k-card
+        }}</SkyBlockTitle>
+        <SkyCard
           v-for="(hours, index) in hoursDraft"
           :key="hours.day"
           class="manager-hours-card"
           :content-wrap="false"
         >
-          <k-list nested>
-            <k-list-item
+          <SkyList nested>
+            <SkyListItem
               :title="phone.t(`Apps.companies.days.${weekdayKeys[hours.day]}`)"
             >
               <template #after>
-                <k-toggle
+                <SkyToggle
                   :checked="!hours.isClosed"
                   :aria-label="phone.t('Apps.companies.manager.dayOpen')"
                   @change="hours.isClosed = !hours.isClosed"
                 />
               </template>
-            </k-list-item>
+            </SkyListItem>
             <template v-if="!hours.isClosed">
-              <k-list-input
-                outline
+              <SkyField
                 type="time"
                 :label="phone.t('Apps.companies.manager.opensAt')"
-                :value="hours.opensAt"
+                :value="hours.opensAt ?? ''"
                 @input="updateHour(index, 'opensAt', $event)"
               />
-              <k-list-input
-                outline
+              <SkyField
                 type="time"
                 :label="phone.t('Apps.companies.manager.closesAt')"
-                :value="hours.closesAt"
+                :value="hours.closesAt ?? ''"
                 @input="updateHour(index, 'closesAt', $event)"
               />
             </template>
-          </k-list>
-        </k-card>
-        <k-button
+          </SkyList>
+        </SkyCard>
+        <SkyButton
           rounded
           class="manager-save"
           :disabled="companies.mutating"
           @click="saveHours"
         >
           {{ phone.t('Apps.companies.manager.saveHours') }}
-        </k-button>
+        </SkyButton>
       </template>
 
       <template v-if="companies.workContext?.permissions.canManageServices">
-        <k-block-title>{{
+        <SkyBlockTitle>{{
           phone.t('Apps.companies.manager.services')
-        }}</k-block-title>
-        <k-card
+        }}</SkyBlockTitle>
+        <SkyCard
           v-for="(service, index) in servicesDraft"
           :key="`${service.id}-${index}`"
           class="manager-service-card"
           :content-wrap="false"
         >
-          <k-list nested>
-            <k-list-input
-              outline
+          <SkyList nested>
+            <SkyField
               maxlength="80"
               :label="phone.t('Apps.companies.manager.serviceTitle')"
               :value="service.title"
               @input="updateService(index, 'title', $event)"
             />
-            <k-list-input
-              outline
+            <SkyField
               maxlength="240"
               :label="phone.t('Apps.companies.manager.serviceDescription')"
               :value="service.description"
               @input="updateService(index, 'description', $event)"
             />
-            <k-list-input
-              outline
+            <SkyField
               maxlength="40"
               :label="phone.t('Apps.companies.manager.priceText')"
               :value="service.priceText ?? ''"
               @input="updateService(index, 'priceText', $event)"
             />
-            <k-list-item
+            <SkyListItem
               :title="phone.t('Apps.companies.manager.serviceActive')"
             >
               <template #after>
-                <k-toggle
+                <SkyToggle
                   :checked="service.active"
                   :aria-label="phone.t('Apps.companies.manager.serviceActive')"
                   @change="service.active = !service.active"
                 />
               </template>
-            </k-list-item>
-            <k-list-item
+            </SkyListItem>
+            <SkyListItem
               :title="phone.t('Apps.companies.manager.serviceRequests')"
             >
               <template #after>
-                <k-toggle
+                <SkyToggle
                   :checked="service.acceptsRequests"
                   :aria-label="
                     phone.t('Apps.companies.manager.serviceRequests')
@@ -2045,9 +1995,9 @@ onBeforeUnmount(() => {
                   @change="service.acceptsRequests = !service.acceptsRequests"
                 />
               </template>
-            </k-list-item>
-          </k-list>
-          <k-button
+            </SkyListItem>
+          </SkyList>
+          <SkyButton
             outline
             rounded
             class="manager-remove"
@@ -2056,28 +2006,27 @@ onBeforeUnmount(() => {
             <Trash2 :size="15" />{{
               phone.t('Apps.companies.manager.removeService')
             }}
-          </k-button>
-        </k-card>
-        <k-button outline rounded class="manager-save" @click="addService">
+          </SkyButton>
+        </SkyCard>
+        <SkyButton outline rounded class="manager-save" @click="addService">
           <Plus :size="16" />{{ phone.t('Apps.companies.manager.addService') }}
-        </k-button>
-        <k-button
+        </SkyButton>
+        <SkyButton
           rounded
           class="manager-save"
           :disabled="companies.mutating"
           @click="saveServices"
         >
           {{ phone.t('Apps.companies.manager.saveServices') }}
-        </k-button>
+        </SkyButton>
       </template>
 
       <template v-if="companies.workContext?.permissions.canManageAnnouncement">
-        <k-block-title>{{
+        <SkyBlockTitle>{{
           phone.t('Apps.companies.manager.announcement')
-        }}</k-block-title>
-        <k-list inset strong class="manager-form-list">
-          <k-list-input
-            outline
+        }}</SkyBlockTitle>
+        <SkyList inset strong class="manager-form-list">
+          <SkyField
             type="textarea"
             maxlength="280"
             :label="phone.t('Apps.companies.manager.announcementText')"
@@ -2087,15 +2036,14 @@ onBeforeUnmount(() => {
             :value="announcementDraft.body"
             @input="announcementDraft.body = eventValue($event)"
           />
-          <k-list-input
-            outline
+          <SkyField
             type="datetime-local"
             :label="phone.t('Apps.companies.manager.expiresAt')"
             :value="announcementDraft.expiresAt"
             @input="announcementDraft.expiresAt = eventValue($event)"
           />
-        </k-list>
-        <k-button
+        </SkyList>
+        <SkyButton
           rounded
           class="manager-save"
           :disabled="companies.mutating"
@@ -2104,242 +2052,236 @@ onBeforeUnmount(() => {
           <Megaphone :size="16" />{{
             phone.t('Apps.companies.manager.publish')
           }}
-        </k-button>
+        </SkyButton>
       </template>
-    </section>
+    </SkyScrollArea>
 
-    <k-tabbar
+    <SkyTabBar
       v-if="screen === 'root'"
-      component="nav"
-      icons
-      labels
-      class="companies-tabbar bottom-0 left-0 fixed"
-      :aria-label="phone.t('Apps.companies.navigation')"
+      class="companies-tabbar"
+      :label="phone.t('Apps.companies.navigation')"
     >
-      <k-toolbar-pane>
-        <k-tabbar-link
-          component="button"
-          :active="activeTab === 'directory'"
-          :link-props="{ type: 'button' }"
-          @click="selectTab('directory')"
-        >
-          <template #label>{{
-            phone.t('Apps.companies.tabs.directory')
-          }}</template>
-          <template #icon
-            ><k-icon><Compass class="w-7 h-7" /></k-icon
-          ></template>
-        </k-tabbar-link>
-        <k-tabbar-link
-          component="button"
-          :active="activeTab === 'requests'"
-          :link-props="{ type: 'button' }"
-          @click="selectTab('requests')"
-        >
-          <template #label>{{
-            phone.t('Apps.companies.tabs.requests')
-          }}</template>
-          <template #icon>
-            <span class="companies-tab-icon">
-              <k-icon><ClipboardList class="w-7 h-7" /></k-icon>
-              <k-badge v-if="companies.customerUnreadCount">{{
-                companies.customerUnreadCount
-              }}</k-badge>
-            </span>
-          </template>
-        </k-tabbar-link>
-        <k-tabbar-link
-          component="button"
-          :active="activeTab === 'work'"
-          :link-props="{ type: 'button' }"
-          @click="selectTab('work')"
-        >
-          <template #label>{{ phone.t('Apps.companies.tabs.work') }}</template>
-          <template #icon>
-            <span class="companies-tab-icon">
-              <k-icon><BriefcaseBusiness class="w-7 h-7" /></k-icon>
-              <k-badge v-if="companies.workUnreadCount">{{
-                companies.workUnreadCount
-              }}</k-badge>
-            </span>
-          </template>
-        </k-tabbar-link>
-      </k-toolbar-pane>
-    </k-tabbar>
+      <SkyTabButton
+        :active="activeTab === 'directory'"
+        type="button"
+        @click="selectTab('directory')"
+      >
+        <template #label>{{
+          phone.t('Apps.companies.tabs.directory')
+        }}</template>
+        <template #icon
+          ><SkyIcon><Compass class="w-7 h-7" /></SkyIcon
+        ></template>
+      </SkyTabButton>
+      <SkyTabButton
+        :active="activeTab === 'requests'"
+        type="button"
+        @click="selectTab('requests')"
+      >
+        <template #label>{{
+          phone.t('Apps.companies.tabs.requests')
+        }}</template>
+        <template #icon>
+          <span class="companies-tab-icon">
+            <SkyIcon><ClipboardList class="w-7 h-7" /></SkyIcon>
+            <SkyBadge v-if="companies.customerUnreadCount">{{
+              companies.customerUnreadCount
+            }}</SkyBadge>
+          </span>
+        </template>
+      </SkyTabButton>
+      <SkyTabButton
+        :active="activeTab === 'work'"
+        type="button"
+        @click="selectTab('work')"
+      >
+        <template #label>{{ phone.t('Apps.companies.tabs.work') }}</template>
+        <template #icon>
+          <span class="companies-tab-icon">
+            <SkyIcon><BriefcaseBusiness class="w-7 h-7" /></SkyIcon>
+            <SkyBadge v-if="companies.workUnreadCount">{{
+              companies.workUnreadCount
+            }}</SkyBadge>
+          </span>
+        </template>
+      </SkyTabButton>
+    </SkyTabBar>
 
     <div class="companies-sheet">
-      <k-sheet
+      <SkySheet
         :opened="requestSheetOpened"
+        :aria-label="phone.t('Apps.companies.composer.title')"
         @backdropclick="requestSheetOpened = false"
+        @escape="requestSheetOpened = false"
       >
-      <section
-        v-if="requestSheetOpened && activeCompany"
-        ref="requestSheetContent"
-        class="companies-sheet__content"
-        role="dialog"
-        aria-modal="true"
-      >
-        <header>
-          <span><ClipboardList :size="23" /></span>
-          <div>
-            <small>{{ activeCompany.name }}</small>
-            <h2>{{ phone.t('Apps.companies.composer.title') }}</h2>
-          </div>
-          <k-link
-            component="button"
-            icon-only
-            :aria-label="phone.t('Apps.companies.close')"
-            :link-props="{ type: 'button' }"
-            @click="requestSheetOpened = false"
-          >
-            <X :size="19" />
-          </k-link>
-        </header>
-        <k-progressbar :progress="requestProgress" />
-        <k-block-title class="composer-service-title">{{
-          phone.t('Apps.companies.composer.chooseService')
-        }}</k-block-title>
-        <k-list inset strong class="composer-service-list">
-          <k-list-item
-            v-for="service in activeCompany.services.filter(
-              (item) => item.active && item.acceptsRequests,
-            )"
-            :key="service.id"
-            label
-            :title="service.title"
-            :subtitle="service.description"
-            title-font-size-ios="text-[15px]"
-            title-font-size-material="text-[15px]"
-            media-class="!py-2.5 !me-3"
-            inner-class="!py-2.5 !pe-safe-3"
-            title-wrap-class="!min-h-5"
-          >
-            <template #media>
-              <k-radio
-                name="company-request-service"
-                :value="service.id"
-                :checked="requestServiceId === service.id"
-                @change="requestServiceId = service.id"
-              />
-            </template>
-            <template v-if="service.priceText" #after>
-              <span class="composer-service-price">{{
-                service.priceText
-              }}</span>
-            </template>
-          </k-list-item>
-        </k-list>
-        <k-list inset strong class="composer-form-list">
-          <k-list-input
-            outline
-            maxlength="100"
-            :label="phone.t('Apps.companies.composer.subject')"
-            :placeholder="phone.t('Apps.companies.composer.subjectPlaceholder')"
-            :value="requestSubject"
-            :input-style="{ height: '38px' }"
-            @input="requestSubject = eventValue($event)"
-          />
-          <k-list-input
-            outline
-            type="textarea"
-            maxlength="1200"
-            :label="phone.t('Apps.companies.composer.description')"
-            :placeholder="
-              phone.t('Apps.companies.composer.descriptionPlaceholder')
-            "
-            :value="requestDescription"
-            :input-style="{
-              height: '72px',
-              lineHeight: '20px',
-              paddingBottom: '8px',
-              paddingTop: '8px',
-              resize: 'none',
-            }"
-            @input="requestDescription = eventValue($event)"
-          />
-        </k-list>
-        <k-card class="composer-contact-card">
-          <Phone :size="18" />
-          <span>
-            <strong>{{ phone.t('Apps.companies.composer.contact') }}</strong>
-            <span v-if="phone.device?.sim?.registered">
-              {{
-                phone.t('Apps.companies.composer.registeredSim', {
-                  number: maskedPhoneNumber(phone.device.sim.number),
-                })
-              }}
-            </span>
-            <span v-else>{{
-              phone.t('Apps.companies.composer.registeredSimRequired')
-            }}</span>
-          </span>
-        </k-card>
-        <k-button
-          outline
-          rounded
-          :disabled="requestMedia.length >= 3"
-          @click="chooseRequestMedia"
+        <section
+          v-if="requestSheetOpened && activeCompany"
+          ref="requestSheetContent"
+          class="companies-sheet__content"
         >
-          <ImagePlus :size="17" />
-          {{
-            phone.t('Apps.companies.composer.addPhotos', {
-              count: String(requestMedia.length),
-            })
-          }}
-        </k-button>
-        <div v-if="requestMedia.length" class="composer-media-strip">
-          <span v-for="media in requestMedia" :key="media.id">
-            <img
-              :src="media.url"
-              :alt="phone.t('Apps.companies.composer.selectedPhoto')"
-            />
-            <k-button
-              rounded
-              :aria-label="phone.t('Apps.companies.composer.removePhoto')"
-              @click="removeRequestMedia(media.id)"
+          <header>
+            <span><ClipboardList :size="23" /></span>
+            <div>
+              <small>{{ activeCompany.name }}</small>
+              <h2>{{ phone.t('Apps.companies.composer.title') }}</h2>
+            </div>
+            <SkyLink
+              component="button"
+              icon-only
+              :aria-label="phone.t('Apps.companies.close')"
+              type="button"
+              @click="requestSheetOpened = false"
             >
-              <X :size="13" />
-            </k-button>
-          </span>
-        </div>
-        <k-button
-          large
-          rounded
-          :disabled="!canSubmitRequest || companies.mutating"
-          @click="submitRequest"
-        >
-          <k-preloader v-if="companies.mutating" />
-          <span v-else>{{ phone.t('Apps.companies.composer.send') }}</span>
-        </k-button>
-      </section>
-      </k-sheet>
+              <X :size="19" />
+            </SkyLink>
+          </header>
+          <SkyProgress
+            :label="phone.t('Apps.companies.composer.review')"
+            :progress="requestProgress"
+          />
+          <SkyBlockTitle class="composer-service-title">{{
+            phone.t('Apps.companies.composer.chooseService')
+          }}</SkyBlockTitle>
+          <SkyList inset strong class="composer-service-list">
+            <SkyListItem
+              v-for="service in activeCompany.services.filter(
+                (item) => item.active && item.acceptsRequests,
+              )"
+              :key="service.id"
+              label
+              :title="service.title"
+              :subtitle="service.description"
+            >
+              <template #media>
+                <SkyRadio
+                  name="company-request-service"
+                  :value="service.id"
+                  :checked="requestServiceId === service.id"
+                  @change="requestServiceId = service.id"
+                />
+              </template>
+              <template v-if="service.priceText" #after>
+                <span class="composer-service-price">{{
+                  service.priceText
+                }}</span>
+              </template>
+            </SkyListItem>
+          </SkyList>
+          <SkyList inset strong class="composer-form-list">
+            <SkyField
+              outline
+              maxlength="100"
+              :label="phone.t('Apps.companies.composer.subject')"
+              :placeholder="
+                phone.t('Apps.companies.composer.subjectPlaceholder')
+              "
+              :value="requestSubject"
+              :input-style="{ height: '38px' }"
+              @input="requestSubject = eventValue($event)"
+            />
+            <SkyField
+              outline
+              type="textarea"
+              maxlength="1200"
+              :label="phone.t('Apps.companies.composer.description')"
+              :placeholder="
+                phone.t('Apps.companies.composer.descriptionPlaceholder')
+              "
+              :value="requestDescription"
+              :input-style="{
+                height: '72px',
+                lineHeight: '20px',
+                paddingBottom: '8px',
+                paddingTop: '8px',
+                resize: 'none',
+              }"
+              @input="requestDescription = eventValue($event)"
+            />
+          </SkyList>
+          <SkyCard class="composer-contact-card">
+            <Phone :size="18" />
+            <span>
+              <strong>{{ phone.t('Apps.companies.composer.contact') }}</strong>
+              <span v-if="phone.device?.sim?.registered">
+                {{
+                  phone.t('Apps.companies.composer.registeredSim', {
+                    number: maskedPhoneNumber(phone.device.sim.number),
+                  })
+                }}
+              </span>
+              <span v-else>{{
+                phone.t('Apps.companies.composer.registeredSimRequired')
+              }}</span>
+            </span>
+          </SkyCard>
+          <SkyButton
+            outline
+            rounded
+            :disabled="requestMedia.length >= 3"
+            @click="chooseRequestMedia"
+          >
+            <ImagePlus :size="17" />
+            {{
+              phone.t('Apps.companies.composer.addPhotos', {
+                count: String(requestMedia.length),
+              })
+            }}
+          </SkyButton>
+          <div v-if="requestMedia.length" class="composer-media-strip">
+            <span v-for="media in requestMedia" :key="media.id">
+              <img
+                :src="media.url"
+                :alt="phone.t('Apps.companies.composer.selectedPhoto')"
+              />
+              <SkyButton
+                rounded
+                :aria-label="phone.t('Apps.companies.composer.removePhoto')"
+                @click="removeRequestMedia(media.id)"
+              >
+                <X :size="13" />
+              </SkyButton>
+            </span>
+          </div>
+          <SkyButton
+            large
+            rounded
+            :disabled="!canSubmitRequest || companies.mutating"
+            @click="submitRequest"
+          >
+            <SkySpinner v-if="companies.mutating" />
+            <span v-else>{{ phone.t('Apps.companies.composer.send') }}</span>
+          </SkyButton>
+        </section>
+      </SkySheet>
     </div>
 
-    <k-actions
+    <SkyActionSheet
       v-if="workActionsOpened"
       :opened="workActionsOpened"
+      :label="phone.t('Apps.companies.actions')"
       @backdropclick="workActionsOpened = false"
+      @escape="workActionsOpened = false"
     >
-      <k-actions-group v-if="companies.request">
-        <k-actions-button
+      <SkyActionGroup v-if="companies.request">
+        <SkyActionButton
           v-if="companies.request.actions.canClaim"
           @click="claimActiveRequest"
         >
           {{ phone.t('Apps.companies.workActions.claim') }}
-        </k-actions-button>
-        <k-actions-button
+        </SkyActionButton>
+        <SkyActionButton
           v-if="companies.request.actions.canAssign"
           @click="openAssignment"
         >
           {{ phone.t('Apps.companies.workActions.assign') }}
-        </k-actions-button>
-        <k-actions-button
+        </SkyActionButton>
+        <SkyActionButton
           v-if="companies.request.actions.canCall"
           @click="callRequestParty"
         >
           {{ phone.t('Apps.companies.workActions.callCustomer') }}
-        </k-actions-button>
-        <k-actions-button
+        </SkyActionButton>
+        <SkyActionButton
           v-for="status in companies.request.actions.allowedStatuses"
           :key="status"
           @click="updateActiveRequestStatus(status)"
@@ -2349,207 +2291,157 @@ onBeforeUnmount(() => {
               status: phone.t(`Apps.companies.requestStatuses.${status}`),
             })
           }}
-        </k-actions-button>
-      </k-actions-group>
-      <k-actions-group>
-        <k-actions-button bold @click="workActionsOpened = false">
+        </SkyActionButton>
+      </SkyActionGroup>
+      <SkyActionGroup>
+        <SkyActionButton bold @click="workActionsOpened = false">
           {{ phone.t('Apps.companies.close') }}
-        </k-actions-button>
-      </k-actions-group>
-    </k-actions>
+        </SkyActionButton>
+      </SkyActionGroup>
+    </SkyActionSheet>
 
     <div class="companies-sheet companies-assignment-sheet">
-      <k-sheet
+      <SkySheet
         :opened="assignmentSheetOpened"
+        :aria-label="phone.t('Apps.companies.assignment.title')"
         @backdropclick="assignmentSheetOpened = false"
+        @escape="assignmentSheetOpened = false"
       >
-      <section
-        v-if="assignmentSheetOpened"
-        class="companies-sheet__content"
-        role="dialog"
-        aria-modal="true"
-      >
-        <header>
-          <span><UsersRound :size="23" /></span>
-          <div>
-            <h2>{{ phone.t('Apps.companies.assignment.title') }}</h2>
-          </div>
-          <k-link
-            component="button"
-            icon-only
-            :aria-label="phone.t('Apps.companies.close')"
-            :link-props="{ type: 'button' }"
-            @click="assignmentSheetOpened = false"
+        <section v-if="assignmentSheetOpened" class="companies-sheet__content">
+          <header>
+            <span><UsersRound :size="23" /></span>
+            <div>
+              <h2>{{ phone.t('Apps.companies.assignment.title') }}</h2>
+            </div>
+            <SkyLink
+              component="button"
+              icon-only
+              :aria-label="phone.t('Apps.companies.close')"
+              type="button"
+              @click="assignmentSheetOpened = false"
+            >
+              <X :size="19" />
+            </SkyLink>
+          </header>
+          <SkyEmptyState v-if="companies.membersLoading" compact>
+            <template #icon><SkySpinner /></template>
+          </SkyEmptyState>
+          <SkyListCard v-else>
+            <SkyListItem
+              v-for="member in companies.members"
+              :key="member.id"
+              label
+              :title="memberName(member.name)"
+              :subtitle="`${member.role} · ${phone.t(`Apps.companies.assignment.${member.online ? 'online' : 'offline'}`)}`"
+            >
+              <template #media
+                ><span class="member-avatar"><UserRound :size="18" /></span
+              ></template>
+              <template #after>
+                <SkyRadio
+                  name="company-member"
+                  :value="member.id"
+                  :checked="selectedMemberId === member.id"
+                  :disabled="!member.online"
+                  @change="selectedMemberId = member.id"
+                />
+              </template>
+            </SkyListItem>
+          </SkyListCard>
+          <SkyButton
+            large
+            rounded
+            :disabled="!selectedMemberId || companies.mutating"
+            @click="assignActiveRequest"
           >
-            <X :size="19" />
-          </k-link>
-        </header>
-        <k-block
-          v-if="companies.membersLoading"
-          inset
-          strong
-          class="companies-state companies-state--compact"
-        >
-          <k-preloader />
-        </k-block>
-        <k-list v-else inset strong>
-          <k-list-item
-            v-for="member in companies.members"
-            :key="member.id"
-            label
-            :title="memberName(member.name)"
-            :subtitle="`${member.role} · ${phone.t(`Apps.companies.assignment.${member.online ? 'online' : 'offline'}`)}`"
-          >
-            <template #media
-              ><span class="member-avatar"><UserRound :size="18" /></span
-            ></template>
-            <template #after>
-              <k-radio
-                name="company-member"
-                :value="member.id"
-                :checked="selectedMemberId === member.id"
-                :disabled="!member.online"
-                @change="selectedMemberId = member.id"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
-        <k-button
-          large
-          rounded
-          :disabled="!selectedMemberId || companies.mutating"
-          @click="assignActiveRequest"
-        >
-          {{ phone.t('Apps.companies.assignment.confirm') }}
-        </k-button>
-      </section>
-      </k-sheet>
+            {{ phone.t('Apps.companies.assignment.confirm') }}
+          </SkyButton>
+        </section>
+      </SkySheet>
     </div>
 
-    <k-dialog
+    <SkyDialog
       :opened="cancelDialogOpened"
       :title="phone.t('Apps.companies.requests.cancelTitle')"
       :content="phone.t('Apps.companies.requests.cancelBody')"
       @backdropclick="cancelDialogOpened = false"
+      @escape="cancelDialogOpened = false"
     >
       <template #buttons>
-        <k-dialog-button @click="cancelDialogOpened = false">
+        <SkyDialogButton @click="cancelDialogOpened = false">
           {{ phone.t('Apps.companies.requests.keep') }}
-        </k-dialog-button>
-        <k-dialog-button
+        </SkyDialogButton>
+        <SkyDialogButton
           strong
           :disabled="companies.mutating"
           @click="cancelActiveRequest"
         >
           {{ phone.t('Apps.companies.requests.cancelConfirm') }}
-        </k-dialog-button>
+        </SkyDialogButton>
       </template>
-    </k-dialog>
+    </SkyDialog>
 
-    <k-dialog
+    <SkyDialog
       :opened="conflictDialogOpened"
       :title="phone.t('Apps.companies.conflict.title')"
       :content="phone.t('Apps.companies.conflict.body')"
       @backdropclick="conflictDialogOpened = false"
+      @escape="conflictDialogOpened = false"
     >
       <template #buttons>
-        <k-dialog-button @click="conflictDialogOpened = false">
+        <SkyDialogButton @click="conflictDialogOpened = false">
           {{ phone.t('Apps.companies.close') }}
-        </k-dialog-button>
-        <k-dialog-button strong @click="reloadConflict">
+        </SkyDialogButton>
+        <SkyDialogButton strong @click="reloadConflict">
           {{ phone.t('Apps.companies.conflict.reload') }}
-        </k-dialog-button>
+        </SkyDialogButton>
       </template>
-    </k-dialog>
+    </SkyDialog>
 
-    <k-toast
+    <SkyToast
       :opened="toastOpened"
       position="center"
       @click="toastOpened = false"
     >
       {{ toastText }}
-    </k-toast>
-  </k-page>
+    </SkyToast>
+  </SkyAppPage>
 </template>
 
 <style scoped>
 .companies-app {
-  --company-blue: #3b82f6;
+  --company-blue: var(--sky-app-accent);
   --company-cyan: #38bdf8;
   --company-green: #22c55e;
   --company-orange: #f59e0b;
   --company-red: #ef4444;
-  --k-safe-area-top: 46px;
-  --k-safe-area-bottom: 25px;
-  position: relative;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  color: #111827;
-}
-
-.companies-app--dark {
-  color: #f8fafc;
-}
-
-.companies-backdrop {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 12% 4%, rgb(56 189 248 / 16%), transparent 30%),
-    radial-gradient(circle at 88% 34%, rgb(59 130 246 / 13%), transparent 32%),
-    linear-gradient(180deg, #eff7ff 0%, #f6f8fb 45%, #eef2f7 100%);
-}
-
-.companies-app--dark .companies-backdrop {
-  background:
-    radial-gradient(circle at 12% 4%, rgb(56 189 248 / 13%), transparent 30%),
-    radial-gradient(circle at 88% 34%, rgb(59 130 246 / 11%), transparent 32%),
-    linear-gradient(180deg, #07111f 0%, #0b1220 52%, #111827 100%);
-}
-
-.companies-content {
-  position: relative;
-  z-index: 1;
-  min-height: 0;
-  padding: 10px 10px calc(var(--k-safe-area-bottom) + 88px);
-  flex: 1;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-}
-
-.companies-navbar {
-  flex: none;
-}
-
-.companies-content::-webkit-scrollbar,
-.companies-chip-row::-webkit-scrollbar,
-.companies-featured-row::-webkit-scrollbar {
-  display: none;
+  --company-surface: var(--sky-surface);
+  --company-surface-muted: var(--sky-surface-muted);
+  --company-border: var(--sky-hairline);
+  --company-text: var(--sky-text);
+  --company-muted: var(--sky-muted);
 }
 
 .companies-search-wrap {
-  margin: 0 -4px 8px;
+  margin: 0 0 8px;
 }
 
 .companies-chip-row {
-  display: flex;
-  gap: 7px;
-  padding: 2px 2px 9px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  gap: 6px;
+  scroll-snap-type: x proximity;
 }
 
-.companies-chip-row :deep(.k-chip) {
+.companies-chip-row :deep(.sky-chip) {
+  min-width: auto;
+  min-height: 38px;
   flex: none;
+  padding: 0 12px;
+  font-size: 12px;
+  scroll-snap-align: start;
   white-space: nowrap;
 }
 
-.companies-chip-row :deep(.is-selected) {
+.companies-chip-row :deep(.sky-chip--selected) {
   color: white;
   background: linear-gradient(135deg, var(--company-blue), var(--company-cyan));
 }
@@ -2560,112 +2452,42 @@ onBeforeUnmount(() => {
 .composer-contact-card,
 .company-announcement {
   margin: 0 0 12px;
-  border: 1px solid rgb(255 255 255 / 58%);
+  border: 1px solid var(--company-border);
   border-radius: 18px;
-  background: rgb(255 255 255 / 68%);
-  box-shadow: 0 12px 30px rgb(24 56 93 / 8%);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-}
-
-.companies-app--dark .work-identity-card,
-.companies-app--dark .manager-intro,
-.companies-app--dark .request-summary-card,
-.companies-app--dark .composer-contact-card,
-.companies-app--dark .company-announcement {
-  border-color: rgb(255 255 255 / 8%);
-  background: rgb(20 30 46 / 70%);
-}
-
-.companies-state {
-  min-height: 260px;
-  margin: 14px 6px;
-  padding: 36px 22px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  color: #64748b;
-  text-align: center;
-}
-
-.companies-state strong {
-  color: inherit;
-  font-size: 16px;
-}
-
-.companies-state p {
-  max-width: 260px;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.companies-state--compact {
-  min-height: 150px;
-  padding: 20px;
-}
-
-.companies-featured-row {
-  display: flex;
-  gap: 9px;
-  padding: 0 2px 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.company-feature-card {
-  width: 145px;
-  min-width: 145px;
-  margin: 0;
-  text-align: left;
-}
-
-.company-feature-card :deep(> *) {
-  padding: 12px;
-  display: grid;
-  gap: 6px;
-}
-
-.company-feature-card strong {
-  overflow: hidden;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.company-feature-card :deep(> *) > span {
-  color: #64748b;
-  font-size: 10px;
+  background: var(--company-surface);
+  box-shadow: none;
 }
 
 .company-list,
 .company-request-list {
-  margin-top: 6px;
+  margin: 0 !important;
 }
 
-.company-list :deep(.k-list-item > button),
-.company-request-list :deep(.k-list-item > button) {
+.company-list :deep(.sky-list-item__row),
+.company-request-list :deep(.sky-list-item__row) {
   width: 100%;
   text-align: left;
 }
 
-.companies-content :deep(.k-block-title) {
-  margin-bottom: 10px;
+.companies-content :deep(.sky-block-title) {
+  margin: 18px 0 8px !important;
+  padding: 0 2px !important;
+  color: var(--company-muted);
+  font-size: 15px;
+  line-height: 20px;
 }
 
 .company-logo {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: grid;
   flex: none;
   place-items: center;
   overflow: hidden;
-  border-radius: 13px;
+  border-radius: 12px;
   color: white;
-  background: linear-gradient(145deg, var(--company-blue), var(--company-cyan));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 42%);
+  background: var(--company-blue);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
   font-size: 13px;
   font-weight: 800;
 }
@@ -2693,7 +2515,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 3px;
 }
 
 .company-row-after small {
@@ -2705,48 +2527,76 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-:deep(.k-badge) {
+.company-list :deep(.sky-list-item__row),
+.company-request-list :deep(.sky-list-item__row) {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
+.company-list :deep(.sky-list-item__title),
+.company-request-list :deep(.sky-list-item__title) {
+  min-height: 22px;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.company-list :deep(.sky-list-item__subtitle),
+.company-request-list :deep(.sky-list-item__subtitle) {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--company-muted);
+  font-size: 12px;
+  line-height: 16px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+:deep(.sky-badge) {
   min-width: 0;
   border-radius: 999px;
   font-size: 8px;
   line-height: 1.2;
 }
 
-:deep(.k-badge.is-available),
-:deep(.k-badge.is-completed) {
+:deep(.sky-badge.is-available),
+:deep(.sky-badge.is-completed) {
   color: #047857;
   background: #d1fae5;
 }
 
-:deep(.k-badge.is-busy),
-:deep(.k-badge.is-waiting-customer) {
+:deep(.sky-badge.is-busy),
+:deep(.sky-badge.is-waiting-customer) {
   color: #b45309;
   background: #fef3c7;
 }
 
-:deep(.k-badge.is-closed),
-:deep(.k-badge.is-cancelled) {
+:deep(.sky-badge.is-closed),
+:deep(.sky-badge.is-cancelled) {
   color: #b91c1c;
   background: #fee2e2;
 }
 
-:deep(.k-badge.is-new),
-:deep(.k-badge.is-assigned),
-:deep(.k-badge.is-in-progress),
-:deep(.k-badge.is-unread) {
+:deep(.sky-badge.is-new),
+:deep(.sky-badge.is-assigned),
+:deep(.sky-badge.is-in-progress),
+:deep(.sky-badge.is-unread) {
   color: #1d4ed8;
   background: #dbeafe;
 }
 
-.companies-load-more,
 .manager-save {
-  width: calc(100% - 20px);
-  margin: 14px 10px 4px;
+  width: 100%;
+  margin: 14px 0 4px;
 }
 
 .companies-segment-wrap,
 .availability-segmented {
-  margin: 4px 6px 14px;
+  margin: 0 0 14px;
+}
+
+.companies-segment-wrap {
+  margin-bottom: 12px;
 }
 
 .company-request-icon,
@@ -2757,7 +2607,7 @@ onBeforeUnmount(() => {
   place-items: center;
   border-radius: 12px;
   color: var(--company-blue);
-  background: rgb(59 130 246 / 13%);
+  background: rgba(59, 130, 246, 0.13);
 }
 
 .work-identity-card :deep(> *),
@@ -2767,6 +2617,15 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 11px;
+}
+
+.work-identity-card {
+  margin-bottom: 18px;
+}
+
+.work-identity-card :deep(> *) {
+  min-height: 72px;
+  padding: 13px 14px;
 }
 
 .work-identity-card :deep(> *) > span:nth-child(2),
@@ -2799,26 +2658,44 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  margin: 0 5px 14px;
+  margin: 0 0 14px;
+}
+
+.work-control-card > :deep(.sky-block-title) {
+  margin-top: 0 !important;
+}
+
+.work-action-list {
+  margin: 0 !important;
+}
+
+.work-action-list :deep(.sky-list-item__subtitle) {
+  color: var(--company-muted);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
 }
 
 .work-metric {
   margin: 0;
-  padding: 15px 16px;
+  min-height: 72px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  border: 1px solid var(--company-border);
   border-radius: 16px;
+  background: var(--company-surface);
 }
 
 .work-metrics strong {
   color: var(--company-blue);
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .work-metrics span {
-  color: #64748b;
-  font-size: 10px;
+  color: var(--company-muted);
+  font-size: 11px;
 }
 
 .company-cover {
@@ -2828,7 +2705,7 @@ onBeforeUnmount(() => {
   align-items: flex-end;
   padding: 14px;
   background:
-    linear-gradient(180deg, transparent, rgb(15 23 42 / 48%)),
+    linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.48)),
     linear-gradient(135deg, #1d4ed8, #38bdf8 58%, #67e8f9);
   background-position: center;
   background-size: cover;
@@ -2837,7 +2714,7 @@ onBeforeUnmount(() => {
 .company-logo--hero {
   width: 66px;
   height: 66px;
-  border: 3px solid rgb(255 255 255 / 88%);
+  border: 3px solid rgba(255, 255, 255, 0.88);
   border-radius: 20px;
   font-size: 18px;
 }
@@ -2876,25 +2753,25 @@ onBeforeUnmount(() => {
 }
 
 .company-profile {
-  padding-bottom: calc(var(--k-safe-area-bottom) + 24px);
+  padding-bottom: calc(var(--sky-safe-area-bottom) + 24px);
 }
 
-.company-profile > :deep(.k-block-title) {
+.company-profile > :deep(.sky-block-title) {
   margin-top: 18px;
   margin-bottom: 6px;
 }
 
-.company-profile > :deep(.k-list) {
+.company-profile > :deep(.sky-list) {
   margin-top: 8px;
   margin-bottom: 10px;
 }
 
-.companies-app--dark .company-profile-heading p,
-.companies-app--dark .work-identity-card small,
-.companies-app--dark .manager-intro span span,
-.companies-app--dark .composer-contact-card span span,
-.companies-app--dark .company-announcement span span,
-.companies-app--dark .work-metrics span {
+.companies-app.sky-app-page--dark .company-profile-heading p,
+.companies-app.sky-app-page--dark .work-identity-card small,
+.companies-app.sky-app-page--dark .manager-intro span span,
+.companies-app.sky-app-page--dark .composer-contact-card span span,
+.companies-app.sky-app-page--dark .company-announcement span span,
+.companies-app.sky-app-page--dark .work-metrics span {
   color: #94a3b8;
 }
 
@@ -2910,12 +2787,12 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 7px;
-  border: 1px solid rgb(255 255 255 / 45%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
   border-radius: 20px;
 }
 
-.companies-app--dark .company-profile-actions {
-  border-color: rgb(255 255 255 / 8%);
+.companies-app.sky-app-page--dark .company-profile-actions {
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .request-thread {
@@ -2981,7 +2858,7 @@ onBeforeUnmount(() => {
   scroll-snap-align: start;
   border-radius: 14px;
   object-fit: cover;
-  background: rgb(148 163 184 / 20%);
+  background: rgba(148, 163, 184, 0.2);
 }
 
 .request-timeline {
@@ -3002,7 +2879,7 @@ onBeforeUnmount(() => {
   left: 10px;
   width: 1px;
   content: '';
-  background: rgb(59 130 246 / 28%);
+  background: rgba(59, 130, 246, 0.28);
 }
 
 .request-timeline > div > span {
@@ -3052,13 +2929,11 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 0;
   left: 0;
-  background: rgb(255 255 255 / 86%);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--company-surface);
 }
 
-.companies-app--dark .company-messagebar {
-  background: rgb(15 23 42 / 88%);
+.companies-app.sky-app-page--dark .company-messagebar {
+  background: var(--company-surface);
 }
 
 .manager-screen {
@@ -3069,7 +2944,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   gap: 9px;
-  margin: 0 10px 12px;
+  margin: 0 0 14px;
 }
 
 .manager-media-button {
@@ -3079,7 +2954,7 @@ onBeforeUnmount(() => {
   position: relative;
   display: grid;
   place-items: center;
-  border: 1px solid rgb(148 163 184 / 30%);
+  border: 1px solid rgba(148, 163, 184, 0.3);
   padding: 0;
 }
 
@@ -3098,7 +2973,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   padding: 4px 6px;
   color: white;
-  background: rgb(15 23 42 / 72%);
+  background: rgba(15, 23, 42, 0.72);
   font-size: 9px;
   font-weight: 700;
   text-overflow: ellipsis;
@@ -3106,8 +2981,8 @@ onBeforeUnmount(() => {
 }
 
 .manager-location {
-  width: calc(100% - 20px);
-  margin: 0 10px 4px;
+  width: 100%;
+  margin: 0 0 4px;
 }
 
 .manager-location-status {
@@ -3121,6 +2996,11 @@ onBeforeUnmount(() => {
 .manager-hours-card,
 .manager-service-card {
   margin-bottom: 10px;
+}
+
+.manager-form-list {
+  margin-right: 0 !important;
+  margin-left: 0 !important;
 }
 
 .manager-hours-card,
@@ -3138,7 +3018,12 @@ onBeforeUnmount(() => {
   display: inline-flex;
 }
 
-.companies-tab-icon :deep(.k-badge) {
+.companies-tabbar {
+  z-index: 25;
+  padding-inline: 0 !important;
+}
+
+.companies-tab-icon :deep(.sky-badge) {
   position: absolute;
   top: -5px;
   right: -10px;
@@ -3146,7 +3031,7 @@ onBeforeUnmount(() => {
   background: var(--company-red);
 }
 
-.companies-sheet :deep(.k-sheet) {
+.companies-sheet :deep(.sky-sheet__panel) {
   max-height: 88%;
   border-radius: 24px 24px 0 0;
   overflow: hidden;
@@ -3202,7 +3087,7 @@ onBeforeUnmount(() => {
   margin-left: 8px;
 }
 
-.composer-service-list :deep(.k-list-item .text-sm) {
+.composer-service-list :deep(.sky-list-item__subtitle) {
   overflow: hidden;
   font-size: 11px;
   line-height: 1.3;
@@ -3210,7 +3095,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.composer-service-list :deep(.k-radio > i) {
+.composer-service-list :deep(.sky-radio__mark) {
   width: 20px;
   height: 20px;
 }
@@ -3228,7 +3113,7 @@ onBeforeUnmount(() => {
   margin-left: 8px;
 }
 
-.composer-form-list :deep(.k-list-input) {
+.composer-form-list :deep(.sky-field) {
   margin-top: 8px;
   margin-bottom: 8px;
 }
@@ -3258,7 +3143,7 @@ onBeforeUnmount(() => {
   object-fit: cover;
 }
 
-.composer-media-strip :deep(.k-button) {
+.composer-media-strip :deep(.sky-button) {
   position: absolute;
   top: 3px;
   right: 3px;
@@ -3267,14 +3152,10 @@ onBeforeUnmount(() => {
   height: 24px;
   padding: 0;
   color: white;
-  background: rgb(15 23 42 / 82%);
+  background: rgba(15, 23, 42, 0.82);
 }
 
 @media (max-width: 330px) {
-  .companies-content {
-    padding-inline: 7px;
-  }
-
   .company-profile-actions {
     grid-template-columns: 1fr;
   }
