@@ -53,8 +53,15 @@
   justify-content: flex-end;
 }
 
-.sky-navbar__title {
+.sky-navbar__heading {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.sky-navbar__title {
   margin: 0;
   padding: 0 var(--sky-space-1);
   overflow: hidden;
@@ -63,6 +70,17 @@
   font-weight: 650;
   line-height: var(--sky-navbar-height);
   text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sky-navbar__subtitle {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--sky-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -135,8 +153,12 @@
   display: none;
 }
 
-.sky-navbar--large .sky-navbar__title {
+.sky-navbar--large .sky-navbar__heading {
   grid-area: title;
+  align-items: flex-start;
+}
+
+.sky-navbar--large .sky-navbar__title {
   padding: 0;
   font-size: var(--sky-font-large-title);
   font-weight: 700;
@@ -401,6 +423,29 @@
   border-top: 1px solid var(--sky-hairline);
   background: var(--sky-surface);
   color: var(--sky-text);
+}
+
+.sky-tabbar--floating {
+  right: var(--sky-space-4);
+  bottom: calc(var(--sky-safe-area-bottom) + 10px);
+  left: var(--sky-space-4);
+  min-height: 62px;
+  padding: 0;
+  border: 1px solid var(--sky-hairline);
+  border-radius: 999px;
+  background: var(--sky-surface);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.34),
+    inset 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.sky-tabbar--floating .sky-tabbar__inner {
+  min-height: 60px;
+  padding: 3px;
+}
+
+.sky-tabbar--floating .sky-tabbar__pane {
+  min-height: 60px;
 }
 
 .sky-tabbar__inner,

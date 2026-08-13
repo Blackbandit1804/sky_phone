@@ -1,5 +1,6 @@
 local server_callbacks = {
     "skyride:bootstrap",
+    "skyride:update-profile",
     "skyride:quote",
     "skyride:request",
     "skyride:set-driver-status",
@@ -78,6 +79,9 @@ local function normalize_state(data)
         end
         if data.profile.avatarUrl == false then
             data.profile.avatarUrl = json.null
+        end
+        if data.profile.avatarMediaId == false then
+            data.profile.avatarMediaId = json.null
         end
         if data.profile.earningsToday == false then
             data.profile.earningsToday = json.null

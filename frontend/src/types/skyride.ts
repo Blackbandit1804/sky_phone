@@ -100,6 +100,7 @@ export type SkyRideRide = {
 
 export type SkyRideProfile = {
   acceptanceRate: number | null
+  avatarMediaId: number | null
   avatarUrl: string | null
   cancelledRides: number
   completedRides: number
@@ -110,6 +111,11 @@ export type SkyRideProfile = {
   memberSince: number
   name: string
   rating: number
+}
+
+export type SkyRideProfileInput = {
+  avatarMediaId: number
+  name: string
 }
 
 export type SkyRideBootstrap = {

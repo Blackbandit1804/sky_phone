@@ -29,7 +29,11 @@ end
 local ride_select = [[
     SELECT r.*,
         passenger.`owner_identifier` AS `passenger_identifier`,
+        COALESCE(NULLIF(passenger.`display_name`, ''), r.`passenger_name`) AS `passenger_profile_name`,
+        passenger_avatar.`url` AS `passenger_avatar_url`,
         driver.`owner_identifier` AS `driver_identifier`,
+        COALESCE(NULLIF(driver.`display_name`, ''), r.`driver_name`) AS `driver_profile_name`,
+        driver_avatar.`url` AS `driver_avatar_url`,
         UNIX_TIMESTAMP(r.`created_at`) AS `created_at_unix`,
         UNIX_TIMESTAMP(r.`updated_at`) AS `updated_at_unix`,
         UNIX_TIMESTAMP(r.`accepted_at`) AS `accepted_at_unix`,
@@ -40,8 +44,12 @@ local ride_select = [[
     FROM `sky_phone_skyride_rides` r
     INNER JOIN `sky_phone_skyride_profiles` passenger
         ON passenger.`id` = r.`passenger_profile_id`
+    LEFT JOIN `sky_phone_media` passenger_avatar
+        ON passenger_avatar.`id` = passenger.`avatar_media_id`
     LEFT JOIN `sky_phone_skyride_profiles` driver
         ON driver.`id` = r.`driver_profile_id`
+    LEFT JOIN `sky_phone_media` driver_avatar
+        ON driver_avatar.`id` = driver.`avatar_media_id`
 ]]
 
 local function affected_rows(result)
@@ -164,9 +172,12 @@ local function require_profile(source)
         SELECT UUID(), ?
     ]], { identifier })
     local rows = Bridge.Database.Query([[
-        SELECT `id`, `owner_identifier`, UNIX_TIMESTAMP(`created_at`) AS `created_at_unix`
-        FROM `sky_phone_skyride_profiles`
-        WHERE `owner_identifier` = ?
+        SELECT profile.`id`, profile.`owner_identifier`, profile.`display_name`,
+            profile.`avatar_media_id`, avatar.`url` AS `avatar_url`,
+            UNIX_TIMESTAMP(profile.`created_at`) AS `created_at_unix`
+        FROM `sky_phone_skyride_profiles` profile
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = profile.`avatar_media_id`
+        WHERE profile.`owner_identifier` = ?
         LIMIT 1
     ]], { identifier })
     if not rows[1] then
@@ -235,7 +246,8 @@ local function profile_snapshot(source, profile)
     local stats = rows[1] or {}
     return {
         acceptanceRate = false,
-        avatarUrl = false,
+        avatarMediaId = profile.avatar_media_id and tonumber(profile.avatar_media_id) or false,
+        avatarUrl = profile.avatar_url or false,
         cancelledRides = tonumber(stats.cancelled_rides) or 0,
         completedRides = tonumber(stats.completed_rides) or 0,
         currency = Config.SkyRide.Currency,
@@ -243,7 +255,7 @@ local function profile_snapshot(source, profile)
         earningsToday = driver_eligible(source) and (tonumber(stats.earnings_today) or 0) or false,
         id = profile.id,
         memberSince = tonumber(profile.created_at_unix) or os.time(),
-        name = player_name(source),
+        name = profile.display_name or player_name(source),
         rating = math.floor(((tonumber(stats.rating) or 5.0) * 100) + 0.5) / 100,
     }
 end
@@ -338,9 +350,9 @@ local function online_source_for_identifier(identifier)
     return nil
 end
 
-local function person_dto(id, name, metrics)
+local function person_dto(id, name, avatar_url, metrics)
     return {
-        avatarUrl = false,
+        avatarUrl = avatar_url or false,
         id = id,
         name = name or "",
         rating = metrics and metrics.rating or 5.0,
@@ -356,12 +368,18 @@ local function ride_dtos(rows)
         local status = row.status == "completing" and "in_progress" or row.status
         local passenger = person_dto(
             row.passenger_profile_id,
-            row.passenger_name,
+            row.passenger_profile_name,
+            row.passenger_avatar_url,
             metrics[row.passenger_profile_id]
         )
         local driver = false
         if row.driver_profile_id then
-            driver = person_dto(row.driver_profile_id, row.driver_name, metrics[row.driver_profile_id])
+            driver = person_dto(
+                row.driver_profile_id,
+                row.driver_profile_name,
+                row.driver_avatar_url,
+                metrics[row.driver_profile_id]
+            )
             driver.vehicle = {
                 color = row.driver_vehicle_color or "",
                 model = row.driver_vehicle_model or "",
@@ -819,6 +837,55 @@ Bridge.Callbacks.Register("sky_phone:skyride:bootstrap", function(source)
     }
 end)
 
+Bridge.Callbacks.Register("sky_phone:skyride:update-profile", function(source, data)
+    if not SkyPhone.AllowOperation(source, "skyride_action", Config.SkyRide.ActionsPerMinute, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local profile, error_response = require_profile(source)
+    if not profile then
+        return error_response
+    end
+    local name = type(data) == "table" and type(data.name) == "string"
+        and data.name:match("^%s*(.-)%s*$") or nil
+    local name_length = name and utf8.len(name) or nil
+    local avatar_media_id = type(data) == "table" and tonumber(data.avatarMediaId) or nil
+    if not name_length
+        or name_length < Config.SkyRide.ProfileNameMinLength
+        or name_length > Config.SkyRide.ProfileNameMaxLength
+    then
+        return { success = false, error = "invalid_profile_name" }
+    end
+    if not avatar_media_id or avatar_media_id < 0 or avatar_media_id ~= math.floor(avatar_media_id) then
+        return { success = false, error = "invalid_profile_image" }
+    end
+    if avatar_media_id > 0
+        and not SkyPhoneMedia.ResolveOwnedMedia(source, tostring(avatar_media_id), "photo")
+    then
+        return { success = false, error = "invalid_profile_image" }
+    end
+    local result, lock_error = run_locked("profile:" .. profile.id, function()
+        local update = Bridge.Database.Query([[
+            UPDATE `sky_phone_skyride_profiles`
+            SET `display_name` = ?, `avatar_media_id` = NULLIF(?, 0)
+            WHERE `id` = ? AND `owner_identifier` = ?
+        ]], { name, avatar_media_id, profile.id, profile.owner_identifier })
+        if affected_rows(update) > 1 then
+            error(("[sky_phone] SkyRide profile update affected multiple rows for '%s'."):format(profile.id))
+        end
+        local updated_profile = require_profile(source)
+        local ride = active_ride(profile.id)
+        if ride then
+            push_participants(ride, { activeRide = true }, source)
+        end
+        push_available_requests(source)
+        return {
+            success = true,
+            data = state_snapshot(source, updated_profile, { profile = true }),
+        }
+    end)
+    return result or lock_error
+end)
+
 Bridge.Callbacks.Register("sky_phone:skyride:history", function(source)
     if not SkyPhone.AllowOperation(source, "skyride_read", Config.SkyRide.ReadsPerMinute, 60) then
         return { success = false, error = "rate_limited" }
@@ -995,7 +1062,7 @@ Bridge.Callbacks.Register("sky_phone:skyride:request", function(source, data)
         ]], {
             ride_id,
             profile.id,
-            player_name(source),
+            profile.display_name or player_name(source),
             quote.option.serviceClass,
             quote.pickup.label,
             quote.pickup.coords.x,
@@ -1232,7 +1299,7 @@ Bridge.Callbacks.Register("sky_phone:skyride:accept", function(source, data)
             WHERE `id` = ? AND `status` = 'searching' AND `driver_profile_id` IS NULL
         ]], {
             profile.id,
-            player_name(source),
+            profile.display_name or player_name(source),
             vehicle.model,
             vehicle.color,
             vehicle.plate,

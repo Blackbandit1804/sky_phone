@@ -10,6 +10,7 @@ const props = withDefaults(
     backLabel?: string
     showBack?: boolean
     showBackText?: boolean
+    subtitle?: string
     title: string
     variant?: 'compact' | 'large'
   }>(),
@@ -18,6 +19,7 @@ const props = withDefaults(
     backLabel: '',
     showBack: false,
     showBackText: false,
+    subtitle: '',
     variant: 'compact',
   },
 )
@@ -49,7 +51,10 @@ const accessibleBackLabel = computed(() => props.backLabel || props.title)
       </slot>
     </div>
 
-    <h1 class="sky-navbar__title">{{ title }}</h1>
+    <div class="sky-navbar__heading">
+      <h1 class="sky-navbar__title">{{ title }}</h1>
+      <span v-if="subtitle" class="sky-navbar__subtitle">{{ subtitle }}</span>
+    </div>
 
     <div class="sky-navbar__right">
       <slot name="right" />

@@ -1851,11 +1851,19 @@ local schema = {
                 characterSet = "ascii",
                 collation = "ascii_bin",
             },
+            { name = "display_name", type = "VARCHAR(50) NULL" },
+            { name = "avatar_media_id", type = "BIGINT UNSIGNED NULL" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
         },
         primaryKey = "id",
         uniqueKeys = {
             { name = "uniq_sky_phone_skyride_owner", columns = "(`owner_identifier`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_skyride_profile_avatar", columns = "(`avatar_media_id`)" },
+        },
+        foreignKeys = {
+            { column = "avatar_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },

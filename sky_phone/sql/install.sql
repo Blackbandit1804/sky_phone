@@ -795,9 +795,13 @@ CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_moderation_audit` (
 CREATE TABLE IF NOT EXISTS `sky_phone_skyride_profiles` (
     `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `owner_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `display_name` VARCHAR(50) NULL,
+    `avatar_media_id` BIGINT UNSIGNED NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uniq_sky_phone_skyride_owner` (`owner_identifier`)
+    UNIQUE KEY `uniq_sky_phone_skyride_owner` (`owner_identifier`),
+    KEY `idx_sky_phone_skyride_profile_avatar` (`avatar_media_id`),
+    FOREIGN KEY (`avatar_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `sky_phone_skyride_rides` (

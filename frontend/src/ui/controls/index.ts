@@ -1,5 +1,6 @@
 export { default as SkyBadge } from './SkyBadge.vue'
 export { default as SkyBlock } from './SkyBlock.vue'
+export { default as SkyBlockHeader } from './SkyBlockHeader.vue'
 export { default as SkyBlockTitle } from './SkyBlockTitle.vue'
 export { default as SkyButton } from './SkyButton.vue'
 export { default as SkyCard } from './SkyCard.vue'

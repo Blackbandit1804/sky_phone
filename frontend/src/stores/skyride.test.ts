@@ -42,6 +42,7 @@ const bootstrap: SkyRideBootstrap = {
   pendingRating: null,
   profile: {
     acceptanceRate: 94,
+    avatarMediaId: null,
     avatarUrl: null,
     cancelledRides: 2,
     completedRides: 128,
@@ -109,6 +110,33 @@ describe('SkyRide store', () => {
     expect(mockNuiCall).toHaveBeenCalledWith('skyride:quote', {
       destination,
       pickup,
+    })
+  })
+
+  it('updates the editable profile with an owned media id', async () => {
+    const updatedProfile = {
+      ...bootstrap.profile,
+      avatarMediaId: 17,
+      avatarUrl: 'https://example.test/avatar.webp',
+      name: 'Jordan Sky',
+    }
+    mockNuiCall.mockResolvedValueOnce({
+      data: { profile: updatedProfile },
+      success: true,
+    })
+    const skyride = useSkyRideStore()
+    skyride.profile = bootstrap.profile
+
+    const response = await skyride.updateProfile({
+      avatarMediaId: 17,
+      name: 'Jordan Sky',
+    })
+
+    expect(response.success).toBe(true)
+    expect(skyride.profile).toEqual(updatedProfile)
+    expect(mockNuiCall).toHaveBeenCalledWith('skyride:update-profile', {
+      avatarMediaId: 17,
+      name: 'Jordan Sky',
     })
   })
 

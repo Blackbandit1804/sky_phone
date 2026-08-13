@@ -888,6 +888,7 @@ let mockGarageValet = null
 
 const skyRideProfile = {
   acceptanceRate: 96,
+  avatarMediaId: 1,
   avatarUrl:
     'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=240&q=80',
   cancelledRides: 3,
@@ -6641,6 +6642,33 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: { items: skyRideHistory } })
     return
   }
+  if (endpoint === 'skyride:update-profile') {
+    const name = String(request.body.name ?? '').trim()
+    const avatarMediaId = Number(request.body.avatarMediaId)
+    const avatar = avatarMediaId
+      ? mockMedia.find(
+          (item) => item.id === avatarMediaId && item.mediaType === 'photo',
+        )
+      : null
+    if (
+      name.length < 2 ||
+      name.length > 50 ||
+      !Number.isInteger(avatarMediaId) ||
+      avatarMediaId < 0 ||
+      (avatarMediaId > 0 && !avatar)
+    ) {
+      response.json({ success: false, error: 'invalid_profile' })
+      return
+    }
+    skyRideProfile.name = name
+    skyRideProfile.avatarMediaId = avatarMediaId || null
+    skyRideProfile.avatarUrl = avatar?.url ?? null
+    response.json({
+      success: true,
+      data: skyRideUpdate(['profile']),
+    })
+    return
+  }
   if (endpoint === 'skyride:quote') {
     const pickup = request.body.pickup
     const destination = request.body.destination
@@ -7679,8 +7707,7 @@ app.post('/api/:endpoint', (request, response) => {
       }
     }
     const bootstrapDeviceData =
-      testScenario === 'easyshare-full' &&
-      !deviceData.apps?.payload?.homeLayout
+      testScenario === 'easyshare-full' && !deviceData.apps?.payload?.homeLayout
         ? {
             ...deviceData,
             apps: {

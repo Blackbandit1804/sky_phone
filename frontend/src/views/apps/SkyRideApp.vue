@@ -1,74 +1,43 @@
 <script setup lang="ts">
 import {
-  kBadge,
-  kBlock,
-  kBlockHeader,
-  kBlockTitle,
-  kButton,
-  kCard,
-  kChip,
-  kDialog,
-  kDialogButton,
-  kFab,
-  kIcon,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kPage,
-  kPreloader,
-  kSegmented,
-  kSegmentedButton,
-  kSheet,
-  kTabbar,
-  kTabbarLink,
-  kToast,
-  kToggle,
-  kToolbarPane,
-} from 'konsta/vue'
-import {
   Bell,
   BriefcaseBusiness,
+  Camera,
   CarFront,
   Check,
   CheckCircle2,
   ChevronRight,
+  CircleUserRound,
   CircleDollarSign,
   Clock3,
   Crosshair,
   History,
   House,
+  Images,
   MapPin,
   MessageCircle,
-  Minus,
   Navigation,
   Phone,
-  Plus,
+  Pencil,
   Power,
   Route,
   ShieldCheck,
   Sparkles,
   Star,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import {
-  defaultCayoStyle,
-  defaultMainlandStyle,
-  defaultMapCoordinates,
-  defaultMapPercentToWorld,
-  defaultMapWorldToPercent,
-} from '@/features/map/defaultMapGeometry'
 import { useCallsStore } from '@/stores/calls'
+import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import { useSkyRideStore } from '@/stores/skyride'
+import type { PhoneMedia } from '@/types/media'
 import type {
   SkyRideChangedMessage,
-  SkyRideCoordinates,
   SkyRideCustomFareInput,
   SkyRideDistanceUnit,
   SkyRideFareMode,
@@ -79,34 +48,56 @@ import type {
   SkyRideRideStatus,
 } from '@/types/skyride'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
+import {
+  SkyAppPage as kPage,
+  SkyBadge as kBadge,
+  SkyBlock as kBlock,
+  SkyBlockHeader as kBlockHeader,
+  SkyBlockTitle as kBlockTitle,
+  SkyButton,
+  SkyButton as kButton,
+  SkyCard as kCard,
+  SkyChip as kChip,
+  SkyDialog as kDialog,
+  SkyDialogButton as kDialogButton,
+  SkyField,
+  SkyField as kListInput,
+  SkyLink as kLink,
+  SkyList as kList,
+  SkyListItem as kListItem,
+  SkyNavbar as kNavbar,
+  SkySegmented as kSegmented,
+  SkySegmentedButton as kSegmentedButton,
+  SkySettingsGroup,
+  SkySettingsRow,
+  SkySheet,
+  SkySheet as kSheet,
+  SkySpinner as kPreloader,
+  SkyTabBar as kTabbar,
+  SkyTabButton as kTabbarLink,
+  SkyToast as kToast,
+  SkyToggle as kToggle,
+} from '@/ui'
 
 type SkyRideTab = 'home' | 'rides' | 'activity' | 'messages' | 'profile'
 type LocationTarget = 'pickup' | 'destination'
+type ProfileMediaContext = {
+  avatarMediaId: number
+  name: string
+  selectedAvatar: PhoneMedia | null
+}
 
 const phone = usePhoneStore()
 const skyride = useSkyRideStore()
 const calls = useCallsStore()
+const messageMedia = useMessageMediaStore()
 const router = useRouter()
 
 const activeTab = ref<SkyRideTab>('home')
 const mode = ref<SkyRideMode>('rider')
 const pickup = ref<SkyRideLocation | null>(null)
 const destination = ref<SkyRideLocation | null>(null)
-const currentCoordinates = ref<SkyRideCoordinates | null>(null)
 const locationTarget = ref<LocationTarget | null>(null)
-const mapPickTarget = ref<LocationTarget | null>(null)
-const mapDraft = ref<SkyRideLocation | null>(null)
-const mapElement = ref<HTMLElement | null>(null)
-const mapStageElement = ref<HTMLElement | null>(null)
-const mapViewport = ref({ scale: 1.15, x: 0, y: 0 })
-const mapPointer = ref<{
-  id: number
-  moved: boolean
-  originX: number
-  originY: number
-  startX: number
-  startY: number
-} | null>(null)
 const selectedQuoteId = ref<string | null>(null)
 const fareMode = ref<SkyRideFareMode>('calculated')
 const customFareInput = ref('')
@@ -115,6 +106,10 @@ const rating = ref(0)
 const tip = ref(0)
 const ratingComment = ref('')
 const toastText = ref('')
+const profileEditorOpened = ref(false)
+const profileName = ref('')
+const profileAvatarMediaId = ref(0)
+const selectedProfileAvatar = ref<PhoneMedia | null>(null)
 let toastTimer: number | undefined
 
 const tabs = [
@@ -122,42 +117,8 @@ const tabs = [
   { icon: Route, id: 'rides' as const },
   { icon: Bell, id: 'activity' as const },
   { icon: MessageCircle, id: 'messages' as const },
-  { icon: UserRound, id: 'profile' as const },
+  { icon: CircleUserRound, id: 'profile' as const },
 ]
-const dangerButtonColors = {
-  tonalBgIos: 'bg-[#ff453a]/15 active:bg-[#ff453a]/25',
-  tonalBgMaterial: 'bg-[#ff453a]/15 active:bg-[#ff453a]/25',
-  tonalTextIos: 'text-[#ff453a]',
-  tonalTextMaterial: 'text-[#ff453a]',
-}
-const mapControlColors = {
-  activeBgIos: '',
-  activeBgMaterial: '',
-  bgIos: '',
-  bgMaterial: '',
-  textIos: 'text-current',
-  textMaterial: 'text-current',
-}
-const quickDestinationButtonColors = {
-  tonalBgIos: '',
-  tonalBgMaterial: '',
-  tonalTextIos: 'text-current',
-  tonalTextMaterial: 'text-current',
-}
-
-const displayedPickup = computed(
-  () => skyride.activeRide?.pickup ?? pickup.value,
-)
-const displayedDestination = computed(
-  () => skyride.activeRide?.destination ?? destination.value,
-)
-const mapRoute = computed(() => {
-  if (!displayedPickup.value || !displayedDestination.value) return null
-  return {
-    destination: defaultMapWorldToPercent(displayedDestination.value.coords),
-    pickup: defaultMapWorldToPercent(displayedPickup.value.coords),
-  }
-})
 const selectedQuote = computed(() =>
   skyride.quote?.options.find(
     (option) => option.quoteId === selectedQuoteId.value,
@@ -174,13 +135,6 @@ const canRequestSelectedQuote = computed(() => {
     Number(customFareInput.value) === option.price
   )
 })
-const mapStageStyle = computed(() => ({
-  '--map-marker-scale': String(1 / Math.pow(mapViewport.value.scale, 1.35)),
-  aspectRatio: String(
-    defaultMapCoordinates.width / defaultMapCoordinates.height,
-  ),
-  transform: `translate(-50%, -50%) translate3d(${mapViewport.value.x}px, ${mapViewport.value.y}px, 0) scale(${mapViewport.value.scale})`,
-}))
 const activeContact = computed(() =>
   mode.value === 'driver'
     ? skyride.activeRide?.passenger
@@ -203,8 +157,15 @@ const driverAction = computed<'arrive' | 'start' | 'complete' | null>(() => {
   return null
 })
 const ratingRide = computed(() => skyride.pendingRating)
-const mapImageUrl = `${import.meta.env.BASE_URL}img/maps/gtav-map.svg`
-const cayoMapImageUrl = `${import.meta.env.BASE_URL}img/maps/cayo-perico.svg`
+const profileAvatarUrl = computed(
+  () =>
+    selectedProfileAvatar.value?.url ??
+    (profileAvatarMediaId.value > 0 ? skyride.profile?.avatarUrl : null),
+)
+const canSaveProfile = computed(() => {
+  const length = Array.from(profileName.value.trim()).length
+  return length >= 2 && length <= 50 && !skyride.isActionPending
+})
 
 function showToast(message: string): void {
   if (toastTimer) window.clearTimeout(toastTimer)
@@ -308,15 +269,6 @@ function updateRatingComment(event: Event): void {
   ratingComment.value = (event.target as HTMLInputElement).value
 }
 
-function markerStyle(location: SkyRideLocation | null): Record<string, string> {
-  if (!location) return {}
-  const point = defaultMapWorldToPercent(location.coords)
-  return {
-    left: `${Math.min(1, Math.max(0, point.x)) * 100}%`,
-    top: `${Math.min(1, Math.max(0, point.y)) * 100}%`,
-  }
-}
-
 function openLocationPicker(target: LocationTarget): void {
   if (skyride.activeRide) return
   locationTarget.value = target
@@ -344,177 +296,10 @@ async function useCurrentLocation(): Promise<void> {
     showToast(errorText(response.error))
     return
   }
-  currentCoordinates.value = response.data.coords
   chooseLocation({
     coords: response.data.coords,
     label: phone.t('Apps.skyride.currentLocation'),
   })
-}
-
-function beginMapPick(): void {
-  mapPickTarget.value = locationTarget.value
-  mapDraft.value = null
-  locationTarget.value = null
-}
-
-function clampMapViewport(x: number, y: number, scale: number) {
-  const bounds = mapElement.value?.getBoundingClientRect()
-  const stage = mapStageElement.value
-  if (!bounds || !stage) return { x: 0, y: 0 }
-  const maximumX = Math.max(0, (stage.offsetWidth * scale - bounds.width) / 2)
-  const maximumY = Math.max(0, (stage.offsetHeight * scale - bounds.height) / 2)
-  return {
-    x: Math.min(maximumX, Math.max(-maximumX, x)),
-    y: Math.min(maximumY, Math.max(-maximumY, y)),
-  }
-}
-
-function setMapDraftAt(clientX: number, clientY: number): void {
-  if (!mapPickTarget.value) return
-  const bounds = mapElement.value?.getBoundingClientRect()
-  const stage = mapStageElement.value
-  if (!bounds || !stage) return
-  const localX =
-    (clientX - bounds.left - bounds.width / 2 - mapViewport.value.x) /
-      mapViewport.value.scale +
-    stage.offsetWidth / 2
-  const localY =
-    (clientY - bounds.top - bounds.height / 2 - mapViewport.value.y) /
-      mapViewport.value.scale +
-    stage.offsetHeight / 2
-  const percent = {
-    x: Math.min(1, Math.max(0, localX / stage.offsetWidth)),
-    y: Math.min(1, Math.max(0, localY / stage.offsetHeight)),
-  }
-  const coords = defaultMapPercentToWorld(percent)
-  mapDraft.value = {
-    coords: {
-      x: Math.round(coords.x * 10) / 10,
-      y: Math.round(coords.y * 10) / 10,
-      z: currentCoordinates.value?.z ?? 0,
-    },
-    label: phone.t('Apps.skyride.mapPoint'),
-  }
-}
-
-function beginMapPan(event: PointerEvent): void {
-  if (event.button !== 0) return
-  mapPointer.value = {
-    id: event.pointerId,
-    moved: false,
-    originX: mapViewport.value.x,
-    originY: mapViewport.value.y,
-    startX: event.clientX,
-    startY: event.clientY,
-  }
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-}
-
-function moveMap(event: PointerEvent): void {
-  const pointer = mapPointer.value
-  if (!pointer || pointer.id !== event.pointerId) return
-  const deltaX = event.clientX - pointer.startX
-  const deltaY = event.clientY - pointer.startY
-  if (Math.hypot(deltaX, deltaY) > 4) pointer.moved = true
-  const clamped = clampMapViewport(
-    pointer.originX + deltaX,
-    pointer.originY + deltaY,
-    mapViewport.value.scale,
-  )
-  mapViewport.value = { ...mapViewport.value, ...clamped }
-}
-
-function endMapPan(event: PointerEvent): void {
-  const pointer = mapPointer.value
-  if (!pointer || pointer.id !== event.pointerId) return
-  if (!pointer.moved) setMapDraftAt(event.clientX, event.clientY)
-  mapPointer.value = null
-  const target = event.currentTarget as HTMLElement
-  if (target.hasPointerCapture(event.pointerId)) {
-    target.releasePointerCapture(event.pointerId)
-  }
-}
-
-function zoomMap(delta: number, focalPoint?: { x: number; y: number }): void {
-  const previous = mapViewport.value
-  const scale = Math.min(5, Math.max(1, previous.scale + delta))
-  let x = previous.x
-  let y = previous.y
-  const bounds = mapElement.value?.getBoundingClientRect()
-  if (focalPoint && bounds && scale !== previous.scale) {
-    const scaleRatio = scale / previous.scale
-    const offsetX = focalPoint.x - bounds.left - bounds.width / 2 - previous.x
-    const offsetY = focalPoint.y - bounds.top - bounds.height / 2 - previous.y
-    x -= offsetX * (scaleRatio - 1)
-    y -= offsetY * (scaleRatio - 1)
-  }
-  const clamped = clampMapViewport(x, y, scale)
-  mapViewport.value = { scale, ...clamped }
-}
-
-function handleMapWheel(event: WheelEvent): void {
-  zoomMap(event.deltaY < 0 ? 0.28 : -0.28, {
-    x: event.clientX,
-    y: event.clientY,
-  })
-}
-
-async function focusMapOnRoute(): Promise<void> {
-  await nextTick()
-  const bounds = mapElement.value?.getBoundingClientRect()
-  const stage = mapStageElement.value
-  if (!bounds || !stage) return
-  const route = mapRoute.value
-  const fallback = displayedPickup.value
-    ? defaultMapWorldToPercent(displayedPickup.value.coords)
-    : { x: 0.37, y: 0.47 }
-  const center = route
-    ? {
-        x: (route.pickup.x + route.destination.x) / 2,
-        y: (route.pickup.y + route.destination.y) / 2,
-      }
-    : fallback
-  const spanX = route ? Math.abs(route.pickup.x - route.destination.x) : 0
-  const spanY = route ? Math.abs(route.pickup.y - route.destination.y) : 0
-  const scale = route
-    ? Math.min(
-        2.65,
-        Math.max(
-          1.05,
-          Math.min(
-            (bounds.width * 0.68) / (Math.max(spanX, 0.05) * stage.offsetWidth),
-            (bounds.height * 0.56) /
-              (Math.max(spanY, 0.05) * stage.offsetHeight),
-          ),
-        ),
-      )
-    : 1.15
-  const clamped = clampMapViewport(
-    (0.5 - center.x) * stage.offsetWidth * scale,
-    (0.5 - center.y) * stage.offsetHeight * scale,
-    scale,
-  )
-  mapViewport.value = { scale, ...clamped }
-}
-
-function resetMapViewport(): void {
-  void focusMapOnRoute()
-}
-
-function confirmMapPick(): void {
-  const target = mapPickTarget.value
-  const location = mapDraft.value
-  if (!target || !location) return
-  if (target === 'pickup') pickup.value = location
-  else destination.value = location
-  mapPickTarget.value = null
-  mapDraft.value = null
-  skyride.clearQuote()
-}
-
-function cancelMapPick(): void {
-  mapPickTarget.value = null
-  mapDraft.value = null
 }
 
 async function createQuote(customFare?: SkyRideCustomFareInput): Promise<void> {
@@ -646,6 +431,66 @@ function openMessages(): void {
   void router.push('/apps/messages')
 }
 
+function syncProfileEditor(): void {
+  if (!skyride.profile) return
+  profileName.value = skyride.profile.name
+  profileAvatarMediaId.value = skyride.profile.avatarMediaId ?? 0
+  selectedProfileAvatar.value = null
+}
+
+function openProfileEditor(): void {
+  syncProfileEditor()
+  profileEditorOpened.value = true
+}
+
+function closeProfileEditor(): void {
+  profileEditorOpened.value = false
+  syncProfileEditor()
+}
+
+function openProfileMedia(app: 'camera' | 'photos'): void {
+  messageMedia.begin(
+    'skyride:profile-avatar',
+    'photo',
+    '/apps/skyride?profileEdit=1',
+    1,
+    {
+      avatarMediaId: profileAvatarMediaId.value,
+      name: profileName.value,
+      selectedAvatar: selectedProfileAvatar.value,
+    } satisfies ProfileMediaContext,
+  )
+  profileEditorOpened.value = false
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
+}
+
+function removeProfileAvatar(): void {
+  selectedProfileAvatar.value = null
+  profileAvatarMediaId.value = 0
+}
+
+async function saveProfile(): Promise<void> {
+  if (!canSaveProfile.value) {
+    showToast(phone.t('Apps.skyride.errors.invalid_profile_name'))
+    return
+  }
+  const response = await skyride.updateProfile({
+    avatarMediaId:
+      selectedProfileAvatar.value?.id ?? profileAvatarMediaId.value,
+    name: profileName.value.trim(),
+  })
+  if (!response.success) {
+    showToast(errorText(response.error))
+    return
+  }
+  profileEditorOpened.value = false
+  syncProfileEditor()
+  showToast(phone.t('Apps.skyride.profileSaved'))
+}
+
 async function submitRating(): Promise<void> {
   const ride = ratingRide.value
   if (!ride || rating.value < 1) return
@@ -700,14 +545,26 @@ watch(
   },
 )
 
-watch(mapRoute, () => void focusMapOnRoute(), { deep: true })
-
 onMounted(async () => {
   window.addEventListener('message', handleSkyRideMessage)
+  const profileSelection = messageMedia.consumeMany<ProfileMediaContext>(
+    'skyride:profile-avatar',
+  )
   await skyride.bootstrap()
+  syncProfileEditor()
+  if (profileSelection?.context) {
+    profileName.value = profileSelection.context.name
+    profileAvatarMediaId.value = profileSelection.context.avatarMediaId
+    selectedProfileAvatar.value =
+      profileSelection.media[0] ?? profileSelection.context.selectedAvatar
+    if (profileSelection.media[0]) {
+      profileAvatarMediaId.value = profileSelection.media[0].id
+    }
+    activeTab.value = 'profile'
+    profileEditorOpened.value = true
+  }
   const response = await skyride.getPlayerCoordinates()
   if (response.success && response.data) {
-    currentCoordinates.value = response.data.coords
     if (!pickup.value) {
       pickup.value = {
         coords: response.data.coords,
@@ -725,15 +582,16 @@ onBeforeUnmount(() => {
 
 <template>
   <k-page
-    component="main"
     class="skyride-app pb-safe-24"
     :class="{ 'skyride-app--dark': phone.isDarkMode }"
-    :colors="{ bgIos: 'bg-transparent' }"
+    :label="phone.t('Apps.skyride.name')"
+    :dark="phone.isDarkMode"
+    accent="#c49a00"
+    accent-soft="rgba(245, 197, 24, 0.16)"
   >
     <div class="skyride-ambient" aria-hidden="true"></div>
     <k-navbar
       class="skyride-navbar"
-      title-class="skyride-navbar__title"
       :title="phone.t('Apps.skyride.name')"
       :subtitle="phone.t(`Apps.skyride.mode.${mode}`)"
     />
@@ -761,7 +619,7 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <div class="skyride-mode">
-        <k-segmented v-if="skyride.driverEligible" rounded strong>
+        <k-segmented v-if="skyride.driverEligible">
           <k-segmented-button
             :active="mode === 'rider'"
             :disabled="Boolean(skyride.activeRide)"
@@ -781,150 +639,6 @@ onBeforeUnmount(() => {
 
       <div class="skyride-scroll">
         <template v-if="activeTab === 'home'">
-          <section
-            ref="mapElement"
-            class="skyride-map"
-            :class="{
-              'is-dragging': mapPointer,
-              'is-picking': mapPickTarget,
-            }"
-            :aria-label="phone.t('Apps.skyride.map')"
-            @pointerdown="beginMapPan"
-            @pointermove="moveMap"
-            @pointerup="endMapPan"
-            @pointercancel="endMapPan"
-            @wheel.prevent="handleMapWheel"
-          >
-            <div
-              ref="mapStageElement"
-              class="skyride-map__stage"
-              :style="mapStageStyle"
-            >
-              <div class="skyride-map__canvas" aria-hidden="true">
-                <img
-                  :src="mapImageUrl"
-                  alt=""
-                  :style="defaultMainlandStyle"
-                  decoding="async"
-                  draggable="false"
-                />
-                <img
-                  :src="cayoMapImageUrl"
-                  alt=""
-                  :style="defaultCayoStyle"
-                  decoding="async"
-                  draggable="false"
-                />
-              </div>
-              <svg
-                v-if="mapRoute"
-                class="skyride-route-line"
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              >
-                <line
-                  :x1="mapRoute.pickup.x * 100"
-                  :y1="mapRoute.pickup.y * 100"
-                  :x2="mapRoute.destination.x * 100"
-                  :y2="mapRoute.destination.y * 100"
-                />
-              </svg>
-              <span
-                v-if="displayedPickup"
-                class="skyride-map-marker is-pickup"
-                :style="markerStyle(displayedPickup)"
-              >
-                <span></span>
-              </span>
-              <span
-                v-if="displayedDestination"
-                class="skyride-map-marker is-destination"
-                :style="markerStyle(displayedDestination)"
-              >
-                <MapPin :size="24" aria-hidden="true" />
-              </span>
-              <span
-                v-if="mapDraft"
-                class="skyride-map-marker is-draft"
-                :style="markerStyle(mapDraft)"
-              >
-                <MapPin :size="27" aria-hidden="true" />
-              </span>
-            </div>
-
-            <div
-              v-if="mapPickTarget"
-              class="skyride-map-picker"
-              @click.stop
-              @pointerdown.stop
-              @pointermove.stop
-              @pointerup.stop
-            >
-              <strong>{{
-                phone.t(`Apps.skyride.pickOnMap.${mapPickTarget}`)
-              }}</strong>
-              <span>{{ phone.t('Apps.skyride.tapMapHint') }}</span>
-              <div>
-                <k-button small rounded outline @click="cancelMapPick">
-                  {{ phone.t('Common.cancel') }}
-                </k-button>
-                <k-button
-                  small
-                  rounded
-                  :disabled="!mapDraft"
-                  @click="confirmMapPick"
-                >
-                  {{ phone.t('Common.use') }}
-                </k-button>
-              </div>
-            </div>
-
-            <div
-              v-if="!mapPickTarget"
-              class="skyride-map-controls"
-              @pointerdown.stop
-              @pointerup.stop
-            >
-              <k-fab
-                component="button"
-                type="button"
-                class="skyride-map-control"
-                :colors="mapControlColors"
-                :aria-label="phone.t('Apps.skyride.zoomIn')"
-                @click.stop="zoomMap(0.35)"
-              >
-                <template #icon>
-                  <Plus :size="17" aria-hidden="true" />
-                </template>
-              </k-fab>
-              <k-fab
-                component="button"
-                type="button"
-                class="skyride-map-control"
-                :colors="mapControlColors"
-                :aria-label="phone.t('Apps.skyride.zoomOut')"
-                @click.stop="zoomMap(-0.35)"
-              >
-                <template #icon>
-                  <Minus :size="17" aria-hidden="true" />
-                </template>
-              </k-fab>
-              <k-fab
-                component="button"
-                type="button"
-                class="skyride-map-control"
-                :colors="mapControlColors"
-                :aria-label="phone.t('Apps.skyride.resetMap')"
-                @click.stop="resetMapViewport"
-              >
-                <template #icon>
-                  <Crosshair :size="17" aria-hidden="true" />
-                </template>
-              </k-fab>
-            </div>
-          </section>
-
           <section v-if="mode === 'rider'" class="skyride-home-panel">
             <template v-if="!skyride.activeRide">
               <k-block-header inset component="header" class="skyride-heading">
@@ -932,9 +646,9 @@ onBeforeUnmount(() => {
                   <span>{{ phone.t('Apps.skyride.riderEyebrow') }}</span>
                   <h1>{{ phone.t('Apps.skyride.whereTo') }}</h1>
                 </div>
-                <k-icon class="skyride-heading__icon">
+                <span class="skyride-heading__icon" aria-hidden="true">
                   <Navigation :size="20" aria-hidden="true" />
-                </k-icon>
+                </span>
               </k-block-header>
 
               <k-list inset strong class="skyride-location-list">
@@ -966,9 +680,8 @@ onBeforeUnmount(() => {
                     :key="location.id ?? location.label"
                     large
                     rounded
-                    tonal
+                    variant="secondary"
                     class="skyride-quick-card"
-                    :colors="quickDestinationButtonColors"
                     @click="chooseQuickDestination(location)"
                   >
                     <component
@@ -997,20 +710,16 @@ onBeforeUnmount(() => {
 
               <template v-else>
                 <div class="skyride-quote-summary">
-                  <k-chip outline class="skyride-quote-chip">{{
+                  <k-chip class="skyride-quote-chip">{{
                     formatQuoteDistance(
                       skyride.quote.distance,
                       skyride.quote.distanceUnit,
                     )
                   }}</k-chip>
-                  <k-chip outline class="skyride-quote-chip">{{
+                  <k-chip class="skyride-quote-chip">{{
                     formatDuration(skyride.quote.durationSeconds)
                   }}</k-chip>
-                  <k-link
-                    component="button"
-                    :link-props="{ type: 'button' }"
-                    @click="skyride.clearQuote()"
-                  >
+                  <k-link @click="skyride.clearQuote()">
                     {{ phone.t('Apps.skyride.change') }}
                   </k-link>
                 </div>
@@ -1070,7 +779,7 @@ onBeforeUnmount(() => {
                     </div>
                     <span>{{ formatDistanceRate(selectedQuote) }}</span>
                   </div>
-                  <k-segmented rounded strong>
+                  <k-segmented>
                     <k-segmented-button
                       :active="fareMode === 'calculated'"
                       @click="applyCalculatedFare"
@@ -1101,7 +810,7 @@ onBeforeUnmount(() => {
                   <div v-else class="skyride-custom-fare">
                     <k-list inset strong>
                       <k-list-input
-                        input-id="skyride-custom-fare"
+                        id="skyride-custom-fare"
                         outline
                         type="number"
                         inputmode="numeric"
@@ -1110,7 +819,7 @@ onBeforeUnmount(() => {
                         :min="selectedQuote.minimumCustomPrice"
                         :max="selectedQuote.maximumCustomPrice"
                         :value="customFareInput"
-                        :info="
+                        :help="
                           phone.t('Apps.skyride.customFareRange', {
                             maximum: formatMoney(
                               selectedQuote.maximumCustomPrice,
@@ -1269,8 +978,8 @@ onBeforeUnmount(() => {
                 <k-button
                   v-if="canCancelRide"
                   rounded
-                  tonal
-                  :colors="dangerButtonColors"
+                  variant="danger"
+                  outline
                   @click="cancelDialogOpened = true"
                 >
                   {{ phone.t('Apps.skyride.cancelRide') }}
@@ -1518,7 +1227,6 @@ onBeforeUnmount(() => {
               <k-card
                 v-for="ride in skyride.history"
                 :key="ride.id"
-                outline
                 header-divider
                 footer-divider
                 content-wrap-padding="px-4 py-2"
@@ -1560,11 +1268,7 @@ onBeforeUnmount(() => {
                 </template>
               </k-card>
             </k-block>
-            <k-card
-              v-else
-              outline
-              :content-wrap="false"
-              class="skyride-empty-card"
+            <k-card v-else :content-wrap="false" class="skyride-empty-card"
               ><History :size="29" /><strong>{{
                 phone.t('Apps.skyride.noRides')
               }}</strong>
@@ -1607,11 +1311,7 @@ onBeforeUnmount(() => {
                 ></template>
               </k-list-item>
             </k-list>
-            <k-card
-              v-else
-              outline
-              :content-wrap="false"
-              class="skyride-empty-card"
+            <k-card v-else :content-wrap="false" class="skyride-empty-card"
               ><Bell :size="29" /><strong>{{
                 phone.t('Apps.skyride.noActivity')
               }}</strong>
@@ -1657,7 +1357,6 @@ onBeforeUnmount(() => {
             <k-block v-if="activeContact" class="skyride-contact-buttons">
               <k-button
                 rounded
-                outline
                 :disabled="!activeContact.phoneNumber"
                 @click="callActiveContact"
                 ><Phone :size="17" />
@@ -1668,11 +1367,7 @@ onBeforeUnmount(() => {
                 {{ phone.t('Apps.skyride.openMessages') }}</k-button
               >
             </k-block>
-            <k-card
-              v-else
-              outline
-              :content-wrap="false"
-              class="skyride-empty-card"
+            <k-card v-else :content-wrap="false" class="skyride-empty-card"
               ><MessageCircle :size="29" /><strong>{{
                 phone.t('Apps.skyride.noMessages')
               }}</strong>
@@ -1687,20 +1382,26 @@ onBeforeUnmount(() => {
         <template v-else>
           <section class="skyride-section-screen skyride-profile">
             <div class="skyride-profile-hero">
-              <div class="skyride-profile-avatar">
+              <button
+                type="button"
+                class="skyride-profile-avatar skyride-profile-avatar--editable"
+                :aria-label="phone.t('Apps.skyride.editProfile')"
+                @click="openProfileEditor"
+              >
                 <img
                   v-if="skyride.profile.avatarUrl"
                   :src="skyride.profile.avatarUrl"
                   alt=""
                 /><UserRound v-else :size="32" />
-              </div>
+                <span><Pencil :size="13" /></span>
+              </button>
               <h1>{{ skyride.profile.name }}</h1>
               <span
                 ><Star :size="15" fill="currentColor" />
                 {{ skyride.profile.rating.toLocaleString(phone.lang) }}</span
               >
             </div>
-            <k-card outline :content-wrap="false" class="skyride-profile-stats">
+            <k-card :content-wrap="false" class="skyride-profile-stats">
               <div>
                 <strong>{{
                   skyride.profile.completedRides.toLocaleString(phone.lang)
@@ -1724,6 +1425,13 @@ onBeforeUnmount(() => {
             </k-card>
             <k-block-title>{{ phone.t('Apps.skyride.account') }}</k-block-title>
             <k-list inset strong>
+              <k-list-item
+                link
+                :title="phone.t('Apps.skyride.editProfile')"
+                :subtitle="phone.t('Apps.skyride.editProfileBody')"
+                @click="openProfileEditor"
+                ><template #media><Pencil :size="18" /></template
+              ></k-list-item>
               <k-list-item
                 :title="phone.t('Apps.skyride.paymentMethod')"
                 :after="
@@ -1763,32 +1471,112 @@ onBeforeUnmount(() => {
       </div>
 
       <k-tabbar
-        component="nav"
-        icons
-        labels
-        inner-class="skyride-tabbar__inner"
-        class="bottom-0 left-0 fixed skyride-tabbar"
-        :aria-label="phone.t('Apps.skyride.navigation')"
+        class="skyride-tabbar"
+        floating
+        :label="phone.t('Apps.skyride.navigation')"
       >
-        <k-toolbar-pane class="skyride-tab-pane">
+        <div class="skyride-tab-pane">
           <k-tabbar-link
             v-for="tab in tabs"
             :key="tab.id"
-            component="button"
             :active="activeTab === tab.id"
-            :link-props="{ type: 'button' }"
             @click="selectTab(tab.id)"
           >
             <template #label>{{
               phone.t(`Apps.skyride.tabs.${tab.id}`)
             }}</template>
-            <template #icon
-              ><k-icon><component :is="tab.icon" class="w-6 h-6" /></k-icon
-            ></template>
+            <template #icon>
+              <component :is="tab.icon" :size="23" :stroke-width="2" />
+            </template>
           </k-tabbar-link>
-        </k-toolbar-pane>
+        </div>
       </k-tabbar>
     </template>
+
+    <SkySheet
+      class="skyride-profile-sheet"
+      :opened="profileEditorOpened"
+      :aria-label="phone.t('Apps.skyride.editProfile')"
+      @backdropclick="closeProfileEditor"
+      @escape="closeProfileEditor"
+    >
+      <section class="skyride-profile-editor">
+        <div class="skyride-sheet__handle" aria-hidden="true"></div>
+        <div class="skyride-sheet__title">
+          <div>
+            <span>{{ phone.t('Apps.skyride.profile') }}</span>
+            <h2>{{ phone.t('Apps.skyride.editProfile') }}</h2>
+          </div>
+          <SkyButton
+            icon-only
+            variant="plain"
+            :aria-label="phone.t('Common.close')"
+            @click="closeProfileEditor"
+          >
+            <X :size="20" />
+          </SkyButton>
+        </div>
+
+        <div class="skyride-profile-editor__avatar">
+          <div class="skyride-profile-avatar">
+            <img v-if="profileAvatarUrl" :src="profileAvatarUrl" alt="" />
+            <UserRound v-else :size="32" />
+          </div>
+          <strong>{{ phone.t('Apps.skyride.profilePhoto') }}</strong>
+          <div>
+            <SkyButton outline rounded @click="openProfileMedia('photos')">
+              <Images :size="17" /> {{ phone.t('Apps.skyride.gallery') }}
+            </SkyButton>
+            <SkyButton outline rounded @click="openProfileMedia('camera')">
+              <Camera :size="17" /> {{ phone.t('Apps.skyride.camera') }}
+            </SkyButton>
+          </div>
+        </div>
+
+        <SkySettingsGroup :title="phone.t('Apps.skyride.profileDetails')">
+          <SkyField
+            v-model="profileName"
+            layout="inline"
+            :label="phone.t('Apps.skyride.profileName')"
+            :maxlength="50"
+            :placeholder="phone.t('Apps.skyride.profileNamePlaceholder')"
+            autocomplete="name"
+          />
+          <SkySettingsRow
+            v-if="profileAvatarUrl"
+            kind="action"
+            tone="danger"
+            :title="phone.t('Apps.skyride.removeProfilePhoto')"
+            @activate="removeProfileAvatar"
+          >
+            <template #leading><Trash2 :size="18" /></template>
+          </SkySettingsRow>
+        </SkySettingsGroup>
+
+        <div class="skyride-profile-editor__actions">
+          <SkyButton
+            block
+            rounded
+            variant="secondary"
+            @click="closeProfileEditor"
+          >
+            {{ phone.t('Common.cancel') }}
+          </SkyButton>
+          <SkyButton
+            block
+            large
+            rounded
+            :disabled="!canSaveProfile"
+            @click="saveProfile"
+          >
+            <k-preloader v-if="skyride.isActionPending" />
+            <template v-else>{{
+              phone.t('Apps.skyride.saveProfile')
+            }}</template>
+          </SkyButton>
+        </div>
+      </section>
+    </SkySheet>
 
     <k-sheet
       :opened="Boolean(locationTarget)"
@@ -1810,9 +1598,8 @@ onBeforeUnmount(() => {
             </h2>
           </div>
           <k-link
-            component="button"
+            icon-only
             class="skyride-sheet__close"
-            :link-props="{ type: 'button' }"
             :aria-label="phone.t('Common.close')"
             @click="locationTarget = null"
             ><X :size="20"
@@ -1825,13 +1612,6 @@ onBeforeUnmount(() => {
             :subtitle="phone.t('Apps.skyride.useGps')"
             @click="useCurrentLocation"
             ><template #media><Crosshair :size="19" /></template
-          ></k-list-item>
-          <k-list-item
-            link
-            :title="phone.t('Apps.skyride.chooseOnMap')"
-            :subtitle="phone.t('Apps.skyride.chooseOnMapBody')"
-            @click="beginMapPick"
-            ><template #media><MapPin :size="19" /></template
           ></k-list-item>
         </k-list>
         <k-block-title class="skyride-sheet-section-title">{{
@@ -1874,7 +1654,7 @@ onBeforeUnmount(() => {
             :key="value"
             small
             rounded
-            clear
+            variant="plain"
             class="skyride-rating-star"
             :class="{ 'is-active': value <= rating }"
             :aria-pressed="value <= rating"
@@ -1906,7 +1686,7 @@ onBeforeUnmount(() => {
         </div>
         <k-list inset strong
           ><k-list-input
-            input-id="skyride-rating-comment"
+            id="skyride-rating-comment"
             outline
             :label="phone.t('Apps.skyride.comment')"
             :placeholder="phone.t('Apps.skyride.commentPlaceholder')"
@@ -1923,23 +1703,20 @@ onBeforeUnmount(() => {
             phone.t('Apps.skyride.submitRating')
           }}</template></k-button
         >
-        <k-link
-          component="button"
-          :link-props="{ type: 'button' }"
-          @click="dismissRating"
-          >{{ phone.t('Apps.skyride.notNow') }}</k-link
-        >
+        <k-link @click="dismissRating">{{
+          phone.t('Apps.skyride.notNow')
+        }}</k-link>
       </section>
     </k-sheet>
 
     <k-dialog
       :opened="cancelDialogOpened"
+      :title="phone.t('Apps.skyride.cancelTitle')"
+      :content="phone.t('Apps.skyride.cancelBody')"
+      role="alertdialog"
       @backdropclick="cancelDialogOpened = false"
+      @escape="cancelDialogOpened = false"
     >
-      <div class="skyride-dialog">
-        <h2>{{ phone.t('Apps.skyride.cancelTitle') }}</h2>
-        <p>{{ phone.t('Apps.skyride.cancelBody') }}</p>
-      </div>
       <template #buttons
         ><k-dialog-button @click="cancelDialogOpened = false">{{
           phone.t('Common.cancel')
@@ -1967,6 +1744,13 @@ onBeforeUnmount(() => {
   --ride-text: #171719;
   --ride-muted: #707078;
   --ride-map: #07131f;
+  --sky-bg: var(--ride-bg);
+  --sky-surface: var(--ride-card-strong);
+  --sky-surface-muted: #e6e6eb;
+  --sky-text: var(--ride-text);
+  --sky-muted: var(--ride-muted);
+  --sky-hairline: var(--ride-border);
+  --sky-danger: #d70015;
   position: relative;
   height: 100%;
   overflow: hidden;
@@ -1983,6 +1767,8 @@ onBeforeUnmount(() => {
   --ride-text: #f7f7f8;
   --ride-muted: #a2a2aa;
   --ride-map: #050a10;
+  --sky-surface-muted: #2c2c2e;
+  --sky-danger: #ff453a;
 }
 
 .skyride-ambient {
@@ -2005,7 +1791,7 @@ onBeforeUnmount(() => {
   color: var(--ride-text);
 }
 
-.skyride-navbar :deep(.skyride-navbar__title) {
+.skyride-navbar :deep(.sky-navbar__title) {
   color: var(--ride-text);
   font-size: 18px;
   font-weight: 700;
@@ -2013,7 +1799,7 @@ onBeforeUnmount(() => {
   letter-spacing: -0.25px;
 }
 
-.skyride-navbar :deep(.skyride-navbar__title > div) {
+.skyride-navbar :deep(.sky-navbar__subtitle) {
   margin-top: 1px;
   color: var(--ride-muted);
   font-size: 12px;
@@ -2042,7 +1828,7 @@ onBeforeUnmount(() => {
 .skyride-scroll {
   position: absolute;
   z-index: 2;
-  inset: 148px 0 72px;
+  inset: 148px 0 116px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2088,177 +1874,6 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
-.skyride-map {
-  position: relative;
-  height: 238px;
-  overflow: hidden;
-  background: var(--ride-map);
-  border-block: 1px solid var(--ride-border);
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-}
-
-.skyride-map.is-picking {
-  cursor: crosshair;
-}
-
-.skyride-map.is-dragging {
-  cursor: grabbing;
-}
-
-.skyride-map__stage {
-  position: absolute;
-  z-index: 1;
-  top: 50%;
-  left: 50%;
-  width: max(120%, 120vh);
-  height: auto;
-  transform-origin: 50% 50%;
-  will-change: transform;
-}
-
-.skyride-map__canvas {
-  position: absolute;
-  inset: 0;
-  filter: saturate(0.72) brightness(0.58) contrast(1.14);
-  opacity: 1;
-}
-
-.skyride-app--dark .skyride-map__canvas {
-  filter: saturate(0.68) brightness(0.42) contrast(1.22);
-  opacity: 1;
-}
-
-.skyride-map__canvas img {
-  position: absolute;
-  object-fit: fill;
-  image-rendering: auto;
-  backface-visibility: hidden;
-  user-select: none;
-  pointer-events: none;
-}
-
-.skyride-route-line {
-  position: absolute;
-  z-index: 3;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  overflow: visible;
-}
-
-.skyride-route-line line {
-  stroke: var(--ride-accent);
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-dasharray: 3 2;
-  vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
-}
-
-.skyride-map-marker {
-  position: absolute;
-  z-index: 5;
-  transform: translate(-50%, -50%) scale(var(--map-marker-scale, 1));
-  transform-origin: 50% 50%;
-  color: #121212;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
-}
-
-.skyride-map-marker.is-pickup > span {
-  display: block;
-  width: 15px;
-  height: 15px;
-  border: 4px solid #fff;
-  border-radius: 50%;
-  background: #151515;
-  box-shadow: 0 0 0 3px rgba(21, 21, 21, 0.28);
-}
-
-.skyride-map-marker.is-destination,
-.skyride-map-marker.is-draft {
-  color: var(--ride-accent-strong);
-  transform: translate(-50%, -85%) scale(var(--map-marker-scale, 1));
-  transform-origin: 50% 85%;
-}
-
-.skyride-map-marker.is-draft {
-  color: #0a84ff;
-}
-
-.skyride-map-controls {
-  position: absolute;
-  z-index: 8;
-  right: 14px;
-  bottom: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.skyride-map-control {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  min-height: 38px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 50%;
-  color: var(--ride-text);
-  background: var(--ride-card);
-  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-}
-
-.skyride-map-control:active {
-  transform: scale(0.94);
-  background: var(--ride-card-strong);
-}
-
-.skyride-map-control :deep(.size-6) {
-  width: 18px;
-  height: 18px;
-}
-
-.skyride-map-picker {
-  position: absolute;
-  z-index: 9;
-  left: 14px;
-  right: 14px;
-  bottom: 12px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 12px;
-  align-items: center;
-  padding: 11px 12px;
-  border: 1px solid var(--ride-border);
-  border-radius: 18px;
-  background: var(--ride-card);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
-
-.skyride-map-picker strong {
-  font-size: 13px;
-}
-
-.skyride-map-picker > span {
-  grid-column: 1;
-  color: var(--ride-muted);
-  font-size: 11px;
-}
-
-.skyride-map-picker > div {
-  grid-area: 1 / 2 / span 2 / 3;
-  display: flex;
-  gap: 6px;
-}
-
 .skyride-home-panel,
 .skyride-section-screen {
   position: relative;
@@ -2268,8 +1883,7 @@ onBeforeUnmount(() => {
 
 .skyride-home-panel {
   min-height: 320px;
-  margin-top: -16px;
-  border-radius: 24px 24px 0 0;
+  margin-top: 0;
   background: var(--ride-bg);
 }
 
@@ -2316,6 +1930,12 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
+.skyride-heading__icon > svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
 .skyride-status-icon.is-searching {
   color: var(--ride-accent-strong);
   background: rgba(245, 197, 24, 0.14);
@@ -2325,8 +1945,8 @@ onBeforeUnmount(() => {
 .skyride-location-list,
 .skyride-service-list,
 .skyride-activity-list,
-.skyride-sheet__content :deep(.k-list),
-.skyride-profile :deep(.k-list) {
+.skyride-sheet__content :deep(.sky-list),
+.skyride-profile :deep(.sky-list) {
   margin-block: 0 14px;
 }
 
@@ -2367,7 +1987,7 @@ onBeforeUnmount(() => {
 }
 
 .skyride-quick-card,
-.skyride-driver-metrics :deep(.k-card),
+.skyride-driver-metrics :deep(.sky-card),
 .skyride-person-card,
 .skyride-trip-card,
 .skyride-driver-status,
@@ -2490,7 +2110,7 @@ onBeforeUnmount(() => {
   opacity: 0.45;
 }
 
-.skyride-service-list :deep(.k-list-item-after) {
+.skyride-service-list :deep(.sky-list-item__after) {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2542,7 +2162,7 @@ onBeforeUnmount(() => {
   text-align: right;
 }
 
-.skyride-fare-card > :deep(.k-segmented) {
+.skyride-fare-card > :deep(.sky-segmented) {
   width: 100%;
 }
 
@@ -2563,7 +2183,7 @@ onBeforeUnmount(() => {
   margin-top: 10px;
 }
 
-.skyride-custom-fare :deep(.k-list) {
+.skyride-custom-fare :deep(.sky-list) {
   margin: 0;
 }
 
@@ -2792,7 +2412,7 @@ onBeforeUnmount(() => {
   line-height: 16px;
 }
 
-.skyride-driver-metrics :deep(.k-card) {
+.skyride-driver-metrics :deep(.sky-card) {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -2921,6 +2541,32 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 5px rgba(245, 197, 24, 0.13);
 }
 
+button.skyride-profile-avatar--editable {
+  position: relative;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.skyride-profile-avatar--editable:focus-visible {
+  outline: 3px solid var(--ride-accent-strong);
+  outline-offset: 5px;
+}
+
+.skyride-profile-avatar--editable > span {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 2px solid var(--ride-bg);
+  border-radius: 50%;
+  color: #171719;
+  background: var(--ride-accent);
+}
+
 .skyride-profile-hero h1 {
   margin: 12px 0 3px;
   font-size: 22px;
@@ -2974,13 +2620,10 @@ onBeforeUnmount(() => {
 .skyride-tabbar {
   z-index: 25;
   color: var(--ride-text);
-  border-top: 1px solid var(--ride-border);
-  background: var(--ride-card);
-  backdrop-filter: blur(26px);
-  -webkit-backdrop-filter: blur(26px);
 }
 
-.skyride-tabbar :deep(.skyride-tabbar__inner) {
+.skyride-tabbar :deep(.sky-tabbar__inner),
+.skyride-tabbar :deep(.sky-tabbar__pane) {
   width: 100% !important;
   max-width: none !important;
   gap: 0 !important;
@@ -2989,30 +2632,36 @@ onBeforeUnmount(() => {
 .skyride-tab-pane {
   width: 100% !important;
   max-width: none !important;
+  display: flex;
+  align-items: stretch;
   gap: 0 !important;
 }
 
-.skyride-tab-pane :deep(> .k-link) {
+.skyride-tab-pane :deep(> .sky-tab-button) {
   flex: 1 1 20%;
   min-width: 0 !important;
-  min-height: 58px;
-  padding-inline: 3px !important;
-  border-radius: 999px;
+  padding-inline: 1px !important;
   outline: none;
 }
 
-.skyride-tab-pane :deep(> .k-link > span > span:last-child) {
+.skyride-tab-pane :deep(> .sky-tab-button .sky-tab-button__label) {
   max-width: 100%;
   overflow: hidden;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   line-height: 13px;
   text-overflow: ellipsis;
 }
 
-.skyride-tab-pane :deep(> .k-link .k-tabbar-link-icon) {
-  width: 26px;
-  height: 26px;
+.skyride-tab-pane :deep(> .sky-tab-button .sky-tab-button__icon) {
+  width: 24px;
+  height: 24px;
+}
+
+.skyride-tab-pane :deep(> .sky-tab-button .sky-tab-button__icon > svg) {
+  display: block;
+  width: 23px;
+  height: 23px;
 }
 
 .skyride-sheet__content {
@@ -3022,6 +2671,65 @@ onBeforeUnmount(() => {
   color: var(--ride-text);
   background: var(--ride-bg);
   border-radius: 26px 26px 0 0;
+}
+
+.skyride-profile-editor {
+  box-sizing: border-box;
+  height: 100%;
+  overflow-y: auto;
+  padding: calc(var(--sky-safe-area-top) + 8px) 14px
+    calc(var(--sky-safe-area-bottom) + 12px);
+  color: var(--ride-text);
+  background: var(--ride-bg);
+  border-radius: 0;
+}
+
+.skyride-profile-sheet :deep(.sky-overlay-backdrop) {
+  background: var(--ride-bg);
+}
+
+.skyride-profile-sheet :deep(.sky-sheet__panel) {
+  top: 0;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--ride-bg);
+  box-shadow: none;
+}
+
+.skyride-profile-editor__avatar {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 11px;
+  padding: 8px 0 18px;
+}
+
+.skyride-profile-editor__avatar > strong {
+  font-size: 14px;
+}
+
+.skyride-profile-editor__avatar > div:last-child,
+.skyride-profile-editor__actions {
+  display: flex;
+  width: 100%;
+  gap: 9px;
+}
+
+.skyride-profile-editor__avatar > div:last-child {
+  justify-content: center;
+}
+
+.skyride-profile-editor__avatar :deep(.sky-button) {
+  gap: 6px;
+}
+
+.skyride-profile-editor__actions {
+  margin-top: 4px;
+}
+
+.skyride-profile-editor__actions :deep(.sky-button) {
+  flex: 1 1 0;
 }
 
 .skyride-sheet__handle {
@@ -3148,7 +2856,7 @@ onBeforeUnmount(() => {
   margin: 8px 0 12px;
 }
 
-.skyride-rating :deep(.k-list) {
+.skyride-rating :deep(.sky-list) {
   width: 100%;
 }
 
@@ -3157,7 +2865,7 @@ onBeforeUnmount(() => {
 }
 
 .skyride-rating > :deep(a),
-.skyride-rating > :deep(.k-link) {
+.skyride-rating > :deep(.sky-link) {
   margin-top: 11px;
 }
 
@@ -3184,6 +2892,10 @@ onBeforeUnmount(() => {
   background-color: var(--ride-accent);
 }
 
+.skyride-app :deep(.sky-button--primary) {
+  color: #171719;
+}
+
 .skyride-app :deep(.text-primary) {
   color: var(--ride-accent-strong);
 }
@@ -3193,10 +2905,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-height: 730px) {
-  .skyride-map {
-    height: 198px;
-  }
-
   .skyride-home-panel,
   .skyride-section-screen {
     padding-top: 14px;

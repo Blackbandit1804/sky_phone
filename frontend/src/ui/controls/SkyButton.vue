@@ -13,6 +13,7 @@ const props = withDefaults(
     large?: boolean
     outline?: boolean
     rounded?: boolean
+    small?: boolean
     type?: 'button' | 'reset' | 'submit'
     variant?: 'danger' | 'plain' | 'primary' | 'secondary'
   }>(),
@@ -25,6 +26,7 @@ const props = withDefaults(
     large: false,
     outline: false,
     rounded: false,
+    small: false,
     type: 'button',
     variant: 'primary',
   },
@@ -73,6 +75,7 @@ function handleClick(event: MouseEvent): void {
         'sky-button--large': large,
         'sky-button--outline': outline,
         'sky-button--rounded': rounded,
+        'sky-button--small': small,
       },
     ]"
     @click="handleClick"

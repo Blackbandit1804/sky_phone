@@ -565,7 +565,8 @@ const defaultLocales: LocaleTree = {
       camera: 'Camera',
       backToLogin: 'Back to CrewLink login',
       authErrors: {
-        no_ifruit_account: 'Sign in to your Sky Cloud account in Settings first.',
+        no_ifruit_account:
+          'Sign in to your Sky Cloud account in Settings first.',
         invalid_username: 'Use 3–20 letters, numbers, dots, or underscores.',
         profile_not_found: 'No CrewLink profile exists for this iFruit email.',
         profile_exists: 'This iFruit email already has a CrewLink profile.',
@@ -1190,7 +1191,8 @@ const defaultLocales: LocaleTree = {
       profileStep: 'Step 2 of 2',
       accountConnected: 'Sky Cloud account connected',
       authErrors: {
-        no_ifruit_account: 'Sign in to your Sky Cloud account in Settings first.',
+        no_ifruit_account:
+          'Sign in to your Sky Cloud account in Settings first.',
         invalid_handle: 'Use 3–30 letters, numbers or underscores.',
         invalid_username: 'That username does not match your Feather profile.',
         profile_not_found: 'No Feather profile exists for this iFruit email.',
@@ -2269,6 +2271,18 @@ const defaultLocales: LocaleTree = {
       acceptance: 'Acceptance',
       rating: 'Rating',
       notAvailable: 'N/A',
+      profile: 'Your profile',
+      editProfile: 'Edit Profile',
+      editProfileBody: 'Change your public name and profile photo',
+      profilePhoto: 'Profile photo',
+      gallery: 'Gallery',
+      camera: 'Camera',
+      profileDetails: 'Profile details',
+      profileName: 'Name',
+      profileNamePlaceholder: 'Your SkyRide name',
+      removeProfilePhoto: 'Remove profile photo',
+      saveProfile: 'Save Profile',
+      profileSaved: 'Your SkyRide profile was updated.',
       memberSince: 'SkyRide member since {date}',
       rideComplete: 'Ride Complete',
       rateRide: 'Rate your ride',
@@ -2309,6 +2323,10 @@ const defaultLocales: LocaleTree = {
         invalid_rating: 'Choose a rating from one to five stars.',
         invalid_tip: 'Choose a valid tip amount.',
         invalid_comment: 'The rating comment is not valid.',
+        invalid_profile: 'Choose a valid profile name and photo.',
+        invalid_profile_name:
+          'Your profile name must contain 2 to 50 characters.',
+        invalid_profile_image: 'Choose a profile photo from your own gallery.',
         tip_failed: 'The tip could not be processed.',
         insufficient_funds:
           'Your selected payment method has insufficient funds.',
@@ -2957,7 +2975,8 @@ const defaultLocales: LocaleTree = {
         'Review the listing and publish it when you are ready.',
       cityMarktPhotosHint: 'The CityMarkt listing photos will be included.',
       authErrors: {
-        no_ifruit_account: 'Sign in to your Sky Cloud account in Settings first.',
+        no_ifruit_account:
+          'Sign in to your Sky Cloud account in Settings first.',
         invalid_username:
           'Use 3–24 lowercase letters, numbers, dots or underscores.',
         profile_not_found:
