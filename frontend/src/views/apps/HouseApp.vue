@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import {
+  kBlockTitle,
   kButton,
   kCard,
   kDialog,
   kDialogButton,
-  kGlass,
   kLink,
   kList,
   kListItem,
@@ -18,7 +18,6 @@ import {
   Camera,
   CarFront,
   Check,
-  ChevronRight,
   House,
   KeyRound,
   LocateFixed,
@@ -56,6 +55,12 @@ const isRefreshing = ref(false)
 const pullDistance = ref(0)
 
 const pullThreshold = 56
+const housePrimaryButtonColors = {
+  fillBgIos: 'bg-[#f47a38] active:bg-[#d86129]',
+  fillBgMaterial: 'bg-[#f47a38] active:bg-[#d86129]',
+  fillTextIos: 'text-white',
+  fillTextMaterial: 'text-white',
+}
 let pullStartY = 0
 let isPulling = false
 let wheelRefreshTimeout: ReturnType<typeof setTimeout> | undefined
@@ -66,6 +71,9 @@ const ownedCount = computed(
     properties.value.filter((property) => property.access === 'owner').length,
 )
 const sharedCount = computed(() => properties.value.length - ownedCount.value)
+const lockedCount = computed(
+  () => properties.value.filter((property) => property.locked).length,
+)
 const selectedProperty = computed(
   () =>
     properties.value.find(
@@ -198,6 +206,18 @@ function accessLabel(property: HousingProperty): string {
   )
 }
 
+function propertySubtitle(property: HousingProperty): string {
+  const details = [accessLabel(property)]
+  if (property.garage?.enabled) {
+    details.push(
+      phone.t('Apps.house.storedVehicles', {
+        count: String(property.garage.storedVehicles),
+      }),
+    )
+  }
+  return details.join(' · ')
+}
+
 function shareProperty(property: HousingProperty): void {
   easyShare.open({
     appId: 'house',
@@ -236,7 +256,11 @@ onBeforeUnmount(() => {
       <span class="house-state__icon"><WifiOff :size="30" /></span>
       <strong>{{ phone.t('Apps.house.unavailable') }}</strong>
       <p>{{ translatedError(housing.error) }}</p>
-      <k-button rounded @click="housing.load()">
+      <k-button
+        rounded
+        :colors="housePrimaryButtonColors"
+        @click="housing.load()"
+      >
         {{ phone.t('Apps.house.tryAgain') }}
       </k-button>
     </div>
@@ -245,7 +269,11 @@ onBeforeUnmount(() => {
       <span class="house-state__icon"><Router :size="31" /></span>
       <strong>{{ phone.t('Apps.house.offline') }}</strong>
       <p>{{ phone.t('Apps.house.offlineBody') }}</p>
-      <k-button rounded @click="housing.load()">
+      <k-button
+        rounded
+        :colors="housePrimaryButtonColors"
+        @click="housing.load()"
+      >
         {{ phone.t('Apps.house.tryAgain') }}
       </k-button>
     </div>
@@ -267,15 +295,19 @@ onBeforeUnmount(() => {
       >
         <k-preloader />
       </div>
-      <k-glass :highlight="false" class="house-hero">
-        <div class="house-hero__title">
-          <span>
-            <small>{{ phone.t('Apps.house.myHomes') }}</small>
-            <strong>{{ properties.length }}</strong>
-          </span>
-          <i><House :size="28" /></i>
-        </div>
-        <div class="house-summary">
+      <section v-if="properties.length" class="house-properties">
+        <header class="house-properties__heading">
+          <div>
+            <small>{{ phone.t('Apps.house.properties') }}</small>
+            <h1>{{ phone.t('Apps.house.myHomes') }}</h1>
+          </div>
+          <span class="house-properties__count">{{ properties.length }}</span>
+        </header>
+
+        <div
+          class="house-overview"
+          :aria-label="phone.t('Apps.house.myHomes')"
+        >
           <span
             ><b>{{ ownedCount }}</b
             >{{ phone.t('Apps.house.owned') }}</span
@@ -285,35 +317,33 @@ onBeforeUnmount(() => {
             >{{ phone.t('Apps.house.shared') }}</span
           >
           <span
-            ><b>{{ properties.filter((property) => property.locked).length }}</b
+            ><b>{{ lockedCount }}</b
             >{{ phone.t('Apps.house.locked') }}</span
           >
         </div>
-      </k-glass>
 
-      <section v-if="properties.length" class="house-properties">
-        <h2>{{ phone.t('Apps.house.properties') }}</h2>
-        <k-glass
+        <k-list inset strong class="house-property-list">
+          <k-list-item
           v-for="property in properties"
           :key="property.id"
-          :highlight="false"
-          component="button"
-          type="button"
-          class="house-property"
+          link
+          chevron
+          :title="property.name"
+          :subtitle="propertySubtitle(property)"
           :aria-label="`${phone.t('Apps.house.openDetails')}: ${property.name}`"
           @click="selectedPropertyId = property.id"
-        >
-          <span class="house-property__icon"><House :size="31" /></span>
-          <span class="house-property__content">
-            <strong>{{ property.name }}</strong>
-            <small><UserRound :size="12" />{{ accessLabel(property) }}</small>
-            <span class="house-property__chips">
-              <i
+          >
+            <template #media>
+              <span class="house-property__icon"><House :size="21" /></span>
+            </template>
+            <template #after>
+              <span
                 v-if="property.capabilities.lock"
+                class="house-property__status"
                 :class="{ 'is-locked': property.locked }"
               >
-                <Lock v-if="property.locked" :size="11" />
-                <LockOpen v-else :size="11" />
+                <Lock v-if="property.locked" :size="13" />
+                <LockOpen v-else :size="13" />
                 {{
                   phone.t(
                     property.locked
@@ -321,32 +351,26 @@ onBeforeUnmount(() => {
                       : 'Apps.house.unlocked',
                   )
                 }}
-              </i>
-              <i v-if="property.capabilities.cctv"
-                ><Camera :size="11" />{{ phone.t('Apps.house.camera') }}</i
-              >
-              <i v-if="property.garage?.enabled"
-                ><CarFront :size="11" />{{ property.garage.storedVehicles }}</i
-              >
-            </span>
-          </span>
-          <ChevronRight :size="18" />
-        </k-glass>
+              </span>
+            </template>
+          </k-list-item>
+        </k-list>
       </section>
 
-      <k-card v-else class="house-empty">
-        <House :size="38" />
-        <strong>{{ phone.t('Apps.house.empty') }}</strong>
+      <section v-else class="house-empty">
+        <span class="house-empty__icon"><House :size="32" /></span>
+        <small>{{ phone.t('Apps.house.myHomes') }}</small>
+        <h1>{{ phone.t('Apps.house.empty') }}</h1>
         <p>{{ phone.t('Apps.house.emptyBody') }}</p>
-      </k-card>
-
-      <p class="house-provider">
-        {{
-          phone.t('Apps.house.provider', {
-            system: housing.overview.provider ?? '',
-          })
-        }}
-      </p>
+        <k-button
+          inline
+          rounded
+          :colors="housePrimaryButtonColors"
+          @click="refresh"
+        >
+          {{ phone.t('Apps.house.refresh') }}
+        </k-button>
+      </section>
     </div>
 
     <k-sheet
@@ -365,7 +389,7 @@ onBeforeUnmount(() => {
           <X :size="18" />
         </k-link>
 
-        <span class="house-detail__mark"><House :size="46" /></span>
+        <span class="house-detail__mark"><House :size="29" /></span>
         <small>{{ accessLabel(selectedProperty) }}</small>
         <h2>{{ selectedProperty.name }}</h2>
         <span
@@ -389,6 +413,7 @@ onBeforeUnmount(() => {
           large
           rounded
           class="house-lock-button"
+          :colors="housePrimaryButtonColors"
           :disabled="isPending('toggle_lock', selectedProperty)"
           @click="runCommand('toggle_lock', selectedProperty)"
         >
@@ -397,48 +422,56 @@ onBeforeUnmount(() => {
           {{
             phone.t(
               selectedProperty.locked
-                ? 'Apps.house.unlocked'
-                : 'Apps.house.locked',
+                ? 'Apps.house.unlockDoor'
+                : 'Apps.house.lockDoor',
             )
           }}
         </k-button>
 
-        <h3>{{ phone.t('Apps.house.actions') }}</h3>
-        <div class="house-actions">
-          <k-glass
-            :highlight="false"
-            component="button"
-            type="button"
+        <k-block-title>{{ phone.t('Apps.house.actions') }}</k-block-title>
+        <k-list inset strong class="house-action-list">
+          <k-list-item
+            link
+            chevron
+            :title="phone.t('Apps.house.setWaypoint')"
             :disabled="isPending('set_waypoint', selectedProperty)"
             @click="runCommand('set_waypoint', selectedProperty)"
           >
-            <LocateFixed :size="23" />
-            <span>{{ phone.t('Apps.house.setWaypoint') }}</span>
-          </k-glass>
-          <k-glass
-            :highlight="false"
-            component="button"
-            type="button"
+            <template #media><LocateFixed :size="19" /></template>
+          </k-list-item>
+          <k-list-item
+            :link="selectedProperty.capabilities.cctv"
+            :chevron="selectedProperty.capabilities.cctv"
+            :title="phone.t('Apps.house.viewCamera')"
+            :subtitle="
+              phone.t(
+                selectedProperty.capabilities.cctv
+                  ? 'Apps.house.cameraAvailable'
+                  : 'Apps.house.cameraUnavailable',
+              )
+            "
             :disabled="
               !selectedProperty.capabilities.cctv ||
               isPending('open_cctv', selectedProperty)
             "
-            @click="runCommand('open_cctv', selectedProperty)"
+            @click="
+              selectedProperty.capabilities.cctv &&
+              runCommand('open_cctv', selectedProperty)
+            "
           >
-            <Camera :size="23" />
-            <span>{{ phone.t('Apps.house.viewCamera') }}</span>
-          </k-glass>
-          <k-glass
-            :highlight="false"
-            component="button"
-            type="button"
+            <template #media><Camera :size="19" /></template>
+          </k-list-item>
+          <k-list-item
+            link
+            chevron
+            :title="phone.t('Apps.easyShare.share')"
             @click="shareProperty(selectedProperty)"
           >
-            <Share2 :size="23" />
-            <span>{{ phone.t('Apps.easyShare.share') }}</span>
-          </k-glass>
-        </div>
+            <template #media><Share2 :size="19" /></template>
+          </k-list-item>
+        </k-list>
 
+        <k-block-title>{{ phone.t('Apps.house.status') }}</k-block-title>
         <k-list inset strong class="house-facts">
           <k-list-item
             :title="phone.t('Apps.house.access')"
@@ -1037,5 +1070,247 @@ onBeforeUnmount(() => {
   padding: 0 16px;
   color: var(--house-muted);
   font-size: 11px;
+}
+
+/* Native, task-first House layout. These overrides intentionally replace the
+   old dashboard treatment while preserving the existing detail interactions. */
+.house-page {
+  --house-bg: #f2f2f7;
+  --house-panel: #ffffff;
+  --house-text: #161619;
+  --house-muted: #6f6f78;
+  background: var(--house-bg);
+}
+:global(.phone-app.dark .house-page) {
+  --house-bg: #000000;
+  --house-panel: #1c1c1e;
+  --house-text: #fafafa;
+  --house-muted: #a1a1aa;
+  background: var(--house-bg);
+}
+.house-navbar {
+  --k-navbar-bg-color: var(--house-bg);
+}
+.house-scroll {
+  padding: 0 0 46px;
+  overscroll-behavior: contain;
+}
+.house-state {
+  padding: 42px 28px 86px;
+}
+.house-state__icon {
+  width: 62px;
+  height: 62px;
+  margin-bottom: 16px;
+  border-radius: 19px;
+  box-shadow: 0 8px 24px #00000014;
+}
+.house-state strong {
+  font-size: 20px;
+  line-height: 1.2;
+}
+.house-state p {
+  margin: 8px 0 20px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.house-properties {
+  padding-top: 14px;
+}
+.house-properties__heading {
+  margin: 0 21px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.house-properties__heading small,
+.house-properties__heading h1 {
+  display: block;
+}
+.house-properties__heading small {
+  color: var(--house-muted);
+  font-size: 12px;
+  line-height: 1.2;
+}
+.house-properties__heading h1 {
+  margin: 2px 0 0;
+  font-size: 25px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.house-properties__count {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--house-accent);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 750;
+}
+.house-overview {
+  margin: 0 16px 20px;
+  padding: 12px 6px;
+  border-radius: 18px;
+  display: flex;
+  background: var(--house-panel);
+}
+.house-overview span {
+  min-width: 0;
+  flex: 1;
+  padding: 0 8px;
+  color: var(--house-muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+.house-overview span + span {
+  border-left: 1px solid #8e8e9338;
+}
+.house-overview b {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--house-text);
+  font-size: 17px;
+  line-height: 1;
+}
+.house-property-list {
+  margin: 0 16px !important;
+}
+.house-property__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--house-accent);
+}
+.house-property__status {
+  padding: 4px 7px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e8f8ed;
+  color: #267c42;
+  font-size: 10px;
+  font-weight: 700;
+}
+.house-property__status.is-locked {
+  background: #fff0e7;
+  color: #c8522b;
+}
+:global(.phone-app.dark .house-property__status) {
+  background: #2a4b35;
+  color: #8ce1a7;
+}
+:global(.phone-app.dark .house-property__status.is-locked) {
+  background: #5a3023;
+  color: #ffb392;
+}
+.house-empty {
+  min-height: calc(100% - 16px);
+  margin: 0;
+  padding: 34px 31px 90px;
+  justify-content: center;
+}
+.house-empty__icon {
+  width: 68px;
+  height: 68px;
+  margin-bottom: 16px;
+  border-radius: 21px;
+  display: grid;
+  place-items: center;
+  background: var(--house-accent);
+  color: #fff;
+  box-shadow: 0 10px 30px #f47a383d;
+}
+.house-empty > small {
+  color: var(--house-accent);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.house-empty h1 {
+  margin: 5px 0 0;
+  color: var(--house-text);
+  font-size: 22px;
+  line-height: 1.2;
+}
+.house-empty p,
+.house-keys__empty p {
+  margin: 8px 0 20px;
+  max-width: 260px;
+  font-size: 13px;
+  line-height: 1.42;
+}
+.house-detail {
+  height: 620px;
+  padding: 18px 0 42px;
+}
+.house-detail__mark {
+  width: 58px;
+  height: 58px;
+  margin: 8px auto 10px;
+  border-radius: 18px;
+  background: var(--house-accent);
+}
+.house-detail > small {
+  font-size: 11px;
+  font-weight: 750;
+}
+.house-detail h2 {
+  margin: 3px 32px 8px;
+  font-size: 22px;
+  line-height: 1.2;
+}
+.house-detail__status {
+  font-size: 11px;
+}
+.house-lock-button {
+  width: calc(100% - 32px);
+  margin: 0 16px 20px;
+}
+.house-detail :deep(.k-block-title) {
+  margin-top: 18px;
+  margin-bottom: 7px;
+  padding: 0 20px;
+  color: var(--house-muted);
+  text-align: left;
+}
+.house-action-list,
+.house-facts {
+  margin: 0 16px !important;
+  text-align: left;
+}
+.house-action-list svg {
+  color: var(--house-accent);
+}
+.house-keys {
+  padding: 0 16px;
+}
+.house-keys header {
+  margin: 20px 4px 8px;
+}
+.house-keys header small {
+  font-size: 11px;
+}
+.house-keys header strong {
+  font-size: 16px;
+}
+.house-candidates {
+  height: 620px;
+  padding: 21px 14px 35px;
+}
+.house-candidates h2 {
+  margin: 8px 0 5px;
+}
+.house-candidates > p {
+  margin: 0 auto 16px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.house-revoke-copy {
+  font-size: 13px;
+  line-height: 1.4;
 }
 </style>
