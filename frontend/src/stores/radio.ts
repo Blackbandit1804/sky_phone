@@ -30,6 +30,13 @@ export const useRadioStore = defineStore('radio', () => {
   const data = reactive<RadioData>(structuredClone(defaults))
   const error = ref('')
   const isLoading = ref(false)
+  const settingRequestIds: Record<keyof RadioSettings, number> = {
+    autoRejoin: 0,
+    notifications: 0,
+  }
+  let badgeRequestId = 0
+  let displayNameRequestId = 0
+  let volumeRequestId = 0
 
   function apply(next: Partial<RadioData>): void {
     Object.assign(data, next)
@@ -61,10 +68,12 @@ export const useRadioStore = defineStore('radio', () => {
   }
 
   async function disconnect(): Promise<void> {
+    isLoading.value = true
     error.value = ''
     const response = await nuiCall('radio:disconnect')
     if (!response.success) {
       error.value = response.error ?? 'request_failed'
+      isLoading.value = false
       return
     }
     apply({
@@ -73,13 +82,16 @@ export const useRadioStore = defineStore('radio', () => {
       members: [],
       secondaryFrequency: 0,
     })
+    isLoading.value = false
   }
 
   async function setVolume(volume: number): Promise<void> {
+    const requestId = ++volumeRequestId
     data.volume = volume
     const response = await nuiCall<{ volume: number }>('radio:set-volume', {
       volume,
     })
+    if (requestId !== volumeRequestId) return
     if (response.success && response.data) data.volume = response.data.volume
   }
 
@@ -87,35 +99,42 @@ export const useRadioStore = defineStore('radio', () => {
     key: keyof RadioSettings,
     value: boolean,
   ): Promise<void> {
+    const requestId = ++settingRequestIds[key]
     const previous = data.settings[key]
     data.settings[key] = value
     const response = await nuiCall<RadioSettings>('radio:save-settings', {
       key,
       value,
     })
-    if (response.success && response.data) data.settings = response.data
-    else {
+    if (requestId !== settingRequestIds[key]) return
+    if (response.success && response.data) {
+      data.settings[key] = response.data[key]
+    } else {
       data.settings[key] = previous
       error.value = response.error ?? 'request_failed'
     }
   }
 
   async function saveBadge(badge: string): Promise<boolean> {
+    const requestId = ++badgeRequestId
     error.value = ''
     const response = await nuiCall<{ badge: string }>('radio:save-badge', {
       badge,
     })
+    if (requestId !== badgeRequestId) return true
     if (response.success && response.data) data.badge = response.data.badge
     else error.value = response.error ?? 'request_failed'
     return response.success
   }
 
   async function saveDisplayName(displayName: string): Promise<boolean> {
+    const requestId = ++displayNameRequestId
     error.value = ''
     const response = await nuiCall<{ displayName: string }>(
       'radio:save-display-name',
       { displayName },
     )
+    if (requestId !== displayNameRequestId) return true
     if (response.success && response.data)
       data.displayName = response.data.displayName
     else error.value = response.error ?? 'request_failed'

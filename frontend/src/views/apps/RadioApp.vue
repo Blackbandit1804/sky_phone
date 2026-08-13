@@ -1,21 +1,5 @@
 <script setup lang="ts">
 import {
-  kBlock,
-  kBlockTitle,
-  kButton,
-  kList,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kPage,
-  kPreloader,
-  kRange,
-  kSegmented,
-  kSegmentedButton,
-  kToast,
-  kToggle,
-} from 'konsta/vue'
-import {
   Clock3,
   RadioTower,
   Settings,
@@ -23,11 +7,30 @@ import {
   Users,
   Volume2,
 } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { usePhoneStore } from '@/stores/phone'
 import { useRadioStore } from '@/stores/radio'
 import type { RadioHistoryEntry } from '@/types/radio'
+import {
+  SkyAppPage,
+  SkyButton,
+  SkyEmptyState,
+  SkyField,
+  SkyList,
+  SkyListItem,
+  SkyNavbar,
+  SkyRange,
+  SkyScrollArea,
+  SkySection,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySettingsGroup,
+  SkySettingsRow,
+  SkySpinner,
+  SkyStatusCard,
+  SkyToast,
+} from '@/ui'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type RadioTab = 'radio' | 'settings'
@@ -40,9 +43,11 @@ const secondaryInput = ref('')
 const badgeInput = ref('')
 const displayNameInput = ref('')
 const feedback = ref('')
+const volumeInput = ref(50)
 const now = ref(Date.now())
 const memberSnapshotAt = ref(Date.now())
 let clockHandle: number | null = null
+let feedbackHandle: number | null = null
 
 const statusText = computed(() => {
   if (!radio.data.connected) return phone.t('Apps.radio.disconnected')
@@ -54,9 +59,11 @@ const statusText = computed(() => {
   })
 })
 
-function eventValue(event: Event): string {
-  return (event.target as HTMLInputElement).value
-}
+const providerText = computed(() => {
+  const provider = radio.data.provider
+  if (!provider) return phone.t('Apps.radio.noProvider')
+  return provider.replace(/^./, (character) => character.toLocaleUpperCase())
+})
 
 function parseFrequency(value: string): number {
   return Number.parseFloat(value.replace(',', '.'))
@@ -64,6 +71,15 @@ function parseFrequency(value: string): number {
 
 function errorText(code: string): string {
   return phone.t(`Apps.radio.errors.${code || 'default'}`)
+}
+
+function showFeedback(message: string): void {
+  if (feedbackHandle !== null) window.clearTimeout(feedbackHandle)
+  feedback.value = message
+  feedbackHandle = window.setTimeout(() => {
+    feedback.value = ''
+    feedbackHandle = null
+  }, 2500)
 }
 
 async function connect(
@@ -74,6 +90,7 @@ async function connect(
     radio.error = 'invalid_frequency'
     return
   }
+
   const connected = await radio.connect(primary, secondary)
   if (connected) {
     memberSnapshotAt.value = Date.now()
@@ -86,6 +103,10 @@ async function connect(
 
 async function disconnect(): Promise<void> {
   await radio.disconnect()
+}
+
+function saveVolume(): void {
+  void radio.setVolume(volumeInput.value)
 }
 
 function connectHistory(entry: RadioHistoryEntry): void {
@@ -127,29 +148,40 @@ function normalizedDisplayName(): string {
   return clean
 }
 
-async function saveRadioProfile(): Promise<void> {
-  if (radio.data.displayNameEnabled && radio.data.displayNameAllowed) {
-    const displayNameSaved = await radio.saveDisplayName(
-      normalizedDisplayName(),
-    )
-    if (!displayNameSaved) {
-      feedback.value = errorText(radio.error)
-      window.setTimeout(() => (feedback.value = ''), 2500)
-      return
-    }
+async function saveDisplayNameSetting(): Promise<void> {
+  if (!radio.data.displayNameEnabled || !radio.data.displayNameAllowed) return
+
+  const displayName = normalizedDisplayName()
+  if (displayName === radio.data.displayName) return
+
+  const saved = await radio.saveDisplayName(displayName)
+  if (displayNameInput.value !== displayName) return
+
+  if (!saved) {
+    displayNameInput.value = radio.data.displayName
+    showFeedback(errorText(radio.error))
+    return
   }
 
-  if (radio.data.badgeEnabled) {
-    const badgeSaved = await radio.saveBadge(normalizedBadge())
-    if (!badgeSaved) {
-      feedback.value = errorText(radio.error)
-      window.setTimeout(() => (feedback.value = ''), 2500)
-      return
-    }
+  displayNameInput.value = radio.data.displayName
+}
+
+async function saveBadgeSetting(): Promise<void> {
+  if (!radio.data.badgeEnabled) return
+
+  const badge = normalizedBadge()
+  if (badge === radio.data.badge) return
+
+  const saved = await radio.saveBadge(badge)
+  if (badgeInput.value !== badge) return
+
+  if (!saved) {
+    badgeInput.value = radio.data.badge
+    showFeedback(errorText(radio.error))
+    return
   }
 
-  feedback.value = phone.t('Apps.radio.profileSaved')
-  window.setTimeout(() => (feedback.value = ''), 2500)
+  badgeInput.value = radio.data.badge
 }
 
 function onMessage(event: MessageEvent): void {
@@ -160,6 +192,11 @@ function onMessage(event: MessageEvent): void {
   }
 }
 
+watch(
+  () => radio.data.volume,
+  (volume) => (volumeInput.value = volume),
+)
+
 onMounted(async () => {
   window.addEventListener('message', onMessage)
   clockHandle = window.setInterval(() => (now.value = Date.now()), 1000)
@@ -167,399 +204,304 @@ onMounted(async () => {
   memberSnapshotAt.value = Date.now()
   badgeInput.value = radio.data.badge
   displayNameInput.value = radio.data.displayName
+  volumeInput.value = radio.data.volume
   if (radio.data.frequency) primaryInput.value = String(radio.data.frequency)
-  if (radio.data.secondaryFrequency)
+  if (radio.data.secondaryFrequency) {
     secondaryInput.value = String(radio.data.secondaryFrequency)
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('message', onMessage)
-  if (clockHandle) window.clearInterval(clockHandle)
+  if (clockHandle !== null) window.clearInterval(clockHandle)
+  if (feedbackHandle !== null) window.clearTimeout(feedbackHandle)
 })
 </script>
 
 <template>
-  <k-page component="main" class="radio-app">
-    <k-navbar :title="phone.t('Apps.radio.name')">
-      <template #subnavbar>
-        <k-segmented :key="tab" strong rounded class="radio-tabs">
-          <k-segmented-button :active="tab === 'radio'" @click="tab = 'radio'">
-            <RadioTower :size="17" />
-            {{ phone.t('Apps.radio.tabs.radio') }}
-          </k-segmented-button>
-          <k-segmented-button
-            :active="tab === 'settings'"
-            @click="tab = 'settings'"
-          >
-            <Settings :size="17" />
-            {{ phone.t('Apps.radio.tabs.settings') }}
-          </k-segmented-button>
-        </k-segmented>
-      </template>
-    </k-navbar>
+  <SkyAppPage
+    class="radio-app"
+    accent="#0a84ff"
+    accent-soft="rgba(10, 132, 255, 0.16)"
+    :dark="phone.isDarkMode"
+    :label="phone.t('Apps.radio.name')"
+  >
+    <SkyNavbar :title="phone.t('Apps.radio.name')" />
 
-    <div v-if="radio.isLoading && !radio.data.provider" class="radio-loading">
-      <k-preloader />
-      {{ phone.t('Common.loading') }}
+    <div class="radio-tab-switcher">
+      <SkySegmented class="radio-tabs" :aria-label="phone.t('Apps.radio.name')">
+        <SkySegmentedButton :active="tab === 'radio'" @click="tab = 'radio'">
+          <RadioTower :size="16" aria-hidden="true" />
+          {{ phone.t('Apps.radio.tabs.radio') }}
+        </SkySegmentedButton>
+        <SkySegmentedButton
+          :active="tab === 'settings'"
+          @click="tab = 'settings'"
+        >
+          <Settings :size="16" aria-hidden="true" />
+          {{ phone.t('Apps.radio.tabs.settings') }}
+        </SkySegmentedButton>
+      </SkySegmented>
     </div>
 
-    <template v-else-if="tab === 'radio'">
-      <k-block class="radio-status" strong inset>
-        <Signal :size="22" :class="{ 'radio-online': radio.data.connected }" />
-        <div>
-          <strong>{{ statusText }}</strong>
-          <small>{{
-            radio.data.provider ?? phone.t('Apps.radio.noProvider')
-          }}</small>
-        </div>
-        <i :class="{ 'radio-status-dot--online': radio.data.connected }"></i>
-      </k-block>
+    <SkyScrollArea class="radio-content">
+      <div v-if="radio.isLoading && !radio.data.provider" class="radio-loading">
+        <SkySpinner :label="phone.t('Common.loading')" />
+        <span>{{ phone.t('Common.loading') }}</span>
+      </div>
 
-      <k-block-title>{{ phone.t('Apps.radio.channel') }}</k-block-title>
-      <k-list strong inset>
-        <k-list-input
-          type="number"
-          :label="phone.t('Apps.radio.primaryFrequency')"
-          :placeholder="phone.t('Apps.radio.frequencyPlaceholder')"
-          :min="radio.data.frequencyMin"
-          :max="radio.data.frequencyMax"
-          :step="radio.data.frequencyStep"
-          :value="primaryInput"
-          @input="primaryInput = eventValue($event)"
+      <template v-else-if="tab === 'radio'">
+        <SkyStatusCard
+          :title="statusText"
+          :subtitle="providerText"
+          :tone="radio.data.connected ? 'success' : 'neutral'"
+          aria-live="polite"
+          indicator
         >
-          <template #after>{{ phone.t('Apps.radio.mhz') }}</template>
-        </k-list-input>
-        <k-list-input
-          v-if="radio.data.secondarySupported"
-          type="number"
-          :label="phone.t('Apps.radio.secondaryFrequency')"
-          :placeholder="phone.t('Apps.radio.optional')"
-          :min="radio.data.frequencyMin"
-          :max="radio.data.frequencyMax"
-          :step="radio.data.frequencyStep"
-          :value="secondaryInput"
-          @input="secondaryInput = eventValue($event)"
-        >
-          <template #after>{{ phone.t('Apps.radio.mhz') }}</template>
-        </k-list-input>
-        <k-list-item :title="phone.t('Apps.radio.volume')">
-          <template #media><Volume2 :size="20" /></template>
-          <template #inner>
-            <div class="radio-volume">
-              <k-range
-                :value="radio.data.volume"
+          <template #icon>
+            <Signal :size="22" aria-hidden="true" />
+          </template>
+        </SkyStatusCard>
+
+        <SkySection :title="phone.t('Apps.radio.channel')">
+          <SkyList density="compact" flush inset strong>
+            <SkyField
+              v-model="primaryInput"
+              type="number"
+              input-mode="decimal"
+              :label="phone.t('Apps.radio.primaryFrequency')"
+              :placeholder="phone.t('Apps.radio.frequencyPlaceholder')"
+              :min="radio.data.frequencyMin"
+              :max="radio.data.frequencyMax"
+              :step="radio.data.frequencyStep"
+            >
+              <template #leading>
+                <RadioTower :size="20" aria-hidden="true" />
+              </template>
+              <template #trailing>
+                <span class="radio-unit">{{ phone.t('Apps.radio.mhz') }}</span>
+              </template>
+            </SkyField>
+            <SkyField
+              v-if="radio.data.secondarySupported"
+              v-model="secondaryInput"
+              type="number"
+              input-mode="decimal"
+              :label="phone.t('Apps.radio.secondaryFrequency')"
+              :placeholder="phone.t('Apps.radio.optional')"
+              :min="radio.data.frequencyMin"
+              :max="radio.data.frequencyMax"
+              :step="radio.data.frequencyStep"
+            >
+              <template #leading>
+                <RadioTower :size="20" aria-hidden="true" />
+              </template>
+              <template #trailing>
+                <span class="radio-unit">{{ phone.t('Apps.radio.mhz') }}</span>
+              </template>
+            </SkyField>
+            <SkyListItem>
+              <template #media>
+                <Volume2 :size="20" aria-hidden="true" />
+              </template>
+              <SkyRange
+                id="radio-volume"
+                v-model="volumeInput"
+                :aria-label="phone.t('Apps.radio.volume')"
+                :aria-value-text="`${volumeInput}%`"
+                :caption="phone.t('Apps.radio.volume')"
                 :min="0"
                 :max="100"
                 :step="1"
-                :aria-label="phone.t('Apps.radio.volume')"
-                @input="radio.setVolume(Number(eventValue($event)))"
-              />
-              <span>{{ radio.data.volume }}%</span>
-            </div>
-          </template>
-        </k-list-item>
-      </k-list>
+                @change="saveVolume"
+              >
+                <output for="radio-volume">{{ volumeInput }}%</output>
+              </SkyRange>
+            </SkyListItem>
+          </SkyList>
 
-      <k-block inset class="radio-action-block">
-        <k-button
-          v-if="!radio.data.connected"
-          large
-          rounded
-          :disabled="radio.isLoading"
-          @click="connect()"
-        >
-          {{ phone.t('Apps.radio.connect') }}
-        </k-button>
-        <k-button
-          v-else
-          large
-          rounded
-          class="radio-disconnect"
-          @click="disconnect"
-        >
-          {{ phone.t('Apps.radio.disconnect') }}
-        </k-button>
-        <p v-if="radio.error" class="radio-error">
-          {{ errorText(radio.error) }}
-        </p>
-      </k-block>
+          <div class="radio-primary-action">
+            <SkyButton
+              v-if="!radio.data.connected"
+              block
+              large
+              :disabled="radio.isLoading"
+              @click="connect()"
+            >
+              {{ phone.t('Apps.radio.connect') }}
+            </SkyButton>
+            <SkyButton
+              v-else
+              block
+              large
+              variant="danger"
+              :disabled="radio.isLoading"
+              @click="disconnect"
+            >
+              {{ phone.t('Apps.radio.disconnect') }}
+            </SkyButton>
+            <p v-if="radio.error" class="radio-error" role="alert">
+              {{ errorText(radio.error) }}
+            </p>
+          </div>
+        </SkySection>
 
-      <template v-if="radio.data.connected">
-        <k-block-title>
-          <Users :size="16" />
-          {{
+        <SkySection
+          v-if="radio.data.connected"
+          :title="
             phone.t('Apps.radio.members', {
               count: String(radio.data.members.length),
             })
-          }}
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item
-            v-for="member in radio.data.members"
-            :key="member.id"
-            :title="member.name"
-            :subtitle="formatDuration(member.joinTime)"
-            :after="member.rank || String(member.rankNumber || '')"
-          />
-          <k-list-item
+          "
+        >
+          <SkyEmptyState
             v-if="!radio.data.members.length"
+            compact
             :title="phone.t('Apps.radio.noMembers')"
-          />
-        </k-list>
+          >
+            <template #icon>
+              <Users :size="32" aria-hidden="true" />
+            </template>
+          </SkyEmptyState>
+          <SkyList v-else inset strong>
+            <SkyListItem
+              v-for="member in radio.data.members"
+              :key="member.id"
+              :title="member.name"
+              :subtitle="formatDuration(member.joinTime)"
+              :after="member.rank || String(member.rankNumber || '')"
+            />
+          </SkyList>
+        </SkySection>
+
+        <SkySection v-else :title="phone.t('Apps.radio.history')">
+          <SkyEmptyState
+            v-if="!radio.data.history.length"
+            compact
+            :title="phone.t('Apps.radio.noHistory')"
+          >
+            <template #icon>
+              <Clock3 :size="32" aria-hidden="true" />
+            </template>
+          </SkyEmptyState>
+          <SkyList v-else inset strong>
+            <SkyListItem
+              v-for="entry in radio.data.history"
+              :key="`${entry.primary}-${entry.secondary}`"
+              link
+              :title="`${entry.primary}${entry.secondary ? ` / ${entry.secondary}` : ''} ${phone.t('Apps.radio.mhz')}`"
+              @click="connectHistory(entry)"
+            />
+          </SkyList>
+        </SkySection>
       </template>
 
       <template v-else>
-        <k-block-title>
-          <Clock3 :size="16" />
-          {{ phone.t('Apps.radio.history') }}
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item
-            v-for="entry in radio.data.history"
-            :key="`${entry.primary}-${entry.secondary}`"
-            link
-            :title="`${entry.primary}${entry.secondary ? ` / ${entry.secondary}` : ''} ${phone.t('Apps.radio.mhz')}`"
-            @click="connectHistory(entry)"
-          />
-          <k-list-item
-            v-if="!radio.data.history.length"
-            :title="phone.t('Apps.radio.noHistory')"
-          />
-        </k-list>
-      </template>
-    </template>
-
-    <template v-else>
-      <template v-if="radio.data.displayNameEnabled">
-        <k-block-title class="radio-settings-title">
-          {{ phone.t('Apps.radio.displayName') }}
-        </k-block-title>
-        <k-list strong inset class="radio-settings-list">
-          <k-list-input
+        <SkySettingsGroup
+          v-if="radio.data.displayNameEnabled"
+          :title="phone.t('Apps.radio.displayName')"
+          :footer="
+            phone.t(
+              radio.data.displayNameAllowed
+                ? 'Apps.radio.displayNameDescription'
+                : 'Apps.radio.displayNameNotAllowed',
+            )
+          "
+        >
+          <SkyField
+            v-model="displayNameInput"
             type="text"
-            :disabled="!radio.data.displayNameAllowed"
+            :aria-label="phone.t('Apps.radio.displayName')"
+            :readonly="!radio.data.displayNameAllowed"
             :maxlength="radio.data.displayNameMaxLength"
             :placeholder="phone.t('Apps.radio.displayNamePlaceholder')"
-            :value="displayNameInput"
-            @input="displayNameInput = eventValue($event)"
+            @change="saveDisplayNameSetting"
           />
-        </k-list>
-        <k-block class="radio-hint-block">
-          <p class="radio-setting-hint">
-            {{
-              phone.t(
-                radio.data.displayNameAllowed
-                  ? 'Apps.radio.displayNameDescription'
-                  : 'Apps.radio.displayNameNotAllowed',
-              )
-            }}
-          </p>
-        </k-block>
-      </template>
+        </SkySettingsGroup>
 
-      <template v-if="radio.data.badgeEnabled">
-        <k-block-title class="radio-settings-title">
-          {{ phone.t('Apps.radio.badge') }}
-        </k-block-title>
-        <k-list strong inset class="radio-settings-list">
-          <k-list-input
+        <SkySettingsGroup
+          v-if="radio.data.badgeEnabled"
+          :title="phone.t('Apps.radio.badge')"
+        >
+          <SkyField
+            v-model="badgeInput"
             type="text"
+            :aria-label="phone.t('Apps.radio.badge')"
             :maxlength="radio.data.badgeMaxLength"
             :placeholder="phone.t('Apps.radio.badgePlaceholder')"
-            :value="badgeInput"
-            @input="
-              badgeInput = eventValue($event).replace(/[^A-Za-z0-9_-]/g, '')
-            "
+            @input="badgeInput = badgeInput.replace(/[^A-Za-z0-9_-]/g, '')"
+            @change="saveBadgeSetting"
           />
-        </k-list>
+        </SkySettingsGroup>
+
+        <SkySettingsGroup :title="phone.t('Apps.radio.otherSettings')">
+          <SkySettingsRow
+            kind="toggle"
+            :model-value="radio.data.settings.autoRejoin"
+            :title="phone.t('Apps.radio.autoRejoin')"
+            :description="phone.t('Apps.radio.autoRejoinDescription')"
+            @update:model-value="radio.saveSetting('autoRejoin', $event)"
+          />
+          <SkySettingsRow
+            kind="toggle"
+            :model-value="radio.data.settings.notifications"
+            :title="phone.t('Apps.radio.radioNotifications')"
+            :description="phone.t('Apps.radio.notificationsDescription')"
+            @update:model-value="radio.saveSetting('notifications', $event)"
+          />
+        </SkySettingsGroup>
       </template>
+    </SkyScrollArea>
 
-      <k-block
-        v-if="
-          radio.data.badgeEnabled ||
-          (radio.data.displayNameEnabled && radio.data.displayNameAllowed)
-        "
-        inset
-        class="radio-action-block radio-profile-action"
-      >
-        <k-button rounded large @click="saveRadioProfile">
-          {{ phone.t('Common.save') }}
-        </k-button>
-      </k-block>
-
-      <k-block-title class="radio-settings-title">
-        {{ phone.t('Apps.radio.otherSettings') }}
-      </k-block-title>
-      <k-list strong inset class="radio-settings-list">
-        <k-list-item
-          class="radio-setting-row"
-          :title="phone.t('Apps.radio.autoRejoin')"
-          :subtitle="phone.t('Apps.radio.autoRejoinDescription')"
-        >
-          <template #after>
-            <k-toggle
-              :checked="radio.data.settings.autoRejoin"
-              @change="
-                radio.saveSetting('autoRejoin', !radio.data.settings.autoRejoin)
-              "
-            />
-          </template>
-        </k-list-item>
-        <k-list-item
-          class="radio-setting-row"
-          :title="phone.t('Apps.radio.radioNotifications')"
-          :subtitle="phone.t('Apps.radio.notificationsDescription')"
-        >
-          <template #after>
-            <k-toggle
-              :checked="radio.data.settings.notifications"
-              @change="
-                radio.saveSetting(
-                  'notifications',
-                  !radio.data.settings.notifications,
-                )
-              "
-            />
-          </template>
-        </k-list-item>
-      </k-list>
-    </template>
-
-    <k-toast
+    <SkyToast
       :opened="Boolean(feedback)"
       position="center"
       @click="feedback = ''"
     >
       {{ feedback }}
-    </k-toast>
-  </k-page>
+    </SkyToast>
+  </SkyAppPage>
 </template>
 
 <style scoped>
-.radio-app {
-  --radio-blue: #0a84ff;
-  overflow-y: auto;
-  padding-bottom: 34px;
+.radio-tab-switcher {
+  padding: 4px var(--sky-page-gutter) 8px;
+  flex: none;
 }
 
-.radio-tabs :deep(button) {
-  align-items: center;
-  display: flex;
+.radio-tabs :deep(.sky-segmented-button) {
   gap: 6px;
-  justify-content: center;
+}
+
+.radio-content {
+  padding-top: 4px;
 }
 
 .radio-loading {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  justify-content: center;
   min-height: 240px;
-}
-
-.radio-status {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: auto 1fr auto;
-  margin-top: 18px;
-}
-
-.radio-status div {
   display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.radio-status small {
-  color: var(--k-color-subtitle, #8e8e93);
-  margin-top: 2px;
-  text-transform: capitalize;
-}
-
-.radio-status i {
-  background: #c7c7cc;
-  border-radius: 50%;
-  height: 10px;
-  width: 10px;
-}
-
-.radio-status .radio-status-dot--online {
-  background: #30d158;
-}
-
-.radio-online {
-  color: #30d158;
-}
-
-.radio-volume {
   align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 1fr 44px;
-  width: 100%;
+  justify-content: center;
+  gap: 10px;
+  color: var(--sky-muted);
+  font-size: 14px;
 }
 
-.radio-volume span {
-  color: var(--k-color-subtitle, #8e8e93);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
+.radio-unit {
+  color: var(--sky-muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.radio-action-block {
-  padding-left: 0;
-  padding-right: 0;
-}
-
-.radio-setting-hint {
-  color: inherit;
-  font-size: 16px;
-  font-weight: 450;
-  line-height: 1.45;
-  margin: 0;
-  opacity: 0.82;
-}
-
-.radio-hint-block {
-  margin-bottom: 0;
-  margin-top: 8px;
-}
-
-.radio-settings-title {
-  margin-bottom: 6px;
-  margin-top: 16px;
-}
-
-.radio-settings-list {
-  margin-bottom: 0;
-  margin-top: 0;
-}
-
-.radio-profile-action {
-  margin-bottom: 0;
+.radio-primary-action {
   margin-top: 12px;
 }
 
-.radio-setting-row :deep(.text-sm) {
-  font-size: 15px;
-  line-height: 1.35;
-}
-
 .radio-error {
-  color: #ff3b30;
-  font-size: 13px;
-  margin: 10px 4px 0;
+  margin: 9px 4px 0;
+  color: var(--sky-danger);
+  font-size: 12px;
+  line-height: 16px;
   text-align: center;
-}
-
-.radio-disconnect {
-  background: #ff3b30 !important;
-  color: #fff !important;
-}
-
-:deep(.k-block-title) {
-  align-items: center;
-  display: flex;
-  gap: 6px;
 }
 </style>
