@@ -1836,7 +1836,6 @@ onBeforeUnmount(() => {
               :key="conversation.id"
               link
               link-component="button"
-              contacts
               strong-title="auto"
               :title="conversation.peer.alias"
               :subtitle="preview(conversation)"

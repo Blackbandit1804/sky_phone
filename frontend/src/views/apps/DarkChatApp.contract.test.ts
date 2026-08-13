@@ -27,6 +27,16 @@ describe('DarkChatApp Sky UI contract', () => {
     expect(inbox.match(/@click="openProfile"/g)).toHaveLength(1)
   })
 
+  it('uses the full conversation card width', () => {
+    const conversationStart = source.indexOf(
+      'v-for="conversation in filteredConversations"',
+    )
+    const conversationEnd = source.indexOf('</SkyListItem>', conversationStart)
+    const conversation = source.slice(conversationStart, conversationEnd)
+
+    expect(conversation).not.toMatch(/\scontacts(?:\s|>)/)
+  })
+
   it('bottom-aligns short threads and exposes profile lifecycle actions', () => {
     expect(source).toContain('ref="messagesArea"')
     expect(source).toMatch(/\.dc-day\s*\{[^}]*margin:\s*auto 0 8px/s)
