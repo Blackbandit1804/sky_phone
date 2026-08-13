@@ -1666,6 +1666,7 @@ const darkChatProfile = {
   activityVisible: false,
   createdAt: '2026-08-01 21:20:00',
 }
+let darkChatProfileActive = true
 const darkChatPeers = [
   {
     id: 2,
@@ -1758,6 +1759,9 @@ const darkChatMessages = [
 ]
 
 function darkChatBootstrap() {
+  if (!darkChatProfileActive) {
+    return { profile: null, contacts: [], conversations: [] }
+  }
   return {
     profile: darkChatProfile,
     contacts: darkChatPeers
@@ -7302,6 +7306,16 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'darkchat:bootstrap') {
     response.json({ success: true, data: darkChatBootstrap() })
+    return
+  }
+  if (endpoint === 'darkchat:create-profile') {
+    darkChatProfileActive = true
+    response.json({ success: true, data: darkChatBootstrap() })
+    return
+  }
+  if (endpoint === 'darkchat:delete-profile') {
+    darkChatProfileActive = false
+    response.json({ success: true })
     return
   }
   if (endpoint === 'darkchat:update-profile') {

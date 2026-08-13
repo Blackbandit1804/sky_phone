@@ -1483,6 +1483,9 @@ const defaultLocales: LocaleTree = {
       signInBody:
         'DarkChat identities are linked to your private Sky Cloud account.',
       signInHint: 'Sign in through Settings to continue.',
+      createIdentity: 'Create Dark Identity',
+      createIdentityBody:
+        'Create a private identity before starting a DarkChat conversation.',
       security: 'Security',
       privateNetwork: 'Private invitation-only network',
       noResults: 'No Results',
@@ -1497,6 +1500,10 @@ const defaultLocales: LocaleTree = {
       darkIdOrInvite: 'Dark-ID or invitation code',
       continue: 'Continue',
       contacts: 'DarkChat Contacts',
+      contactsHint:
+        'Saved private identities appear only on your DarkChat account.',
+      noContacts: 'No saved DarkChat contacts',
+      private: 'Private',
       shareIdentity: 'Tap to share your private identity',
       message: 'Dark message',
       activeNow: 'Activity shared',
@@ -1535,7 +1542,10 @@ const defaultLocales: LocaleTree = {
       deleteForMe: 'Delete for me',
       deleteForBoth: 'Delete for both',
       report: 'Report',
+      messageActions: 'Message actions',
       contactSecurity: 'Contact & Security',
+      chatSettings: 'Chat Settings',
+      contactActions: 'Contact Actions',
       chatSince: 'Private chat since {date}',
       notifications: 'Notifications',
       readReceipts: 'Read receipts',
@@ -1552,6 +1562,7 @@ const defaultLocales: LocaleTree = {
       chatCleared: 'Chat cleared',
       myIdentity: 'My Dark Identity',
       alias: 'Alias',
+      privacySettings: 'Privacy Settings',
       notificationPrivacy: 'Notification privacy',
       notificationFull: 'Full · alias and message',
       notificationPrivate: 'Private · generic message',
@@ -1561,6 +1572,19 @@ const defaultLocales: LocaleTree = {
       copyInvite: 'Copy Invite',
       privacyDisclaimer:
         'DarkChat stores messages on the server and does not claim end-to-end encryption.',
+      profileActions: 'Account Actions',
+      signOut: 'Sign Out',
+      signOutTitle: 'Sign out of Sky Cloud?',
+      signOutBody:
+        'This signs the whole phone out of Sky Cloud. Your DarkChat profile and messages remain stored.',
+      signingOut: 'Signing Out...',
+      signOutHint:
+        'Signing out affects every app that uses Sky Cloud on this phone.',
+      deleteProfile: 'Delete DarkChat Profile',
+      deleteProfileTitle: 'Delete DarkChat profile?',
+      deleteProfileBody:
+        'Your identity, contacts and DarkChat conversations will be permanently deleted.',
+      deletingProfile: 'Deleting...',
       unknownIdentity: 'Unknown Identity',
       unknownIdentityBody:
         'Only continue if you expected this identity. The account is not discoverable through public search.',
@@ -1588,6 +1612,7 @@ const defaultLocales: LocaleTree = {
         invalid_voice: 'This voice message is invalid.',
         invalid_attachment: 'This photo or video is unavailable.',
         invalid_profile: 'Check your alias and privacy settings.',
+        sign_out_failed: 'Sky Cloud could not sign out.',
         rate_limited: 'Too many requests. Try again shortly.',
         gif_provider_unconfigured: 'GIF search is not configured.',
         gif_provider_unauthorized: 'The GIF provider key is invalid.',

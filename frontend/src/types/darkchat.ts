@@ -79,7 +79,7 @@ export type DarkChatMessage = {
 }
 
 export type DarkChatBootstrap = {
-  profile: DarkChatProfile
+  profile: DarkChatProfile | null
   contacts: DarkChatContact[]
   conversations: DarkChatConversationSummary[]
 }

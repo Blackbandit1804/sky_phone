@@ -117,7 +117,10 @@ local function require_profile(source)
     if not account then
         return nil, nil, error_response
     end
-    local profile = load_profile(account.id) or create_profile(account.id)
+    local profile = load_profile(account.id)
+    if not profile then
+        return nil, account, { success = false, error = "profile_not_found" }
+    end
     return profile, account
 end
 
@@ -340,9 +343,20 @@ local function valid_voice(data)
 end
 
 Bridge.Callbacks.Register("sky_phone:darkchat:bootstrap", function(source)
-    local profile, _, error_response = require_profile(source)
-    if not profile then
+    local account, error_response = SkyPhone.RequireAccount(source)
+    if not account then
         return error_response
+    end
+    local profile = load_profile(account.id)
+    if not profile then
+        return {
+            success = true,
+            data = {
+                profile = nil,
+                contacts = {},
+                conversations = {},
+            },
+        }
     end
     return {
         success = true,
@@ -352,6 +366,52 @@ Bridge.Callbacks.Register("sky_phone:darkchat:bootstrap", function(source)
             conversations = list_conversations(profile.id),
         },
     }
+end)
+
+Bridge.Callbacks.Register("sky_phone:darkchat:create-profile", function(source)
+    if not SkyPhone.AllowOperation(source, "darkchat_profile_create", 5, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local account, error_response = SkyPhone.RequireAccount(source)
+    if not account then
+        return error_response
+    end
+    local profile = load_profile(account.id) or create_profile(account.id)
+    return {
+        success = true,
+        data = {
+            profile = profile_payload(profile),
+            contacts = list_contacts(profile.id),
+            conversations = list_conversations(profile.id),
+        },
+    }
+end)
+
+Bridge.Callbacks.Register("sky_phone:darkchat:delete-profile", function(source)
+    if not SkyPhone.AllowOperation(source, "darkchat_profile_delete", 3, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local profile, account, error_response = require_profile(source)
+    if not profile then
+        return error_response
+    end
+    if not Bridge.Database.Transaction({
+        {
+            query = [[
+                DELETE conversation FROM `sky_phone_darkchat_conversations` conversation
+                JOIN `sky_phone_darkchat_members` member ON member.`conversation_id` = conversation.`id`
+                WHERE member.`profile_id` = ?
+            ]],
+            params = { profile.id },
+        },
+        {
+            query = "DELETE FROM `sky_phone_darkchat_profiles` WHERE `id` = ? AND `account_id` = ?",
+            params = { profile.id, account.id },
+        },
+    }) then
+        error("[sky_phone] Failed to delete a DarkChat profile transaction.")
+    end
+    return { success = true }
 end)
 
 Bridge.Callbacks.Register("sky_phone:darkchat:update-profile", function(source, data)

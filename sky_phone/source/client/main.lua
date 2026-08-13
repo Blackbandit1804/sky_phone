@@ -246,6 +246,8 @@ local server_callbacks = {
     "easyshare:respond",
     "easyshare:cancel",
     "darkchat:bootstrap",
+    "darkchat:create-profile",
+    "darkchat:delete-profile",
     "darkchat:update-profile",
     "darkchat:start",
     "darkchat:thread",

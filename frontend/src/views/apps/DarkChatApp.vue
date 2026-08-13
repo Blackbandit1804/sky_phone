@@ -1,37 +1,16 @@
 <script setup lang="ts">
 import {
-  kButton,
-  kCard,
-  kDialog,
-  kDialogButton,
-  kGlass,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kMessagebar,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kSearchbar,
-  kSheet,
-  kToast,
-  kToggle,
-} from 'konsta/vue'
-import {
   ArrowUpCircle,
   Bell,
   BellOff,
   Camera,
   Check,
-  ChevronLeft,
-  ChevronRight,
   Clock3,
   Copy,
   ImagePlay,
   Images,
   LockKeyhole,
+  LogOut,
   MessageCirclePlus,
   Mic,
   Plus,
@@ -41,6 +20,7 @@ import {
   ShieldCheck,
   ShieldOff,
   Trash2,
+  UserRound,
   UserMinus,
   UserPlus,
   Video,
@@ -69,6 +49,29 @@ import type { MediaType, PhoneMedia } from '@/types/media'
 import { copyText } from '@/utils/clipboard'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
 import { handleEnterAction } from '@/utils/keyboard'
+import {
+  SkyAppPage,
+  SkyButton,
+  SkyCard,
+  SkyDialog,
+  SkyDialogButton,
+  SkyEmptyState,
+  SkyField,
+  SkyGlass,
+  SkyLink,
+  SkyList,
+  SkyListItem,
+  SkyMessagebar,
+  SkyNavbar,
+  SkyPillNavigation,
+  SkyScrollArea,
+  SkySearchbar,
+  SkySettingsGroup,
+  SkySettingsRow,
+  SkySheet,
+  SkySpinner,
+  SkyToast,
+} from '@/ui'
 
 const VOICE_MAX_DURATION_MS = 60_000
 const VOICE_MAX_BYTES = 270_000
@@ -78,28 +81,6 @@ type DarkChatSelectOption = {
   value: number | string
 }
 type SelectionSheet = 'disappearing' | 'notification' | 'report'
-const darkNavbarColors = {
-  bgIos: 'bg-black',
-  textIos: 'text-white',
-}
-const darkInputColors = {
-  bgIos: 'bg-transparent',
-  labelTextFocusIos: 'text-[#0a84ff]',
-  labelTextIos: 'text-[#b8b8bd]',
-}
-const darkMessagebarColors = {
-  bgIos: 'bg-black',
-  inputBgIos: 'bg-[#1c1c1e]',
-  placeholderIos: 'placeholder-[#8e8e93]',
-  toolbarIconIos: 'fill-[#0a84ff]',
-}
-const darkSearchbarColors = {
-  inputBgIos: 'bg-transparent',
-  placeholderIos: 'placeholder-[#8e8e93]',
-}
-const darkSheetColors = {
-  bgIos: 'bg-[#111113]',
-}
 const account = useAccountStore()
 const darkchat = useDarkChatStore()
 const easyShare = useEasyShareStore()
@@ -133,6 +114,10 @@ const reportOpen = ref(false)
 const reportReason = ref('spam')
 const reportDetails = ref('')
 const selectionSheet = ref<SelectionSheet | null>(null)
+const signOutOpen = ref(false)
+const deleteProfileOpen = ref(false)
+const profileActionPending = ref(false)
+const messagesArea = ref<HTMLElement | null>(null)
 const toast = ref('')
 const sending = ref(false)
 const recording = ref(false)
@@ -213,20 +198,20 @@ function setReportDetails(event: Event): void {
   reportDetails.value = inputValue(event)
 }
 
-function setConversationNotifications(event: Event): void {
+function setConversationNotifications(value: boolean): void {
   if (!active.value) return
-  active.value.notificationsEnabled = (event.target as HTMLInputElement).checked
+  active.value.notificationsEnabled = value
   void updateConversation()
 }
 
-function setReadReceipts(event: Event): void {
+function setReadReceipts(value: boolean): void {
   if (!active.value) return
-  active.value.readReceipts = (event.target as HTMLInputElement).checked
+  active.value.readReceipts = value
   void updateConversation()
 }
 
-function setActivityVisible(event: Event): void {
-  activityVisible.value = (event.target as HTMLInputElement).checked
+function setActivityVisible(value: boolean): void {
+  activityVisible.value = value
 }
 
 function preview(conversation: DarkChatConversationSummary): string {
@@ -235,7 +220,8 @@ function preview(conversation: DarkChatConversationSummary): string {
   if (conversation.lastMessageType === 'gif') return `GIF · ${t('gif')}`
   if (conversation.lastMessageType === 'image') return `📷 ${t('photo')}`
   if (conversation.lastMessageType === 'video') return `▶ ${t('video')}`
-  if (conversation.lastMessageType === 'share') return `🔗 ${conversation.lastMessage}`
+  if (conversation.lastMessageType === 'share')
+    return `🔗 ${conversation.lastMessage}`
   if (conversation.lastMessageType === 'system') return t('securityUpdate')
   return conversation.lastMessage
 }
@@ -321,11 +307,13 @@ function systemText(body: string): string {
 
 async function scrollBottom(animate = true): Promise<void> {
   await nextTick()
-  const area = document.querySelector<HTMLElement>('.darkchat-thread__messages')
-  area?.scrollTo({
-    behavior: animate ? 'smooth' : 'auto',
-    top: area.scrollHeight,
-  })
+  const area = messagesArea.value
+  if (!area) return
+  if (!animate) {
+    area.scrollTop = area.scrollHeight
+    return
+  }
+  area.scrollTo({ behavior: 'smooth', top: area.scrollHeight })
 }
 
 async function openConversation(conversationId: string): Promise<void> {
@@ -682,6 +670,41 @@ async function saveProfile(): Promise<void> {
   }
 }
 
+async function signOut(): Promise<void> {
+  if (profileActionPending.value) return
+  profileActionPending.value = true
+  const success = await account.logout()
+  profileActionPending.value = false
+  if (!success) {
+    showToast(t('errors.sign_out_failed'))
+    return
+  }
+  signOutOpen.value = false
+  darkchat.reset()
+  screen.value = 'inbox'
+}
+
+async function deleteProfile(): Promise<void> {
+  if (profileActionPending.value) return
+  profileActionPending.value = true
+  const success = await darkchat.deleteProfile()
+  profileActionPending.value = false
+  if (!success) {
+    showToast(errorText(darkchat.lastError ?? undefined))
+    return
+  }
+  deleteProfileOpen.value = false
+  screen.value = 'inbox'
+}
+
+async function createProfile(): Promise<void> {
+  if (profileActionPending.value) return
+  profileActionPending.value = true
+  const success = await darkchat.createProfile()
+  profileActionPending.value = false
+  if (!success) showToast(errorText(darkchat.lastError ?? undefined))
+}
+
 function selectDisappearing(value: number | string): void {
   if (!active.value) {
     console.error(
@@ -907,6 +930,13 @@ watch(
   },
 )
 
+watch(
+  () => darkchat.messages.length,
+  () => {
+    if (screen.value === 'thread') void scrollBottom(false)
+  },
+)
+
 onBeforeUnmount(() => {
   discardRecording = true
   cleanupRecording()
@@ -917,24 +947,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .dc-ios {
-  --dc-accent: #0a84ff;
-  --dc-surface: #1c1c1e;
-  --dc-surface-raised: #2c2c2e;
-  --dc-border: rgb(255 255 255 / 14%);
-  --dc-label: #fff;
-  --dc-secondary: #b8b8bd;
-  --dc-tertiary: #8e8e93;
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  padding: 44px 0 0;
-  overflow: hidden;
-  color: var(--dc-label);
-  color-scheme: dark;
-  background: #000;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  --dc-accent: var(--sky-app-accent);
+  --dc-surface: var(--sky-surface);
+  --dc-surface-raised: var(--sky-surface-muted);
+  --dc-border: var(--sky-hairline);
+  --dc-label: var(--sky-text);
+  --dc-secondary: var(--sky-muted);
+  --dc-tertiary: var(--sky-muted-2);
 }
 
 .dc-ios button,
@@ -943,64 +962,42 @@ onBeforeUnmount(() => {
   font: inherit;
 }
 
-.dc-ios :deep(.bg-ios-light-glass) {
-  background: rgb(44 44 46 / 88%) !important;
-  box-shadow: 0 0 0 0.5px rgb(255 255 255 / 12%) inset !important;
-}
-
 .dc-screen,
+.dc-inbox,
+.dc-thread,
 .dc-gate {
   width: 100%;
   height: 100%;
   min-height: 0;
-  overflow-x: hidden;
 }
 
-.dc-navbar {
-  z-index: 20;
-  flex: 0 0 auto;
-  border-bottom: 0.5px solid var(--dc-border);
-  color: var(--dc-label) !important;
-  background: #000;
-}
-
-.dc-navbar > div:nth-child(2) {
-  background-image: linear-gradient(
-    to bottom,
-    #1c1c1e 0%,
-    #000 100%
-  ) !important;
-}
-
-.dc-navbar :deep(button),
-.dc-navbar :deep(a) {
-  color: var(--dc-accent);
-  font-size: 15px;
-}
-
-.dc-navbar :deep([class*='title']) {
-  letter-spacing: -0.2px;
+.dc-screen,
+.dc-inbox,
+.dc-thread {
+  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .dc-gate {
   display: grid;
-  place-items: center;
   padding: 22px;
+  place-items: center;
   text-align: center;
 }
 
 .dc-gate-card {
   width: 100%;
   margin: 0;
-  padding: 24px 18px;
-  border-color: var(--dc-border);
-  border-radius: 20px;
-  background: var(--dc-surface);
+  border-radius: 24px;
+}
+
+.dc-gate-card :deep(.sky-card__content) {
+  padding: 26px 20px;
 }
 
 .dc-gate h1,
 .dc-hero h2,
-.dc-empty h2,
 .dc-profile-hero h2 {
   margin: 12px 0 5px;
   color: var(--dc-label);
@@ -1010,8 +1007,7 @@ onBeforeUnmount(() => {
 }
 
 .dc-gate p,
-.dc-hero p,
-.dc-empty p {
+.dc-hero p {
   margin: 0;
   color: var(--dc-secondary);
   font-size: 14px;
@@ -1032,66 +1028,73 @@ onBeforeUnmount(() => {
   height: 54px;
   align-items: center;
   justify-content: center;
-  border-radius: 15px;
+  border-radius: 17px;
   color: var(--dc-accent);
-  background: rgb(10 132 255 / 14%);
+  background: var(--sky-app-accent-soft);
 }
 
 .dc-preloader {
   color: var(--dc-accent);
 }
 
-.dc-inbox,
-.dc-thread,
-.dc-scroll-screen {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+.dc-navbar-action {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  padding: 0;
+  border: 1px solid var(--dc-border);
+  border-radius: 50%;
+  color: var(--dc-label);
+  place-items: center;
 }
 
 .dc-inbox-content,
 .dc-scroll-content {
   min-height: 0;
-  overflow: auto;
-  scrollbar-width: none;
-}
-
-.dc-inbox-content::-webkit-scrollbar,
-.dc-scroll-content::-webkit-scrollbar,
-.dc-messages::-webkit-scrollbar {
-  display: none;
+  flex: 1;
 }
 
 .dc-inbox-content {
-  flex: 1;
-  padding: 10px 0 84px;
+  padding-top: 12px;
+}
+
+.dc-inbox-navbar :deep(.sky-navbar__title-container > div) {
+  transform: translateY(-6px);
+}
+
+.dc-scroll-content {
+  padding-top: 14px;
+}
+
+.dc-search {
+  width: 100%;
+  margin: 0;
 }
 
 .dc-security {
+  width: 100%;
+  min-height: 58px;
   display: flex;
-  width: calc(100% - 24px);
-  min-height: 52px;
-  margin: 0 12px 10px;
-  padding: 8px 12px;
+  margin-bottom: 12px;
+  padding: 9px 13px;
   align-items: center;
-  gap: 10px;
-  border: 0.5px solid var(--dc-border);
-  border-radius: 14px;
+  gap: 11px;
+  border: 1px solid var(--dc-border);
+  border-radius: 18px;
   color: var(--dc-label);
   text-align: left;
-  background: rgb(28 28 30 / 88%);
 }
 
 .dc-security > span {
-  display: flex;
   min-width: 0;
+  display: flex;
   flex: 1;
   flex-direction: column;
 }
 
 .dc-security strong {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .dc-security small {
@@ -1103,79 +1106,29 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.dc-security > svg:first-child,
-.dc-security > svg:last-child {
+.dc-security > svg {
   flex: 0 0 auto;
   color: var(--dc-accent);
 }
 
-.dc-search {
-  margin: 0 7px 8px;
-}
-
-.dc-search :deep(input) {
-  color: var(--dc-label);
-  font-size: 15px;
-}
-
-.dc-search :deep(input::placeholder) {
-  color: var(--dc-tertiary);
-  opacity: 1;
-}
-
 .dc-conversation-list,
-.dc-contact-list,
-.dc-settings-list,
 .dc-form-list,
-.dc-danger-list,
 .dc-action-list {
-  margin-top: 8px;
-  margin-bottom: 16px;
+  margin: 0 0 16px;
 }
 
-.dc-conversation-list :deep(ul),
-.dc-contact-list :deep(ul),
-.dc-settings-list :deep(ul),
-.dc-form-list :deep(ul),
-.dc-danger-list :deep(ul),
-.dc-action-list :deep(ul) {
-  background: var(--dc-surface);
+.dc-conversation-list :deep(.sky-list-item__row) {
+  min-height: 76px;
 }
 
-.dc-conversation :deep(button) {
-  min-height: 72px;
-  width: 100%;
-  text-align: left;
-}
-
-.dc-conversation :deep([class*='title']),
-.dc-contact-list :deep([class*='title']),
-.dc-settings-list :deep([class*='title']),
-.dc-danger-list :deep([class*='title']),
-.dc-action-list :deep([class*='title']) {
-  color: var(--dc-label);
-  font-size: 16px;
-}
-
-.dc-conversation :deep([class*='subtitle']),
-.dc-contact-list :deep([class*='subtitle']) {
-  color: var(--dc-secondary);
-  font-size: 13px;
-  line-height: 1.3;
-}
-
-.dc-conversation time {
+.dc-conversation-list :deep(.sky-list-item__after) {
   color: var(--dc-tertiary);
-  font-size: 12px;
-  font-weight: 400;
+  font-size: 11px;
+  font-weight: 500;
 }
 
-.dc-preview {
-  display: block;
-  max-width: 190px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.dc-conversation--unread :deep(.sky-list-item__title) {
+  font-weight: 760;
 }
 
 .dc-timer {
@@ -1188,9 +1141,9 @@ onBeforeUnmount(() => {
 
 .dc-avatar {
   position: relative;
-  display: inline-flex;
   width: 48px;
   height: 48px;
+  display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -1199,251 +1152,185 @@ onBeforeUnmount(() => {
   font-size: 20px;
   font-style: normal;
   font-weight: 700;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 10%) inset;
 }
 
 .dc-avatar i {
   position: absolute;
   top: 0;
   right: 0;
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
   border: 2px solid var(--dc-surface);
   border-radius: 50%;
   background: var(--dc-accent);
 }
 
 .dc-avatar--small {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   font-size: 17px;
 }
 
-.dc-avatar--header {
-  width: 34px;
-  height: 34px;
-  font-size: 14px;
-}
-
 .dc-avatar--profile {
-  width: 76px;
-  height: 76px;
+  width: 78px;
+  height: 78px;
   font-size: 30px;
 }
 
 .dc-empty {
-  display: flex;
   min-height: 270px;
-  padding: 36px 30px;
-  align-items: center;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.dc-new-chat {
-  position: absolute;
-  z-index: 22;
-  right: 16px;
-  bottom: 23px;
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: var(--dc-accent);
-  box-shadow: 0 5px 18px rgb(0 0 0 / 38%);
-}
-
-.dc-scroll-content {
-  flex: 1;
-  padding: 14px 0 36px;
 }
 
 .dc-hero,
 .dc-qr-card {
-  margin: 0 12px 16px;
-  border-color: var(--dc-border);
-  border-radius: 18px;
-  color: var(--dc-label);
-  background: var(--dc-surface);
-  text-align: center;
+  margin: 0 0 16px;
+  border-radius: 22px;
 }
 
 .dc-hero {
-  padding: 18px 12px;
+  text-align: center;
 }
 
 .dc-primary {
-  width: calc(100% - 32px);
-  min-height: 47px;
-  margin: 8px 16px 18px;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  background: var(--dc-accent);
+  margin: 0 2px 22px;
 }
 
-.dc-primary:disabled {
-  opacity: 0.42;
+.dc-contacts-group {
+  margin-bottom: 18px;
 }
 
-.dc-section-title {
-  margin: 18px 18px 7px;
+.dc-contact-badge {
+  display: inline-flex;
+  padding: 4px 7px;
+  align-items: center;
+  gap: 3px;
+  border-radius: 999px;
+  color: var(--dc-accent);
+  background: var(--sky-app-accent-soft);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.dc-contacts-empty {
+  min-height: 78px;
+  display: flex;
+  padding: 16px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   color: var(--dc-secondary);
   font-size: 13px;
-  font-weight: 500;
-  text-transform: uppercase;
-}
-
-.dc-form-list :deep(input) {
-  color: var(--dc-label);
-  font-size: 16px;
-}
-
-.dc-form-list :deep(label),
-.dc-form-list :deep([class*='label']) {
-  color: var(--dc-secondary);
-  font-size: 12px;
-}
-
-.dc-form-list :deep(.text-black),
-.dc-settings-list :deep(.text-black) {
-  color: var(--dc-label) !important;
+  list-style: none;
 }
 
 .dc-qr-card {
-  display: flex;
-  width: calc(100% - 24px);
-  min-height: 226px;
-  padding: 18px;
+  display: grid;
+  padding: 14px;
+  grid-template-columns: 72px 1fr;
   align-items: center;
-  flex-direction: column;
-  justify-content: center;
-  gap: 12px;
+  gap: 13px;
 }
 
 .dc-faux-qr {
+  width: 72px;
+  height: 72px;
   display: grid;
-  width: 82px;
-  height: 82px;
-  place-items: center;
   border-radius: 16px;
-  color: #111;
-  background: #fff;
+  color: #050505;
+  background: #f5f5f7;
+  place-items: center;
 }
 
 .dc-qr-card > div:nth-child(2) {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
 }
 
 .dc-qr-card strong {
-  color: var(--dc-label);
+  overflow: hidden;
   font-size: 15px;
+  text-overflow: ellipsis;
 }
 
 .dc-qr-card small {
-  color: var(--dc-secondary);
-  font-size: 12px;
-}
-
-.dc-qr-card :deep(button) {
-  gap: 7px;
-  font-size: 14px;
-}
-
-.dc-thread-navbar :deep([class*='title']) {
-  overflow: visible;
-}
-
-.dc-thread-identity {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  color: var(--dc-label) !important;
-  text-align: left;
-}
-
-.dc-thread-identity > span:last-child {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-
-.dc-thread-identity strong {
-  max-width: 130px;
-  overflow: hidden;
-  font-size: 15px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dc-thread-identity small {
+  margin-top: 4px;
   color: var(--dc-secondary);
   font-size: 11px;
-  font-weight: 400;
+  line-height: 1.35;
+}
+
+.dc-qr-card :deep(.sky-button) {
+  grid-column: 1 / -1;
 }
 
 .dc-thread-meta {
+  min-height: 28px;
   display: flex;
-  min-height: 29px;
   padding: 5px 12px;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  border-bottom: 0.5px solid var(--dc-border);
+  gap: 4px;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--dc-border);
   color: var(--dc-secondary);
-  font-size: 12px;
+  background: var(--sky-surface);
+  font-size: 10px;
 }
 
 .dc-thread-meta span {
-  display: inline-flex;
-  gap: 4px;
+  color: var(--dc-tertiary);
 }
 
 .dc-messages {
-  display: flex;
   min-height: 0;
-  flex: 1;
+  display: flex;
   padding: 12px 10px 10px;
-  overflow-y: auto;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 7px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: none;
+}
+
+.dc-messages::-webkit-scrollbar {
+  display: none;
 }
 
 .dc-day {
   align-self: center;
-  margin: 3px 0 8px;
-  padding: 4px 9px;
-  border-radius: 999px;
+  margin: auto 0 8px;
+  padding: 5px 9px;
+  border-radius: 10px;
   color: var(--dc-secondary);
-  font-size: 12px;
-  background: var(--dc-surface);
+  background: var(--dc-surface-raised);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .dc-system {
   display: inline-flex;
-  align-self: center;
-  max-width: 88%;
-  margin: 4px 0;
+  margin: 4px auto;
+  padding: 5px 9px;
   align-items: center;
   gap: 5px;
+  border-radius: 10px;
   color: var(--dc-secondary);
-  font-size: 12px;
-  line-height: 1.35;
+  background: rgb(44 44 46 / 82%);
+  font-size: 10px;
   text-align: center;
 }
 
 .dc-message {
   position: relative;
+  max-width: 82%;
   display: flex;
-  max-width: 79%;
-  min-width: 64px;
-  padding: 8px 11px 6px;
+  padding: 9px 13px 7px;
+  flex: 0 0 auto;
   flex-direction: column;
-  gap: 3px;
   border: 0;
   color: var(--dc-label);
   text-align: left;
@@ -1452,88 +1339,93 @@ onBeforeUnmount(() => {
 
 .dc-message--received {
   align-self: flex-start;
-  border-radius: 18px 18px 18px 5px;
+  border-radius: 20px 20px 20px 5px;
   background: var(--dc-surface-raised);
 }
 
 .dc-message--sent {
   align-self: flex-end;
-  border-radius: 18px 18px 5px;
+  border-radius: 20px 20px 5px;
   background: var(--dc-accent);
 }
 
 .dc-message--failed {
-  outline: 1px solid #ff453a;
+  box-shadow: 0 0 0 1px #ff453a inset;
 }
 
 .dc-message-body {
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.28;
   white-space: pre-wrap;
 }
 
 .dc-message > img,
 .dc-message > video {
-  width: min(100%, 220px);
-  max-height: 230px;
+  width: 100%;
+  max-height: 220px;
+  margin-bottom: 4px;
   border-radius: 12px;
   object-fit: cover;
 }
 
 .dc-message > small {
+  margin-top: 3px;
   align-self: flex-end;
-  color: rgb(255 255 255 / 72%);
-  font-size: 10.5px;
-  line-height: 1.2;
+  color: rgb(255 255 255 / 68%);
+  font-size: 9px;
 }
 
 .dc-reply-preview {
+  width: 100%;
   display: flex;
-  max-width: 100%;
+  margin-bottom: 5px;
   padding: 5px 7px;
   align-items: center;
   gap: 5px;
   overflow: hidden;
   border-left: 2px solid currentColor;
-  border-radius: 6px;
-  color: rgb(255 255 255 / 82%);
-  font-size: 12px;
+  border-radius: 5px;
+  background: rgb(0 0 0 / 14%);
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: rgb(0 0 0 / 16%);
 }
 
 .dc-reactions {
-  align-self: flex-end;
-  font-size: 13px;
+  position: absolute;
+  right: 4px;
+  bottom: -12px;
+  padding: 1px 5px;
+  border: 1px solid var(--dc-border);
+  border-radius: 9px;
+  background: var(--dc-surface-raised);
+  font-size: 11px;
 }
 
 .dc-replying {
   display: flex;
-  min-height: 48px;
-  padding: 7px 12px;
+  padding: 8px 12px;
   align-items: center;
   gap: 9px;
-  border-top: 0.5px solid var(--dc-border);
+  border-top: 1px solid var(--dc-border);
   background: var(--dc-surface);
 }
 
 .dc-replying > span {
-  display: flex;
   min-width: 0;
+  display: flex;
   flex: 1;
   flex-direction: column;
 }
 
 .dc-replying small {
   color: var(--dc-accent);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .dc-replying strong {
   overflow: hidden;
-  color: var(--dc-label);
-  font-size: 13px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1543,70 +1435,62 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  border-top: 0.5px solid var(--dc-border);
-  background: #000;
+  border-top: 1px solid var(--dc-border);
+  background: var(--dc-surface);
 }
 
-.dc-attachments :deep(button) {
+.dc-attachments :deep(.sky-button) {
+  min-width: 0;
   min-height: 42px;
-  gap: 6px;
-  justify-content: flex-start;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .dc-gif-panel {
-  max-height: 300px;
-  margin: 0;
-  padding: 10px;
-  overflow-y: auto;
-  border-color: var(--dc-border);
-  border-radius: 16px 16px 0 0;
-  background: var(--dc-surface);
+  max-height: 260px;
+  margin: 0 8px 8px;
+  overflow: auto;
+  flex: 0 1 auto;
 }
 
 .dc-gif-panel header {
   display: flex;
-  padding: 3px 4px 9px;
+  margin-bottom: 8px;
   align-items: center;
   justify-content: space-between;
-  font-size: 16px;
 }
 
 .dc-gif-grid {
   display: grid;
-  margin-top: 7px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 8px;
+  grid-template-columns: repeat(3, 1fr);
   gap: 5px;
 }
 
 .dc-gif-grid button {
-  padding: 0;
   overflow: hidden;
   border: 0;
-  border-radius: 9px;
+  border-radius: 7px;
+  aspect-ratio: 1;
   background: var(--dc-surface-raised);
 }
 
 .dc-gif-grid img {
-  display: block;
   width: 100%;
-  height: 86px;
+  height: 100%;
   object-fit: cover;
 }
 
 .dc-recorder {
+  min-height: 56px;
   display: flex;
-  min-height: 58px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   align-items: center;
-  gap: 8px;
-  border-top: 0.5px solid var(--dc-border);
-  background: var(--dc-surface);
+  gap: 9px;
 }
 
 .dc-recorder > i {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: #ff453a;
 }
@@ -1618,772 +1502,481 @@ onBeforeUnmount(() => {
 }
 
 .dc-recorder > span {
-  display: flex;
-  height: 28px;
   min-width: 0;
+  height: 25px;
+  display: flex;
   flex: 1;
   align-items: center;
   gap: 1px;
-  overflow: hidden;
 }
 
 .dc-recorder b {
-  width: 2px;
-  flex: 0 0 auto;
-  border-radius: 2px;
+  min-width: 1px;
+  flex: 1;
+  border-radius: 1px;
   background: var(--dc-accent);
 }
 
-.dc-composer {
+.dc-composer-pill {
+  box-sizing: border-box;
+  min-width: 0;
+  margin: var(--sky-space-2)
+    calc(var(--sky-page-gutter) + var(--sky-safe-area-right))
+    calc(var(--sky-safe-area-bottom) + 10px)
+    calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
+  overflow: hidden;
   flex: 0 0 auto;
-  padding-bottom: 2px;
-  border-top: 0.5px solid var(--dc-border);
-  background: #000;
+  border-radius: var(--sky-radius-pill);
 }
 
-.dc-composer :deep(.k-toolbar) {
-  border: 0 !important;
-  background: #000 !important;
+.dc-composer-row {
+  display: flex;
+  margin: var(--sky-space-2)
+    calc(var(--sky-page-gutter) + var(--sky-safe-area-right))
+    calc(var(--sky-safe-area-bottom) + 10px)
+    calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
+  align-items: center;
+  gap: var(--sky-space-2);
+  flex: 0 0 auto;
 }
 
-.dc-composer :deep(.k-glass) {
-  border: 0.5px solid #38383a;
-  background: var(--dc-surface) !important;
-  box-shadow: none !important;
+.dc-composer-row .dc-composer-pill {
+  margin: 0;
+  flex: 1 1 auto;
 }
 
-.dc-composer :deep(textarea) {
-  min-height: 36px;
-  max-height: 90px;
-  color: var(--dc-label);
-  font-size: 16px;
-  line-height: 1.3;
-}
-
-.dc-composer :deep(textarea::placeholder) {
-  color: var(--dc-tertiary);
-  opacity: 1;
-}
-
-.dc-composer :deep(button) {
+.dc-composer-action {
+  width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
+  display: grid;
+  padding: 0;
+  overflow: hidden;
+  flex: 0 0 var(--sky-touch-target);
+  border-radius: 50%;
   color: var(--dc-accent);
+  place-items: center;
 }
 
-.dc-composer :deep(button.active) {
+.dc-composer-action.active {
   color: #fff;
   background: var(--dc-accent);
 }
 
+.dc-composer {
+  min-width: 0;
+  padding: 6px;
+  background: transparent;
+}
+
+.dc-composer :deep(textarea) {
+  min-height: var(--sky-touch-target);
+  border-radius: var(--sky-radius-pill);
+  padding: 12px 14px;
+}
+
+.dc-composer :deep(.sky-messagebar__right) {
+  margin-right: 0;
+}
+
 .dc-profile-hero {
   display: flex;
-  padding: 12px 20px 18px;
+  padding: 18px 14px 22px;
   align-items: center;
   flex-direction: column;
   text-align: center;
 }
 
 .dc-profile-hero h2 {
-  font-size: 22px;
+  margin-bottom: 1px;
 }
 
-.dc-profile-hero :deep(button) {
-  gap: 6px;
-  font-size: 14px;
+.dc-profile-hero :deep(.sky-button) {
+  min-height: 34px;
+  padding: 5px 10px;
+  font-size: 13px;
 }
 
 .dc-profile-hero > small {
-  color: var(--dc-secondary);
-  font-size: 12px;
-}
-
-.dc-settings-list :deep(li),
-.dc-danger-list :deep(li) {
-  min-height: 50px;
-}
-
-.dc-settings-list :deep(svg),
-.dc-danger-list :deep(svg) {
-  color: var(--dc-accent);
+  color: var(--dc-tertiary);
+  font-size: 11px;
 }
 
 .dc-setting-value {
+  max-width: 120px;
   display: block;
-  max-width: 132px;
   overflow: hidden;
-  color: var(--dc-secondary);
-  font-size: 13px;
+  color: var(--dc-tertiary);
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dc-select-row :deep([class*='inner']) {
-  min-width: 0;
-}
-
-.dc-select-row :deep(.darkchat-select-control) {
-  margin-top: 8px;
-}
-
-.dc-danger-list :deep([class*='title']),
-.dc-danger-list :deep(svg),
-.dc-danger-row :deep([class*='title']),
+.dc-danger-row :deep(.sky-list-item__title),
 .dc-danger-row :deep(svg),
 .dc-danger-text {
-  color: #ff453a !important;
+  color: var(--sky-danger);
 }
 
 .dc-privacy-note {
   display: flex;
-  margin: 0 20px;
+  margin: 4px 16px 22px;
   align-items: flex-start;
   gap: 8px;
-  color: var(--dc-secondary);
-  font-size: 13px;
+  color: var(--dc-tertiary);
+  font-size: 11px;
   line-height: 1.4;
 }
 
 .dc-privacy-note svg {
   flex: 0 0 auto;
-  margin-top: 1px;
-  color: var(--dc-accent);
-}
-
-.dc-dialog :deep([class*='contentWrap']) {
-  color: var(--dc-label);
-}
-
-.dc-dialog :deep([class*='title']) {
-  color: var(--dc-label);
-  font-size: 18px;
 }
 
 .dc-dialog p {
-  margin: 8px 0 12px;
+  margin: 8px 0;
   color: var(--dc-secondary);
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .dc-dialog-icon {
-  display: grid;
   width: 48px;
   height: 48px;
-  margin: 2px auto 8px;
-  place-items: center;
-  border-radius: 14px;
+  display: grid;
+  margin: 4px auto 10px;
+  border-radius: 50%;
   color: var(--dc-accent);
-  background: rgb(10 132 255 / 14%);
+  background: var(--sky-app-accent-soft);
+  place-items: center;
 }
 
 .dc-dialog-icon--danger {
-  color: #ff453a;
+  color: var(--sky-danger);
   background: rgb(255 69 58 / 14%);
 }
 
 .dc-dialog-id {
   display: block;
-  padding: 9px;
+  margin-top: 10px;
+  padding: 8px;
   border-radius: 9px;
-  color: var(--dc-label);
-  font-size: 14px;
-  background: rgb(255 255 255 / 8%);
-}
-
-.dc-action-sheet :deep(.k-sheet) {
-  max-height: 72%;
-  padding: 7px 0 32px;
-  overflow-y: auto;
-  border-radius: 20px 20px 0 0;
-  color: var(--dc-label);
-  background: #111113;
-}
-
-.dc-selection-sheet :deep(.k-sheet) {
-  z-index: 1300;
-  padding-top: 9px;
-}
-
-.dc-selection-sheet h3 {
-  margin: 2px 20px 10px;
-  color: var(--dc-label);
-  font-size: 17px;
-  font-weight: 650;
-  letter-spacing: -0.2px;
+  color: var(--dc-accent);
+  background: var(--dc-surface-raised);
+  font-size: 13px;
   text-align: center;
 }
 
-.dc-selection-list {
-  max-height: 330px;
-  overflow-y: auto;
+.dc-action-sheet :deep(.sky-sheet__panel) {
+  padding: 6px 0 calc(var(--sky-safe-area-bottom) + 12px);
 }
 
-.dc-selection-list :deep(svg) {
-  color: var(--dc-accent);
+.dc-selection-sheet :deep(.sky-sheet__panel) {
+  max-height: 72%;
 }
 
-.dc-report-reason {
-  margin: 8px 0 0;
+.dc-selection-sheet h3 {
+  margin: 5px 16px 11px;
+  color: var(--dc-label);
+  font-size: 17px;
+  text-align: center;
 }
 
 .dc-sheet-handle {
   width: 36px;
   height: 5px;
-  margin: 0 auto 10px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 28%);
+  margin: 6px auto 10px;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 24%);
 }
 
 .dc-reaction-row {
-  display: grid;
-  margin: 0 12px 10px;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 5px;
+  display: flex;
+  padding: 3px 11px 10px;
+  justify-content: space-between;
 }
 
 .dc-reaction-row button {
-  display: grid;
-  min-width: 0;
-  aspect-ratio: 1;
-  place-items: center;
-  border: 0;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--dc-border);
   border-radius: 50%;
-  font-size: 20px;
   background: var(--dc-surface-raised);
+  font-size: 20px;
 }
 
 .dc-sheet-cancel {
-  width: calc(100% - 32px);
-  margin: 0 16px 8px;
-  color: var(--dc-accent);
-  background: var(--dc-surface);
+  width: calc(100% - 24px);
+  margin: 2px 12px 0;
+}
+
+.dc-report-reason {
+  margin: 12px 0 8px;
 }
 
 .dc-toast {
-  color: var(--dc-label);
-  font-size: 14px;
-  line-height: 1.35;
+  z-index: 150;
 }
 
 .dc-message :deep(.darkchat-voice) {
-  min-width: 180px;
+  color: #fff;
 }
 
 .dc-message :deep(.darkchat-voice__time),
 .dc-message :deep(.darkchat-voice__speed) {
-  color: rgb(255 255 255 / 80%);
-  font-size: 11px;
+  color: rgb(255 255 255 / 72%);
 }
 
-@media (max-height: 650px) {
-  .dc-ios {
-    padding-top: 42px;
+@media (max-width: 360px) {
+  .dc-message {
+    max-width: 86%;
   }
 
-  .dc-security {
-    min-height: 46px;
+  .dc-attachments :deep(.sky-button) {
+    padding-inline: 8px;
+    font-size: 10px;
   }
-
-  .dc-conversation :deep(button) {
-    min-height: 66px;
-  }
-
-  .dc-avatar {
-    width: 44px;
-    height: 44px;
-  }
-
-  .dc-avatar--header {
-    width: 32px;
-    height: 32px;
-  }
-}
-
-/* DarkChat follows the native Messages layout and only keeps privacy-specific accents. */
-.dc-inbox {
-  position: relative;
-  padding-bottom: 74px;
-}
-
-.dc-sms-inbox-header {
-  z-index: 30;
-  display: grid;
-  height: 52px;
-  padding: 0 14px;
-  flex: 0 0 auto;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  border-bottom: 0.5px solid var(--dc-border);
-  background: rgb(0 0 0 / 92%);
-  backdrop-filter: saturate(180%) blur(22px);
-}
-
-.dc-sms-inbox-header > strong {
-  color: var(--dc-label);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.35px;
-}
-
-.dc-sms-inbox-header > button {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  margin-left: auto;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--dc-accent);
-}
-
-.dc-sms-inbox-header .dc-sms-edit {
-  width: auto;
-  min-width: 44px;
-  margin: 0;
-  padding: 0 10px;
-  justify-self: start;
-  border-radius: 18px;
-  font-size: 14px;
-}
-
-.dc-sms-security {
-  display: grid;
-  width: 100%;
-  min-height: 46px;
-  padding: 7px 16px;
-  flex: 0 0 auto;
-  align-items: center;
-  grid-template-columns: 17px minmax(0, 1fr);
-  column-gap: 7px;
-  border: 0;
-  border-bottom: 0.5px solid var(--dc-border);
-  color: #f5f5f7;
-  background: #000;
-}
-
-.dc-sms-security > svg {
-  grid-row: 1 / 3;
-  color: var(--dc-accent);
-}
-
-.dc-sms-security span {
-  align-self: end;
-  font-size: 13px;
-  font-weight: 550;
-  line-height: 1.2;
-}
-
-.dc-sms-security small {
-  max-width: 100%;
-  align-self: start;
-  overflow: hidden;
-  color: #b8b8bd;
-  font-size: 11.5px;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dc-inbox .dc-inbox-content {
-  padding: 0 14px 12px;
-}
-
-.dc-sms-conversation {
-  position: relative;
-  display: flex;
-  width: 100%;
-  min-height: 72px;
-  padding: 8px 0 8px 7px;
-  align-items: center;
-  gap: 11px;
-  border: 0;
-  color: var(--dc-label);
-  text-align: left;
-  background: transparent;
-}
-
-.dc-sms-conversation::after {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 66px;
-  height: 0.5px;
-  background: var(--dc-border);
-  content: '';
-}
-
-.dc-sms-conversation:active {
-  border-radius: 13px;
-  background: var(--dc-surface);
-  transform: scale(0.985);
-}
-
-.dc-sms-unread {
-  position: absolute;
-  left: -7px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--dc-accent);
-}
-
-.dc-sms-conversation-body {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.dc-sms-conversation-body > span {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 14px;
-  align-items: center;
-  gap: 4px;
-}
-
-.dc-sms-conversation-body strong {
-  overflow: hidden;
-  font-size: 15px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dc-sms-conversation--unread strong {
-  font-weight: 750;
-}
-
-.dc-sms-conversation-body time,
-.dc-sms-conversation-body svg {
-  color: var(--dc-tertiary);
-}
-
-.dc-sms-conversation-body time {
-  font-size: 11px;
-}
-
-.dc-sms-conversation-body > small {
-  min-height: 17px;
-  overflow: hidden;
-  color: var(--dc-secondary);
-  font-size: 13px;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dc-sms-conversation-body em {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--dc-tertiary);
-  font-size: 11.5px;
-  font-style: normal;
-}
-
-.dc-sms-inbox-toolbar {
-  position: absolute;
-  z-index: 35;
-  right: 12px;
-  bottom: 26px;
-  left: 12px;
-  display: flex;
-  height: 44px;
-  align-items: center;
-  gap: 9px;
-}
-
-.dc-sms-search {
-  min-width: 0;
-  margin: 0;
-  flex: 1;
-}
-
-.dc-sms-inbox-toolbar > button {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--dc-accent);
-}
-
-.dc-sms-chat-header {
-  position: relative;
-  height: 122px;
-  flex: 0 0 auto;
-  border-bottom: 0.5px solid var(--dc-border);
-  background: #000;
-}
-
-.dc-sms-back {
-  position: absolute;
-  z-index: 2;
-  top: 13px;
-  left: 14px;
-  display: grid;
-  width: 44px;
-  height: 44px;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--dc-accent);
-}
-
-.dc-sms-chat-contact {
-  position: absolute;
-  top: 5px;
-  left: 50%;
-  display: flex;
-  width: 170px;
-  margin-left: -85px;
-  align-items: center;
-  flex-direction: column;
-  color: var(--dc-label);
-  background: transparent;
-  transform: none;
-  transform-origin: center;
-}
-
-.dc-sms-chat-contact:active {
-  transform: scale(0.97);
-}
-
-.dc-avatar--chat {
-  width: 58px;
-  height: 58px;
-  margin-bottom: 6px;
-  border: 2px solid #000;
-  font-size: 23px;
-}
-
-.dc-sms-chat-contact > span:nth-child(2) {
-  display: flex;
-  min-width: 0;
-  min-height: 23px;
-  padding: 3px 11px;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  border: 0.5px solid var(--dc-border);
-  border-radius: 16px;
-  background: var(--dc-surface);
-}
-
-.dc-sms-chat-contact strong {
-  max-width: 150px;
-  overflow: hidden;
-  font-size: 14px;
-  line-height: 1.05;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dc-sms-chat-contact small {
-  color: var(--dc-secondary);
-  font-size: 9.5px;
-  line-height: 1.05;
-}
-
-.dc-sms-chat-contact > svg {
-  position: absolute;
-  right: 2px;
-  bottom: 9px;
-  color: var(--dc-tertiary);
-}
-
-.dc-thread .dc-message--received {
-  border-radius: 20px 20px 20px 5px;
-  background: #29292c;
-}
-
-.dc-thread .dc-message--sent {
-  border-radius: 20px 20px 5px;
-  background: var(--dc-accent);
-}
-
-.dc-thread .dc-message {
-  padding: 9px 13px 7px;
 }
 </style>
 
 <template>
-  <k-page component="main" class="darkchat-page dc-ios dark">
+  <SkyAppPage
+    class="darkchat-page dc-ios"
+    :label="t('name')"
+    :dark="true"
+    accent="#0a84ff"
+    accent-soft="rgb(10 132 255 / 18%)"
+  >
     <section v-if="!signedIn" class="dc-gate">
-      <k-card class="dc-gate-card" outline>
+      <SkyCard class="dc-gate-card" outline>
         <span class="dc-icon-tile"><LockKeyhole :size="28" /></span>
         <h1>{{ t('name') }}</h1>
         <p>{{ t('signInBody') }}</p>
         <small>{{ t('signInHint') }}</small>
-      </k-card>
+      </SkyCard>
     </section>
 
     <section v-else-if="darkchat.loading && !darkchat.profile" class="dc-gate">
-      <k-preloader class="dc-preloader" />
+      <SkySpinner class="dc-preloader" />
       <p>{{ phone.t('Common.loading') }}</p>
     </section>
 
-    <template v-else-if="darkchat.profile">
+    <section v-else-if="!darkchat.profile" class="dc-gate">
+      <SkyEmptyState
+        :title="t('createIdentity')"
+        :body="t('createIdentityBody')"
+      >
+        <template #icon><ShieldCheck :size="30" /></template>
+        <template #actions>
+          <SkyButton
+            large
+            rounded
+            :disabled="profileActionPending"
+            @click="createProfile"
+          >
+            {{
+              profileActionPending
+                ? phone.t('Common.loading')
+                : t('createIdentity')
+            }}
+          </SkyButton>
+        </template>
+      </SkyEmptyState>
+    </section>
+
+    <template v-else>
       <section v-if="screen === 'inbox'" class="dc-screen dc-inbox">
-        <header class="dc-sms-inbox-header">
-          <k-glass
-            component="button"
-            type="button"
-            class="dc-sms-edit"
-            @click="openProfile"
-            >{{ phone.t('Common.edit') }}</k-glass
-          >
-          <strong>{{ t('name') }}</strong>
-          <k-glass
-            component="button"
-            type="button"
-            :aria-label="t('security')"
-            @click="openProfile"
-            ><ShieldCheck :size="21"
-          /></k-glass>
-        </header>
-        <button
-          type="button"
-          class="dc-sms-security"
-          @click="copyIdentity(darkchat.profile.darkId)"
+        <SkyNavbar
+          class="dc-inbox-navbar"
+          :title="t('name')"
+          :subtitle="t('privateNetwork')"
+          variant="large"
         >
-          <LockKeyhole :size="12" /><span>{{ t('privateNetwork') }}</span
-          ><small>{{ darkchat.profile.darkId }}</small>
-        </button>
-        <div class="dc-inbox-content">
-          <div
-            v-if="filteredConversations.length"
-            class="dc-sms-conversation-list"
+          <template #right>
+            <SkyGlass
+              component="button"
+              class="dc-navbar-action"
+              :aria-label="t('myIdentity')"
+              @click="openProfile"
+            >
+              <UserRound :size="20" />
+            </SkyGlass>
+          </template>
+          <template #subnavbar>
+            <SkySearchbar
+              v-model="search"
+              class="dc-search"
+              :label="phone.t('Common.search')"
+              :placeholder="phone.t('Common.search')"
+              :clear-label="phone.t('Common.clear')"
+            />
+          </template>
+        </SkyNavbar>
+
+        <SkyScrollArea with-tabbar class="dc-inbox-content">
+          <SkyGlass
+            component="button"
+            class="dc-security"
+            @click="copyIdentity(darkchat.profile.darkId)"
           >
-            <button
+            <LockKeyhole :size="17" />
+            <span>
+              <strong>{{ t('privateNetwork') }}</strong>
+              <small>{{ darkchat.profile.darkId }}</small>
+            </span>
+            <Copy :size="16" />
+          </SkyGlass>
+
+          <SkyList
+            v-if="filteredConversations.length"
+            inset
+            strong
+            class="dc-conversation-list"
+          >
+            <SkyListItem
               v-for="conversation in filteredConversations"
               :key="conversation.id"
-              type="button"
-              class="dc-sms-conversation"
-              :class="{ 'dc-sms-conversation--unread': conversation.unread }"
+              link
+              link-component="button"
+              contacts
+              strong-title="auto"
+              :title="conversation.peer.alias"
+              :subtitle="preview(conversation)"
+              :class="{ 'dc-conversation--unread': conversation.unread }"
               @click="openConversation(conversation.id)"
             >
-              <i v-if="conversation.unread" class="dc-sms-unread" />
-              <span
-                class="dc-avatar"
-                :style="{
-                  background: avatarGradient(conversation.peer.avatarSeed),
-                }"
-                >{{ avatarGlyph(conversation.peer.avatarSeed) }}</span
-              >
-              <span class="dc-sms-conversation-body"
-                ><span
-                  ><strong>{{ conversation.peer.alias }}</strong
-                  ><time>{{ formatDate(conversation.lastMessageAt) }}</time
-                  ><ChevronRight :size="14" /></span
-                ><small>{{ preview(conversation) }}</small
-                ><em v-if="conversation.disappearingSeconds !== 0"
-                  ><Clock3 :size="11" />{{
-                    timerLabel(conversation.disappearingSeconds)
-                  }}</em
-                ></span
-              >
-            </button>
-          </div>
-          <div v-else class="dc-empty">
-            <span class="dc-icon-tile"><ShieldCheck :size="27" /></span>
-            <h2>{{ search ? t('noResults') : t('noChats') }}</h2>
-            <p>{{ search ? t('noResultsBody') : t('noChatsBody') }}</p>
-          </div>
-        </div>
-        <footer class="dc-sms-inbox-toolbar">
-          <k-searchbar
-            v-model="search"
-            class="dc-sms-search"
-            :placeholder="phone.t('Common.search')"
-            :colors="darkSearchbarColors"
-            :input-style="{ color: 'var(--dc-label)' }"
-          />
-          <k-glass
-            component="button"
-            type="button"
-            :aria-label="t('newChat')"
-            @click="screen = 'new'"
-            ><MessageCirclePlus :size="21"
-          /></k-glass>
-        </footer>
+              <template #media>
+                <span
+                  class="dc-avatar"
+                  :style="{
+                    background: avatarGradient(conversation.peer.avatarSeed),
+                  }"
+                >
+                  {{ avatarGlyph(conversation.peer.avatarSeed) }}
+                  <i v-if="conversation.unread" />
+                </span>
+              </template>
+              <template #after>
+                <time>{{ formatDate(conversation.lastMessageAt) }}</time>
+              </template>
+              <template v-if="conversation.disappearingSeconds !== 0" #footer>
+                <span class="dc-timer">
+                  <Clock3 :size="11" />
+                  {{ timerLabel(conversation.disappearingSeconds) }}
+                </span>
+              </template>
+            </SkyListItem>
+          </SkyList>
+
+          <SkyEmptyState
+            v-else
+            class="dc-empty"
+            :title="search ? t('noResults') : t('noChats')"
+            :body="search ? t('noResultsBody') : t('noChatsBody')"
+          >
+            <template #icon><ShieldCheck :size="27" /></template>
+          </SkyEmptyState>
+        </SkyScrollArea>
+
+        <SkyPillNavigation
+          layout="compact"
+          align="end"
+          :label="t('newChat')"
+          class="dc-inbox-navigation"
+        >
+          <SkyButton raised rounded @click="screen = 'new'">
+            <MessageCirclePlus :size="19" />{{ t('newChat') }}
+          </SkyButton>
+        </SkyPillNavigation>
       </section>
 
-      <section v-else-if="screen === 'new'" class="dc-screen dc-scroll-screen">
-        <k-navbar
+      <section v-else-if="screen === 'new'" class="dc-screen">
+        <SkyNavbar
           :title="t('newChat')"
-          class="dc-navbar"
-          :colors="darkNavbarColors"
-          ><template #left
-            ><k-navbar-back-link
-              :text="phone.t('Common.back')"
-              @click="back" /></template
-        ></k-navbar>
-        <div class="dc-scroll-content">
-          <k-card class="dc-hero" outline>
+          show-back
+          back-appearance="surface"
+          :back-label="phone.t('Common.back')"
+          @back="back"
+        />
+        <SkyScrollArea class="dc-scroll-content">
+          <SkyCard class="dc-hero" outline>
             <span class="dc-icon-tile"><QrCode :size="27" /></span>
             <h2>{{ t('connectPrivately') }}</h2>
             <p>{{ t('newChatBody') }}</p>
-          </k-card>
-          <k-list inset strong class="dc-form-list"
-            ><k-list-input
+          </SkyCard>
+          <SkyList
+            inset
+            strong
+            class="dc-form-list"
+            @keydown.enter="handleEnterAction($event, requestStart)"
+          >
+            <SkyField
               :label="t('darkIdOrInvite')"
               :value="identifier"
-              :colors="darkInputColors"
               autocomplete="off"
               placeholder="dark:7X4K-P92D"
               clear-button
+              :clear-label="phone.t('Common.clear')"
               @input="setIdentifier"
               @clear="identifier = ''"
-              @keydown.enter="handleEnterAction($event, requestStart)"
-          /></k-list>
-          <k-button
+            />
+          </SkyList>
+          <SkyButton
             large
             rounded
+            block
             class="dc-primary"
             :disabled="!identifier.trim()"
             @click="requestStart()"
-            >{{ t('continue') }}</k-button
           >
+            {{ t('continue') }}
+          </SkyButton>
 
-          <h3 class="dc-section-title">{{ t('contacts') }}</h3>
-          <k-list
-            v-if="darkchat.contacts.length"
-            inset
-            strong
-            class="dc-contact-list"
+          <SkySettingsGroup
+            :title="t('contacts')"
+            :footer="t('contactsHint')"
+            class="dc-contacts-group"
           >
-            <k-list-item
+            <SkyListItem
               v-for="contact in darkchat.contacts"
               :key="contact.id"
               link
               link-component="button"
-              content-class="w-full"
+              contacts
+              strong-title="auto"
               :title="contact.alias"
               :subtitle="contact.darkId"
               @click="requestStart(contact.darkId)"
             >
-              <template #media
-                ><span
+              <template #media>
+                <span
                   class="dc-avatar dc-avatar--small"
                   :style="{ background: avatarGradient(contact.avatarSeed) }"
-                  >{{ avatarGlyph(contact.avatarSeed) }}</span
-                ></template
-              >
-            </k-list-item>
-          </k-list>
-          <k-card class="dc-qr-card" outline :content-wrap="false">
+                >
+                  {{ avatarGlyph(contact.avatarSeed) }}
+                </span>
+              </template>
+              <template #after>
+                <span class="dc-contact-badge">
+                  <LockKeyhole :size="11" />{{ t('private') }}
+                </span>
+              </template>
+            </SkyListItem>
+            <li v-if="!darkchat.contacts.length" class="dc-contacts-empty">
+              <UserRound :size="22" />{{ t('noContacts') }}
+            </li>
+          </SkySettingsGroup>
+
+          <SkyCard class="dc-qr-card" outline :content-wrap="false">
             <div class="dc-faux-qr"><QrCode :size="58" /></div>
             <div>
-              <strong>{{ darkchat.profile.darkId }}</strong
-              ><small>{{ t('shareIdentity') }}</small>
+              <strong>{{ darkchat.profile.darkId }}</strong>
+              <small>{{ t('shareIdentity') }}</small>
             </div>
-            <k-button
-              tonal
-              rounded
-              @click="shareIdentity"
-              ><Share2 :size="16" />{{ phone.t('Apps.easyShare.shareProfile') }}</k-button
-            >
-          </k-card>
-        </div>
+            <SkyButton tonal rounded @click="shareIdentity">
+              <Share2 :size="16" />
+              {{ phone.t('Apps.easyShare.shareProfile') }}
+            </SkyButton>
+          </SkyCard>
+        </SkyScrollArea>
       </section>
 
       <section
@@ -2391,39 +1984,32 @@ onBeforeUnmount(() => {
         class="dc-screen dc-thread"
         :class="{ 'dc-thread--panel': attachmentPanelOpen }"
       >
-        <header class="dc-sms-chat-header">
-          <k-glass
-            component="button"
-            type="button"
-            class="dc-sms-back"
-            :aria-label="phone.t('Common.back')"
-            @click="back"
-            ><ChevronLeft :size="28" :stroke-width="2.35"
-          /></k-glass>
-          <button
-            type="button"
-            class="dc-sms-chat-contact"
-            @click="openContact"
-          >
-            <span
-              class="dc-avatar dc-avatar--chat"
-              :style="{ background: avatarGradient(active.peer.avatarSeed) }"
-              >{{ avatarGlyph(active.peer.avatarSeed) }}</span
-            ><span
-              ><strong>{{ active.peer.alias }}</strong
-              ><small v-if="active.peer.activityVisible">{{
-                t('activeNow')
-              }}</small></span
-            ><ChevronRight :size="13" />
-          </button>
-        </header>
+        <SkyNavbar
+          :title="active.peer.alias"
+          :subtitle="active.peer.activityVisible ? t('activeNow') : ''"
+          show-back
+          back-appearance="surface"
+          :back-label="phone.t('Common.back')"
+          @back="back"
+        >
+          <template #right>
+            <SkyGlass
+              component="button"
+              class="dc-navbar-action"
+              :aria-label="t('contactSecurity')"
+              @click="openContact"
+            >
+              <UserRound :size="19" />
+            </SkyGlass>
+          </template>
+        </SkyNavbar>
         <div class="dc-thread-meta">
-          <LockKeyhole :size="13" />{{ t('serverPrivate')
-          }}<span v-if="active.disappearingSeconds !== 0"
-            >· {{ timerLabel(active.disappearingSeconds) }}</span
-          >
+          <LockKeyhole :size="13" />{{ t('serverPrivate') }}
+          <span v-if="active.disappearingSeconds !== 0">
+            · {{ timerLabel(active.disappearingSeconds) }}
+          </span>
         </div>
-        <div class="darkchat-thread__messages dc-messages">
+        <div ref="messagesArea" class="darkchat-thread__messages dc-messages">
           <div class="dc-day">{{ dayLabel(active.createdAt) }}</div>
           <template
             v-for="message in darkchat.messages"
@@ -2442,9 +2028,9 @@ onBeforeUnmount(() => {
               ]"
               @click="selectedMessage = message"
             >
-              <span v-if="message.replyBody" class="dc-reply-preview"
-                ><Reply :size="12" />{{ message.replyBody }}</span
-              >
+              <span v-if="message.replyBody" class="dc-reply-preview">
+                <Reply :size="12" />{{ message.replyBody }}
+              </span>
               <img
                 v-if="
                   message.messageType === 'gif' ||
@@ -2452,6 +2038,7 @@ onBeforeUnmount(() => {
                 "
                 :src="message.mediaPayload || undefined"
                 :alt="message.messageType === 'gif' ? 'GIF' : t('photo')"
+                @load="scrollBottom(false)"
               />
               <video
                 v-else-if="message.messageType === 'video'"
@@ -2459,13 +2046,16 @@ onBeforeUnmount(() => {
                 controls
                 playsinline
                 preload="metadata"
+                @loadedmetadata="scrollBottom(false)"
               />
               <DarkChatVoiceMessage
                 v-else-if="message.messageType === 'voice'"
                 :message="message"
               />
               <SharedContentCard
-                v-else-if="message.messageType === 'share' && message.sharePayload"
+                v-else-if="
+                  message.messageType === 'share' && message.sharePayload
+                "
                 :payload="message.sharePayload"
                 variant="darkchat"
               />
@@ -2473,11 +2063,12 @@ onBeforeUnmount(() => {
               <span
                 v-if="Object.keys(message.reactions).length"
                 class="dc-reactions"
-                >{{ Object.values(message.reactions).join(' ') }}</span
               >
-              <small
-                >{{ formatDate(message.createdAt)
-                }}<template v-if="message.direction === 'sent'">
+                {{ Object.values(message.reactions).join(' ') }}
+              </span>
+              <small>
+                {{ formatDate(message.createdAt) }}
+                <template v-if="message.direction === 'sent'">
                   ·
                   {{
                     message.deliveryStatus === 'sending'
@@ -2487,55 +2078,50 @@ onBeforeUnmount(() => {
                         : message.readAt
                           ? t('read')
                           : t('delivered')
-                  }}</template
-                ></small
-              >
+                  }}
+                </template>
+              </small>
             </button>
           </template>
         </div>
 
         <div v-if="replyTo" class="dc-replying">
-          <Reply :size="15" /><span
-            ><small>{{ t('replying') }}</small
-            ><strong>{{ replyTo.body || t(replyTo.messageType) }}</strong></span
-          ><k-link
-            component="button"
-            type="button"
-            icon-only
-            @click="replyTo = null"
-            ><X :size="17"
-          /></k-link>
+          <Reply :size="15" />
+          <span>
+            <small>{{ t('replying') }}</small>
+            <strong>{{ replyTo.body || t(replyTo.messageType) }}</strong>
+          </span>
+          <SkyLink icon-only @click="replyTo = null"><X :size="17" /></SkyLink>
         </div>
         <div v-if="attachmentOpen" class="dc-attachments">
-          <k-button tonal rounded @click="openMediaApp('photos', 'photo')"
-            ><Images :size="19" />{{ t('attachPhoto') }}</k-button
-          >
-          <k-button tonal rounded @click="openMediaApp('camera', 'photo')"
-            ><Camera :size="19" />{{ t('takePhoto') }}</k-button
-          >
-          <k-button tonal rounded @click="openEmojiPanel"
-            ><span>😀</span>{{ t('emoji') }}</k-button
-          >
-          <k-button tonal rounded @click="openGifPanel"
-            ><ImagePlay :size="19" />{{ t('attachGif') }}</k-button
-          >
-          <k-button tonal rounded @click="openMediaApp('photos', 'video')"
-            ><Video :size="19" />{{ t('attachVideo') }}</k-button
-          >
+          <SkyButton tonal rounded @click="openMediaApp('photos', 'photo')">
+            <Images :size="19" />{{ t('attachPhoto') }}
+          </SkyButton>
+          <SkyButton tonal rounded @click="openMediaApp('camera', 'photo')">
+            <Camera :size="19" />{{ t('takePhoto') }}
+          </SkyButton>
+          <SkyButton tonal rounded @click="openEmojiPanel">
+            <span>😀</span>{{ t('emoji') }}
+          </SkyButton>
+          <SkyButton tonal rounded @click="openGifPanel">
+            <ImagePlay :size="19" />{{ t('attachGif') }}
+          </SkyButton>
+          <SkyButton tonal rounded @click="openMediaApp('photos', 'video')">
+            <Video :size="19" />{{ t('attachVideo') }}
+          </SkyButton>
         </div>
-        <k-card v-if="gifOpen" class="dc-gif-panel" outline>
+        <SkyCard v-if="gifOpen" class="dc-gif-panel" outline>
           <header>
-            <strong>{{ t('gifs') }}</strong
-            ><k-link
-              component="button"
-              type="button"
-              @click="gifOpen = false"
-              >{{ phone.t('Common.done') }}</k-link
-            >
+            <strong>{{ t('gifs') }}</strong>
+            <SkyLink @click="gifOpen = false">{{
+              phone.t('Common.done')
+            }}</SkyLink>
           </header>
-          <k-searchbar
+          <SkySearchbar
             :value="gifQuery"
+            :label="t('searchGifs')"
             :placeholder="t('searchGifs')"
+            :clear-label="phone.t('Common.clear')"
             @input="updateGifSearch"
             @clear="clearGifSearch"
           />
@@ -2549,13 +2135,11 @@ onBeforeUnmount(() => {
               <img :src="gif.previewUrl" :alt="gif.title" />
             </button>
           </div>
-          <k-button
-            v-if="gifHasMore && !gifLoading"
-            clear
-            @click="loadGifs()"
-            >{{ t('loadMore') }}</k-button
-          ><k-preloader v-if="gifLoading" class="dc-preloader" />
-        </k-card>
+          <SkyButton v-if="gifHasMore && !gifLoading" clear @click="loadGifs()">
+            {{ t('loadMore') }}
+          </SkyButton>
+          <SkySpinner v-if="gifLoading" class="dc-preloader" />
+        </SkyCard>
         <FullEmojiPicker
           v-if="emojiOpen"
           @close="emojiOpen = false"
@@ -2574,290 +2158,298 @@ onBeforeUnmount(() => {
             <X :size="15" />
           </button>
         </div>
-        <div v-if="recording" class="dc-recorder">
-          <k-link
-            component="button"
-            type="button"
-            icon-only
-            @click="cancelRecording"
-            ><X :size="19" /></k-link
-          ><i /><time>{{ recordingTime() }}</time
-          ><span
-            ><b
+        <SkyGlass v-if="recording" class="dc-composer-pill dc-recorder">
+          <SkyLink icon-only @click="cancelRecording"><X :size="19" /></SkyLink>
+          <i />
+          <time>{{ recordingTime() }}</time>
+          <span>
+            <b
               v-for="(level, index) in recordingLevels"
               :key="index"
-              :style="{ height: `${Math.max(3, level * 23)}px` }" /></span
-          ><k-link
+              :style="{ height: `${Math.max(3, level * 23)}px` }"
+            />
+          </span>
+          <SkyLink icon-only @click="stopRecording">
+            <ArrowUpCircle :size="29" />
+          </SkyLink>
+        </SkyGlass>
+        <div v-else class="dc-composer-row">
+          <SkyGlass
             component="button"
-            type="button"
-            icon-only
-            @click="stopRecording"
-            ><ArrowUpCircle :size="29"
-          /></k-link>
+            class="dc-composer-action"
+            :class="{ active: attachmentOpen || attachmentPanelOpen }"
+            :aria-label="phone.t('Common.add')"
+            @click="toggleAttachmentPanel"
+          >
+            <Plus :size="23" />
+          </SkyGlass>
+          <SkyGlass class="dc-composer-pill">
+            <SkyMessagebar
+              class="dc-composer"
+              :outline="false"
+              :value="draft"
+              :placeholder="t('message')"
+              @input="setDraft"
+              @keydown.enter.exact="handleEnterAction($event, sendText)"
+            >
+              <template #right>
+                <SkyLink
+                  v-if="draft.trim() || shareDraft"
+                  icon-only
+                  @click="sendText"
+                >
+                  <ArrowUpCircle :size="27" />
+                </SkyLink>
+                <SkyLink v-else icon-only @click="startRecording">
+                  <Mic :size="20" />
+                </SkyLink>
+              </template>
+            </SkyMessagebar>
+          </SkyGlass>
         </div>
-        <k-messagebar
-          v-else
-          class="dc-composer"
-          :value="draft"
-          :placeholder="t('message')"
-          :colors="darkMessagebarColors"
-          @input="setDraft"
-          @keydown.enter.exact="handleEnterAction($event, sendText)"
-        >
-          <template #left
-            ><k-link
-              component="button"
-              type="button"
-              icon-only
-              :class="{ active: attachmentOpen || attachmentPanelOpen }"
-              @click="toggleAttachmentPanel"
-              ><Plus :size="23" /></k-link
-          ></template>
-          <template #right
-            ><k-link
-              v-if="draft.trim() || shareDraft"
-              component="button"
-              type="button"
-              icon-only
-              @click="sendText"
-              ><ArrowUpCircle :size="27" /></k-link
-            ><k-link
-              v-else
-              component="button"
-              type="button"
-              icon-only
-              @click="startRecording"
-              ><Mic :size="20" /></k-link
-          ></template>
-        </k-messagebar>
       </section>
 
-      <section
-        v-else-if="screen === 'contact' && active"
-        class="dc-screen dc-scroll-screen"
-      >
-        <k-navbar
+      <section v-else-if="screen === 'contact' && active" class="dc-screen">
+        <SkyNavbar
           :title="t('contactSecurity')"
-          class="dc-navbar"
-          :colors="darkNavbarColors"
-          ><template #left
-            ><k-navbar-back-link
-              :text="phone.t('Common.back')"
-              @click="back" /></template
-        ></k-navbar>
-        <div class="dc-scroll-content">
+          show-back
+          back-appearance="surface"
+          :back-label="phone.t('Common.back')"
+          @back="back"
+        />
+        <SkyScrollArea class="dc-scroll-content">
           <div class="dc-profile-hero">
             <span
               class="dc-avatar dc-avatar--profile"
               :style="{ background: avatarGradient(active.peer.avatarSeed) }"
-              >{{ avatarGlyph(active.peer.avatarSeed) }}</span
             >
+              {{ avatarGlyph(active.peer.avatarSeed) }}
+            </span>
             <h2>{{ active.peer.alias }}</h2>
-            <k-button clear rounded @click="copyIdentity(active.peer.darkId)"
-              >{{ active.peer.darkId }}<Copy :size="14" /></k-button
-            ><small>{{
+            <SkyButton clear rounded @click="copyIdentity(active.peer.darkId)">
+              {{ active.peer.darkId }}<Copy :size="14" />
+            </SkyButton>
+            <small>{{
               t('chatSince', { date: dayLabel(active.createdAt) })
             }}</small>
           </div>
-          <k-list inset strong class="dc-settings-list">
-            <k-list-item :title="t('notifications')"
-              ><template #media><Bell :size="20" /></template
-              ><template #after
-                ><k-toggle
-                  :checked="active.notificationsEnabled"
-                  @change="setConversationNotifications" /></template
-            ></k-list-item>
-            <k-list-item :title="t('readReceipts')"
-              ><template #media><Check :size="20" /></template
-              ><template #after
-                ><k-toggle
-                  :checked="active.readReceipts"
-                  @change="setReadReceipts" /></template
-            ></k-list-item>
-            <k-list-item
-              link
-              link-component="button"
-              content-class="w-full"
-              :title="t('disappearing')"
-              @click="selectionSheet = 'disappearing'"
+
+          <SkySettingsGroup :title="t('chatSettings')">
+            <SkySettingsRow
+              kind="toggle"
+              :title="t('notifications')"
+              :model-value="active.notificationsEnabled"
+              @update:model-value="setConversationNotifications"
             >
-              <template #media><Clock3 :size="20" /></template>
-              <template #after
-                ><span class="dc-setting-value">{{
-                  timerLabel(active.disappearingSeconds)
-                }}</span></template
-              >
-            </k-list-item>
-          </k-list>
-          <k-list inset strong class="dc-form-list"
-            ><k-list-input
+              <template #leading><Bell :size="20" /></template>
+            </SkySettingsRow>
+            <SkySettingsRow
+              kind="toggle"
+              :title="t('readReceipts')"
+              :model-value="active.readReceipts"
+              @update:model-value="setReadReceipts"
+            >
+              <template #leading><Check :size="20" /></template>
+            </SkySettingsRow>
+            <SkySettingsRow
+              kind="navigation"
+              :title="t('disappearing')"
+              :value="timerLabel(active.disappearingSeconds)"
+              @activate="selectionSheet = 'disappearing'"
+            >
+              <template #leading><Clock3 :size="20" /></template>
+            </SkySettingsRow>
+          </SkySettingsGroup>
+
+          <SkyList inset strong class="dc-form-list">
+            <SkyField
               :label="t('contactAlias')"
               :value="contactAliasDraft"
-              :colors="darkInputColors"
               maxlength="32"
               @input="setContactAliasDraft"
-          /></k-list>
-          <k-button large rounded class="dc-primary" @click="saveContact"
-            ><UserPlus :size="18" />{{
-              active.peer.isContact ? t('saveContact') : t('addContact')
-            }}</k-button
+            />
+          </SkyList>
+          <SkyButton
+            large
+            rounded
+            block
+            class="dc-primary"
+            @click="saveContact"
           >
-          <k-list inset strong class="dc-danger-list">
-            <k-list-item
+            <UserPlus :size="18" />
+            {{ active.peer.isContact ? t('saveContact') : t('addContact') }}
+          </SkyButton>
+
+          <SkySettingsGroup :title="t('contactActions')">
+            <SkySettingsRow
               v-if="active.peer.isContact"
-              link
-              link-component="button"
-              content-class="w-full"
+              kind="action"
               :title="t('removeContact')"
-              @click="removeContact"
-              ><template #media><UserMinus :size="20" /></template
-            ></k-list-item>
-            <k-list-item
-              link
-              link-component="button"
-              content-class="w-full"
+              @activate="removeContact"
+            >
+              <template #leading><UserMinus :size="20" /></template>
+            </SkySettingsRow>
+            <SkySettingsRow
+              kind="action"
+              tone="danger"
               :title="active.peer.blocked ? t('unblock') : t('block')"
-              @click="toggleBlock"
-              ><template #media><ShieldOff :size="20" /></template
-            ></k-list-item>
-            <k-list-item
-              link
-              link-component="button"
-              content-class="w-full"
+              @activate="toggleBlock"
+            >
+              <template #leading><ShieldOff :size="20" /></template>
+            </SkySettingsRow>
+            <SkySettingsRow
+              kind="action"
+              tone="danger"
               :title="t('report')"
-              @click="beginReport()"
-              ><template #media><BellOff :size="20" /></template
-            ></k-list-item>
-            <k-list-item
-              link
-              link-component="button"
-              content-class="w-full"
+              @activate="beginReport()"
+            >
+              <template #leading><BellOff :size="20" /></template>
+            </SkySettingsRow>
+            <SkySettingsRow
+              kind="action"
+              tone="danger"
               :title="t('clearChat')"
-              @click="clearChat"
-              ><template #media><Trash2 :size="20" /></template
-            ></k-list-item>
-          </k-list>
-        </div>
+              @activate="clearChat"
+            >
+              <template #leading><Trash2 :size="20" /></template>
+            </SkySettingsRow>
+          </SkySettingsGroup>
+        </SkyScrollArea>
       </section>
 
-      <section
-        v-else-if="screen === 'profile'"
-        class="dc-screen dc-scroll-screen"
-      >
-        <k-navbar
+      <section v-else-if="screen === 'profile'" class="dc-screen">
+        <SkyNavbar
           :title="t('myIdentity')"
-          class="dc-navbar"
-          :colors="darkNavbarColors"
-          ><template #left
-            ><k-navbar-back-link
-              :text="phone.t('Common.back')"
-              @click="back" /></template
-          ><template #right
-            ><k-link component="button" type="button" @click="saveProfile">{{
-              phone.t('Common.done')
-            }}</k-link></template
-          ></k-navbar
+          show-back
+          back-appearance="surface"
+          :back-label="phone.t('Common.back')"
+          @back="back"
         >
-        <div class="dc-scroll-content">
+          <template #right>
+            <SkyLink @click="saveProfile">{{ phone.t('Common.done') }}</SkyLink>
+          </template>
+        </SkyNavbar>
+        <SkyScrollArea class="dc-scroll-content">
           <div class="dc-profile-hero">
             <span
               class="dc-avatar dc-avatar--profile"
               :style="{
                 background: avatarGradient(darkchat.profile.avatarSeed),
               }"
-              >{{ avatarGlyph(darkchat.profile.avatarSeed) }}</span
             >
+              {{ avatarGlyph(darkchat.profile.avatarSeed) }}
+            </span>
             <h2>{{ darkchat.profile.alias }}</h2>
-            <k-button
+            <SkyButton
               clear
               rounded
               @click="copyIdentity(darkchat.profile.darkId)"
-              >{{ darkchat.profile.darkId }}<Copy :size="14"
-            /></k-button>
+            >
+              {{ darkchat.profile.darkId }}<Copy :size="14" />
+            </SkyButton>
           </div>
-          <k-list inset strong class="dc-form-list"
-            ><k-list-input
+
+          <SkyList inset strong class="dc-form-list">
+            <SkyField
               :label="t('alias')"
               :value="aliasDraft"
-              :colors="darkInputColors"
               maxlength="32"
               @input="setAliasDraft"
-          /></k-list>
-          <k-list inset strong class="dc-settings-list">
-            <k-list-item
-              link
-              link-component="button"
-              content-class="w-full"
-              title-wrap-class="gap-2"
-              @click="selectionSheet = 'notification'"
+            />
+          </SkyList>
+
+          <SkySettingsGroup :title="t('privacySettings')">
+            <SkySettingsRow
+              kind="navigation"
+              :title="t('notificationPrivacy')"
+              :value="
+                notificationOptions.find(
+                  (option) => option.value === notificationMode,
+                )?.label
+              "
+              @activate="selectionSheet = 'notification'"
             >
-              <template #media><Bell :size="20" /></template>
-              <template #title>
-                <span class="whitespace-nowrap text-[15px]">
-                  {{ t('notificationPrivacy') }}
-                </span>
-              </template>
-              <template #after
-                ><span class="dc-setting-value max-w-[106px] text-[12px]">{{
-                  notificationOptions.find(
-                    (option) => option.value === notificationMode,
-                  )?.label
-                }}</span></template
-              >
-            </k-list-item>
-            <k-list-item :title="t('shareActivity')"
-              ><template #media><ShieldCheck :size="20" /></template
-              ><template #after
-                ><k-toggle
-                  :checked="activityVisible"
-                  @change="setActivityVisible" /></template
-            ></k-list-item>
-          </k-list>
-          <k-card class="dc-qr-card" outline :content-wrap="false"
-            ><div class="dc-faux-qr"><QrCode :size="58" /></div>
+              <template #leading><Bell :size="20" /></template>
+            </SkySettingsRow>
+            <SkySettingsRow
+              kind="toggle"
+              :title="t('shareActivity')"
+              :model-value="activityVisible"
+              @update:model-value="setActivityVisible"
+            >
+              <template #leading><ShieldCheck :size="20" /></template>
+            </SkySettingsRow>
+          </SkySettingsGroup>
+
+          <SkyCard class="dc-qr-card" outline :content-wrap="false">
+            <div class="dc-faux-qr"><QrCode :size="58" /></div>
             <div>
-              <strong>{{ darkchat.profile.inviteCode }}</strong
-              ><small>{{ t('inviteCode') }}</small>
+              <strong>{{ darkchat.profile.inviteCode }}</strong>
+              <small>{{ t('inviteCode') }}</small>
             </div>
-            <k-button
+            <SkyButton
               tonal
               rounded
               @click="copyIdentity(darkchat.profile.inviteCode)"
-              ><Copy :size="16" />{{ t('copyInvite') }}</k-button
-            ></k-card
-          >
+            >
+              <Copy :size="16" />{{ t('copyInvite') }}
+            </SkyButton>
+          </SkyCard>
           <p class="dc-privacy-note">
             <LockKeyhole :size="17" />{{ t('privacyDisclaimer') }}
           </p>
-        </div>
+
+          <SkySettingsGroup
+            :title="t('profileActions')"
+            :footer="t('signOutHint')"
+          >
+            <SkySettingsRow
+              kind="action"
+              :title="t('signOut')"
+              @activate="signOutOpen = true"
+            >
+              <template #leading><LogOut :size="20" /></template>
+            </SkySettingsRow>
+            <SkySettingsRow
+              kind="action"
+              tone="danger"
+              :title="t('deleteProfile')"
+              @activate="deleteProfileOpen = true"
+            >
+              <template #leading><Trash2 :size="20" /></template>
+            </SkySettingsRow>
+          </SkySettingsGroup>
+        </SkyScrollArea>
       </section>
     </template>
 
-    <k-dialog
+    <SkyDialog
       :opened="safetyOpen"
       class="dc-dialog"
       @backdropclick="safetyOpen = false"
+      @escape="safetyOpen = false"
     >
-      <template #title>{{ t('unknownIdentity') }}</template
-      ><span class="dc-dialog-icon"><ShieldCheck :size="25" /></span>
+      <template #title>{{ t('unknownIdentity') }}</template>
+      <span class="dc-dialog-icon"><ShieldCheck :size="25" /></span>
       <p>{{ t('unknownIdentityBody') }}</p>
       <strong class="dc-dialog-id">{{ pendingIdentifier }}</strong>
-      <template #buttons
-        ><k-dialog-button @click="safetyOpen = false">{{
-          phone.t('Common.cancel')
-        }}</k-dialog-button
-        ><k-dialog-button strong @click="confirmStart">{{
-          t('openSecureChat')
-        }}</k-dialog-button></template
-      >
-    </k-dialog>
+      <template #buttons>
+        <SkyDialogButton @click="safetyOpen = false">
+          {{ phone.t('Common.cancel') }}
+        </SkyDialogButton>
+        <SkyDialogButton strong @click="confirmStart">
+          {{ t('openSecureChat') }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
 
-    <div class="dc-action-sheet">
-      <k-sheet
-        :opened="Boolean(selectedMessage)"
-        :colors="darkSheetColors"
-        @backdropclick="selectedMessage = null"
-      >
+    <SkySheet
+      :opened="Boolean(selectedMessage)"
+      :aria-label="t('messageActions')"
+      class="dc-action-sheet"
+      @backdropclick="selectedMessage = null"
+      @escape="selectedMessage = null"
+    >
       <template v-if="selectedMessage">
         <div class="dc-sheet-handle" />
         <div class="dc-reaction-row">
@@ -2870,134 +2462,138 @@ onBeforeUnmount(() => {
             {{ reaction }}
           </button>
         </div>
-        <k-list inset strong class="dc-action-list">
-          <k-list-item
+        <SkyList inset strong class="dc-action-list">
+          <SkyListItem
             link
             link-component="button"
-            content-class="w-full"
             :title="phone.t('Apps.easyShare.name')"
             @click="shareMessage(selectedMessage)"
-            ><template #media><Share2 :size="20" /></template
-          ></k-list-item>
-          <k-list-item
+          >
+            <template #media><Share2 :size="20" /></template>
+          </SkyListItem>
+          <SkyListItem
             link
             link-component="button"
-            content-class="w-full"
             :title="t('reply')"
             @click="beginReply(selectedMessage)"
-            ><template #media><Reply :size="20" /></template
-          ></k-list-item>
-          <k-list-item
+          >
+            <template #media><Reply :size="20" /></template>
+          </SkyListItem>
+          <SkyListItem
             v-if="
               selectedMessage.messageType === 'text' ||
               selectedMessage.messageType === 'emoji'
             "
             link
             link-component="button"
-            content-class="w-full"
             :title="t('copy')"
             @click="copyMessage(selectedMessage)"
-            ><template #media><Copy :size="20" /></template
-          ></k-list-item>
-          <k-list-item
+          >
+            <template #media><Copy :size="20" /></template>
+          </SkyListItem>
+          <SkyListItem
             link
             link-component="button"
-            content-class="w-full"
             :title="t('deleteForMe')"
             @click="messageAction(selectedMessage, 'delete_me')"
-            ><template #media><Trash2 :size="20" /></template
-          ></k-list-item>
-          <k-list-item
+          >
+            <template #media><Trash2 :size="20" /></template>
+          </SkyListItem>
+          <SkyListItem
             v-if="selectedMessage.direction === 'sent'"
             link
             link-component="button"
-            content-class="w-full"
             class="dc-danger-row"
             :title="t('deleteForBoth')"
             @click="messageAction(selectedMessage, 'delete_all')"
-            ><template #media><Trash2 :size="20" /></template
-          ></k-list-item>
-          <k-list-item
+          >
+            <template #media><Trash2 :size="20" /></template>
+          </SkyListItem>
+          <SkyListItem
             v-if="selectedMessage.direction === 'received'"
             link
             link-component="button"
-            content-class="w-full"
             class="dc-danger-row"
             :title="t('report')"
             @click="beginReport(selectedMessage)"
-            ><template #media><ShieldOff :size="20" /></template
-          ></k-list-item> </k-list
-        ><k-button
+          >
+            <template #media><ShieldOff :size="20" /></template>
+          </SkyListItem>
+        </SkyList>
+        <SkyButton
           large
           rounded
+          block
+          variant="secondary"
           class="dc-sheet-cancel"
           @click="selectedMessage = null"
-          >{{ phone.t('Common.cancel') }}</k-button
         >
+          {{ phone.t('Common.cancel') }}
+        </SkyButton>
       </template>
-      </k-sheet>
-    </div>
+    </SkySheet>
 
-    <k-dialog
+    <SkyDialog
       :opened="reportOpen"
       class="dc-dialog dc-report-dialog"
       @backdropclick="closeReport"
+      @escape="closeReport"
     >
-      <template #title>{{ t('reportUser') }}</template
-      ><span class="dc-dialog-icon dc-dialog-icon--danger"
-        ><ShieldOff :size="25" /></span
-      ><k-list inset strong class="dc-action-list dc-report-reason">
-        <k-list-item
+      <template #title>{{ t('reportUser') }}</template>
+      <span class="dc-dialog-icon dc-dialog-icon--danger">
+        <ShieldOff :size="25" />
+      </span>
+      <SkyList inset strong class="dc-action-list dc-report-reason">
+        <SkyListItem
           link
           link-component="button"
-          content-class="w-full"
           :title="t('reportUser')"
           @click="selectionSheet = 'report'"
         >
-          <template #after
-            ><span class="dc-setting-value">{{
-              reportOptions.find((option) => option.value === reportReason)
-                ?.label
-            }}</span></template
-          >
-        </k-list-item>
-      </k-list>
-      <k-list inset strong class="dc-form-list">
-        <k-list-input
+          <template #after>
+            <span class="dc-setting-value">
+              {{
+                reportOptions.find((option) => option.value === reportReason)
+                  ?.label
+              }}
+            </span>
+          </template>
+        </SkyListItem>
+      </SkyList>
+      <SkyList inset strong class="dc-form-list">
+        <SkyField
           type="textarea"
           :value="reportDetails"
           maxlength="500"
           :placeholder="t('reportDetails')"
-          :colors="darkInputColors"
-          input-class="text-[#f5f5f7] placeholder:text-[#8e8e93]"
           @input="setReportDetails"
         />
-      </k-list>
-      <template #buttons
-        ><k-dialog-button @click="closeReport">{{
-          phone.t('Common.cancel')
-        }}</k-dialog-button
-        ><k-dialog-button strong class="dc-danger-text" @click="submitReport">{{
-          t('submitReport')
-        }}</k-dialog-button></template
-      >
-    </k-dialog>
+      </SkyList>
+      <template #buttons>
+        <SkyDialogButton @click="closeReport">
+          {{ phone.t('Common.cancel') }}
+        </SkyDialogButton>
+        <SkyDialogButton strong class="dc-danger-text" @click="submitReport">
+          {{ t('submitReport') }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
 
-    <div class="dc-action-sheet dc-selection-sheet">
-      <k-sheet
-        :opened="selectionSheet !== null"
-        :colors="darkSheetColors"
-        @backdropclick="selectionSheet = null"
-      >
+    <SkySheet
+      :opened="selectionSheet !== null"
+      :aria-label="selectionTitle"
+      class="dc-action-sheet dc-selection-sheet"
+      @backdropclick="selectionSheet = null"
+      @escape="selectionSheet = null"
+    >
       <div class="dc-sheet-handle" />
       <h3>{{ selectionTitle }}</h3>
-      <k-list inset strong class="dc-action-list dc-selection-list">
-        <k-list-item
+      <SkyList inset strong class="dc-action-list dc-selection-list">
+        <SkyListItem
           v-for="option in selectionOptions"
           :key="option.value"
           link
           link-component="button"
-          content-class="w-full"
           :chevron="false"
           :title="option.label"
           @click="chooseSelection(option.value)"
@@ -3005,21 +2601,83 @@ onBeforeUnmount(() => {
           <template
             v-if="String(option.value) === String(selectionValue)"
             #after
-            ><Check :size="20"
-          /></template>
-        </k-list-item>
-      </k-list>
-      <k-button
+          >
+            <Check :size="20" />
+          </template>
+        </SkyListItem>
+      </SkyList>
+      <SkyButton
         large
         rounded
+        block
+        variant="secondary"
         class="dc-sheet-cancel"
         @click="selectionSheet = null"
-        >{{ phone.t('Common.cancel') }}</k-button
       >
-      </k-sheet>
-    </div>
-    <k-toast :opened="Boolean(toast)" position="center" class="dc-toast">{{
-      toast
-    }}</k-toast>
-  </k-page>
+        {{ phone.t('Common.cancel') }}
+      </SkyButton>
+    </SkySheet>
+
+    <SkyDialog
+      :opened="signOutOpen"
+      :title="t('signOutTitle')"
+      :content="t('signOutBody')"
+      @backdropclick="signOutOpen = false"
+      @escape="signOutOpen = false"
+    >
+      <template #buttons>
+        <SkyDialogButton
+          :disabled="profileActionPending"
+          @click="signOutOpen = false"
+        >
+          {{ phone.t('Common.cancel') }}
+        </SkyDialogButton>
+        <SkyDialogButton
+          strong
+          :disabled="profileActionPending"
+          @click="signOut"
+        >
+          {{ profileActionPending ? t('signingOut') : t('signOut') }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
+
+    <SkyDialog
+      :opened="deleteProfileOpen"
+      :title="t('deleteProfileTitle')"
+      :content="t('deleteProfileBody')"
+      @backdropclick="deleteProfileOpen = false"
+      @escape="deleteProfileOpen = false"
+    >
+      <template #buttons>
+        <SkyDialogButton
+          :disabled="profileActionPending"
+          @click="deleteProfileOpen = false"
+        >
+          {{ phone.t('Common.cancel') }}
+        </SkyDialogButton>
+        <SkyDialogButton
+          strong
+          class="dc-danger-text"
+          :disabled="profileActionPending"
+          @click="deleteProfile"
+        >
+          {{
+            profileActionPending
+              ? t('deletingProfile')
+              : phone.t('Common.delete')
+          }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
+
+    <SkyToast
+      :opened="Boolean(toast)"
+      position="center"
+      vertical-position="center"
+      class="dc-toast"
+    >
+      {{ toast }}
+    </SkyToast>
+  </SkyAppPage>
 </template>
