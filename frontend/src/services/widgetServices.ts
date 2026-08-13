@@ -64,6 +64,7 @@ export function useWeatherService() {
         : phone.t('Common.loading'),
     ),
     forecast: computed(() => weather.forecast),
+    loading: computed(() => weather.isLoading),
     location: computed(() =>
       phone.t(
         `Apps.weather.regions.${weather.forecast?.region ?? 'los_santos'}`,
@@ -75,17 +76,16 @@ export function useWeatherService() {
 export function useMusicService() {
   const music = useMusicStore()
   return {
-    current: computed(
-      () =>
-        music.currentTrack ?? {
-          artist: 'Music',
-          title: 'Not Playing',
-        },
-    ),
+    current: computed(() => music.currentTrack),
     next(): void {
       void music.next()
     },
     playing: computed(() => music.isPlaying),
+    progress: computed(() =>
+      music.duration > 0
+        ? Math.max(0, Math.min(100, (music.currentTime / music.duration) * 100))
+        : 0,
+    ),
     toggle(): void {
       void music.toggle()
     },

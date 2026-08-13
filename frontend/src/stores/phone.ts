@@ -3964,10 +3964,12 @@ const defaultLocales: LocaleTree = {
       weather: {
         name: 'Weather',
         description: 'Current conditions, location, and high and low.',
+        range: 'H: {high}° L: {low}°',
       },
       music: {
         name: 'Now Playing',
         description: 'Music controls and the current track.',
+        empty: 'No recently played music',
       },
       wallet: {
         name: 'Wallet',
