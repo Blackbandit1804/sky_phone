@@ -13,6 +13,7 @@ import { useRoute, useRouter } from 'vue-router'
 import PhoneHomeIndicator from '@/components/PhoneHomeIndicator.vue'
 import PhoneControlCenter from '@/components/PhoneControlCenter.vue'
 import PhoneMediaCapture from '@/components/PhoneMediaCapture.vue'
+import PhoneMemoRecorder from '@/components/PhoneMemoRecorder.vue'
 import PhoneLockScreen from '@/components/PhoneLockScreen.vue'
 import PhonePasscode from '@/components/PhonePasscode.vue'
 import PhoneNotifications from '@/components/PhoneNotifications.vue'
@@ -47,6 +48,7 @@ import { useAppStoreStore } from '@/stores/app-store'
 import { useWidgetsStore } from '@/stores/widgets'
 import { isPhoneAppId } from '@/config/apps'
 import { useNotesStore } from '@/stores/notes'
+import { useMemosStore } from '@/stores/memos'
 import { useWeatherStore } from '@/stores/weather'
 import { useEasyShareStore } from '@/stores/easyshare'
 import {
@@ -265,6 +267,7 @@ const appCatalog = useAppCatalogStore()
 const appStore = useAppStoreStore()
 const widgets = useWidgetsStore()
 const notes = useNotesStore()
+const memos = useMemosStore()
 const weather = useWeatherStore()
 const easyShare = useEasyShareStore()
 const notifications = useNotificationsStore()
@@ -377,6 +380,7 @@ function hydratePhone(payload: PhoneOpenPayload): void {
     payload.account?.email ?? '',
   )
   notes.hydrate(payload.notes ?? [])
+  memos.hydrate(payload.memos ?? [])
   clock.hydrate(payload.device?.data.alarms?.payload)
   games.hydrate(payload.device?.data.games?.payload)
   media.hydrate(payload.device?.data.media?.payload)
@@ -454,6 +458,7 @@ async function hydrateDevelopmentPhone(): Promise<void> {
         type: 'registered',
       },
     },
+    memos: [],
     notes: [],
     token: 'development',
   })
@@ -1291,6 +1296,7 @@ onBeforeUnmount(() => {
 
 <template>
   <PhoneMediaCapture />
+  <PhoneMemoRecorder />
   <RadioHud />
   <PayphoneOverlay />
   <SimPhonePicker
@@ -1419,7 +1425,7 @@ onBeforeUnmount(() => {
                   />
                 </Transition>
                 <PhoneNotifications
-                  :notification="phone.isOpen ? null : notifications.current"
+                  :notification="notifications.current"
                   @close="notifications.dismissCurrent()"
                   @open="openNotificationPreview"
                 />

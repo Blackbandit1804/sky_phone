@@ -1,4 +1,5 @@
 import {
+  AudioLines,
   Calculator,
   Bomb,
   Blocks,
@@ -48,6 +49,7 @@ import messagesIcon from '@/assets/img/app-icons/sms.webp'
 import darkChatIcon from '@/assets/img/app-icons/darkchat.webp'
 import notesIcon from '@/assets/img/app-icons/notes.webp'
 import radioIcon from '@/assets/img/app-icons/radio.webp'
+import memosIcon from '@/assets/img/app-icons/memos.webp'
 import photosIcon from '@/assets/img/app-icons/gallery.webp'
 import phoneIcon from '@/assets/img/app-icons/phone.webp'
 import settingsIcon from '@/assets/img/app-icons/settings.svg'
@@ -392,6 +394,20 @@ export const PHONE_APPS = shallowReactive<PhoneAppDefinition[]>([
     id: 'notes',
     labelKey: 'Apps.notes.name',
     route: '/apps/notes',
+  },
+  {
+    category: 'productivity',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/MemosApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 8,
+    icon: markRaw(AudioLines),
+    iconClass: '',
+    iconImage: memosIcon,
+    id: 'memos',
+    labelKey: 'Apps.memos.name',
+    route: '/apps/memos',
   },
   {
     category: 'productivity',

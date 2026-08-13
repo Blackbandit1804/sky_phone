@@ -16,6 +16,7 @@ export type BuiltinPhoneAppId =
   | 'mail'
   | 'map'
   | 'notes'
+  | 'memos'
   | 'radio'
   | 'music'
   | 'photos'

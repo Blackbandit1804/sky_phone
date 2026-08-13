@@ -1,3 +1,5 @@
+const { randomUUID } = require('node:crypto')
+
 const cors = require('cors')
 const express = require('express')
 
@@ -5,7 +7,7 @@ const app = express()
 const port = Number(process.argv[2]) || 3001
 
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '3mb' }))
 
 const lifecycleEndpoints = new Set([
   'camera:setActive',
@@ -36,6 +38,14 @@ function isoTime(offsetMilliseconds) {
 
 function unixTime(offsetSeconds = 0) {
   return Math.floor(Date.now() / 1000) + offsetSeconds
+}
+
+function memoWaveform(phase = 0) {
+  return Array.from({ length: 48 }, (_, index) =>
+    Number(
+      (0.12 + Math.abs(Math.sin((index + phase) * 0.67)) * 0.76).toFixed(3),
+    ),
+  )
 }
 
 let authenticated = true
@@ -1956,6 +1966,53 @@ let mockNotes = [
     updatedAt: Date.now() - 172_800_000,
   },
 ]
+let mockMemos = [
+  {
+    createdAt: Date.now() - 25 * 60_000,
+    durationMs: 42_100,
+    id: '4b918e0e-840e-4f35-99d7-c93b047bc3f7',
+    mediaId: 9101,
+    mimeType: 'audio/ogg',
+    note: 'Patrol route via Mission Row, Pillbox Hill and the Vespucci canals.',
+    pinned: true,
+    revision: 2,
+    sizeBytes: 132_840,
+    title: 'Night shift briefing',
+    updatedAt: Date.now() - 18 * 60_000,
+    url: 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga',
+    waveform: memoWaveform(1),
+  },
+  {
+    createdAt: Date.now() - 3 * 60 * 60_000,
+    durationMs: 18_600,
+    id: '7df6287a-a3f1-49cc-a722-a950fc9a5dd2',
+    mediaId: 9102,
+    mimeType: 'audio/ogg',
+    note: 'Check the paint, engine sound and service history before making an offer.',
+    pinned: false,
+    revision: 1,
+    sizeBytes: 61_920,
+    title: 'Sultan RS inspection',
+    updatedAt: Date.now() - 3 * 60 * 60_000,
+    url: 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga',
+    waveform: memoWaveform(5),
+  },
+  {
+    createdAt: Date.now() - 26 * 60 * 60_000,
+    durationMs: 7_400,
+    id: '0b2a0d0d-3eb7-4623-873e-829a96a9d525',
+    mediaId: 9103,
+    mimeType: 'audio/ogg',
+    note: 'Repair kit, flashlight and two bottles of water.',
+    pinned: false,
+    revision: 1,
+    sizeBytes: 26_480,
+    title: 'Supply reminder',
+    updatedAt: Date.now() - 26 * 60 * 60_000,
+    url: 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga',
+    waveform: memoWaveform(9),
+  },
+]
 let calendarEvents = [
   {
     endsAt: calendarTime(0, 10),
@@ -3479,8 +3536,16 @@ function companyWorkContext(testScenario = '') {
 }
 
 app.post('/api/:endpoint', async (request, response, next) => {
-  console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
+  console.log(
+    `[NUI] ${endpoint}`,
+    endpoint === 'memos:devCapture'
+      ? {
+          ...request.body,
+          audioDataUrl: `<${String(request.body.audioDataUrl ?? '').length} characters>`,
+        }
+      : request.body,
+  )
   if (endpoint === 'music:bootstrap') {
     response.json({ success: true, data: musicBootstrap() })
     return
@@ -7715,6 +7780,7 @@ app.post('/api/:endpoint', (request, response) => {
           name: 'Personal iFruit Phone',
           sim: mockSim,
         },
+        memos: mockMemos,
         notes: mockNotes,
         security: mockSecurity,
         token: 'development',
@@ -8170,6 +8236,7 @@ app.post('/api/:endpoint', (request, response) => {
   if (endpoint === 'device:factory-reset') {
     authenticated = false
     linkedAccount = null
+    mockMemos = []
     mockNotes = []
     mockMedia = []
     calendarEvents = []
@@ -8939,6 +9006,162 @@ app.post('/api/:endpoint', (request, response) => {
   if (endpoint === 'payphone:close') {
     mockPayphoneCall = null
     response.json({ success: true })
+    return
+  }
+  if (endpoint === 'memos:list') {
+    response.json({ success: true, data: mockMemos })
+    return
+  }
+  if (endpoint === 'memos:devCapture') {
+    const correlationId =
+      typeof request.body.correlationId === 'string'
+        ? request.body.correlationId
+        : ''
+    const title =
+      typeof request.body.title === 'string' ? request.body.title.trim() : ''
+    const note =
+      request.body.note === undefined
+        ? ''
+        : typeof request.body.note === 'string'
+          ? request.body.note.trim()
+          : null
+    const durationMs = Math.floor(Number(request.body.durationMs))
+    const mimeType =
+      request.body.mimeType === 'audio/ogg'
+        ? 'audio/ogg'
+        : ['audio/webm', 'audio/webm;codecs=opus'].includes(
+              request.body.mimeType,
+            )
+          ? 'audio/webm'
+          : null
+    const waveform = Array.isArray(request.body.waveform)
+      ? request.body.waveform.map(Number)
+      : []
+    const audioDataUrl =
+      typeof request.body.audioDataUrl === 'string'
+        ? request.body.audioDataUrl
+        : ''
+    const separator = audioDataUrl.indexOf(';base64,')
+    const audioMime =
+      separator > 5
+        ? audioDataUrl.slice(5, separator).split(';', 1)[0].toLowerCase()
+        : ''
+    const encodedAudio = separator > 0 ? audioDataUrl.slice(separator + 8) : ''
+    const validAudio =
+      Boolean(mimeType) &&
+      audioMime === mimeType &&
+      encodedAudio.length > 0 &&
+      encodedAudio.length % 4 === 0 &&
+      /^[A-Za-z0-9+/]+={0,2}$/.test(encodedAudio)
+    const sizeBytes = validAudio
+      ? Buffer.from(encodedAudio, 'base64').byteLength
+      : 0
+    if (
+      !correlationId ||
+      correlationId.length > 80 ||
+      !title ||
+      title.length > 120 ||
+      note === null ||
+      note.length > 2000 ||
+      !Number.isFinite(durationMs) ||
+      durationMs < 300 ||
+      durationMs > 300_000 ||
+      typeof request.body.pinned !== 'boolean' ||
+      waveform.length < 8 ||
+      waveform.length > 96 ||
+      waveform.some(
+        (sample) => !Number.isFinite(sample) || sample < 0 || sample > 1,
+      ) ||
+      !validAudio ||
+      sizeBytes < 1 ||
+      sizeBytes > 2 * 1024 * 1024 ||
+      mockMemos.length >= 100
+    ) {
+      response.json({ success: false, error: 'invalid_memo' })
+      return
+    }
+    const now = Date.now()
+    const memo = {
+      createdAt: now,
+      durationMs,
+      id: randomUUID(),
+      mediaId:
+        Math.max(0, ...mockMemos.map((item) => Number(item.mediaId) || 0)) + 1,
+      mimeType,
+      note,
+      pinned: request.body.pinned,
+      revision: 1,
+      sizeBytes,
+      title,
+      updatedAt: now,
+      url: audioDataUrl,
+      waveform,
+    }
+    mockMemos.unshift(memo)
+    response.json({ success: true, data: memo })
+    return
+  }
+  if (endpoint === 'memos:update') {
+    const id = typeof request.body.id === 'string' ? request.body.id : ''
+    const title =
+      typeof request.body.title === 'string' ? request.body.title.trim() : ''
+    const note =
+      request.body.note === undefined
+        ? ''
+        : typeof request.body.note === 'string'
+          ? request.body.note.trim()
+          : null
+    const revision = Math.floor(Number(request.body.revision) || 0)
+    if (
+      id.length !== 36 ||
+      !title ||
+      title.length > 120 ||
+      note === null ||
+      note.length > 2000 ||
+      typeof request.body.pinned !== 'boolean' ||
+      revision < 1
+    ) {
+      response.json({ success: false, error: 'invalid_memo' })
+      return
+    }
+    const index = mockMemos.findIndex(
+      (memo) => memo.id === id && memo.revision === revision,
+    )
+    if (index < 0) {
+      response.json({ success: false, error: 'conflict', data: mockMemos })
+      return
+    }
+    const memo = {
+      ...mockMemos[index],
+      note,
+      pinned: request.body.pinned,
+      revision: revision + 1,
+      title,
+      updatedAt: Date.now(),
+    }
+    mockMemos[index] = memo
+    mockMemos.sort(
+      (left, right) =>
+        Number(right.pinned) - Number(left.pinned) ||
+        right.updatedAt - left.updatedAt ||
+        right.id.localeCompare(left.id),
+    )
+    response.json({ success: true, data: memo })
+    return
+  }
+  if (endpoint === 'memos:delete') {
+    const id = typeof request.body.id === 'string' ? request.body.id : ''
+    if (id.length !== 36) {
+      response.json({ success: false, error: 'invalid_memo' })
+      return
+    }
+    const index = mockMemos.findIndex((memo) => memo.id === id)
+    if (index < 0) {
+      response.json({ success: false, error: 'memo_not_found' })
+      return
+    }
+    mockMemos.splice(index, 1)
+    response.json({ success: true, data: { id } })
     return
   }
   if (endpoint === 'notes:list') {

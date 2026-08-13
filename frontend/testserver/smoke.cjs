@@ -46,6 +46,7 @@ const browserDataRequests = [
   ['marketplace:profile', {}],
   ['messages:conversations', {}],
   ['messages:gifs', { query: 'party' }],
+  ['memos:list', {}],
   ['music:bootstrap', {}],
   ['notes:list', {}],
   ['pages:list', {}],
@@ -82,6 +83,89 @@ async function expectSuccess(baseUrl, endpoint, body = {}, data = false) {
 }
 
 async function verifyStatefulActions(baseUrl) {
+  const memoBootstrap = await expectSuccess(
+    baseUrl,
+    'development:bootstrap',
+    {},
+    true,
+  )
+  assert(
+    Array.isArray(memoBootstrap.memos) && memoBootstrap.memos.length >= 3,
+    'development:bootstrap did not include realistic memo data',
+  )
+  assert(
+    memoBootstrap.memos.every(
+      (memo) =>
+        typeof memo.url === 'string' &&
+        memo.url.length > 0 &&
+        Array.isArray(memo.waveform) &&
+        memo.waveform.length >= 8,
+    ),
+    'development:bootstrap returned an invalid memo response shape',
+  )
+
+  let memos = await expectSuccess(baseUrl, 'memos:list', {}, true)
+  const capturedMemo = await expectSuccess(
+    baseUrl,
+    'memos:devCapture',
+    {
+      audioDataUrl: 'data:audio/webm;base64,T2dnUw==',
+      correlationId: 'browser-smoke-memo',
+      durationMs: 1_250,
+      mimeType: 'audio/webm;codecs=opus',
+      note: 'Recorded in the browser preview.',
+      pinned: false,
+      title: 'Browser recording',
+      waveform: Array(16).fill(0.35),
+    },
+    true,
+  )
+  assert.equal(capturedMemo.title, 'Browser recording')
+  assert.equal(capturedMemo.mimeType, 'audio/webm')
+  assert.equal(capturedMemo.sizeBytes, 4)
+  assert.match(capturedMemo.id, /^[0-9a-f-]{36}$/)
+  memos = await expectSuccess(baseUrl, 'memos:list', {}, true)
+  assert(
+    memos.some((item) => item.id === capturedMemo.id),
+    'memos:devCapture did not persist',
+  )
+  await expectSuccess(baseUrl, 'memos:delete', { id: capturedMemo.id }, true)
+  memos = await expectSuccess(baseUrl, 'memos:list', {}, true)
+
+  const memo = memos.find((item) => !item.pinned)
+  assert(memo, 'memos:list did not return an editable memo')
+  const updatedMemo = await expectSuccess(
+    baseUrl,
+    'memos:update',
+    {
+      id: memo.id,
+      note: 'Updated by the browser mock smoke test.',
+      pinned: true,
+      revision: memo.revision,
+      title: 'Updated browser memo',
+    },
+    true,
+  )
+  assert.equal(updatedMemo.id, memo.id)
+  assert.equal(updatedMemo.title, 'Updated browser memo')
+  assert.equal(updatedMemo.note, 'Updated by the browser mock smoke test.')
+  assert.equal(updatedMemo.pinned, true)
+  assert.equal(updatedMemo.revision, memo.revision + 1)
+  assert(Array.isArray(updatedMemo.waveform) && updatedMemo.waveform.length > 0)
+
+  const deletedMemo = await expectSuccess(
+    baseUrl,
+    'memos:delete',
+    { id: updatedMemo.id },
+    true,
+  )
+  assert.deepEqual(deletedMemo, { id: updatedMemo.id })
+  memos = await expectSuccess(baseUrl, 'memos:list', {}, true)
+  assert(
+    !memos.some((item) => item.id === updatedMemo.id),
+    'memos:delete did not persist',
+  )
+
   const noteId = `browser-note-${Date.now()}`
   let notes = await expectSuccess(
     baseUrl,
