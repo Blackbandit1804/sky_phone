@@ -1,9 +1,13 @@
 .sky-sheet,
 .sky-action-sheet,
-.sky-dialog {
+.sky-dialog,
+.sky-panel,
+.sky-popup,
+.sky-popover {
   position: absolute;
   z-index: var(--sky-overlay-layer, 80);
   inset: 0;
+  pointer-events: none;
 }
 
 .sky-overlay-backdrop {
@@ -13,35 +17,182 @@
   height: 100%;
   border: 0;
   padding: 0;
-  background: rgba(0, 0, 0, 0.48);
+  background: var(--sky-overlay-backdrop, rgba(0, 0, 0, 0.4));
+  cursor: default;
+  pointer-events: auto;
+}
+
+.sky-sheet__panel,
+.sky-action-sheet__panel,
+.sky-dialog__panel,
+.sky-panel__panel,
+.sky-popup__panel,
+.sky-popover__panel {
+  pointer-events: auto;
+}
+
+.sky-action-rise-enter-active .sky-overlay-backdrop,
+.sky-action-rise-leave-active .sky-overlay-backdrop,
+.sky-sheet-rise-enter-active .sky-overlay-backdrop,
+.sky-sheet-rise-leave-active .sky-overlay-backdrop,
+.sky-popup-rise-enter-active .sky-overlay-backdrop,
+.sky-popup-rise-leave-active .sky-overlay-backdrop,
+.sky-panel-left-enter-active .sky-overlay-backdrop,
+.sky-panel-left-leave-active .sky-overlay-backdrop,
+.sky-panel-right-enter-active .sky-overlay-backdrop,
+.sky-panel-right-leave-active .sky-overlay-backdrop,
+.sky-popover-scale-enter-active .sky-overlay-backdrop,
+.sky-popover-scale-leave-active .sky-overlay-backdrop,
+.sky-dialog-pop-enter-active .sky-overlay-backdrop,
+.sky-dialog-pop-leave-active .sky-overlay-backdrop {
+  transition-property: opacity;
+  transition-timing-function: ease;
+}
+
+.sky-action-rise-enter-active .sky-overlay-backdrop,
+.sky-action-rise-leave-active .sky-overlay-backdrop {
+  transition-duration: 300ms;
 }
 
 .sky-sheet-rise-enter-active .sky-overlay-backdrop,
-.sky-sheet-rise-leave-active .sky-overlay-backdrop {
-  transition: opacity 220ms ease;
+.sky-sheet-rise-leave-active .sky-overlay-backdrop,
+.sky-popup-rise-enter-active .sky-overlay-backdrop,
+.sky-popup-rise-leave-active .sky-overlay-backdrop,
+.sky-panel-left-enter-active .sky-overlay-backdrop,
+.sky-panel-left-leave-active .sky-overlay-backdrop,
+.sky-panel-right-enter-active .sky-overlay-backdrop,
+.sky-panel-right-leave-active .sky-overlay-backdrop,
+.sky-popover-scale-enter-active .sky-overlay-backdrop,
+.sky-popover-scale-leave-active .sky-overlay-backdrop,
+.sky-dialog-pop-enter-active .sky-overlay-backdrop,
+.sky-dialog-pop-leave-active .sky-overlay-backdrop {
+  transition-duration: 400ms;
 }
 
+.sky-action-rise-enter-active .sky-action-sheet__panel,
+.sky-action-rise-leave-active .sky-action-sheet__panel,
 .sky-sheet-rise-enter-active .sky-sheet__panel,
 .sky-sheet-rise-leave-active .sky-sheet__panel,
 .sky-sheet-rise-enter-active .sky-action-sheet__panel,
 .sky-sheet-rise-leave-active .sky-action-sheet__panel {
-  transition:
-    opacity 220ms ease,
-    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-property: opacity, transform;
+  transition-timing-function: ease, cubic-bezier(0.22, 1, 0.36, 1);
   will-change: opacity, transform;
 }
 
+.sky-action-rise-enter-active .sky-action-sheet__panel,
+.sky-action-rise-leave-active .sky-action-sheet__panel {
+  transition-duration: 300ms;
+}
+
+.sky-sheet-rise-enter-active .sky-sheet__panel,
+.sky-sheet-rise-leave-active .sky-sheet__panel {
+  transition-duration: 400ms;
+}
+
+.sky-action-rise-enter-from .sky-overlay-backdrop,
+.sky-action-rise-leave-to .sky-overlay-backdrop,
 .sky-sheet-rise-enter-from .sky-overlay-backdrop,
-.sky-sheet-rise-leave-to .sky-overlay-backdrop {
+.sky-sheet-rise-leave-to .sky-overlay-backdrop,
+.sky-popup-rise-enter-from .sky-overlay-backdrop,
+.sky-popup-rise-leave-to .sky-overlay-backdrop,
+.sky-panel-left-enter-from .sky-overlay-backdrop,
+.sky-panel-left-leave-to .sky-overlay-backdrop,
+.sky-panel-right-enter-from .sky-overlay-backdrop,
+.sky-panel-right-leave-to .sky-overlay-backdrop,
+.sky-popover-scale-enter-from .sky-overlay-backdrop,
+.sky-popover-scale-leave-to .sky-overlay-backdrop,
+.sky-dialog-pop-enter-from .sky-overlay-backdrop,
+.sky-dialog-pop-leave-to .sky-overlay-backdrop {
   opacity: 0;
 }
 
+.sky-action-rise-enter-from .sky-action-sheet__panel,
+.sky-action-rise-leave-to .sky-action-sheet__panel,
 .sky-sheet-rise-enter-from .sky-sheet__panel,
 .sky-sheet-rise-leave-to .sky-sheet__panel,
 .sky-sheet-rise-enter-from .sky-action-sheet__panel,
 .sky-sheet-rise-leave-to .sky-action-sheet__panel {
   opacity: 0;
   transform: translateY(100%);
+}
+
+.sky-dialog-pop-enter-active .sky-dialog__panel,
+.sky-dialog-pop-leave-active .sky-dialog__panel {
+  transition:
+    opacity 400ms ease,
+    transform 400ms cubic-bezier(0, 1, 0.2, 1.05);
+  will-change: opacity, transform;
+}
+
+.sky-dialog-pop-enter-from .sky-dialog__panel,
+.sky-dialog-pop-leave-to .sky-dialog__panel {
+  opacity: 0;
+  transform: scale(0.86);
+}
+
+.sky-popup-rise-enter-active .sky-popup__panel,
+.sky-popup-rise-leave-active .sky-popup__panel {
+  transition:
+    opacity 400ms ease,
+    transform 400ms var(--sky-ease-out, ease-out);
+  will-change: opacity, transform;
+}
+
+.sky-popup-rise-enter-from .sky-popup__panel,
+.sky-popup-rise-leave-to .sky-popup__panel {
+  opacity: 0;
+  transform: translateY(100%);
+}
+
+.sky-panel-left-enter-active .sky-panel__panel,
+.sky-panel-left-leave-active .sky-panel__panel,
+.sky-panel-right-enter-active .sky-panel__panel,
+.sky-panel-right-leave-active .sky-panel__panel {
+  transition:
+    opacity 400ms ease,
+    transform 400ms var(--sky-ease-out, ease-out);
+  will-change: opacity, transform;
+}
+
+.sky-panel-left-enter-from .sky-panel__panel,
+.sky-panel-left-leave-to .sky-panel__panel {
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+.sky-panel-right-enter-from .sky-panel__panel,
+.sky-panel-right-leave-to .sky-panel__panel {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.sky-popover-scale-enter-active .sky-popover__panel,
+.sky-popover-scale-leave-active .sky-popover__panel {
+  transition:
+    opacity 400ms ease,
+    transform 400ms cubic-bezier(0, 1, 0.2, 1.05);
+  will-change: opacity, transform;
+}
+
+.sky-popover-scale-enter-from .sky-popover__panel,
+.sky-popover-scale-leave-to .sky-popover__panel {
+  opacity: 0;
+  transform: scale(0);
+}
+
+.sky-popover-scale-enter-active .sky-popover__content,
+.sky-popover-scale-leave-active .sky-popover__content {
+  transition:
+    opacity 600ms ease,
+    transform 600ms cubic-bezier(0, 1, 0.2, 1.05);
+  will-change: opacity, transform;
+}
+
+.sky-popover-scale-enter-from .sky-popover__content,
+.sky-popover-scale-leave-to .sky-popover__content {
+  opacity: 0;
+  transform: translateY(-80px);
 }
 
 .sky-sheet__panel,
@@ -52,17 +203,19 @@
   left: 0;
   max-height: 88%;
   overflow: auto;
-  border: 1px solid var(--sky-hairline);
+  border: 0;
   border-bottom: 0;
   border-radius: var(--sky-radius-sheet) var(--sky-radius-sheet) 0 0;
   background: var(--sky-surface);
   color: var(--sky-text);
-  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.22);
+  box-shadow: none;
 }
 
 .sky-action-sheet__panel {
-  padding: var(--sky-space-2) var(--sky-page-gutter)
-    calc(var(--sky-safe-area-bottom) + var(--sky-space-2));
+  max-width: 448px;
+  margin: 0 auto;
+  padding: var(--sky-space-4) var(--sky-page-gutter)
+    calc(var(--sky-safe-area-bottom) + var(--sky-space-4));
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -71,29 +224,67 @@
 .sky-action-group {
   overflow: hidden;
   margin-top: var(--sky-space-2);
-  border: 1px solid var(--sky-hairline);
-  border-radius: var(--sky-radius-card);
-  background: var(--sky-surface);
+  border: 0;
+  border-radius: 32px;
+  background: var(--sky-glass-solid, var(--sky-surface));
+  box-shadow: var(--sky-shadow-glass);
 }
 
 .sky-action-button {
+  box-sizing: border-box;
   width: 100%;
-  min-height: 52px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
-  border-bottom: 1px solid var(--sky-hairline);
   padding: 10px 16px;
   color: var(--sky-app-accent);
   background: transparent;
   font: inherit;
-  font-size: 16px;
+  font-size: 17px;
+  line-height: 22px;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 100ms ease;
 }
 
-.sky-action-button:last-child {
-  border-bottom: 0;
+.sky-action-group--dividers .sky-action-button--dividers:not(:last-child) {
+  border-bottom: 1px solid var(--sky-hairline);
+}
+
+.sky-action-button:active:not(.sky-action-button--disabled) {
+  background: var(--sky-pressed);
 }
 
 .sky-action-button--bold {
   font-weight: 700;
+}
+
+.sky-action-button--disabled {
+  cursor: default;
+  pointer-events: none;
+}
+
+.sky-actions-label {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  background: var(--sky-surface);
+  color: var(--sky-muted);
+  font-size: 14px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.sky-actions-label--dividers {
+  border-bottom: 1px solid var(--sky-hairline);
 }
 
 .sky-dialog {
@@ -105,28 +296,31 @@
 .sky-dialog__panel {
   position: relative;
   z-index: 1;
-  width: min(280px, 90%);
+  width: min(300px, 100%);
   overflow: hidden;
-  border: 1px solid var(--sky-hairline);
-  border-radius: var(--sky-radius-card);
-  background: var(--sky-surface);
+  border: 0;
+  border-radius: 32px;
+  background: var(--sky-glass-solid, var(--sky-surface));
   color: var(--sky-text);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--sky-shadow-glass);
 }
 
 .sky-sheet__panel:focus,
 .sky-action-sheet__panel:focus,
-.sky-dialog__panel:focus {
+.sky-dialog__panel:focus,
+.sky-panel__panel:focus,
+.sky-popup__panel:focus,
+.sky-popover__panel:focus {
   outline: none;
 }
 
 .sky-dialog__content {
-  padding: 20px 18px 16px;
-  text-align: center;
+  padding: 24px;
+  text-align: left;
 }
 
 .sky-dialog__content h2 {
-  margin: 0 0 6px;
+  margin: 0 0 12px;
   font-size: 17px;
   line-height: 22px;
 }
@@ -140,22 +334,26 @@
 
 .sky-dialog__buttons {
   display: flex;
-  border-top: 1px solid var(--sky-hairline);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px 14px;
 }
 
 .sky-dialog-button {
   min-width: 0;
-  min-height: 48px;
-  flex: 1;
+  min-height: 44px;
+  flex: 1 1 0;
   border: 0;
-  border-right: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-pill, 999px);
+  padding: 0 12px;
   color: var(--sky-app-accent);
-  background: transparent;
+  background: var(--sky-app-accent-soft);
   font: inherit;
 }
 
-.sky-dialog-button:last-child {
-  border-right: 0;
+.sky-dialog-button:active:not(:disabled) {
+  background: var(--sky-pressed);
 }
 
 .sky-dialog-button--strong {
@@ -163,37 +361,95 @@
 }
 
 .sky-toast {
+  box-sizing: border-box;
   position: absolute;
   z-index: 100;
-  right: 50%;
-  max-width: calc(100% - 40px);
-  border: 1px solid var(--sky-hairline);
-  border-radius: 999px;
-  padding: 10px 16px;
-  color: var(--sky-text);
-  background: var(--sky-surface);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.26);
-  font-size: 13px;
-  transform: translateX(50%);
+  right: var(--sky-safe-area-right, 0px);
+  left: var(--sky-safe-area-left, 0px);
+  display: flex;
+  padding: 0 16px;
+  pointer-events: none;
 }
 
-.sky-toast--top {
-  top: calc(var(--sky-safe-area-top) + var(--sky-space-4));
+.sky-toast--left {
+  justify-content: flex-start;
 }
 
 .sky-toast--center {
-  top: 50%;
-  transform: translate(50%, -50%);
+  justify-content: center;
 }
 
-.sky-toast--bottom {
-  bottom: calc(var(--sky-safe-area-bottom) + var(--sky-space-5));
+.sky-toast--right {
+  justify-content: flex-end;
+}
+
+.sky-toast--vertical-top {
+  top: calc(var(--sky-safe-area-top) + var(--sky-space-4));
+}
+
+.sky-toast--vertical-center {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.sky-toast--vertical-bottom {
+  bottom: calc(var(--sky-safe-area-bottom) + var(--sky-space-4));
+}
+
+.sky-toast__inner {
+  max-width: min(512px, 100%);
+  border: 1px solid var(--sky-hairline);
+  border-radius: 16px;
+  color: var(--sky-text);
+  background: var(--sky-glass-solid, var(--sky-surface));
+  box-shadow: var(--sky-shadow-glass);
+  font-size: 14px;
+  pointer-events: auto;
+}
+
+.sky-toast__content {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+}
+
+.sky-toast__text {
+  min-width: 0;
+}
+
+.sky-toast__button {
+  flex: none;
+  margin: -6px -8px -6px 16px;
+}
+
+.sky-toast-slide-enter-active,
+.sky-toast-slide-leave-active {
+  transition:
+    opacity 300ms ease,
+    transform 300ms var(--sky-ease-out, ease-out);
+}
+
+.sky-toast-slide-enter-from,
+.sky-toast-slide-leave-to {
+  opacity: 0;
+  transform: translateY(100%);
+}
+
+.sky-toast--vertical-center.sky-toast-slide-enter-from,
+.sky-toast--vertical-center.sky-toast-slide-leave-to {
+  transform: translateY(calc(-50% + 24px));
+}
+
+.sky-toast--vertical-top.sky-toast-slide-enter-from,
+.sky-toast--vertical-top.sky-toast-slide-leave-to {
+  transform: translateY(-100%);
 }
 
 .sky-messages {
   display: flex;
   flex-direction: column;
-  gap: var(--sky-space-2);
   padding: var(--sky-space-2) 0;
 }
 
@@ -205,8 +461,12 @@
 }
 
 .sky-message {
-  max-width: 82%;
+  max-width: 70%;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
   align-self: flex-start;
+  margin-bottom: 8px;
 }
 
 .sky-message--sent {
@@ -214,47 +474,83 @@
 }
 
 .sky-message__name,
-.sky-message time {
+.sky-message__header {
   display: block;
-  margin: 0 6px 3px;
+  margin: 0 16px 2px;
   color: var(--sky-muted);
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 16px;
 }
 
-.sky-message p {
+.sky-message__avatar {
+  width: 32px;
+  height: 32px;
+  display: block;
+  flex: none;
+  align-self: flex-end;
+  overflow: hidden;
+  margin-right: 6px;
+  border-radius: 50%;
+}
+
+.sky-message__content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sky-message__bubble {
   margin: 0;
-  border-radius: 16px 16px 16px 5px;
-  padding: 9px 12px;
+  border-radius: 16px;
+  padding: 6px 16px;
   background: var(--sky-surface-muted);
   color: var(--sky-text);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 17px;
+  line-height: 22px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.sky-message--sent p {
-  border-radius: 16px 16px 5px;
+.sky-message--sent .sky-message__bubble {
   background: var(--sky-app-accent);
   color: #ffffff;
 }
 
-.sky-message time {
-  margin-top: 3px;
+.sky-message__text-header,
+.sky-message__text-footer {
+  width: 100%;
+  color: currentColor;
+  font-size: 14px;
+  line-height: 18px;
+  text-align: left;
+  opacity: 0.8;
 }
 
-.sky-message--sent time {
+.sky-message--sent .sky-message__header,
+.sky-message--sent .sky-message__name {
   text-align: right;
+}
+
+.sky-message__footer {
+  width: 100%;
+  color: currentColor;
+  font-size: 12px;
+  line-height: 16px;
+  opacity: 0.8;
 }
 
 .sky-messagebar {
   display: flex;
   align-items: flex-end;
   gap: var(--sky-space-2);
-  border-top: 1px solid var(--sky-hairline);
+  border-top: 0;
   padding: 8px var(--sky-page-gutter)
     calc(var(--sky-safe-area-bottom) + var(--sky-space-2));
-  background: var(--sky-surface);
+  background: var(--sky-glass-solid, var(--sky-surface));
+}
+
+.sky-messagebar--outline {
+  border-top: 1px solid var(--sky-hairline);
 }
 
 .sky-messagebar textarea {
@@ -263,34 +559,325 @@
   max-height: 100px;
   flex: 1;
   resize: none;
-  border: 1px solid var(--sky-hairline);
-  border-radius: 18px;
-  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 24px;
+  padding: 10px 16px;
   color: var(--sky-text);
   background: var(--sky-surface-muted);
   font: inherit;
-  font-size: 14px;
+  font-size: 17px;
   line-height: 20px;
 }
 
+.sky-messagebar__left,
 .sky-messagebar__right {
   min-width: var(--sky-touch-target);
   min-height: var(--sky-touch-target);
   display: grid;
+  flex: none;
   place-items: center;
+  color: var(--sky-app-accent);
+}
+
+.sky-messagebar__right {
+  margin-right: -4px;
+}
+
+.sky-notification {
+  box-sizing: border-box;
+  min-height: 72px;
+  position: absolute;
+  z-index: 100;
+  top: calc(var(--sky-safe-area-top, 0px) + 8px);
+  right: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: 24px;
+  background: var(--sky-glass-solid, var(--sky-surface));
+  color: var(--sky-text);
+  box-shadow: var(--sky-shadow-glass);
+}
+
+.sky-notification__icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.sky-notification__content {
+  min-width: 0;
+  flex: 1;
+}
+
+.sky-notification__header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.sky-notification__title,
+.sky-notification__time,
+.sky-notification__subtitle,
+.sky-notification__text {
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.sky-notification__title,
+.sky-notification__subtitle {
+  font-weight: 600;
+}
+
+.sky-notification__title {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sky-notification__time {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--sky-muted);
+  white-space: nowrap;
+}
+
+.sky-notification__text {
+  color: var(--sky-text);
+}
+
+.sky-notification__close {
+  width: var(--sky-touch-target, 44px);
+  height: var(--sky-touch-target, 44px);
+  display: inline-grid;
+  flex: none;
+  margin: -13px -13px -13px 2px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sky-muted);
+  font: inherit;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.sky-notification__close:active {
+  background: var(--sky-pressed);
+}
+
+.sky-notification__close:focus-visible {
+  outline: 2px solid var(--sky-app-accent);
+  outline-offset: 2px;
+}
+
+.sky-notification-slide-enter-active,
+.sky-notification-slide-leave-active {
+  transition:
+    opacity 500ms ease,
+    transform 500ms var(--sky-ease-out, ease-out);
+}
+
+.sky-notification-slide-enter-from,
+.sky-notification-slide-leave-to {
+  opacity: 0;
+  transform: translateY(calc(-100% - var(--sky-safe-area-top, 0px) - 8px));
+}
+
+.sky-panel__panel,
+.sky-popup__panel,
+.sky-popover__panel {
+  position: absolute;
+  z-index: 1;
+  border: 0;
+  background: var(--sky-glass-solid, var(--sky-surface));
+  color: var(--sky-text);
+  box-shadow: var(--sky-shadow-glass);
+}
+
+.sky-panel__panel {
+  top: 0;
+  bottom: 0;
+  width: 288px;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.sky-panel__panel--left {
+  left: 0;
+}
+
+.sky-panel__panel--right {
+  right: 0;
+}
+
+.sky-panel__panel--floating {
+  top: calc(var(--sky-safe-area-top, 0px) + 8px);
+  bottom: calc(var(--sky-safe-area-bottom, 0px) + 8px);
+  border-radius: 32px;
+}
+
+.sky-panel__panel--left.sky-panel__panel--floating {
+  left: 8px;
+}
+
+.sky-panel__panel--right.sky-panel__panel--floating {
+  right: 8px;
+}
+
+.sky-popup__panel {
+  inset: 0;
+  overflow: auto;
+  box-shadow: none;
+}
+
+.sky-popover__panel {
+  width: 240px;
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 16px);
+  border-radius: 32px;
+  background: var(--sky-glass-solid, var(--sky-surface));
+  transform-origin: center;
+}
+
+.sky-popover__panel--top {
+  transform-origin: center bottom;
+}
+
+.sky-popover__panel--bottom {
+  transform-origin: center top;
+}
+
+.sky-popover__panel--left {
+  transform-origin: right center;
+}
+
+.sky-popover__panel--right {
+  transform-origin: left center;
+}
+
+.sky-popover__content {
+  max-height: inherit;
+  overflow: auto;
+  border-radius: inherit;
+}
+
+.sky-popover__arrow-wrap {
+  position: absolute;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sky-popover__arrow-wrap--top,
+.sky-popover__arrow-wrap--bottom {
+  width: 26px;
+  height: 13px;
+  transform: translateX(-50%);
+}
+
+.sky-popover__arrow-wrap--left,
+.sky-popover__arrow-wrap--right {
+  width: 13px;
+  height: 26px;
+  transform: translateY(-50%);
+}
+
+.sky-popover__arrow-wrap--top {
+  bottom: 100%;
+}
+
+.sky-popover__arrow-wrap--bottom {
+  top: 100%;
+}
+
+.sky-popover__arrow-wrap--left {
+  right: 100%;
+}
+
+.sky-popover__arrow-wrap--right {
+  left: 100%;
+}
+
+.sky-popover__arrow {
+  width: 19px;
+  height: 19px;
+  position: absolute;
+  display: block;
+  background: var(--sky-glass-solid, var(--sky-surface));
+  transform: rotate(45deg);
+}
+
+.sky-popover__arrow-wrap--top .sky-popover__arrow {
+  bottom: -10px;
+  left: 4px;
+}
+
+.sky-popover__arrow-wrap--bottom .sky-popover__arrow {
+  top: -10px;
+  left: 4px;
+}
+
+.sky-popover__arrow-wrap--left .sky-popover__arrow {
+  top: 4px;
+  right: -10px;
+}
+
+.sky-popover__arrow-wrap--right .sky-popover__arrow {
+  top: 4px;
+  left: -10px;
+}
+
+.sky-panel__panel--left {
+  transform-origin: left center;
+}
+
+.sky-panel__panel--right {
+  transform-origin: right center;
 }
 
 .sky-action-button:focus-visible,
 .sky-dialog-button:focus-visible,
-.sky-messagebar textarea:focus-visible {
+.sky-messagebar textarea:focus-visible,
+.sky-panel__panel:focus-visible,
+.sky-popup__panel:focus-visible,
+.sky-popover__panel:focus-visible {
   outline: 2px solid var(--sky-app-accent);
   outline-offset: -2px;
 }
 
 .sky-action-button:disabled,
+.sky-action-button--disabled,
 .sky-dialog-button:disabled,
 .sky-messagebar textarea:disabled {
   opacity: 0.45;
+}
+
+@supports (
+  (-webkit-backdrop-filter: blur(16px)) or (backdrop-filter: blur(16px))
+) {
+  .sky-action-group,
+  .sky-dialog__panel,
+  .sky-messagebar,
+  .sky-notification,
+  .sky-panel__panel,
+  .sky-popover__panel,
+  .sky-toast__inner {
+    background: var(--sky-glass);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
+
+  .sky-popover__arrow {
+    background: var(--sky-glass);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -298,8 +885,36 @@
   .sky-sheet-rise-leave-active .sky-overlay-backdrop,
   .sky-sheet-rise-enter-active .sky-sheet__panel,
   .sky-sheet-rise-leave-active .sky-sheet__panel,
-  .sky-sheet-rise-enter-active .sky-action-sheet__panel,
-  .sky-sheet-rise-leave-active .sky-action-sheet__panel {
+  .sky-action-rise-enter-active .sky-overlay-backdrop,
+  .sky-action-rise-leave-active .sky-overlay-backdrop,
+  .sky-action-rise-enter-active .sky-action-sheet__panel,
+  .sky-action-rise-leave-active .sky-action-sheet__panel,
+  .sky-dialog-pop-enter-active .sky-overlay-backdrop,
+  .sky-dialog-pop-leave-active .sky-overlay-backdrop,
+  .sky-dialog-pop-enter-active .sky-dialog__panel,
+  .sky-dialog-pop-leave-active .sky-dialog__panel,
+  .sky-panel-left-enter-active .sky-overlay-backdrop,
+  .sky-panel-left-leave-active .sky-overlay-backdrop,
+  .sky-panel-left-enter-active .sky-panel__panel,
+  .sky-panel-left-leave-active .sky-panel__panel,
+  .sky-panel-right-enter-active .sky-overlay-backdrop,
+  .sky-panel-right-leave-active .sky-overlay-backdrop,
+  .sky-panel-right-enter-active .sky-panel__panel,
+  .sky-panel-right-leave-active .sky-panel__panel,
+  .sky-popup-rise-enter-active .sky-overlay-backdrop,
+  .sky-popup-rise-leave-active .sky-overlay-backdrop,
+  .sky-popup-rise-enter-active .sky-popup__panel,
+  .sky-popup-rise-leave-active .sky-popup__panel,
+  .sky-popover-scale-enter-active .sky-overlay-backdrop,
+  .sky-popover-scale-leave-active .sky-overlay-backdrop,
+  .sky-popover-scale-enter-active .sky-popover__panel,
+  .sky-popover-scale-leave-active .sky-popover__panel,
+  .sky-popover-scale-enter-active .sky-popover__content,
+  .sky-popover-scale-leave-active .sky-popover__content,
+  .sky-toast-slide-enter-active,
+  .sky-toast-slide-leave-active,
+  .sky-notification-slide-enter-active,
+  .sky-notification-slide-leave-active {
     transition-duration: 0.01ms !important;
   }
 }

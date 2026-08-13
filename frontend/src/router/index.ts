@@ -1,8 +1,22 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import {
+  createRouter,
+  createWebHashHistory,
+  type RouteRecordRaw,
+} from 'vue-router'
 
 import { isPhoneAppId } from '@/config/apps'
 import PhoneAppWindow from '@/views/PhoneAppWindow.vue'
 import SpringboardView from '@/views/SpringboardView.vue'
+
+const developmentRoutes: RouteRecordRaw[] = import.meta.env.DEV
+  ? [
+      {
+        component: () => import('@/views/development/SkyUiKitchenSinkView.vue'),
+        name: 'development-sky-ui',
+        path: '/development/sky-ui',
+      },
+    ]
+  : []
 
 export default createRouter({
   history: createWebHashHistory(),
@@ -21,5 +35,6 @@ export default createRouter({
       name: 'app',
       path: '/apps/:appId',
     },
+    ...developmentRoutes,
   ],
 })

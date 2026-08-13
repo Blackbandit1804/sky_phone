@@ -1,13 +1,25 @@
 import { readFileSync } from 'node:fs'
 
-import { createSSRApp } from 'vue'
+import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { describe, expect, it } from 'vitest'
 
 import SkyNavbar from '@/ui/SkyNavbar.vue'
+import SkySegmented from '@/ui/controls/SkySegmented.vue'
+import SkySegmentedButton from '@/ui/controls/SkySegmentedButton.vue'
+
+import { getSkyNavbarCollapseState } from './navbar-collapse'
 
 const foundationStyles = readFileSync(
   new URL('./foundation.css', import.meta.url),
+  'utf8',
+)
+const appPageSource = readFileSync(
+  new URL('./SkyAppPage.vue', import.meta.url),
+  'utf8',
+)
+const navbarSource = readFileSync(
+  new URL('./SkyNavbar.vue', import.meta.url),
   'utf8',
 )
 
@@ -18,7 +30,13 @@ describe('SkyNavbar', () => {
     )
 
     expect(html).toContain('sky-navbar--compact')
-    expect(html).toContain('<h1 class="sky-navbar__title">Account</h1>')
+    expect(html).toContain('sky-navbar__blur')
+    expect(html).toContain('sky-navbar__background')
+    expect(html).toContain('sky-navbar__inner')
+    expect(html).not.toContain('sky-navbar__left')
+    expect(html).not.toContain('sky-navbar__right')
+    expect(html).toContain('<h1 class="sky-navbar__title">')
+    expect(html).toContain('Account')
   })
 
   it('exposes the large-title header without changing heading semantics', async () => {
@@ -30,19 +48,161 @@ describe('SkyNavbar', () => {
     )
 
     expect(html).toContain('sky-navbar--large')
-    expect(html).toContain('<h1 class="sky-navbar__title">Settings</h1>')
+    expect(html).toContain('sky-navbar--no-navigation')
+    expect(html).not.toContain('sky-navbar__inner')
+    expect(html).not.toContain('sky-navbar__left')
+    expect(html).not.toContain('sky-navbar__right')
+    expect(html).toContain('<h1 class="sky-navbar__title">')
+    expect(html).toContain('Settings')
   })
 
-  it('does not reserve a second navigation row for the large title', () => {
-    const largeNavbarRule = foundationStyles.match(
-      /\.sky-navbar--large\s*\{(?<declarations>[^}]*)\}/,
+  it('renders the extended navigation row only when it has controls', async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(
+            SkyNavbar,
+            { title: 'Account', variant: 'large' },
+            { right: () => h('button', { type: 'button' }, 'Done') },
+          ),
+      }),
+    )
+
+    expect(html).not.toContain('sky-navbar--no-navigation')
+    expect(html).toContain('sky-navbar__inner')
+    expect(html).not.toContain('sky-navbar__left')
+    expect(html).toContain('sky-navbar__right')
+    expect(html).toContain('>Done</button>')
+  })
+
+  it('reserves the navigation-row geometry without empty elements', () => {
+    const noNavigationRule = foundationStyles.match(
+      /\.sky-navbar--no-navigation\s*\{(?<declarations>[^}]*)\}/,
+    )?.groups?.declarations
+    const navigationRowRule = foundationStyles.match(
+      /\.sky-navbar__inner\s*\{(?<declarations>[^}]*)\}/,
     )?.groups?.declarations
 
-    expect(largeNavbarRule).toBeDefined()
-    expect(largeNavbarRule).toContain(
-      'grid-template-rows: var(--sky-navbar-large-title-height)',
+    expect(noNavigationRule).toBeDefined()
+    expect(noNavigationRule).toContain('var(--sky-safe-area-top)')
+    expect(noNavigationRule).toContain('var(--sky-navbar-height)')
+    expect(noNavigationRule).toContain('var(--sky-space-3)')
+    expect(navigationRowRule).toBeDefined()
+    expect(navigationRowRule).toContain('margin-bottom: var(--sky-space-3)')
+  })
+
+  it('reserves the Konsta iOS title row below the navigation controls', () => {
+    const mediumNavbarRule = foundationStyles.match(
+      /(?:^|\n)\.sky-navbar--medium\s*\{(?<declarations>[^}]*)\}/,
+    )?.groups?.declarations
+    const largeNavbarRule = foundationStyles.match(
+      /(?:^|\n)\.sky-navbar--large\s*\{(?<declarations>[^}]*)\}/,
+    )?.groups?.declarations
+
+    expect(mediumNavbarRule).toContain('var(--sky-navbar-height)')
+    expect(mediumNavbarRule).not.toContain(
+      'var(--sky-navbar-large-title-height)',
     )
-    expect(largeNavbarRule).not.toContain('var(--sky-navbar-height)')
+    expect(largeNavbarRule).toContain('var(--sky-navbar-height)')
+    expect(largeNavbarRule).toContain('var(--sky-navbar-large-title-height)')
+  })
+
+  it('uses Konsta medium and large collapse geometry', () => {
+    expect(getSkyNavbarCollapseState(0, 52)).toEqual({
+      compactTitleOpacity: 0,
+      extendedTitleOpacity: 1,
+      offset: 0,
+    })
+    expect(getSkyNavbarCollapseState(26, 52)).toEqual({
+      compactTitleOpacity: 0.25,
+      extendedTitleOpacity: 0,
+      offset: 26,
+    })
+    expect(getSkyNavbarCollapseState(100, 52)).toEqual({
+      compactTitleOpacity: 1,
+      extendedTitleOpacity: 0,
+      offset: 52,
+    })
+    expect(getSkyNavbarCollapseState(44, 44).offset).toBe(44)
+  })
+
+  it('fades a compact transparent title without collapsing its layout', () => {
+    expect(getSkyNavbarCollapseState(44, 44, false)).toEqual({
+      compactTitleOpacity: 1,
+      extendedTitleOpacity: 0,
+      offset: 0,
+    })
+    expect(navbarSource).toContain(
+      'hasExtendedTitle.value || props.transparent',
+    )
+    expect(foundationStyles).toMatch(
+      /\.sky-navbar--transparent \.sky-navbar__heading\s*\{[^}]*opacity:\s*var\(--sky-navbar-compact-title-opacity\)/s,
+    )
+  })
+
+  it('compensates the collapsing sibling header inside the scroll content', () => {
+    const scrollAreaRule = foundationStyles.match(
+      /(?:^|\n)\.sky-scroll-area\s*\{(?<declarations>[^}]*)\}/,
+    )?.groups?.declarations
+    const compensationRule = foundationStyles.match(
+      /(?:^|\n)\.sky-scroll-area::before\s*\{(?<declarations>[^}]*)\}/,
+    )?.groups?.declarations
+
+    expect(scrollAreaRule).toContain('overflow-anchor: none')
+    expect(compensationRule).toContain(
+      'height: var(--sky-page-collapse-offset)',
+    )
+    expect(appPageSource).toContain(
+      "'--sky-page-collapse-offset': `${pageScroll.collapseOffset.value}px`",
+    )
+    expect(navbarSource).toContain(
+      'pageScroll.collapseOffset.value = collapseState.value.offset',
+    )
+  })
+
+  it('keeps one semantic heading while exposing the collapsed visual title', async () => {
+    const html = await renderToString(
+      createSSRApp(SkyNavbar, { title: 'Store', variant: 'large' }),
+    )
+
+    expect(html.match(/<h1/g)).toHaveLength(1)
+    expect(html).toContain('sky-navbar__collapsed-heading')
+    expect(html).toContain('aria-hidden="true"')
+  })
+
+  it('keeps the custom title slot in sync while collapsed', async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(
+            SkyNavbar,
+            { title: 'Fallback', variant: 'large' },
+            { title: () => 'Custom title' },
+          ),
+      }),
+    )
+
+    expect(html).not.toContain('Fallback')
+    expect(html.match(/Custom title/g)).toHaveLength(2)
+    expect(html.match(/<h1/g)).toHaveLength(1)
+  })
+
+  it('separates and fades the Konsta navbar blur before the scroll content', () => {
+    const blurEnhancement = foundationStyles.slice(
+      foundationStyles.indexOf(
+        '@supports (\n  (-webkit-backdrop-filter: blur(2px))',
+      ),
+    )
+
+    expect(foundationStyles).toMatch(
+      /\.sky-navbar__background\s*\{[\s\S]*?linear-gradient\([\s\S]*?--sky-navbar-glass[\s\S]*?transparent 100%/,
+    )
+    expect(blurEnhancement).toMatch(
+      /@supports[\s\S]*?-webkit-mask-image: linear-gradient\(#000, transparent\)[\s\S]*?\.sky-navbar__blur\s*\{[\s\S]*?backdrop-filter: blur\(2px\)[\s\S]*?-webkit-mask-image: linear-gradient\([\s\S]*?#000 50%[\s\S]*?transparent 100%/,
+    )
+    expect(blurEnhancement).not.toMatch(
+      /\.sky-navbar__background\s*\{[^}]*backdrop-filter/,
+    )
   })
 
   it('exposes the optional surface back affordance for detail screens', async () => {
@@ -57,5 +217,115 @@ describe('SkyNavbar', () => {
 
     expect(html).toContain('sky-navbar__back--surface')
     expect(html).toContain('aria-label="Back to Settings"')
+  })
+
+  it('renders the Konsta 56px subnavbar and custom class hook', async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(
+            SkyNavbar,
+            { subnavbarClass: 'custom-subnavbar', title: 'Search' },
+            { subnavbar: () => h('label', 'Search controls') },
+          ),
+      }),
+    )
+    const subnavbarRule = foundationStyles.match(
+      /(?:^|\n)\.sky-navbar__subnavbar\s*\{(?<declarations>[^}]*)\}/,
+    )?.groups?.declarations
+
+    expect(html).toContain('sky-navbar--with-subnavbar')
+    expect(html).toContain('sky-navbar__subnavbar')
+    expect(html).toContain('custom-subnavbar')
+    expect(subnavbarRule).toContain('height: 56px')
+    expect(subnavbarRule).toContain('var(--sky-safe-area-right)')
+    expect(subnavbarRule).toContain('var(--sky-safe-area-left)')
+    expect(subnavbarRule).not.toMatch(/padding-(?:top|bottom)|padding:\s/)
+  })
+
+  it('uses the Konsta navbar glass heights with and without subnavbar', () => {
+    const baseEffectRule = foundationStyles.match(
+      /\.sky-navbar__blur,\s*\.sky-navbar__background\s*\{(?<declarations>[^}]*)\}/,
+    )?.groups?.declarations
+    const subnavbarEffectRule = foundationStyles.match(
+      /\.sky-navbar--with-subnavbar \.sky-navbar__blur,\s*\.sky-navbar--with-subnavbar \.sky-navbar__background\s*\{(?<declarations>[^}]*)\}/,
+    )?.groups?.declarations
+
+    expect(baseEffectRule).toContain('var(--sky-safe-area-top)')
+    expect(baseEffectRule).toContain('var(--sky-navbar-height)')
+    expect(baseEffectRule).toContain('+ 16px')
+    expect(subnavbarEffectRule).toContain('var(--sky-safe-area-top)')
+    expect(subnavbarEffectRule).toContain('var(--sky-navbar-height)')
+    expect(subnavbarEffectRule).toContain('+ 70px + 16px')
+    expect(foundationStyles).toMatch(
+      /\.sky-navbar--outline::after\s*\{[^}]*bottom:\s*0/s,
+    )
+    expect(foundationStyles).not.toMatch(
+      /\.sky-navbar--with-subnavbar\.sky-navbar--outline[\s\S]*?\.sky-navbar__background::after/,
+    )
+  })
+
+  it('provides the Konsta navigation context to segmented subnavbar content', async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(
+            SkyNavbar,
+            { title: 'Store' },
+            {
+              subnavbar: () =>
+                h(
+                  SkySegmented,
+                  { activeIndex: 0, ariaLabel: 'Store sections', itemCount: 2 },
+                  {
+                    default: () => [
+                      h(SkySegmentedButton, { active: true }, () => 'Apps'),
+                      h(SkySegmentedButton, { active: false }, () => 'Games'),
+                    ],
+                  },
+                ),
+            },
+          ),
+      }),
+    )
+
+    expect(html).toContain('sky-navbar__subnavbar')
+    expect(html).toContain('sky-glass')
+    expect(html).toContain('sky-glass--highlight')
+    expect(html).toContain('sky-segmented--navigation')
+    expect(html).toContain('sky-segmented__highlight')
+  })
+
+  it('lets subnavbar content explicitly opt out of navigation Glass', async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(
+            SkyNavbar,
+            { title: 'Filters' },
+            {
+              subnavbar: () =>
+                h(
+                  SkySegmented,
+                  { ariaLabel: 'Filters', navigation: false },
+                  { default: () => h(SkySegmentedButton, () => 'All') },
+                ),
+            },
+          ),
+      }),
+    )
+
+    expect(html).toContain('sky-navbar__subnavbar')
+    expect(html).not.toContain('sky-glass')
+    expect(html).not.toContain('sky-segmented--navigation')
+  })
+
+  it('keeps Konsta transparent navbar glass while fading the compact title', () => {
+    expect(foundationStyles).toMatch(
+      /\.sky-navbar--transparent \.sky-navbar__heading\s*\{[^}]*opacity:\s*var\(--sky-navbar-compact-title-opacity\)/s,
+    )
+    expect(foundationStyles).not.toMatch(
+      /\.sky-navbar--transparent \.sky-navbar__(?:blur|background)\s*\{[^}]*opacity:\s*0/s,
+    )
   })
 })

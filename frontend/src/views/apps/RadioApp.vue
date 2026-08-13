@@ -456,6 +456,7 @@ onBeforeUnmount(() => {
     <SkyToast
       :opened="Boolean(feedback)"
       position="center"
+      vertical-position="center"
       @click="feedback = ''"
     >
       {{ feedback }}

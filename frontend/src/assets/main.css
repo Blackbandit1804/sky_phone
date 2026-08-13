@@ -354,6 +354,20 @@ button {
 .phone-app--performance.phone-app--light {
   --phone-performance-glass: rgb(245 245 248 / 97%);
 }
+.phone-app--performance .sky-ui-provider,
+.phone-app--performance .sky-app,
+.phone-app--performance .sky-app-page {
+  --sky-glass: var(--phone-performance-glass);
+  --sky-glass-solid: var(--phone-performance-glass);
+  --sky-navbar-glass: var(--sky-bg);
+  --sky-hold-thumb-scale: 1;
+  --sky-range-hold-background: #ffffff;
+  --sky-range-hold-shadow: var(--sky-shadow-thumb);
+  --sky-toggle-hold-background: #ffffff;
+  --sky-toggle-hold-glass-opacity: 0;
+  --sky-toggle-hold-glow-opacity: 0;
+  --sky-toggle-hold-track-scale: 1;
+}
 .phone-device.phone-app--performance {
   filter: none;
 }
@@ -366,6 +380,41 @@ button {
 }
 .phone-app--performance .k-glass {
   background-color: var(--phone-performance-glass) !important;
+  scale: 1 !important;
+}
+.phone-app--performance .k-glass > [class~='rounded-[inherit]'] {
+  display: none !important;
+}
+.phone-app--performance
+  .k-range
+  [class~='group-has-[input:active]/range:scale-[1.4]'] {
+  background-color: #ffffff !important;
+  scale: 1 !important;
+}
+.phone-app--performance
+  .k-range
+  [class~='group-has-[input:active]/range:opacity-100'] {
+  opacity: 0 !important;
+}
+.phone-app--performance .k-toggle [class~='group-active:scale-[0.75]'],
+.phone-app--performance .k-toggle [class~='group-active:scale-[1.4]'] {
+  scale: 1 !important;
+}
+.phone-app--performance .k-toggle [class~='group-active:bg-transparent'] {
+  background-color: #ffffff !important;
+}
+.phone-app--performance .k-toggle [class~='group-active:opacity-100'] {
+  opacity: 0 !important;
+}
+.phone-app--performance .sky-glass--highlight-visible::after {
+  opacity: 0;
+}
+.phone-app--performance .sky-glass--touch-highlight {
+  transform: none;
+}
+.phone-app--performance .sky-segmented--navigation {
+  background: var(--phone-performance-glass);
+  box-shadow: none;
 }
 .phone-app--performance .control-center__backdrop {
   background: rgb(20 20 24 / 92%);

@@ -3,11 +3,11 @@ defineOptions({ inheritAttrs: false })
 
 withDefaults(
   defineProps<{
-    component?: 'div' | 'header' | 'section'
+    component?: 'div' | 'header' | 'p' | 'section'
     inset?: boolean
   }>(),
   {
-    component: 'header',
+    component: 'div',
     inset: false,
   },
 )

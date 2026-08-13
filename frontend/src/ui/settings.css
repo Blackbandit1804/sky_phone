@@ -1,14 +1,14 @@
 .sky-settings-group {
   min-width: 0;
-  margin: 0 0 var(--sky-space-5);
+  margin: 0 0 32px;
 }
 
 .sky-settings-group__title {
-  margin: var(--sky-space-5) var(--sky-space-3) 7px;
+  margin: 32px 16px 8px;
   padding: 0;
   color: var(--sky-muted);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 18px;
 }
 
@@ -25,10 +25,10 @@
 }
 
 .sky-settings-group__footer {
-  margin: 7px var(--sky-space-3) 0;
+  margin: 8px 16px 0;
   color: var(--sky-muted);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 13px;
+  line-height: 18px;
 }
 
 .sky-settings-row,
@@ -46,12 +46,14 @@
   position: absolute;
   z-index: 2;
   top: 0;
-  right: 14px;
-  left: 14px;
+  right: 16px;
+  left: 16px;
   height: 1px;
   content: '';
   background: var(--sky-hairline);
   pointer-events: none;
+  transform: scaleY(var(--sky-hairline-scale, 1));
+  transform-origin: center top;
 }
 
 .sky-settings-group__list
@@ -70,7 +72,7 @@
   min-width: 0;
   min-height: 52px;
   margin: 0;
-  padding: 8px 14px;
+  padding: 8px 16px;
   display: flex;
   align-items: center;
   gap: 11px;
@@ -81,6 +83,10 @@
   color: var(--sky-text);
   font: inherit;
   text-align: left;
+  transition:
+    background-color 300ms ease,
+    opacity 300ms ease,
+    transform 300ms ease;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -89,7 +95,9 @@ button.sky-settings-row__frame {
 }
 
 button.sky-settings-row__frame:active:not(:disabled) {
-  background: var(--sky-surface-muted);
+  background: var(--sky-pressed);
+  transform: scale(0.995);
+  transition-duration: 0ms;
 }
 
 button.sky-settings-row__frame:focus-visible {
@@ -127,9 +135,9 @@ button.sky-settings-row__frame:focus-visible {
 .sky-settings-row__title {
   min-width: 0;
   color: inherit;
-  font-size: 15px;
-  font-weight: 450;
-  line-height: 20px;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 22px;
   overflow-wrap: anywhere;
 }
 
@@ -139,8 +147,8 @@ label.sky-settings-row__title {
 
 .sky-settings-row__description {
   color: var(--sky-muted);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 14px;
+  line-height: 18px;
 }
 
 .sky-settings-row__accessory {
@@ -152,8 +160,8 @@ label.sky-settings-row__title {
 .sky-settings-row__value {
   max-width: 126px;
   overflow: hidden;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 17px;
+  line-height: 22px;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -222,7 +230,7 @@ label.sky-settings-row__title {
 
 .sky-settings-group__list > .sky-field {
   min-height: 52px;
-  padding: var(--sky-space-1) 14px;
+  padding: var(--sky-space-1) 16px;
 }
 
 .sky-settings-group__list > .sky-field .sky-field__label {
@@ -231,7 +239,7 @@ label.sky-settings-row__title {
 }
 
 .sky-settings-group__list > .sky-field .sky-field__input {
-  font-size: 15px;
+  font-size: 17px;
 }
 
 .sky-settings-group__list > .sky-field--inline {
@@ -244,9 +252,9 @@ label.sky-settings-row__title {
 .sky-settings-group__list > .sky-field--inline .sky-field__label {
   margin: 0;
   color: var(--sky-text);
-  font-size: 15px;
-  font-weight: 450;
-  line-height: 20px;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 22px;
 }
 
 .sky-settings-group__list > .sky-field--inline .sky-field__control {

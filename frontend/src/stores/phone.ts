@@ -3660,6 +3660,10 @@ const defaultLocales: LocaleTree = {
       phoneScale: 'Phone Scale',
       phoneFrame: 'Phone Frame',
       screenBrightness: 'Screen Brightness',
+      development: 'Development',
+      skyUiKitchenSink: 'Sky UI Kitchen Sink',
+      skyUiKitchenSinkDescription:
+        'Interactive catalog of first-party Sky UI components',
       about: 'About',
       deviceName: 'Device Name',
       deviceNameValue: 'Sky Phone',

@@ -1,3 +1,16 @@
+<script setup lang="ts">
+withDefaults(defineProps<{ component?: string; dividers?: boolean }>(), {
+  component: 'div',
+  dividers: true,
+})
+</script>
+
 <template>
-  <div class="sky-action-group"><slot /></div>
+  <component
+    :is="component"
+    class="sky-action-group"
+    :class="{ 'sky-action-group--dividers': dividers }"
+  >
+    <slot />
+  </component>
 </template>

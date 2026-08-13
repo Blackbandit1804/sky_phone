@@ -1664,6 +1664,8 @@ Locales["en"] = {
                 appearanceMode = "Appearance Mode",
                 automatic = "Automatic", light = "Light", dark = "Dark", phoneScale = "Phone Scale", phoneFrame = "Phone Frame",
                 screenBrightness = "Screen Brightness",
+                development = "Development", skyUiKitchenSink = "Sky UI Kitchen Sink",
+                skyUiKitchenSinkDescription = "Interactive catalog of first-party Sky UI components",
                 about = "About", deviceName = "Device Name", deviceNameValue = "Sky Phone", softwareVersion = "Software Version",
                 language = "Language", languageValue = "English", localStorage = "Local Storage", localStorageValue = "On Device",
                 back = "Settings", wallpaperPicker = "Built-in Wallpapers", deviceInformation = "Device Information",

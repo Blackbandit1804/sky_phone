@@ -32,12 +32,11 @@ import {
   SkySegmentedButton,
   SkyAppPage,
   SkyNavbar,
+  SkyPillNavigation,
   SkyScrollArea,
   SkyScrollRail,
   SkySection,
   SkySheet,
-  SkyTabButton,
-  SkyTabBar,
   SkyToast,
   SkyToggle,
   SkyToolbarPane,
@@ -144,6 +143,11 @@ const route = useRoute()
 const router = useRouter()
 
 const activeTab = ref<CompaniesTab>('directory')
+const activeTabIndex = computed(() => {
+  if (activeTab.value === 'requests') return 1
+  if (activeTab.value === 'work') return 2
+  return 0
+})
 const screen = ref<CompaniesScreen>('root')
 const requestOrigin = ref<RequestOrigin>('customer')
 const search = ref('')
@@ -2056,56 +2060,63 @@ onBeforeUnmount(() => {
       </template>
     </SkyScrollArea>
 
-    <SkyTabBar
+    <SkyPillNavigation
       v-if="screen === 'root'"
-      class="companies-tabbar"
+      class="companies-navigation"
+      layout="full"
       :label="phone.t('Apps.companies.navigation')"
     >
-      <SkyTabButton
-        :active="activeTab === 'directory'"
-        type="button"
-        @click="selectTab('directory')"
+      <SkySegmented
+        strong
+        rounded
+        navigation
+        :active-index="activeTabIndex"
+        :aria-label="phone.t('Apps.companies.navigation')"
+        :data-active-tab="activeTab"
+        :item-count="3"
       >
-        <template #label>{{
-          phone.t('Apps.companies.tabs.directory')
-        }}</template>
-        <template #icon
-          ><SkyIcon><Compass class="w-7 h-7" /></SkyIcon
-        ></template>
-      </SkyTabButton>
-      <SkyTabButton
-        :active="activeTab === 'requests'"
-        type="button"
-        @click="selectTab('requests')"
-      >
-        <template #label>{{
-          phone.t('Apps.companies.tabs.requests')
-        }}</template>
-        <template #icon>
-          <span class="companies-tab-icon">
-            <SkyIcon><ClipboardList class="w-7 h-7" /></SkyIcon>
-            <SkyBadge v-if="companies.customerUnreadCount">{{
-              companies.customerUnreadCount
-            }}</SkyBadge>
+        <SkySegmentedButton
+          :active="activeTab === 'directory'"
+          type="button"
+          @click="selectTab('directory')"
+        >
+          <span class="companies-navigation__item">
+            <SkyIcon :size="20"><Compass :size="20" /></SkyIcon>
+            <span>{{ phone.t('Apps.companies.tabs.directory') }}</span>
           </span>
-        </template>
-      </SkyTabButton>
-      <SkyTabButton
-        :active="activeTab === 'work'"
-        type="button"
-        @click="selectTab('work')"
-      >
-        <template #label>{{ phone.t('Apps.companies.tabs.work') }}</template>
-        <template #icon>
-          <span class="companies-tab-icon">
-            <SkyIcon><BriefcaseBusiness class="w-7 h-7" /></SkyIcon>
-            <SkyBadge v-if="companies.workUnreadCount">{{
-              companies.workUnreadCount
-            }}</SkyBadge>
+        </SkySegmentedButton>
+        <SkySegmentedButton
+          :active="activeTab === 'requests'"
+          type="button"
+          @click="selectTab('requests')"
+        >
+          <span class="companies-navigation__item">
+            <span class="companies-tab-icon">
+              <SkyIcon :size="20"><ClipboardList :size="20" /></SkyIcon>
+              <SkyBadge v-if="companies.customerUnreadCount">{{
+                companies.customerUnreadCount
+              }}</SkyBadge>
+            </span>
+            <span>{{ phone.t('Apps.companies.tabs.requests') }}</span>
           </span>
-        </template>
-      </SkyTabButton>
-    </SkyTabBar>
+        </SkySegmentedButton>
+        <SkySegmentedButton
+          :active="activeTab === 'work'"
+          type="button"
+          @click="selectTab('work')"
+        >
+          <span class="companies-navigation__item">
+            <span class="companies-tab-icon">
+              <SkyIcon :size="20"><BriefcaseBusiness :size="20" /></SkyIcon>
+              <SkyBadge v-if="companies.workUnreadCount">{{
+                companies.workUnreadCount
+              }}</SkyBadge>
+            </span>
+            <span>{{ phone.t('Apps.companies.tabs.work') }}</span>
+          </span>
+        </SkySegmentedButton>
+      </SkySegmented>
+    </SkyPillNavigation>
 
     <div class="companies-sheet">
       <SkySheet
@@ -2401,6 +2412,7 @@ onBeforeUnmount(() => {
     <SkyToast
       :opened="toastOpened"
       position="center"
+      vertical-position="center"
       @click="toastOpened = false"
     >
       {{ toastText }}
@@ -3018,15 +3030,31 @@ onBeforeUnmount(() => {
   display: inline-flex;
 }
 
-.companies-tabbar {
+.companies-navigation {
   z-index: 25;
-  padding-inline: 0 !important;
+}
+
+.companies-navigation__item {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1;
+}
+
+.companies-navigation__item > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .companies-tab-icon :deep(.sky-badge) {
   position: absolute;
   top: -5px;
-  right: -10px;
+  inset-inline-end: -10px;
   color: white;
   background: var(--company-red);
 }

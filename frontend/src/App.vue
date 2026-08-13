@@ -274,6 +274,9 @@ const notifications = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
 const isAppRoute = computed(() => route.name === 'app')
+const isDevelopmentRoute = computed(
+  () => isDevelopment && route.name === 'development-sky-ui',
+)
 const showActiveCallReturn = computed(
   () => Boolean(calls.activeCall) && route.params.appId !== 'phone',
 )
@@ -1378,12 +1381,12 @@ onBeforeUnmount(() => {
                   @control-center="toggleControlCenter"
                   @lock="lockPhone"
                 />
-                <SpringboardView />
+                <SpringboardView v-if="!isDevelopmentRoute" />
                 <RouterView v-slot="{ Component }">
                   <Transition :name="appTransitionName">
                     <component
                       :is="Component"
-                      v-if="isAppRoute"
+                      v-if="isAppRoute || isDevelopmentRoute"
                       :key="route.path"
                     />
                   </Transition>
