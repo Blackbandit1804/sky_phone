@@ -2469,7 +2469,7 @@ button {
 .app-dock {
   position: absolute;
   z-index: 8;
-  bottom: 43px;
+  bottom: 30px;
   left: 15px;
   right: 15px;
   height: 82px;
@@ -2520,7 +2520,7 @@ button {
 }
 .page-indicator {
   position: absolute;
-  bottom: 132px;
+  bottom: 122px;
   left: 0;
   right: 0;
   height: 14px;
