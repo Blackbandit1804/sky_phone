@@ -423,10 +423,12 @@ CREATE TABLE IF NOT EXISTS `sky_phone_fliptok_profiles` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `account_id` BIGINT UNSIGNED NOT NULL,
     `handle` VARCHAR(24) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL, `display_name` VARCHAR(40) NOT NULL,
     `bio` VARCHAR(160) NOT NULL DEFAULT '', `account_type` ENUM('person','business','organization','media','event') NOT NULL DEFAULT 'person',
+    `avatar_media_id` BIGINT UNSIGNED NULL,
     `verified` TINYINT(1) NOT NULL DEFAULT 0, `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`), UNIQUE KEY `uniq_sky_phone_fliptok_account` (`account_id`), UNIQUE KEY `uniq_sky_phone_fliptok_handle` (`handle`),
-    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
+    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`avatar_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `sky_phone_fliptok_credentials` (
@@ -454,6 +456,8 @@ CREATE TABLE IF NOT EXISTS `sky_phone_fliptok_videos` (
     `trim_start_ms` INT UNSIGNED NOT NULL DEFAULT 0, `trim_end_ms` INT UNSIGNED NULL, `cover_time_ms` INT UNSIGNED NOT NULL DEFAULT 0,
     `original_volume` TINYINT UNSIGNED NOT NULL DEFAULT 100, `music_volume` TINYINT UNSIGNED NOT NULL DEFAULT 0,
     `music_track` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL DEFAULT '',
+    `custom_music_url` VARCHAR(2048) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT '',
+    `custom_music_title` VARCHAR(160) NOT NULL DEFAULT '', `custom_music_artist` VARCHAR(120) NOT NULL DEFAULT '',
     `status` ENUM('draft','published','removed') NOT NULL DEFAULT 'published', `view_count` INT UNSIGNED NOT NULL DEFAULT 0,
     `share_count` INT UNSIGNED NOT NULL DEFAULT 0, `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -480,9 +484,20 @@ CREATE TABLE IF NOT EXISTS `sky_phone_fliptok_follows` (
 
 CREATE TABLE IF NOT EXISTS `sky_phone_fliptok_comments` (
     `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, `video_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    `profile_id` BIGINT UNSIGNED NOT NULL, `body` VARCHAR(300) NOT NULL, `status` ENUM('visible','removed') NOT NULL DEFAULT 'visible',
+    `profile_id` BIGINT UNSIGNED NOT NULL, `parent_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `body` VARCHAR(300) NOT NULL, `status` ENUM('visible','removed') NOT NULL DEFAULT 'visible',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), KEY `idx_sky_phone_fliptok_comments` (`video_id`,`created_at`),
+    KEY `idx_sky_phone_fliptok_comment_parent` (`parent_id`,`created_at`),
     FOREIGN KEY (`video_id`) REFERENCES `sky_phone_fliptok_videos` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_fliptok_profiles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`parent_id`) REFERENCES `sky_phone_fliptok_comments` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_fliptok_comment_reactions` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `comment_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` BIGINT UNSIGNED NOT NULL, `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`), UNIQUE KEY `uniq_sky_phone_fliptok_comment_reaction` (`comment_id`,`profile_id`),
+    FOREIGN KEY (`comment_id`) REFERENCES `sky_phone_fliptok_comments` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_fliptok_profiles` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { kButton } from 'konsta/vue'
 import {
   Check,
   ChevronRight,
@@ -10,6 +9,7 @@ import {
 import { computed, ref, watch } from 'vue'
 
 import type { SmsSharedContact } from '@/types/messages'
+import { SkyButton } from '@/ui'
 
 const props = defineProps<{
   addLabel: string
@@ -61,12 +61,13 @@ const initials = computed(() =>
       <ChevronRight :size="20" class="message-contact-card__chevron" />
     </div>
     <div class="message-contact-card__actions">
-      <k-button rounded tonal @click.stop="emit('message')">
+      <SkyButton rounded small tonal @click.stop="emit('message')">
         <MessageCircle :size="17" />
         {{ messageLabel }}
-      </k-button>
-      <k-button
+      </SkyButton>
+      <SkyButton
         rounded
+        small
         tonal
         :disabled="saved"
         @click.stop="emit('save')"
@@ -74,7 +75,7 @@ const initials = computed(() =>
         <Check v-if="saved" :size="17" />
         <UserPlus v-else :size="17" />
         {{ saved ? savedLabel : addLabel }}
-      </k-button>
+      </SkyButton>
     </div>
   </div>
 </template>
@@ -84,11 +85,15 @@ const initials = computed(() =>
   width: min(258px, 100%);
   width: min(258px, 72cqw);
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 48%);
+  border: 1px solid var(--sky-hairline);
   border-radius: 21px;
-  color: #151517;
-  background: linear-gradient(155deg, rgb(255 255 255 / 96%), #edf5ff);
-  box-shadow: 0 8px 24px rgb(22 63 112 / 14%);
+  color: var(--sky-text);
+  background: linear-gradient(
+    155deg,
+    var(--sky-surface-tint),
+    var(--sky-surface)
+  );
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
 }
 
 .message-contact-card__identity {
@@ -107,9 +112,9 @@ const initials = computed(() =>
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: white;
-  background: linear-gradient(145deg, #64d2ff, #0a84ff);
-  box-shadow: 0 4px 14px rgb(10 132 255 / 24%);
+  color: #ffffff;
+  background: linear-gradient(145deg, var(--sky-success), #248a3d);
+  box-shadow: 0 4px 14px rgb(52 199 89 / 24%);
 }
 
 .message-contact-card__avatar img {
@@ -143,44 +148,28 @@ const initials = computed(() =>
 
 .message-contact-card__identity small {
   margin-top: 3px;
-  color: #6e6e73;
+  color: var(--sky-muted);
   font-size: 11.5px;
 }
 
 .message-contact-card__chevron {
-  color: #8e8e93;
+  color: var(--sky-muted);
 }
 
 .message-contact-card__actions {
   display: grid;
   gap: 1px;
   padding: 8px;
-  border-top: 1px solid rgb(60 60 67 / 12%);
-  background: rgb(255 255 255 / 58%);
+  border-top: 1px solid var(--sky-hairline);
+  background: var(--sky-surface-muted);
 }
 
-.message-contact-card__actions :deep(.button) {
+.message-contact-card__actions :deep(.sky-button) {
   width: 100%;
   margin: 0;
   min-height: 36px;
   justify-content: flex-start;
   padding-inline: 14px;
   font-size: 13px;
-}
-
-:global(.phone-app.dark) .message-contact-card {
-  color: #f7f7f7;
-  border-color: rgb(255 255 255 / 10%);
-  background: linear-gradient(155deg, #34363b, #242a33);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
-}
-
-:global(.phone-app.dark) .message-contact-card__identity small {
-  color: #aeaeb2;
-}
-
-:global(.phone-app.dark) .message-contact-card__actions {
-  border-top-color: rgb(255 255 255 / 10%);
-  background: rgb(0 0 0 / 10%);
 }
 </style>

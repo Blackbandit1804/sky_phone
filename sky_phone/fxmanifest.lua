@@ -65,6 +65,7 @@ server_scripts {
     'source/server/custom_apps.lua',
     'source/server/custom_app_compat.lua',
     'source/server/db_migrate.lua',
+    'source/server/media_metadata.lua',
     'source/server/phone.lua',
     'source/server/companies.lua',
     'source/server/custom_app_storage.lua',

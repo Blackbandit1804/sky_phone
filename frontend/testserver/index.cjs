@@ -413,6 +413,8 @@ function crewLinkBootstrap(testScenario = '') {
 }
 const flipTokProfile = {
   id: 1,
+  avatar_media_id: null,
+  avatar_url: null,
   handle: 'skyline',
   display_name: 'Skyline',
   bio: 'Life around Los Santos.',
@@ -433,8 +435,97 @@ const flipTokMusicTracks = [
     url: 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga',
   },
 ]
+const flipTokMusicExtensions = new Set([
+  'aac',
+  'm4a',
+  'mp3',
+  'oga',
+  'ogg',
+  'opus',
+  'wav',
+  'webm',
+])
+function validFlipTokMusicUrl(value) {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > 2048 ||
+    /[\s\u0000-\u001f\u007f]/.test(value)
+  ) {
+    return false
+  }
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase()
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      url.port ||
+      !host.includes('.') ||
+      host === 'localhost' ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal') ||
+      /^\d+\.\d+\.\d+\.\d+$/.test(host) ||
+      !/^[a-z0-9.-]+$/.test(host) ||
+      host
+        .split('.')
+        .some(
+          (label) =>
+            !label ||
+            label.length > 63 ||
+            label.startsWith('-') ||
+            label.endsWith('-'),
+        )
+    ) {
+      return false
+    }
+    const extension = url.pathname.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase()
+    return Boolean(extension && flipTokMusicExtensions.has(extension))
+  } catch {
+    return false
+  }
+}
+function parseFlipTokYoutubeId(value) {
+  if (typeof value !== 'string' || value.length > 500) return ''
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) {
+      return ''
+    }
+    const host = url.hostname.toLowerCase()
+    let videoId = ''
+    if (host === 'youtu.be' || host === 'www.youtu.be') {
+      videoId = url.pathname.split('/')[1] || ''
+    } else if (
+      [
+        'youtube.com',
+        'www.youtube.com',
+        'm.youtube.com',
+        'music.youtube.com',
+        'youtube-nocookie.com',
+        'www.youtube-nocookie.com',
+      ].includes(host)
+    ) {
+      videoId =
+        url.searchParams.get('v') ||
+        url.pathname.match(/^\/(?:shorts|embed|live)\/([a-z0-9_-]+)/i)?.[1] ||
+        ''
+    }
+    return /^[a-z0-9_-]{11}$/i.test(videoId) ? videoId : ''
+  } catch {
+    return ''
+  }
+}
+function mockYoutubeMetadata(videoId) {
+  if (videoId === 'dQw4w9WgXcQ') {
+    return { artist: 'Rick Astley', title: 'Never Gonna Give You Up' }
+  }
+  return { artist: 'YouTube', title: `YouTube ${videoId}` }
+}
 let flipTokVideos = [
   {
+    avatar_url: null,
     id: 'fliptok-1',
     profile_id: 2,
     handle: 'novals',
@@ -450,7 +541,9 @@ let flipTokVideos = [
     music_track: '',
     music_title: '',
     music_artist: '',
+    music_source: '',
     music_url: '',
+    music_video_id: '',
     url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
     comments_enabled: true,
     is_liked: false,
@@ -464,6 +557,7 @@ let flipTokVideos = [
     created_at: Date.now() - 3600000,
   },
   {
+    avatar_url: null,
     id: 'fliptok-2',
     profile_id: 1,
     handle: 'skyline',
@@ -479,7 +573,9 @@ let flipTokVideos = [
     music_track: 'night-drive',
     music_title: 'Night Drive',
     music_artist: 'Los Santos Radio',
+    music_source: 'audio',
     music_url: flipTokMusicTracks[0].url,
+    music_video_id: '',
     url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
     comments_enabled: true,
     is_liked: true,
@@ -495,8 +591,13 @@ let flipTokVideos = [
 ]
 let flipTokComments = [
   {
+    avatar_url: null,
     id: 'comment-1',
+    is_liked: false,
+    like_count: 7,
+    parent_id: null,
     profile_id: 2,
+    reply_to_handle: null,
     handle: 'nova',
     display_name: 'Nova',
     verified: true,
@@ -506,6 +607,7 @@ let flipTokComments = [
 ]
 let flipTokActivities = [
   {
+    avatar_url: null,
     id: 'activity-1',
     profile_id: 2,
     handle: 'nova',
@@ -6433,15 +6535,33 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'fliptok:comment') {
-    flipTokComments.unshift({
+    const comment = {
+      avatar_url: flipTokProfile.avatar_url,
       id: `comment-${Date.now()}`,
+      is_liked: false,
+      like_count: 0,
+      parent_id: request.body.parentId || null,
       profile_id: 1,
+      reply_to_handle: request.body.parentId
+        ? flipTokComments.find((item) => item.id === request.body.parentId)
+            ?.handle || null
+        : null,
       handle: flipTokProfile.handle,
       display_name: flipTokProfile.display_name,
       verified: flipTokProfile.verified,
       body: request.body.body,
       created_at: Date.now(),
-    })
+    }
+    flipTokComments.push(comment)
+    response.json({ success: true, data: { id: comment.id } })
+    return
+  }
+  if (endpoint === 'fliptok:comment-react') {
+    const comment = flipTokComments.find((item) => item.id === request.body.id)
+    if (comment) {
+      comment.is_liked = request.body.active === true
+      comment.like_count += comment.is_liked ? 1 : -1
+    }
     response.json({ success: true })
     return
   }
@@ -6516,6 +6636,8 @@ app.post('/api/:endpoint', (request, response) => {
               display_name: first.display_name,
               bio: 'Creator in Los Santos.',
               account_type: 'person',
+              avatar_media_id: null,
+              avatar_url: first.avatar_url ?? null,
               verified: first.verified,
               is_following: first.is_following,
               is_owner: false,
@@ -6525,6 +6647,38 @@ app.post('/api/:endpoint', (request, response) => {
             },
         videos,
       },
+    })
+    return
+  }
+  if (endpoint === 'fliptok:connections') {
+    const creatorVideo = flipTokVideos.find((video) => !video.is_owner)
+    const creator = creatorVideo
+      ? {
+          account_type: 'person',
+          avatar_media_id: null,
+          avatar_url: creatorVideo.avatar_url ?? null,
+          bio: 'Creator in Los Santos.',
+          display_name: creatorVideo.display_name,
+          followers: 12840,
+          following: 91,
+          handle: creatorVideo.handle,
+          id: creatorVideo.profile_id,
+          is_following: creatorVideo.is_following,
+          is_owner: false,
+          verified: creatorVideo.verified,
+          video_count: 1,
+        }
+      : null
+    response.json({
+      success: true,
+      data:
+        request.body.mode === 'followers'
+          ? creator
+            ? [creator]
+            : []
+          : creator
+            ? [creator, { ...flipTokProfile }]
+            : [{ ...flipTokProfile }],
     })
     return
   }
@@ -6568,8 +6722,28 @@ app.post('/api/:endpoint', (request, response) => {
       display_name: request.body.displayName,
       bio: request.body.bio,
       account_type: request.body.accountType,
+      avatar_media_id: request.body.avatarMediaId || null,
+      avatar_url:
+        mockMedia.find((item) => item.id === request.body.avatarMediaId)?.url ||
+        null,
     })
     response.json({ success: true, data: flipTokProfile })
+    return
+  }
+  if (endpoint === 'fliptok:music-metadata') {
+    const videoId = parseFlipTokYoutubeId(String(request.body.url || '').trim())
+    if (!videoId) {
+      response.json({ success: false, error: 'invalid_music_url' })
+      return
+    }
+    response.json({
+      success: true,
+      data: {
+        ...mockYoutubeMetadata(videoId),
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        videoId,
+      },
+    })
     return
   }
   if (endpoint === 'fliptok:publish') {
@@ -6580,7 +6754,26 @@ app.post('/api/:endpoint', (request, response) => {
       response.json({ success: false, error: 'invalid_media' })
       return
     }
+    const musicTrack = String(request.body.musicTrack || '')
+    const configuredTrack = flipTokMusicTracks.find(
+      (track) => track.id === musicTrack,
+    )
+    const customMusicUrl = String(request.body.customMusicUrl || '').trim()
+    const youtubeVideoId = parseFlipTokYoutubeId(customMusicUrl)
+    const youtubeMetadata = youtubeVideoId
+      ? mockYoutubeMetadata(youtubeVideoId)
+      : null
+    if (
+      (musicTrack && !configuredTrack) ||
+      (customMusicUrl &&
+        (configuredTrack ||
+          (!youtubeVideoId && !validFlipTokMusicUrl(customMusicUrl))))
+    ) {
+      response.json({ success: false, error: 'invalid_music_url' })
+      return
+    }
     flipTokVideos.unshift({
+      avatar_url: flipTokProfile.avatar_url,
       id: `fliptok-${Date.now()}`,
       profile_id: 1,
       handle: flipTokProfile.handle,
@@ -6593,16 +6786,18 @@ app.post('/api/:endpoint', (request, response) => {
       cover_time_ms: request.body.coverTimeMs || 0,
       original_volume: request.body.originalVolume ?? 100,
       music_volume: request.body.musicVolume || 0,
-      music_track: request.body.musicTrack || '',
-      music_title:
-        flipTokMusicTracks.find((track) => track.id === request.body.musicTrack)
-          ?.title || '',
-      music_artist:
-        flipTokMusicTracks.find((track) => track.id === request.body.musicTrack)
-          ?.artist || '',
-      music_url:
-        flipTokMusicTracks.find((track) => track.id === request.body.musicTrack)
-          ?.url || '',
+      music_track: configuredTrack?.id || '',
+      music_title: configuredTrack?.title || youtubeMetadata?.title || '',
+      music_artist: configuredTrack?.artist || youtubeMetadata?.artist || '',
+      music_source: configuredTrack
+        ? 'audio'
+        : youtubeVideoId
+          ? 'youtube'
+          : customMusicUrl
+            ? 'audio'
+            : '',
+      music_url: youtubeVideoId ? '' : configuredTrack?.url || customMusicUrl,
+      music_video_id: youtubeVideoId,
       url: media.url,
       comments_enabled: request.body.commentsEnabled,
       is_liked: false,

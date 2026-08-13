@@ -5,6 +5,16 @@ local report_reasons = { spam = true, harassment = true, dangerous = true, illeg
 local report_actions = { dismiss = true, remove = true }
 local music_tracks = {}
 local music_track_list = {}
+local custom_music_extensions = {
+    aac = true,
+    m4a = true,
+    mp3 = true,
+    oga = true,
+    ogg = true,
+    opus = true,
+    wav = true,
+    webm = true,
+}
 local password_pepper = GetConvar(Config.FlipTok.PasswordPepperConvar, "")
 
 if password_pepper == "" then
@@ -37,6 +47,37 @@ end
 local function valid_text(value, minimum, maximum)
     local length = type(value) == "string" and utf8.len(value) or nil
     return length and length >= minimum and length <= maximum
+end
+
+local function valid_custom_music_url(value)
+    if type(value) ~= "string" or value == "" or #value > Config.Media.UrlMaxLength
+        or value:find("[^\33-\126]")
+    then
+        return false
+    end
+
+    local authority = value:match("^https://([^/%?#]+)")
+    if not authority or authority:find("@", 1, true) then return false end
+
+    local host = authority:match("^([^:]+)")
+    local port = host and authority:sub(#host + 1) or ""
+    if not host or (port ~= "" and port ~= ":443") then return false end
+
+    host = host:lower()
+    if host == "localhost" or host:match("%.localhost$") or host:match("%.local$") or host:match("%.internal$")
+        or host:match("^%d+%.%d+%.%d+%.%d+$") or not host:find("%.")
+        or host:find("[^a-z0-9%.%-]")
+    then
+        return false
+    end
+
+    for label in host:gmatch("[^.]+") do
+        if #label > 63 or label:match("^%-") or label:match("%-$") then return false end
+    end
+
+    local path = value:match("^https://[^/]+(/[^?#]*)") or ""
+    local extension = path:match("%.([%w]+)$")
+    return extension and custom_music_extensions[extension:lower()] == true or false
 end
 
 local function affected_rows(result)
@@ -91,6 +132,7 @@ end
 
 local function hydrate_profile(profile, viewer_id)
     profile.id = tonumber(profile.id)
+    profile.avatar_media_id = tonumber(profile.avatar_media_id)
     profile.verified = tonumber(profile.verified) == 1
     profile.is_following = viewer_id and tonumber(profile.is_following) == 1 or false
     profile.is_owner = viewer_id and profile.id == viewer_id or false
@@ -102,12 +144,14 @@ end
 
 local function load_profile(profile_id, viewer_id)
     local rows = Bridge.Database.Query([[
-        SELECT p.*,
+        SELECT p.*, avatar.`url` AS `avatar_url`,
             EXISTS(SELECT 1 FROM `sky_phone_fliptok_follows` f WHERE f.`follower_id` = ? AND f.`following_id` = p.`id`) AS `is_following`,
             (SELECT COUNT(*) FROM `sky_phone_fliptok_follows` f WHERE f.`following_id` = p.`id`) AS `followers`,
             (SELECT COUNT(*) FROM `sky_phone_fliptok_follows` f WHERE f.`follower_id` = p.`id`) AS `following`,
             (SELECT COUNT(*) FROM `sky_phone_fliptok_videos` v WHERE v.`profile_id` = p.`id` AND v.`status` = 'published') AS `video_count`
-        FROM `sky_phone_fliptok_profiles` p WHERE p.`id` = ? LIMIT 1
+        FROM `sky_phone_fliptok_profiles` p
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = p.`avatar_media_id`
+        WHERE p.`id` = ? LIMIT 1
     ]], { viewer_id, profile_id })
     return rows[1] and hydrate_profile(rows[1], viewer_id) or nil
 end
@@ -143,9 +187,16 @@ local function hydrate_videos(rows)
         video.original_volume = tonumber(video.original_volume) or 100
         video.music_volume = tonumber(video.music_volume) or 0
         local track = music_tracks[video.music_track]
-        video.music_title = track and track.title or ""
-        video.music_artist = track and track.artist or ""
-        video.music_url = track and track.url or ""
+        local custom_music_url = type(video.custom_music_url) == "string" and video.custom_music_url or ""
+        local youtube_id = SkyPhoneYouTube.ParseId(custom_music_url)
+        video.music_title = track and track.title or video.custom_music_title or ""
+        video.music_artist = track and track.artist or video.custom_music_artist or ""
+        video.music_url = track and track.url or (youtube_id and "" or custom_music_url)
+        video.music_source = track and "audio" or (youtube_id and "youtube" or (custom_music_url ~= "" and "audio" or ""))
+        video.music_video_id = youtube_id or ""
+        video.custom_music_url = nil
+        video.custom_music_title = nil
+        video.custom_music_artist = nil
         video.created_at = (tonumber(video.created_at_unix) or 0) * 1000
         video.created_at_unix = nil
     end
@@ -160,7 +211,9 @@ local function list_videos(viewer_id, where_clause, values, limit, offset, ranki
     return hydrate_videos(Bridge.Database.Query(([[
         SELECT v.`id`, v.`profile_id`, v.`caption`, v.`location`, v.`comments_enabled`, v.`view_count`, v.`share_count`,
             v.`trim_start_ms`, v.`trim_end_ms`, v.`cover_time_ms`, v.`original_volume`, v.`music_volume`, v.`music_track`,
+            v.`custom_music_url`, v.`custom_music_title`, v.`custom_music_artist`,
             m.`url`, UNIX_TIMESTAMP(v.`created_at`) AS `created_at_unix`, p.`handle`, p.`display_name`, p.`verified`,
+            avatar.`url` AS `avatar_url`,
             (v.`profile_id` = ?) AS `is_owner`,
             EXISTS(SELECT 1 FROM `sky_phone_fliptok_reactions` r WHERE r.`video_id` = v.`id` AND r.`profile_id` = ? AND r.`kind` = 'like') AS `is_liked`,
             EXISTS(SELECT 1 FROM `sky_phone_fliptok_reactions` r WHERE r.`video_id` = v.`id` AND r.`profile_id` = ? AND r.`kind` = 'save') AS `is_saved`,
@@ -170,6 +223,7 @@ local function list_videos(viewer_id, where_clause, values, limit, offset, ranki
         FROM `sky_phone_fliptok_videos` v
         JOIN `sky_phone_fliptok_profiles` p ON p.`id` = v.`profile_id`
         JOIN `sky_phone_media` m ON m.`id` = v.`media_id`
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = p.`avatar_media_id`
         WHERE v.`status` = 'published' AND %s
             AND NOT EXISTS(SELECT 1 FROM `sky_phone_fliptok_blocks` b WHERE
                 (b.`blocker_id` = ? AND b.`blocked_id` = v.`profile_id`) OR (b.`blocked_id` = ? AND b.`blocker_id` = v.`profile_id`))
@@ -339,6 +393,25 @@ Bridge.Callbacks.Register("sky_phone:fliptok:discover", function(source, data)
     return { success = true, data = rows }
 end)
 
+Bridge.Callbacks.Register("sky_phone:fliptok:music-metadata", function(source, data)
+    local profile, error_response = require_profile(source)
+    if not profile then return error_response end
+    if not SkyPhone.AllowOperation(source, "fliptok:music-metadata", 12, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local value = trim(type(data) == "table" and data.url or nil)
+    local video_id = SkyPhoneYouTube.ParseId(value)
+    if not video_id then return { success = false, error = "invalid_music_url" } end
+
+    local metadata = SkyPhoneYouTube.FetchMetadata(video_id)
+    return { success = true, data = {
+        url = SkyPhoneYouTube.WatchUrl(video_id),
+        videoId = video_id,
+        title = metadata and metadata.title or "YouTube " .. video_id,
+        artist = metadata and metadata.artist or "YouTube",
+    } }
+end)
+
 Bridge.Callbacks.Register("sky_phone:fliptok:publish", function(source, data)
     local profile, error_response = require_profile(source)
     if not profile then return error_response end
@@ -354,6 +427,9 @@ Bridge.Callbacks.Register("sky_phone:fliptok:publish", function(source, data)
     local original_volume = math.floor(tonumber(data.originalVolume) or 100)
     local music_volume = math.floor(tonumber(data.musicVolume) or 0)
     local music_track = type(data.musicTrack) == "string" and data.musicTrack or ""
+    local custom_music_url = trim(data.customMusicUrl) or ""
+    local custom_music_title = ""
+    local custom_music_artist = ""
     if not media_id or media_id < 1 or media_id ~= math.floor(media_id)
         or not valid_text(caption, 0, Config.FlipTok.CaptionMaxLength)
         or not valid_text(location, 0, 80) or not visibilities[visibility]
@@ -364,17 +440,31 @@ Bridge.Callbacks.Register("sky_phone:fliptok:publish", function(source, data)
         or original_volume < 0 or original_volume > 100 or music_volume < 0 or music_volume > 100
         or (music_track ~= "" and not music_tracks[music_track])
     then return { success = false, error = "invalid_video" } end
-    if music_track == "" then music_volume = 0 end
+    if custom_music_url ~= "" then
+        if music_track ~= "" then return { success = false, error = "invalid_music_url" } end
+        local youtube_id = SkyPhoneYouTube.ParseId(custom_music_url)
+        if youtube_id then
+            local metadata = SkyPhoneYouTube.FetchMetadata(youtube_id)
+            custom_music_url = SkyPhoneYouTube.WatchUrl(youtube_id)
+            custom_music_title = metadata and metadata.title or "YouTube " .. youtube_id
+            custom_music_artist = metadata and metadata.artist or "YouTube"
+        elseif not valid_custom_music_url(custom_music_url) then
+            return { success = false, error = "invalid_music_url" }
+        end
+    end
+    if music_track == "" and custom_music_url == "" then music_volume = 0 end
     if not SkyPhoneMedia.ResolveOwnedMedia(source, tostring(media_id), "video") then
         return { success = false, error = "invalid_media" }
     end
     local id = new_id()
     Bridge.Database.Query([[INSERT INTO `sky_phone_fliptok_videos`
         (`id`, `profile_id`, `media_id`, `caption`, `location`, `visibility`, `comments_enabled`, `trim_start_ms`, `trim_end_ms`,
-            `cover_time_ms`, `original_volume`, `music_volume`, `music_track`, `status`)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]], {
+            `cover_time_ms`, `original_volume`, `music_volume`, `music_track`, `custom_music_url`, `custom_music_title`,
+            `custom_music_artist`, `status`)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]], {
         id, profile.id, media_id, caption, location, visibility, data.commentsEnabled and 1 or 0, trim_start_ms, trim_end_ms,
-        cover_time_ms, original_volume, music_volume, music_track, data.draft == true and "draft" or "published",
+        cover_time_ms, original_volume, music_volume, music_track, custom_music_url, custom_music_title, custom_music_artist,
+        data.draft == true and "draft" or "published",
     })
     return { success = true, data = { id = id } }
 end)
@@ -426,14 +516,30 @@ Bridge.Callbacks.Register("sky_phone:fliptok:comments", function(source, data)
     local profile, error_response = require_profile(source)
     if not profile then return error_response end
     if type(data) ~= "table" or type(data.id) ~= "string" then return { success = false, error = "invalid_request" } end
-    local rows = Bridge.Database.Query([[SELECT c.`id`, c.`body`, UNIX_TIMESTAMP(c.`created_at`) * 1000 AS `created_at`,
-        p.`id` AS `profile_id`, p.`handle`, p.`display_name`, p.`verified`
-        FROM `sky_phone_fliptok_comments` c JOIN `sky_phone_fliptok_profiles` p ON p.`id` = c.`profile_id`
+    local rows = Bridge.Database.Query([[SELECT c.`id`, c.`parent_id`, c.`body`, UNIX_TIMESTAMP(c.`created_at`) * 1000 AS `created_at`,
+        p.`id` AS `profile_id`, p.`handle`, p.`display_name`, p.`verified`, avatar.`url` AS `avatar_url`,
+        parent_author.`handle` AS `reply_to_handle`,
+        EXISTS(SELECT 1 FROM `sky_phone_fliptok_comment_reactions` reaction
+            WHERE reaction.`comment_id` = c.`id` AND reaction.`profile_id` = ?) AS `is_liked`,
+        (SELECT COUNT(*) FROM `sky_phone_fliptok_comment_reactions` reaction
+            WHERE reaction.`comment_id` = c.`id`) AS `like_count`
+        FROM `sky_phone_fliptok_comments` c
+        JOIN `sky_phone_fliptok_profiles` p ON p.`id` = c.`profile_id`
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = p.`avatar_media_id`
+        LEFT JOIN `sky_phone_fliptok_comments` parent ON parent.`id` = c.`parent_id`
+        LEFT JOIN `sky_phone_fliptok_profiles` parent_author ON parent_author.`id` = parent.`profile_id`
         WHERE c.`video_id` = ? AND c.`status` = 'visible'
             AND NOT EXISTS(SELECT 1 FROM `sky_phone_fliptok_blocks` b WHERE
                 (b.`blocker_id` = ? AND b.`blocked_id` = c.`profile_id`) OR (b.`blocked_id` = ? AND b.`blocker_id` = c.`profile_id`))
-        ORDER BY c.`created_at` DESC LIMIT 100]], { data.id, profile.id, profile.id })
-    for _, row in ipairs(rows) do row.verified = tonumber(row.verified) == 1 end
+        ORDER BY COALESCE(parent.`created_at`, c.`created_at`) DESC,
+            c.`parent_id` IS NOT NULL, c.`created_at` ASC LIMIT 100]], {
+        profile.id, data.id, profile.id, profile.id,
+    })
+    for _, row in ipairs(rows) do
+        row.verified = tonumber(row.verified) == 1
+        row.is_liked = tonumber(row.is_liked) == 1
+        row.like_count = tonumber(row.like_count) or 0
+    end
     return { success = true, data = rows }
 end)
 
@@ -442,17 +548,56 @@ Bridge.Callbacks.Register("sky_phone:fliptok:comment", function(source, data)
     if not profile then return error_response end
     if not SkyPhone.AllowOperation(source, "fliptok:comment", 20, 60) then return { success = false, error = "rate_limited" } end
     local body = type(data) == "table" and trim(data.body) or nil
+    local parent_id = type(data) == "table" and trim(data.parentId) or nil
     if type(data) ~= "table" or type(data.id) ~= "string" or not valid_text(body, 1, Config.FlipTok.CommentMaxLength) then return { success = false, error = "invalid_comment" } end
+    if parent_id and #parent_id ~= 36 then return { success = false, error = "invalid_comment" } end
     local videos = Bridge.Database.Query("SELECT `profile_id` FROM `sky_phone_fliptok_videos` WHERE `id` = ? AND `status` = 'published' AND `comments_enabled` = 1 LIMIT 1", { data.id })
     if not videos[1] then return { success = false, error = "comments_disabled" } end
     local owner_id = tonumber(videos[1].profile_id)
     if owner_id ~= profile.id and are_profiles_blocked(profile.id, owner_id) then
         return { success = false, error = "blocked" }
     end
-    Bridge.Database.Query("INSERT INTO `sky_phone_fliptok_comments` (`id`, `video_id`, `profile_id`, `body`) VALUES (?, ?, ?, ?)", { new_id(), data.id, profile.id, body })
+    if parent_id then
+        local parents = Bridge.Database.Query([[SELECT c.`id`, c.`profile_id` FROM `sky_phone_fliptok_comments` c
+            WHERE c.`id` = ? AND c.`video_id` = ? AND c.`status` = 'visible' LIMIT 1]], { parent_id, data.id })
+        if not parents[1] or are_profiles_blocked(profile.id, tonumber(parents[1].profile_id)) then
+            return { success = false, error = "invalid_comment" }
+        end
+    end
+    local comment_id = new_id()
+    Bridge.Database.Query("INSERT INTO `sky_phone_fliptok_comments` (`id`, `video_id`, `profile_id`, `parent_id`, `body`) VALUES (?, ?, ?, ?, ?)", {
+        comment_id, data.id, profile.id, parent_id, body,
+    })
     if tonumber(videos[1].profile_id) ~= profile.id then
         Bridge.Database.Query("INSERT INTO `sky_phone_fliptok_notifications` (`id`, `recipient_id`, `actor_id`, `video_id`, `kind`) VALUES (?, ?, ?, ?, 'comment')", { new_id(), videos[1].profile_id, profile.id, data.id })
         notify_profile(owner_id, profile.id, "comment", data.id)
+    end
+    return { success = true, data = { id = comment_id } }
+end)
+
+Bridge.Callbacks.Register("sky_phone:fliptok:comment-react", function(source, data)
+    local profile, error_response = require_profile(source)
+    if not profile then return error_response end
+    if not SkyPhone.AllowOperation(source, "fliptok:comment-react", 60, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local comment_id = type(data) == "table" and data.id or nil
+    if type(comment_id) ~= "string" or #comment_id ~= 36 or type(data.active) ~= "boolean" then
+        return { success = false, error = "invalid_request" }
+    end
+    local comments = Bridge.Database.Query([[SELECT c.`profile_id` FROM `sky_phone_fliptok_comments` c
+        JOIN `sky_phone_fliptok_videos` v ON v.`id` = c.`video_id`
+        WHERE c.`id` = ? AND c.`status` = 'visible' AND v.`status` = 'published' LIMIT 1]], { comment_id })
+    if not comments[1] then return { success = false, error = "invalid_comment" } end
+    if are_profiles_blocked(profile.id, tonumber(comments[1].profile_id)) then
+        return { success = false, error = "blocked" }
+    end
+    if data.active then
+        Bridge.Database.Query([[INSERT IGNORE INTO `sky_phone_fliptok_comment_reactions`
+            (`comment_id`, `profile_id`) VALUES (?, ?)]], { comment_id, profile.id })
+    else
+        Bridge.Database.Query([[DELETE FROM `sky_phone_fliptok_comment_reactions`
+            WHERE `comment_id` = ? AND `profile_id` = ?]], { comment_id, profile.id })
     end
     return { success = true }
 end)
@@ -491,19 +636,65 @@ Bridge.Callbacks.Register("sky_phone:fliptok:profile", function(source, data)
     return { success = true, data = { profile = target, videos = videos } }
 end)
 
+Bridge.Callbacks.Register("sky_phone:fliptok:connections", function(source, data)
+    local viewer, error_response = require_profile(source)
+    if not viewer then return error_response end
+    local target_id = type(data) == "table" and tonumber(data.profileId) or nil
+    local mode = type(data) == "table" and data.mode or nil
+    if not target_id or (mode ~= "followers" and mode ~= "following") then
+        return { success = false, error = "invalid_request" }
+    end
+    if target_id ~= viewer.id and are_profiles_blocked(viewer.id, target_id) then
+        return { success = false, error = "profile_not_found" }
+    end
+    local join_column = mode == "followers" and "f.`follower_id`" or "f.`following_id`"
+    local filter_column = mode == "followers" and "f.`following_id`" or "f.`follower_id`"
+    local rows = Bridge.Database.Query(([[SELECT p.*, avatar.`url` AS `avatar_url`,
+        EXISTS(SELECT 1 FROM `sky_phone_fliptok_follows` own_follow
+            WHERE own_follow.`follower_id` = ? AND own_follow.`following_id` = p.`id`) AS `is_following`,
+        (SELECT COUNT(*) FROM `sky_phone_fliptok_follows` followers WHERE followers.`following_id` = p.`id`) AS `followers`,
+        (SELECT COUNT(*) FROM `sky_phone_fliptok_follows` following WHERE following.`follower_id` = p.`id`) AS `following`,
+        (SELECT COUNT(*) FROM `sky_phone_fliptok_videos` video WHERE video.`profile_id` = p.`id` AND video.`status` = 'published') AS `video_count`
+        FROM `sky_phone_fliptok_follows` f
+        JOIN `sky_phone_fliptok_profiles` p ON p.`id` = %s
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = p.`avatar_media_id`
+        WHERE %s = ? AND NOT EXISTS(SELECT 1 FROM `sky_phone_fliptok_blocks` block WHERE
+            (block.`blocker_id` = ? AND block.`blocked_id` = p.`id`) OR
+            (block.`blocked_id` = ? AND block.`blocker_id` = p.`id`))
+        ORDER BY p.`display_name`, p.`handle` LIMIT 200]]):format(join_column, filter_column), {
+        viewer.id, target_id, viewer.id, viewer.id,
+    })
+    for _, row in ipairs(rows) do hydrate_profile(row, viewer.id) end
+    return { success = true, data = rows }
+end)
+
 Bridge.Callbacks.Register("sky_phone:fliptok:update-profile", function(source, data)
     local profile, error_response = require_profile(source)
     if not profile then return error_response end
-    local handle = type(data) == "table" and trim(data.handle) or nil
-    local display_name = type(data) == "table" and trim(data.displayName) or nil
-    local bio = type(data) == "table" and trim(data.bio) or nil
-    local account_type = type(data) == "table" and data.accountType or nil
-    if not handle or not handle:match("^[a-z0-9._]+$") or not valid_text(handle, 3, 24)
+    if type(data) ~= "table" then return { success = false, error = "invalid_request" } end
+    local handle = normalize_handle(data.handle)
+    local display_name = trim(data.displayName)
+    local bio = trim(data.bio)
+    local account_type = data.accountType
+    if not handle
         or not valid_text(display_name, 1, 40) or not valid_text(bio, 0, Config.FlipTok.BioMaxLength) or not account_types[account_type]
     then return { success = false, error = "invalid_profile" } end
+    local avatar_media_id = profile.avatar_media_id and tonumber(profile.avatar_media_id) or nil
+    if data.avatarMediaId ~= nil then
+        local requested_avatar_id = tonumber(data.avatarMediaId)
+        if not requested_avatar_id or requested_avatar_id < 0 or requested_avatar_id ~= math.floor(requested_avatar_id) then
+            return { success = false, error = "invalid_profile_image" }
+        end
+        if requested_avatar_id > 0 and not SkyPhoneMedia.ResolveOwnedMedia(source, requested_avatar_id, "photo") then
+            return { success = false, error = "invalid_profile_image" }
+        end
+        avatar_media_id = requested_avatar_id > 0 and requested_avatar_id or nil
+    end
     local duplicate = Bridge.Database.Query("SELECT `id` FROM `sky_phone_fliptok_profiles` WHERE `handle` = ? AND `id` <> ? LIMIT 1", { handle, profile.id })
     if duplicate[1] then return { success = false, error = "handle_taken" } end
-    Bridge.Database.Query("UPDATE `sky_phone_fliptok_profiles` SET `handle` = ?, `display_name` = ?, `bio` = ?, `account_type` = ? WHERE `id` = ?", { handle, display_name, bio, account_type, profile.id })
+    Bridge.Database.Query("UPDATE `sky_phone_fliptok_profiles` SET `handle` = ?, `display_name` = ?, `bio` = ?, `account_type` = ?, `avatar_media_id` = ? WHERE `id` = ?", {
+        handle, display_name, bio, account_type, avatar_media_id, profile.id,
+    })
     return { success = true, data = load_profile(profile.id, profile.id) }
 end)
 
@@ -511,8 +702,9 @@ Bridge.Callbacks.Register("sky_phone:fliptok:activities", function(source)
     local profile, error_response = require_profile(source)
     if not profile then return error_response end
     local rows = Bridge.Database.Query([[SELECT n.`id`, n.`kind`, n.`video_id`, n.`read_at`, UNIX_TIMESTAMP(n.`created_at`) * 1000 AS `created_at`,
-        p.`id` AS `profile_id`, p.`handle`, p.`display_name`, p.`verified`
+        p.`id` AS `profile_id`, p.`handle`, p.`display_name`, p.`verified`, avatar.`url` AS `avatar_url`
         FROM `sky_phone_fliptok_notifications` n JOIN `sky_phone_fliptok_profiles` p ON p.`id` = n.`actor_id`
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = p.`avatar_media_id`
         WHERE n.`recipient_id` = ?
             AND (n.`kind` = 'verified' OR NOT EXISTS(SELECT 1 FROM `sky_phone_fliptok_blocks` b WHERE
                 (b.`blocker_id` = n.`recipient_id` AND b.`blocked_id` = n.`actor_id`) OR

@@ -1,38 +1,16 @@
 <script setup lang="ts">
 import {
-  kBlock,
-  kGlass,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kMessage,
-  kMessagebar,
-  kMessages,
-  kMessagesTitle,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kSearchbar,
-  kToast,
-  kToolbarPane,
-} from 'konsta/vue'
-import {
   ArrowUpCircle,
   Camera,
   Check,
-  ChevronLeft,
   ChevronRight,
   ImagePlay,
   Images,
-  ListFilter,
   MessageCircle,
   Mic,
   Pencil,
   Phone as PhoneIcon,
   Plus,
-  Search,
   SquarePen,
   Trash2,
   ContactRound,
@@ -65,6 +43,28 @@ import type {
 } from '@/types/messages'
 import type { PhoneContact } from '@/types/phone'
 import type { EasySharePayload } from '@/types/easyshare'
+import {
+  SkyAppPage,
+  SkyButton,
+  SkyEmptyState,
+  SkyField,
+  SkyGlass,
+  SkyLink,
+  SkyList,
+  SkyListItem,
+  SkyMessage,
+  SkyMessagebar,
+  SkyMessages,
+  SkyMessagesTitle,
+  SkyNavbar,
+  SkyPillNavigation,
+  SkyScrollArea,
+  SkySearchbar,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySpinner,
+  SkyToast,
+} from '@/ui'
 
 const VOICE_MAX_DURATION_MS = 30_000
 const VOICE_MAX_BYTES = 135_000
@@ -198,9 +198,7 @@ function conversationPreview(conversation: SmsConversation): string {
 }
 
 function contactInitials(number: string): string {
-  const contact = calls.contacts.find(
-    (entry) => entry.phone_number === number,
-  )
+  const contact = calls.contacts.find((entry) => entry.phone_number === number)
   if (!contact) return ''
   return contact.name
     .split(/\s+/)
@@ -290,10 +288,6 @@ function messageFooter(message: SmsMessage, index: number): string | undefined {
     return phone.t('Apps.messages.notDelivered')
   }
   return phone.t('Apps.messages.delivered')
-}
-
-function eventValue(event: Event): string {
-  return (event.target as HTMLInputElement).value
 }
 
 function showToast(message: string): void {
@@ -855,503 +849,575 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
+  <SkyAppPage
     v-if="!hasSim"
-    class="messages-page !pt-[44px] !pb-[25px]"
-    :aria-label="phone.t('Apps.messages.name')"
+    class="messages-sky-page"
+    :label="phone.t('Apps.messages.name')"
+    :dark="phone.isDarkMode"
+    accent="#34c759"
+    accent-soft="rgba(52, 199, 89, 0.16)"
   >
-    <k-navbar large transparent :title="phone.t('Apps.messages.name')" />
-    <div class="messages-empty-state">
-      <span class="messages-empty-state__icon"
-        ><MessageCircle :size="35"
-      /></span>
-      <h2>{{ phone.t('Apps.messages.noSim') }}</h2>
-      <p>{{ phone.t('Apps.messages.noSimBody') }}</p>
-    </div>
-  </k-page>
+    <SkyNavbar variant="large" :title="phone.t('Apps.messages.name')" />
+    <SkyScrollArea class="messages-sky-state-scroll">
+      <SkyEmptyState
+        :title="phone.t('Apps.messages.noSim')"
+        :body="phone.t('Apps.messages.noSimBody')"
+      >
+        <template #icon><MessageCircle :size="35" /></template>
+      </SkyEmptyState>
+    </SkyScrollArea>
+  </SkyAppPage>
 
-  <k-page
+  <SkyAppPage
     v-else-if="!messages.activeNumber && !composing"
-    class="messages-page messages-inbox-page"
-    :aria-label="phone.t('Apps.messages.name')"
+    class="messages-sky-page messages-sky-inbox"
+    :label="phone.t('Apps.messages.name')"
+    :dark="phone.isDarkMode"
+    accent="#34c759"
+    accent-soft="rgba(52, 199, 89, 0.16)"
   >
-    <header class="messages-inbox-header">
-      <k-glass
-        component="button"
-        type="button"
-        class="messages-inbox-header__edit"
-        @click="toggleListEditing"
-      >
-        <span>{{ phone.t(editingList ? 'Common.done' : 'Common.edit') }}</span>
-      </k-glass>
-      <strong>
-        {{
-          editingList
-            ? phone.t('Apps.messages.selectedCount', {
-                count: String(selectedNumbers.length),
-              })
-            : phone.t('Apps.messages.name')
-        }}
-      </strong>
-      <k-glass
-        v-if="!editingList"
-        component="button"
-        type="button"
-        :class="{ active: showUnreadOnly }"
-        :aria-label="phone.t('Apps.messages.filterUnread')"
-        @click="showUnreadOnly = !showUnreadOnly"
-      >
-        <ListFilter :size="24" :stroke-width="2.25" />
-      </k-glass>
-      <k-glass
-        v-else
-        component="button"
-        type="button"
-        class="messages-inbox-header__delete"
-        :disabled="!selectedNumbers.length"
-        :aria-label="phone.t('Apps.messages.deleteSelected')"
-        @click="deleteSelectedConversations"
-      >
-        <Trash2 :size="18" />
-      </k-glass>
-    </header>
-
-    <div v-if="filteredConversations.length" class="messages-conversation-list">
-      <button
-        v-for="conversation in filteredConversations"
-        :key="conversation.phoneNumber"
-        type="button"
-        class="messages-conversation"
-        :class="{
-          'messages-conversation--unread': conversation.unread > 0,
-          'messages-conversation--selected': selectedNumbers.includes(
-            conversation.phoneNumber,
-          ),
-        }"
-        @click="openConversation(conversation)"
-      >
-        <span v-if="editingList" class="messages-conversation__selection">
-          <Check
-            v-if="selectedNumbers.includes(conversation.phoneNumber)"
-            :size="14"
-          />
-        </span>
-        <span
-          v-else-if="conversation.unread"
-          class="messages-conversation__dot"
-        />
-        <span
-          class="messages-avatar"
-          :class="{
-            'messages-avatar--unknown': !knownContactNumbers.has(
-              conversation.phoneNumber,
-            ),
-          }"
-          aria-hidden="true"
+    <SkyNavbar
+      variant="large"
+      :title="
+        editingList
+          ? phone.t('Apps.messages.selectedCount', {
+              count: String(selectedNumbers.length),
+            })
+          : phone.t('Apps.messages.name')
+      "
+    >
+      <template #left>
+        <SkyLink class="messages-sky-edit" @click="toggleListEditing">
+          {{ phone.t(editingList ? 'Common.done' : 'Common.edit') }}
+        </SkyLink>
+      </template>
+      <template #right>
+        <SkyLink
+          v-if="editingList"
+          icon-only
+          class="messages-sky-delete"
+          :disabled="!selectedNumbers.length"
+          :aria-label="phone.t('Apps.messages.deleteSelected')"
+          @click="deleteSelectedConversations"
         >
-          <img
-            v-if="contactAvatarUrls.get(conversation.phoneNumber)"
-            class="messages-avatar__image"
-            :src="contactAvatarUrls.get(conversation.phoneNumber)"
-            alt=""
-          />
-          <span
-            v-else-if="knownContactNumbers.has(conversation.phoneNumber)"
-            class="messages-avatar__initials"
-          >
-            {{ contactInitials(conversation.phoneNumber) }}
-          </span>
-          <span v-else class="messages-avatar__placeholder">
-            <i />
-            <b />
-          </span>
-        </span>
-        <span class="messages-conversation__body">
-          <span class="messages-conversation__headline">
-            <strong>{{ contactName(conversation.phoneNumber) }}</strong>
-            <time>{{
-              formatConversationDate(conversation.lastMessageAt)
-            }}</time>
-            <ChevronRight :size="13" />
-          </span>
-          <span class="messages-conversation__preview">
-            {{ conversationPreview(conversation) }}
-          </span>
-        </span>
-      </button>
-    </div>
+          <Trash2 :size="20" />
+        </SkyLink>
+        <SkyLink
+          v-else
+          icon-only
+          :aria-label="phone.t('Apps.messages.compose')"
+          @click="beginCompose"
+        >
+          <SquarePen :size="21" />
+        </SkyLink>
+      </template>
+      <template #subnavbar>
+        <SkySearchbar
+          v-model="search"
+          class="messages-sky-search"
+          :label="phone.t('Apps.messages.search')"
+          :placeholder="phone.t('Apps.messages.search')"
+          :clear-label="phone.t('Common.clear')"
+        />
+      </template>
+    </SkyNavbar>
 
-    <div v-else class="messages-empty-state messages-empty-state--list">
-      <span class="messages-empty-state__icon"
-        ><MessageCircle :size="35"
-      /></span>
-      <h2>
-        {{
+    <SkyScrollArea with-tabbar class="messages-sky-inbox-scroll">
+      <SkySegmented
+        v-if="!editingList"
+        navigation
+        rounded
+        strong
+        class="messages-sky-filters"
+        :active-index="showUnreadOnly ? 1 : 0"
+        :aria-label="phone.t('Apps.messages.filterLabel')"
+        :item-count="2"
+      >
+        <SkySegmentedButton
+          :active="!showUnreadOnly"
+          @click="showUnreadOnly = false"
+        >
+          {{ phone.t('Apps.messages.allMessages') }}
+        </SkySegmentedButton>
+        <SkySegmentedButton
+          :active="showUnreadOnly"
+          @click="showUnreadOnly = true"
+        >
+          {{ phone.t('Apps.messages.unreadMessages') }}
+        </SkySegmentedButton>
+      </SkySegmented>
+
+      <SkyList
+        v-if="filteredConversations.length"
+        flush
+        class="messages-sky-conversation-list"
+      >
+        <SkyListItem
+          v-for="conversation in filteredConversations"
+          :key="conversation.phoneNumber"
+          link
+          link-component="button"
+          :chevron="false"
+          :active="selectedNumbers.includes(conversation.phoneNumber)"
+          :aria-label="contactName(conversation.phoneNumber)"
+          class="messages-sky-conversation"
+          :class="{
+            'messages-sky-conversation--unread': conversation.unread > 0,
+          }"
+          @click="openConversation(conversation)"
+        >
+          <template #media>
+            <span
+              class="messages-avatar"
+              :class="{
+                'messages-avatar--unknown': !knownContactNumbers.has(
+                  conversation.phoneNumber,
+                ),
+              }"
+              aria-hidden="true"
+            >
+              <img
+                v-if="contactAvatarUrls.get(conversation.phoneNumber)"
+                class="messages-avatar__image"
+                :src="contactAvatarUrls.get(conversation.phoneNumber)"
+                alt=""
+              />
+              <span
+                v-else-if="knownContactNumbers.has(conversation.phoneNumber)"
+                class="messages-avatar__initials"
+              >
+                {{ contactInitials(conversation.phoneNumber) }}
+              </span>
+              <span v-else class="messages-avatar__placeholder">
+                <i />
+                <b />
+              </span>
+              <span
+                v-if="editingList"
+                class="messages-sky-selection"
+                :class="{
+                  'is-selected': selectedNumbers.includes(
+                    conversation.phoneNumber,
+                  ),
+                }"
+              >
+                <Check
+                  v-if="selectedNumbers.includes(conversation.phoneNumber)"
+                  :size="13"
+                />
+              </span>
+              <span
+                v-else-if="conversation.unread"
+                class="messages-sky-unread-dot"
+              />
+            </span>
+          </template>
+          <template #title>
+            {{ contactName(conversation.phoneNumber) }}
+          </template>
+          <template #after>
+            <span class="messages-sky-conversation-time">
+              <time>{{
+                formatConversationDate(conversation.lastMessageAt)
+              }}</time>
+              <ChevronRight :size="15" />
+            </span>
+          </template>
+          <template #subtitle>
+            {{ conversationPreview(conversation) }}
+          </template>
+        </SkyListItem>
+      </SkyList>
+
+      <SkyEmptyState
+        v-else
+        class="messages-sky-empty"
+        :title="
           phone.t(
             search ? 'Apps.messages.noResults' : 'Apps.messages.noMessages',
           )
-        }}
-      </h2>
-      <p v-if="!search">{{ phone.t('Apps.messages.noMessagesBody') }}</p>
-      <button v-if="!search" type="button" @click="beginCompose">
-        {{ phone.t('Apps.messages.compose') }}
-      </button>
-    </div>
-
-    <footer v-if="!editingList" class="messages-inbox-toolbar">
-      <div class="messages-inbox-search">
-        <k-searchbar
-          :value="search"
-          :placeholder="phone.t('Apps.messages.search')"
-          :colors="{
-            inputBgIos: 'bg-transparent',
-            placeholderIos: 'placeholder-[#8e8e93]',
-          }"
-          :clear-button="false"
-          :input-style="{
-            color: phone.isDarkMode ? '#f5f5f7' : '#111',
-            paddingRight: '48px',
-          }"
-          @input="search = eventValue($event)"
-          @clear="search = ''"
-        />
-        <k-link
-          component="button"
-          icon-only
-          class="messages-inbox-search__voice"
-          :aria-label="phone.t('Apps.messages.search')"
-        >
-          <Mic :size="20" />
-        </k-link>
-      </div>
-      <k-glass
-        component="button"
-        type="button"
-        :aria-label="phone.t('Apps.messages.compose')"
-        @click="beginCompose"
+        "
+        :body="search ? '' : phone.t('Apps.messages.noMessagesBody')"
       >
-        <SquarePen :size="20" />
-      </k-glass>
-    </footer>
-    <footer v-else class="messages-edit-toolbar">
-      <span>{{
-        phone.t('Apps.messages.selectedCount', {
-          count: String(selectedNumbers.length),
-        })
-      }}</span>
-      <button
-        type="button"
+        <template #icon><MessageCircle :size="32" /></template>
+        <template v-if="!search" #actions>
+          <SkyButton rounded @click="beginCompose">
+            {{ phone.t('Apps.messages.compose') }}
+          </SkyButton>
+        </template>
+      </SkyEmptyState>
+    </SkyScrollArea>
+
+    <SkyPillNavigation
+      v-if="editingList"
+      layout="compact"
+      align="center"
+      class="messages-sky-edit-navigation"
+      :label="phone.t('Apps.messages.deleteSelected')"
+    >
+      <SkyButton
+        rounded
+        variant="danger"
         :disabled="!selectedNumbers.length"
         @click="deleteSelectedConversations"
       >
         <Trash2 :size="18" />
         {{ phone.t('Apps.messages.deleteSelected') }}
-      </button>
-    </footer>
-  </k-page>
+      </SkyButton>
+    </SkyPillNavigation>
+  </SkyAppPage>
 
-  <k-page
+  <SkyAppPage
     v-else-if="composing"
-    class="messages-page messages-compose-page !pt-[44px] !pb-[25px]"
-    :aria-label="phone.t('Apps.messages.compose')"
+    class="messages-sky-page messages-sky-compose"
+    :label="phone.t('Apps.messages.compose')"
+    :dark="phone.isDarkMode"
+    accent="#34c759"
+    accent-soft="rgba(52, 199, 89, 0.16)"
   >
-    <k-navbar :title="phone.t('Apps.messages.compose')">
-      <template #left>
-        <k-navbar-back-link
-          component="button"
-          :text="phone.t('Common.cancel')"
-          @click="goBack"
-        />
+    <SkyNavbar :title="phone.t('Apps.messages.compose')">
+      <template #right>
+        <SkyLink @click="goBack">
+          {{ phone.t('Common.cancel') }}
+        </SkyLink>
       </template>
-    </k-navbar>
-    <k-list class="messages-recipient-field" strong>
-      <k-list-input
-        :value="composerNumber"
-        :label="phone.t('Apps.messages.to')"
-        inputmode="tel"
-        autofocus
-        clear-button
-        @input="composerNumber = eventValue($event)"
-        @clear="composerNumber = ''"
-        @keyup.enter="chooseRecipient(composerNumber)"
-      />
-    </k-list>
-    <k-list
-      v-if="contactSuggestions.length"
-      class="messages-contact-list"
-      strong
-    >
-      <k-list-item
-        v-for="contact in contactSuggestions"
-        :key="contact.id"
-        link
-        :title="contact.name"
-        :subtitle="contact.phone_number"
-        @click="chooseRecipient(contact.phone_number)"
+    </SkyNavbar>
+    <SkyScrollArea class="messages-sky-compose-scroll">
+      <SkyList class="messages-recipient-field" density="compact" flush>
+        <SkyField
+          v-model="composerNumber"
+          :label="phone.t('Apps.messages.to')"
+          layout="inline"
+          input-mode="tel"
+          type="tel"
+          :clear-button="true"
+          :clear-label="phone.t('Common.clear')"
+          @clear="composerNumber = ''"
+          @keyup.enter="chooseRecipient(composerNumber)"
+        />
+      </SkyList>
+      <SkyList
+        v-if="contactSuggestions.length"
+        class="messages-contact-list"
+        flush
       >
-        <template #media>
-          <span
-            class="messages-avatar messages-avatar--small"
-          >
-            <img
-              v-if="contact.avatar_url"
-              class="messages-avatar__image"
-              :src="contact.avatar_url"
-              alt=""
-            />
-            <span v-else class="messages-avatar__initials">{{
-              contactInitials(contact.phone_number)
-            }}</span>
-          </span>
-        </template>
-      </k-list-item>
-    </k-list>
-    <k-block v-else-if="messages.loading"><k-preloader /></k-block>
-    <button
-      v-else-if="composerNumber.trim()"
-      class="messages-number-action"
-      type="button"
-      @click="chooseRecipient(composerNumber)"
-    >
-      <MessageCircle :size="17" />
-      {{ composerNumber }}
-    </button>
-  </k-page>
-
-  <k-page
-    v-else
-    class="messages-page messages-thread-page"
-    :class="{
-      'messages-thread-page--emoji': attachmentPanelOpen,
-      'messages-thread-page--share': Boolean(shareDraft),
-    }"
-    :aria-label="activeTitle"
-  >
-    <header class="messages-chat-header">
-      <k-link
-        component="button"
-        icon-only
-        type="button"
-        class="messages-chat-header__back"
-        :aria-label="phone.t('Apps.messages.name')"
-        @click="goBack"
-      >
-        <ChevronLeft :size="28" :stroke-width="2.35" />
-      </k-link>
-      <div class="messages-chat-header__contact">
-        <span
-          class="messages-avatar messages-avatar--header"
-          :class="{ 'messages-avatar--unknown': !activeContact }"
+        <SkyListItem
+          v-for="contact in contactSuggestions"
+          :key="contact.id"
+          link
+          link-component="button"
+          strong-title="auto"
+          :title="contact.name"
+          :subtitle="contact.phone_number"
+          @click="chooseRecipient(contact.phone_number)"
         >
-          <img
-            v-if="activeContact?.avatar_url"
-            class="messages-avatar__image"
-            :src="activeContact.avatar_url"
-            alt=""
-          />
-          <span v-else-if="activeContact" class="messages-avatar__initials">{{
-            contactInitials(messages.activeNumber ?? '')
-          }}</span>
-          <span v-else class="messages-avatar__placeholder" aria-hidden="true">
-            <i />
-            <b />
-          </span>
-        </span>
-        <k-link
-          component="button"
+          <template #media>
+            <span class="messages-avatar messages-avatar--small">
+              <img
+                v-if="contact.avatar_url"
+                class="messages-avatar__image"
+                :src="contact.avatar_url"
+                alt=""
+              />
+              <span v-else class="messages-avatar__initials">{{
+                contactInitials(contact.phone_number)
+              }}</span>
+            </span>
+          </template>
+        </SkyListItem>
+      </SkyList>
+      <div v-else-if="messages.loading" class="messages-sky-loading">
+        <SkySpinner :label="phone.t('Common.loading')" />
+      </div>
+      <SkyButton
+        v-else-if="composerNumber.trim()"
+        rounded
+        tonal
+        class="messages-number-action"
+        @click="chooseRecipient(composerNumber)"
+      >
+        <MessageCircle :size="17" />
+        {{ composerNumber }}
+      </SkyButton>
+    </SkyScrollArea>
+  </SkyAppPage>
+
+  <SkyAppPage
+    v-else
+    class="messages-sky-page messages-sky-thread"
+    :class="{
+      'messages-sky-thread--panel': attachmentPanelOpen,
+      'messages-sky-thread--share': Boolean(shareDraft),
+    }"
+    :label="activeTitle"
+    :dark="phone.isDarkMode"
+    accent="#34c759"
+    accent-soft="rgba(52, 199, 89, 0.16)"
+  >
+    <SkyNavbar
+      class="messages-sky-thread-navbar"
+      :title="activeTitle"
+      show-back
+      back-appearance="plain"
+      :back-label="phone.t('Common.back')"
+      @back="goBack"
+    >
+      <template #title>
+        <button
           type="button"
-          class="messages-chat-header__name"
+          class="messages-sky-thread-contact"
           :aria-label="phone.t('Apps.messages.contactDetails')"
           @click="openContactDetails"
         >
-          <strong>{{ activeTitle }}</strong>
-          <ChevronRight :size="13" />
-        </k-link>
-      </div>
-    </header>
-
-    <section v-if="contactDetailsOpen" class="messages-contact-details">
-      <header>
-        <button
-          type="button"
-          :aria-label="phone.t('Common.back')"
-          @click="contactDetailsOpen = false"
-        >
-          <ChevronLeft :size="24" :stroke-width="2.35" />
-        </button>
-        <strong>{{ phone.t('Apps.messages.contactDetails') }}</strong>
-        <button
-          v-if="!activeContact?.readonly"
-          type="button"
-          @click="
-            contactEditing ? saveContactDetails() : (contactEditing = true)
-          "
-        >
-          <Check v-if="contactEditing" :size="19" />
-          <Pencil v-else :size="18" />
-        </button>
-      </header>
-      <div class="messages-contact-details__hero">
-        <span
-          class="messages-avatar messages-avatar--contact"
-          :class="{ 'messages-avatar--unknown': !activeContact }"
-        >
-          <img
-            v-if="activeContact?.avatar_url"
-            class="messages-avatar__image"
-            :src="activeContact.avatar_url"
-            alt=""
-          />
-          <span v-else-if="activeContact" class="messages-avatar__initials">{{
-            contactInitials(messages.activeNumber ?? '')
-          }}</span>
-          <span v-else class="messages-avatar__placeholder" aria-hidden="true">
-            <i />
-            <b />
+          <span
+            class="messages-avatar messages-avatar--thread"
+            :class="{ 'messages-avatar--unknown': !activeContact }"
+          >
+            <img
+              v-if="activeContact?.avatar_url"
+              class="messages-avatar__image"
+              :src="activeContact.avatar_url"
+              alt=""
+            />
+            <span v-else-if="activeContact" class="messages-avatar__initials">
+              {{ contactInitials(messages.activeNumber ?? '') }}
+            </span>
+            <span
+              v-else
+              class="messages-avatar__placeholder"
+              aria-hidden="true"
+            >
+              <i />
+              <b />
+            </span>
           </span>
-        </span>
-        <h2>{{ activeTitle }}</h2>
-        <small>
-          {{ messages.activeNumber }}
-          <template v-if="activeContact?.readonly">
-            · {{ phone.t('Apps.phone.officialContact') }}
-          </template>
-        </small>
-      </div>
-      <div class="messages-contact-details__actions">
-        <button
-          v-if="activeContact?.canCall !== false"
-          type="button"
-          @click="callActiveContact"
-        >
-          <PhoneIcon :size="20" />
-          <span>{{ phone.t('Apps.messages.call') }}</span>
+          <span>{{ activeTitle }}</span>
+          <ChevronRight :size="13" />
         </button>
-        <button
-          v-if="activeCanMessage"
-          type="button"
-          @click="contactDetailsOpen = false"
-        >
-          <MessageCircle :size="20" />
-          <span>{{ phone.t('Apps.messages.messageAction') }}</span>
-        </button>
-      </div>
-      <div class="messages-contact-details__fields">
-        <label>
-          <span>{{ phone.t('Apps.messages.contactName') }}</span>
-          <input
+      </template>
+    </SkyNavbar>
+
+    <SkyAppPage
+      v-if="contactDetailsOpen"
+      class="messages-contact-overlay"
+      :label="phone.t('Apps.messages.contactDetails')"
+      :dark="phone.isDarkMode"
+      accent="#34c759"
+      accent-soft="rgba(52, 199, 89, 0.16)"
+    >
+      <SkyNavbar
+        :title="phone.t('Apps.messages.contactDetails')"
+        show-back
+        back-appearance="surface"
+        :back-label="phone.t('Common.back')"
+        @back="contactDetailsOpen = false"
+      >
+        <template #right>
+          <SkyLink
+            v-if="!activeContact?.readonly"
+            icon-only
+            :aria-label="phone.t('Common.edit')"
+            @click="
+              contactEditing ? saveContactDetails() : (contactEditing = true)
+            "
+          >
+            <Check v-if="contactEditing" :size="19" />
+            <Pencil v-else :size="18" />
+          </SkyLink>
+        </template>
+      </SkyNavbar>
+      <SkyScrollArea class="messages-contact-overlay__scroll">
+        <div class="messages-contact-details__hero">
+          <span
+            class="messages-avatar messages-avatar--contact"
+            :class="{ 'messages-avatar--unknown': !activeContact }"
+          >
+            <img
+              v-if="activeContact?.avatar_url"
+              class="messages-avatar__image"
+              :src="activeContact.avatar_url"
+              alt=""
+            />
+            <span v-else-if="activeContact" class="messages-avatar__initials">{{
+              contactInitials(messages.activeNumber ?? '')
+            }}</span>
+            <span
+              v-else
+              class="messages-avatar__placeholder"
+              aria-hidden="true"
+            >
+              <i />
+              <b />
+            </span>
+          </span>
+          <h2>{{ activeTitle }}</h2>
+          <small>
+            {{ messages.activeNumber }}
+            <template v-if="activeContact?.readonly">
+              · {{ phone.t('Apps.phone.officialContact') }}
+            </template>
+          </small>
+        </div>
+        <div class="messages-contact-details__actions">
+          <SkyGlass
+            v-if="activeContact?.canCall !== false"
+            component="button"
+            type="button"
+            @click="callActiveContact"
+          >
+            <PhoneIcon :size="20" />
+            <span>{{ phone.t('Apps.messages.call') }}</span>
+          </SkyGlass>
+          <SkyGlass
+            v-if="activeCanMessage"
+            component="button"
+            type="button"
+            @click="contactDetailsOpen = false"
+          >
+            <MessageCircle :size="20" />
+            <span>{{ phone.t('Apps.messages.messageAction') }}</span>
+          </SkyGlass>
+        </div>
+        <SkyList inset strong class="messages-contact-details__fields">
+          <SkyField
             v-model="contactNameDraft"
+            :label="phone.t('Apps.messages.contactName')"
             :readonly="!contactEditing || activeContact?.readonly"
             :placeholder="phone.t('Apps.messages.contactName')"
           />
-        </label>
-        <label>
-          <span>{{ phone.t('Apps.messages.phoneNumber') }}</span>
-          <input
+          <SkyField
             v-model="contactNumberDraft"
+            :label="phone.t('Apps.messages.phoneNumber')"
             :readonly="!contactEditing || activeContact?.readonly"
-            inputmode="tel"
+            input-mode="tel"
+            type="tel"
           />
-        </label>
-      </div>
-      <button
-        v-if="!activeContact"
-        type="button"
-        class="messages-contact-details__primary"
-        @click="contactEditing = true"
-      >
-        <UserPlus :size="18" />
-        {{ phone.t('Apps.messages.addContact') }}
-      </button>
-      <button
-        v-else-if="!activeContact.readonly"
-        type="button"
-        class="messages-contact-details__delete"
-        @click="deleteActiveContact"
-      >
-        <Trash2 :size="18" />
-        {{ phone.t('Apps.messages.deleteContact') }}
-      </button>
-    </section>
-
-    <k-messages class="messages-bubbles">
-      <template
-        v-for="(message, index) in messages.messages"
-        :key="message.client_id ?? message.id"
-      >
-        <k-messages-title v-if="startsDay(message, index)">
-          <span class="messages-thread-timestamp">
-            <span>{{ phone.t('Apps.messages.smsLabel') }}</span>
-            <b
-              >{{ dayLabel(message.created_at) }},
-              {{ timeLabel(message.created_at) }}</b
-            >
-          </span>
-        </k-messages-title>
-        <k-message
-          :class="{
-            'messages-message--sending': message.delivery_status === 'sending',
-            'messages-message--failed': message.delivery_status === 'failed',
-          }"
-          :type="message.direction"
-          :text="message.message_type === 'text' ? message.body : undefined"
-          :text-footer="messageFooter(message, index)"
+        </SkyList>
+        <SkyButton
+          v-if="!activeContact"
+          block
+          rounded
+          tonal
+          class="messages-contact-details__primary"
+          @click="contactEditing = true"
         >
-          <template v-if="message.message_type !== 'text'" #text>
-            <VoiceMessageBubble
-              v-if="message.message_type === 'voice'"
-              :message="message"
-            />
-            <MessageContactBubble
-              v-else-if="message.message_type === 'contact' && message.contact"
-              :add-label="phone.t('Apps.messages.addContact')"
-              :contact="message.contact"
-              :message-label="phone.t('Apps.messages.messageAction')"
-              :saved="knownContactNumbers.has(message.contact.phone_number)"
-              :saved-label="phone.t('Apps.messages.contactSaved')"
-              @message="messageSharedContact(message.contact)"
-              @save="saveSharedContact(message.contact)"
-            />
-            <SharedContentCard
-              v-else-if="message.message_type === 'share' && message.share"
-              :payload="message.share"
-              variant="messages"
-            />
-            <MessageAttachmentBubble v-else :message="message" />
-          </template>
-        </k-message>
-      </template>
-    </k-messages>
-    <span ref="threadBottom" class="messages-thread-bottom" aria-hidden="true" />
+          <UserPlus :size="18" />
+          {{ phone.t('Apps.messages.addContact') }}
+        </SkyButton>
+        <SkyButton
+          v-else-if="!activeContact.readonly"
+          block
+          rounded
+          tonal
+          variant="danger"
+          class="messages-contact-details__delete"
+          @click="deleteActiveContact"
+        >
+          <Trash2 :size="18" />
+          {{ phone.t('Apps.messages.deleteContact') }}
+        </SkyButton>
+      </SkyScrollArea>
+    </SkyAppPage>
+
+    <SkyScrollArea class="messages-sky-thread-scroll">
+      <SkyMessages class="messages-bubbles">
+        <template
+          v-for="(message, index) in messages.messages"
+          :key="message.client_id ?? message.id"
+        >
+          <SkyMessagesTitle v-if="startsDay(message, index)">
+            <span class="messages-thread-timestamp">
+              <span>{{ phone.t('Apps.messages.smsLabel') }}</span>
+              <b
+                >{{ dayLabel(message.created_at) }},
+                {{ timeLabel(message.created_at) }}</b
+              >
+            </span>
+          </SkyMessagesTitle>
+          <SkyMessage
+            :class="{
+              'messages-message--sending':
+                message.delivery_status === 'sending',
+              'messages-message--failed': message.delivery_status === 'failed',
+            }"
+            :type="message.direction"
+            :text="message.message_type === 'text' ? message.body : undefined"
+            :text-footer="messageFooter(message, index)"
+          >
+            <template v-if="message.message_type !== 'text'" #text>
+              <VoiceMessageBubble
+                v-if="message.message_type === 'voice'"
+                :message="message"
+              />
+              <MessageContactBubble
+                v-else-if="
+                  message.message_type === 'contact' && message.contact
+                "
+                :add-label="phone.t('Apps.messages.addContact')"
+                :contact="message.contact"
+                :message-label="phone.t('Apps.messages.messageAction')"
+                :saved="knownContactNumbers.has(message.contact.phone_number)"
+                :saved-label="phone.t('Apps.messages.contactSaved')"
+                @message="messageSharedContact(message.contact)"
+                @save="saveSharedContact(message.contact)"
+              />
+              <SharedContentCard
+                v-else-if="message.message_type === 'share' && message.share"
+                :payload="message.share"
+                variant="messages"
+              />
+              <MessageAttachmentBubble v-else :message="message" />
+            </template>
+          </SkyMessage>
+        </template>
+      </SkyMessages>
+      <span
+        ref="threadBottom"
+        class="messages-thread-bottom"
+        aria-hidden="true"
+      />
+    </SkyScrollArea>
 
     <section
       v-if="activeCanMessage && attachmentMenuOpen"
       class="messages-attachment-menu"
     >
-      <button type="button" @click="openMediaApp('photos', 'photo')">
+      <SkyGlass
+        component="button"
+        type="button"
+        @click="openMediaApp('photos', 'photo')"
+      >
         <span><Images :size="20" /></span>
         {{ phone.t('Apps.messages.attachPhoto') }}
-      </button>
-      <button type="button" @click="openMediaApp('camera', 'photo')">
+      </SkyGlass>
+      <SkyGlass
+        component="button"
+        type="button"
+        @click="openMediaApp('camera', 'photo')"
+      >
         <span><Camera :size="20" /></span>
         {{ phone.t('Apps.messages.takePhoto') }}
-      </button>
-      <button type="button" @click="openEmojiPicker">
+      </SkyGlass>
+      <SkyGlass component="button" type="button" @click="openEmojiPicker">
         <span class="messages-action-emoji">😀</span>
         {{ phone.t('Apps.messages.emoji') }}
-      </button>
-      <button type="button" @click="openContactPicker">
+      </SkyGlass>
+      <SkyGlass component="button" type="button" @click="openContactPicker">
         <span><ContactRound :size="20" /></span>
         {{ phone.t('Apps.messages.shareContact') }}
-      </button>
-      <button type="button" @click="openGifPicker">
+      </SkyGlass>
+      <SkyGlass component="button" type="button" @click="openGifPicker">
         <span><ImagePlay :size="20" /></span>
         {{ phone.t('Apps.messages.attachGif') }}
-      </button>
-      <button type="button" @click="openMediaApp('photos', 'video')">
+      </SkyGlass>
+      <SkyGlass
+        component="button"
+        type="button"
+        @click="openMediaApp('photos', 'video')"
+      >
         <span><Video :size="20" /></span>
         {{ phone.t('Apps.messages.attachVideo') }}
-      </button>
+      </SkyGlass>
     </section>
 
     <section
@@ -1368,20 +1434,21 @@ onBeforeUnmount(() => {
             )
           }}
         </strong>
-        <button type="button" @click="attachmentPicker = null">
+        <SkyLink @click="attachmentPicker = null">
           {{ phone.t('Common.done') }}
-        </button>
+        </SkyLink>
       </header>
-      <k-list
+      <SkyList
         v-if="attachmentPicker === 'contacts'"
         inset
         strong
         class="messages-media-picker__contacts"
       >
-        <k-list-item
+        <SkyListItem
           v-for="contact in calls.contacts"
           :key="contact.id"
           link
+          link-component="button"
           :title="contact.name"
           :subtitle="contact.organization || contact.phone_number"
           @click="sendContact(contact)"
@@ -1399,21 +1466,21 @@ onBeforeUnmount(() => {
               }}</span>
             </span>
           </template>
-        </k-list-item>
+        </SkyListItem>
         <p v-if="!calls.contacts.length" class="messages-media-picker__empty">
           {{ phone.t('Apps.messages.noContactsToShare') }}
         </p>
-      </k-list>
+      </SkyList>
       <div v-else class="messages-media-picker__gifs">
-        <label class="messages-gif-search">
-          <Search :size="15" />
-          <input
-            v-model="gifQuery"
-            type="search"
-            :placeholder="phone.t('Apps.messages.searchGifs')"
-            @input="queueGifSearch"
-          />
-        </label>
+        <SkySearchbar
+          v-model="gifQuery"
+          class="messages-gif-search"
+          :label="phone.t('Apps.messages.searchGifs')"
+          :placeholder="phone.t('Apps.messages.searchGifs')"
+          :clear-label="phone.t('Common.clear')"
+          @input="queueGifSearch"
+          @clear="queueGifSearch"
+        />
         <button
           v-for="gif in gifResults"
           :key="gif.id"
@@ -1438,7 +1505,11 @@ onBeforeUnmount(() => {
             {{ phone.t('Apps.messages.retryGifs') }}
           </button>
         </div>
-        <k-preloader v-if="gifLoading" class="messages-gif-loading" />
+        <SkySpinner
+          v-if="gifLoading"
+          class="messages-gif-loading"
+          :label="phone.t('Common.loading')"
+        />
       </div>
     </section>
 
@@ -1453,24 +1524,24 @@ onBeforeUnmount(() => {
       class="shared-composer-preview"
     >
       <SharedContentCard compact :payload="shareDraft" variant="messages" />
-      <button
-        type="button"
+      <SkyLink
+        icon-only
         :aria-label="phone.t('Common.close')"
         @click="shareDraft = null"
       >
         <X :size="15" />
-      </button>
+      </SkyLink>
     </div>
 
     <section v-if="activeCanMessage && recording" class="messages-recorder">
-      <button
-        type="button"
+      <SkyLink
+        icon-only
         class="messages-recorder__cancel"
         :aria-label="phone.t('Apps.messages.cancelRecording')"
         @click="cancelVoiceRecording"
       >
         <X :size="20" />
-      </button>
+      </SkyLink>
       <span class="messages-recorder__dot" />
       <time>{{ formatRecordingTime(recordingElapsedMs) }}</time>
       <div class="messages-recorder__wave" aria-hidden="true">
@@ -1480,69 +1551,470 @@ onBeforeUnmount(() => {
           :style="{ height: `${Math.max(3, level * 24)}px` }"
         />
       </div>
-      <button
-        type="button"
+      <SkyLink
+        icon-only
         class="messages-recorder__send"
         :aria-label="phone.t('Apps.messages.stopAndSend')"
         @click="stopVoiceRecording"
       >
         <ArrowUpCircle :size="29" fill="currentColor" />
-      </button>
+      </SkyLink>
     </section>
 
-    <k-messagebar
-      v-else-if="activeCanMessage"
-      class="messages-messagebar"
-      :placeholder="phone.t('Apps.messages.message')"
-      :value="draft"
-      :disabled="sending"
-      @input="draft = eventValue($event)"
-      @keydown.enter.exact="handleEnterAction($event, sendTextMessage)"
-    >
-      <template #left>
-        <k-toolbar-pane class="ios:h-10 messages-messagebar__tools">
-          <k-link
-            component="button"
-            icon-only
-            :aria-label="phone.t('Apps.messages.moreActions')"
-            :class="{ active: attachmentMenuOpen || attachmentPanelOpen }"
-            @click="toggleAttachmentMenu"
-          >
-            <Plus :size="25" />
-          </k-link>
-        </k-toolbar-pane>
-      </template>
-      <template #right>
-        <k-toolbar-pane class="ios:h-10">
-          <k-link
-            v-if="draft.trim() || shareDraft"
-            component="button"
-            icon-only
-            :disabled="sending"
-            :aria-label="phone.t('Apps.messages.send')"
-            @click="sendTextMessage"
-          >
-            <ArrowUpCircle :size="29" :stroke-width="2.4" />
-          </k-link>
-          <k-link
-            v-else
-            component="button"
-            icon-only
-            :disabled="sending"
-            :aria-label="phone.t('Apps.messages.recordVoice')"
-            @click="startVoiceRecording"
-          >
-            <Mic :size="21" :stroke-width="2.3" />
-          </k-link>
-        </k-toolbar-pane>
-      </template>
-    </k-messagebar>
-    <k-block v-else class="text-center text-sm text-[#8e8e93]">
+    <div v-else-if="activeCanMessage" class="messages-sky-composer-shell">
+      <SkyGlass
+        component="div"
+        :highlight="false"
+        class="messages-sky-composer-pill"
+      >
+        <SkyGlass
+          component="button"
+          class="messages-sky-messagebar__action messages-sky-messagebar__plus"
+          :class="{ active: attachmentMenuOpen || attachmentPanelOpen }"
+          :aria-label="phone.t('Apps.messages.moreActions')"
+          @click="toggleAttachmentMenu"
+        >
+          <Plus :size="24" />
+        </SkyGlass>
+        <SkyMessagebar
+          v-model="draft"
+          class="messages-sky-messagebar"
+          :outline="false"
+          :placeholder="phone.t('Apps.messages.message')"
+          :disabled="sending"
+          @keydown.enter.exact="handleEnterAction($event, sendTextMessage)"
+        >
+          <template #right>
+            <SkyLink
+              v-if="draft.trim() || shareDraft"
+              icon-only
+              class="messages-sky-messagebar__send"
+              :disabled="sending"
+              :aria-label="phone.t('Apps.messages.send')"
+              @click="sendTextMessage"
+            >
+              <ArrowUpCircle :size="29" :stroke-width="2.4" />
+            </SkyLink>
+            <SkyLink
+              v-else
+              icon-only
+              class="messages-sky-messagebar__send"
+              :disabled="sending"
+              :aria-label="phone.t('Apps.messages.recordVoice')"
+              @click="startVoiceRecording"
+            >
+              <Mic :size="21" :stroke-width="2.3" />
+            </SkyLink>
+          </template>
+        </SkyMessagebar>
+      </SkyGlass>
+    </div>
+    <div v-else class="messages-sky-unavailable">
       {{ phone.t('Apps.messages.messagingUnavailable') }}
-    </k-block>
-  </k-page>
+    </div>
+  </SkyAppPage>
 
-  <k-toast :opened="toastOpened" position="center" @click="toastOpened = false">
+  <SkyToast
+    :opened="toastOpened"
+    position="center"
+    @click="toastOpened = false"
+  >
     {{ toastText }}
-  </k-toast>
+  </SkyToast>
 </template>
+
+<style scoped>
+.messages-sky-page {
+  --sky-page-gutter: 14px;
+}
+
+.messages-sky-state-scroll,
+.messages-sky-loading {
+  display: grid;
+  place-items: center;
+}
+
+.messages-sky-state-scroll :deep(.sky-empty-state) {
+  margin: auto;
+}
+
+.messages-sky-edit,
+.messages-sky-delete {
+  color: var(--sky-app-accent);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.messages-sky-delete {
+  color: var(--sky-danger);
+}
+
+.messages-sky-search {
+  width: 100%;
+}
+
+.messages-sky-inbox-scroll {
+  padding-top: 4px;
+}
+
+.messages-sky-filters {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.messages-sky-filters :deep(.sky-segmented-button) {
+  min-height: 40px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.messages-sky-conversation-list {
+  margin: 0 calc(var(--sky-page-gutter) * -1);
+}
+
+.messages-sky-conversation :deep(.sky-list-item__row) {
+  min-height: 72px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.messages-sky-conversation :deep(.sky-list-item__media) {
+  position: relative;
+}
+
+.messages-sky-conversation :deep(.sky-list-item__title) {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.messages-sky-conversation--unread :deep(.sky-list-item__title) {
+  font-weight: 760;
+}
+
+.messages-sky-conversation :deep(.sky-list-item__subtitle) {
+  overflow: hidden;
+  display: -webkit-box;
+  color: var(--sky-muted);
+  font-size: 12px;
+  line-height: 16px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.messages-sky-conversation-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--sky-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.messages-sky-selection,
+.messages-sky-unread-dot {
+  position: absolute;
+  z-index: 2;
+  border-radius: 50%;
+}
+
+.messages-sky-selection {
+  right: -3px;
+  bottom: -2px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--sky-bg);
+  background: var(--sky-surface-muted);
+  color: #fff;
+}
+
+.messages-sky-selection.is-selected {
+  background: var(--sky-app-accent);
+}
+
+.messages-sky-unread-dot {
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--sky-bg);
+  background: var(--sky-app-accent);
+}
+
+.messages-sky-empty {
+  min-height: 65%;
+}
+
+.messages-sky-edit-navigation :deep(.sky-button) {
+  min-width: 132px;
+}
+
+.messages-sky-compose-scroll {
+  padding-top: 2px;
+}
+
+.messages-recipient-field,
+.messages-contact-list {
+  margin: 0 calc(var(--sky-page-gutter) * -1) 12px;
+  border-top: 1px solid var(--sky-hairline);
+  border-bottom: 1px solid var(--sky-hairline);
+  background: transparent;
+}
+
+.messages-recipient-field :deep(.sky-field) {
+  min-height: 52px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+}
+
+.messages-contact-list :deep(.sky-list-item__row) {
+  background: transparent;
+}
+
+.messages-recipient-field :deep(.sky-field__label) {
+  margin: 0;
+  flex: none;
+  color: var(--sky-muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.messages-recipient-field :deep(.sky-field__control),
+.messages-recipient-field :deep(.sky-field__input) {
+  min-height: 52px;
+}
+
+.messages-recipient-field :deep(.sky-field__control) {
+  flex: 1;
+}
+
+.messages-recipient-field :deep(.sky-field__input) {
+  font-size: 15px;
+}
+
+.messages-number-action {
+  margin: 0;
+}
+
+.messages-sky-loading {
+  min-height: 120px;
+  color: var(--sky-app-accent);
+}
+
+.messages-sky-thread-navbar :deep(.sky-navbar__heading) {
+  overflow: visible;
+}
+
+.messages-sky-thread-contact {
+  width: 100%;
+  min-width: 0;
+  height: var(--sky-navbar-height);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--sky-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.messages-sky-thread-contact > span:not(.messages-avatar) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.messages-avatar--thread {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--sky-hairline);
+  box-shadow: none;
+  font-size: 12px;
+}
+
+.messages-sky-thread-scroll {
+  padding: 4px 14px 10px;
+  transition: padding-bottom 240ms ease;
+}
+
+.messages-bubbles {
+  min-height: 100%;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.messages-bubbles :deep(.sky-message) {
+  max-width: 86%;
+  margin-bottom: 7px;
+}
+
+.messages-bubbles :deep(.sky-message__bubble) {
+  padding: 8px 12px;
+  border-radius: 19px;
+  font-size: 15px;
+  line-height: 19px;
+}
+
+.messages-bubbles :deep(.sky-message--received .sky-message__bubble) {
+  background: var(--sky-surface-muted);
+  color: var(--sky-text);
+}
+
+.messages-bubbles :deep(.sky-message--sent .sky-message__bubble) {
+  background: var(--sky-app-accent);
+  color: #fff;
+}
+
+.messages-bubbles :deep(.sky-message__text-footer) {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 13px;
+}
+
+.messages-bubbles :deep(.messages-message--failed .sky-message__bubble) {
+  box-shadow: 0 0 0 1px var(--sky-danger);
+}
+
+.messages-sky-composer-shell {
+  z-index: 42;
+  flex: none;
+  padding: 6px var(--sky-page-gutter) calc(var(--sky-safe-area-bottom) + 6px);
+  background: var(--sky-bg);
+}
+
+.messages-sky-composer-pill {
+  min-width: 0;
+  min-height: 56px;
+  padding: 5px 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  border-radius: var(--sky-radius-pill);
+}
+
+.messages-sky-messagebar {
+  min-width: 0;
+  padding: 0;
+  flex: 1;
+  gap: 4px;
+  background: transparent;
+}
+
+.messages-sky-composer-pill > .messages-sky-messagebar {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.messages-sky-messagebar :deep(textarea) {
+  min-height: 44px;
+  padding: 11px 8px 9px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--sky-text);
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.messages-sky-messagebar__action,
+.messages-sky-messagebar__send {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.messages-sky-messagebar__action {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border-color: transparent;
+  background: var(--sky-surface-variant);
+  color: var(--sky-text);
+  box-shadow: none;
+}
+
+.messages-sky-messagebar__plus {
+  transition: transform 180ms ease;
+}
+
+.messages-sky-messagebar__plus.active {
+  color: var(--sky-app-accent);
+  transform: rotate(45deg);
+}
+
+.messages-sky-messagebar__send {
+  color: var(--sky-app-accent);
+}
+
+.messages-sky-unavailable {
+  padding: 12px 18px calc(var(--sky-safe-area-bottom) + 12px);
+  color: var(--sky-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.messages-sky-thread--panel .messages-sky-thread-scroll {
+  padding-bottom: 326px;
+}
+
+.messages-sky-thread--share .messages-sky-thread-scroll {
+  padding-bottom: 150px;
+}
+
+.messages-contact-overlay {
+  position: absolute;
+  z-index: 58;
+  inset: 0;
+}
+
+.messages-contact-overlay__scroll {
+  padding-top: 4px;
+}
+
+.messages-contact-details__hero {
+  padding-top: 10px;
+}
+
+.messages-contact-details__actions :deep(.sky-glass) {
+  min-height: 62px;
+  flex-direction: column;
+  border-radius: var(--sky-radius-card);
+}
+
+.messages-contact-details__fields {
+  margin: 0 0 12px;
+}
+
+.messages-contact-details__primary,
+.messages-contact-details__delete {
+  width: 100%;
+  margin: 10px 0 0;
+}
+
+.messages-gif-search {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .messages-sky-thread-scroll,
+  .messages-sky-messagebar__plus {
+    transition: none;
+  }
+}
+</style>
