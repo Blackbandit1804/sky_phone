@@ -3,8 +3,9 @@ import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
+import vueDevTools from 'vite-plugin-vue-devtools'
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: './',
   build: {
     assetsDir: 'assets',
@@ -22,7 +23,7 @@ export default defineConfig({
       },
     },
   },
-  plugins: [tailwindcss(), vue()],
+  plugins: [command === 'serve' && vueDevTools(), tailwindcss(), vue()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -37,4 +38,4 @@ export default defineConfig({
     // numeric loopback origin. Keep the local UI on the localhost origin.
     host: 'localhost',
   },
-})
+}))
