@@ -653,12 +653,13 @@ const defaultLocales: LocaleTree = {
       routeSet: 'GPS route set.',
       pingCreated: 'Ping shared with your crew.',
       pingRemoved: 'Ping removed.',
-      newPingBody:
-        'Share your current position or place the ping at the center of the map.',
+      newPingBody: 'Choose a point on the map, then add a label and ping type.',
       pingLabel: 'Ping label',
       pingLabelPlaceholder: 'e.g. Meet at the garage',
-      placeOnMap: 'Use map center',
-      placeOnMapBody: 'Otherwise your current position is used.',
+      placeOnMap: 'Place ping on map',
+      placeOnMapBody: 'Move the map until the crosshair marks the exact spot.',
+      positionSelected: 'Position selected · tap to change',
+      addHere: 'Place Here',
       sharePing: 'Share Ping',
       pingTypes: {
         meeting: 'Meet',

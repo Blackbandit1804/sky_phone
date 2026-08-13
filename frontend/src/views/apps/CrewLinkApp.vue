@@ -37,12 +37,14 @@ import {
   LocateFixed,
   LogOut,
   Map as MapIcon,
+  MapPinned,
   MapPin,
   Navigation,
   Plus,
   Radio,
   RefreshCw,
   Route,
+  Satellite,
   Settings2,
   Share2,
   Shield,
@@ -90,6 +92,7 @@ import { nuiCall } from '@/utils/nui'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type CrewLinkTab = 'map' | 'group' | 'pings' | 'profile'
+type CrewLinkMapStyle = 'default' | 'satellite' | 'atlas' | 'roads'
 type CrewLinkSheet =
   | 'create-group'
   | 'join-group'
@@ -116,9 +119,49 @@ const crew = useCrewLinkStore()
 const messageMedia = useMessageMediaStore()
 const route = useRoute()
 const router = useRouter()
-const mainlandMapUrl = `${import.meta.env.BASE_URL}img/maps/gtav-map.svg`
+const mapStyle = ref<CrewLinkMapStyle>('default')
+const mapAspect = ref(
+  defaultMapCoordinates.width / defaultMapCoordinates.height,
+)
+const mapMaxZoom = ref(8)
 const cayoMapUrl = `${import.meta.env.BASE_URL}img/maps/cayo-perico.svg`
+const mapBounds = {
+  minX: -4096,
+  maxX: 4096,
+  minY: -4096,
+  maxY: 4096,
+}
+const mapOrigin = { x: -336.8, y: -1412.2 }
+const mapScale = { x: -2340 / -1548.1, y: 291 / 189.3 }
+const mapStyles = [
+  { id: 'default' as const, icon: MapPinned },
+  { id: 'satellite' as const, icon: Satellite },
+  { id: 'atlas' as const, icon: MapIcon },
+  { id: 'roads' as const, icon: Route },
+]
+const activeMapStyle = computed(
+  () => mapStyles.find((style) => style.id === mapStyle.value) ?? mapStyles[0],
+)
+const mapImageUrl = computed(() => {
+  const filename =
+    mapStyle.value === 'default'
+      ? 'gtav-map.svg'
+      : mapStyle.value === 'roads'
+        ? 'map_roads_4096.webp'
+        : mapStyle.value === 'atlas'
+          ? 'map_atlas_4096.webp'
+          : 'map_satellite_4096.webp'
+  return `${import.meta.env.BASE_URL}img/maps/${filename}`
+})
 const activeTab = ref<CrewLinkTab>('map')
+const headerTitle = computed(() =>
+  activeTab.value === 'map'
+    ? t('name')
+    : t(activeTab.value === 'group' ? 'crew' : activeTab.value),
+)
+const headerSubtitle = computed(() =>
+  activeTab.value === 'map' ? t('liveCoordination') : t('name'),
+)
 const sheet = ref<CrewLinkSheet>(null)
 const username = ref('')
 const authMode = ref<'login' | 'register'>('login')
@@ -140,7 +183,8 @@ const sharedInviteCode = ref(
 )
 const pingType = ref<CrewLinkPingType>('meeting')
 const pingLabel = ref('')
-const pingAtMapCenter = ref(false)
+const placingPing = ref(false)
+const pingCoords = ref<MapPoint | null>(null)
 const nearbyPlayers = ref<CrewLinkNearbyPlayer[]>([])
 const selectedMember = ref<CrewLinkMember | null>(null)
 const selectedPing = ref<CrewLinkPing | null>(null)
@@ -160,6 +204,7 @@ const viewportRef = ref<HTMLElement | null>(null)
 const canvasRef = ref<HTMLElement | null>(null)
 const isPointerDown = ref(false)
 const pointerStart = { x: 0, y: 0, panX: 0, panY: 0 }
+const pointerLatest = { x: 0, y: 0 }
 let liveTimer: number | undefined
 let toastTimer: number | undefined
 let pointerFrame: number | undefined
@@ -231,10 +276,8 @@ const authUsernameValid = computed(() =>
   /^[A-Za-z0-9][A-Za-z0-9._]{1,18}[A-Za-z0-9]$/.test(authUsername.value.trim()),
 )
 const canvasStyle = computed(() => ({
-  aspectRatio: String(
-    defaultMapCoordinates.width / defaultMapCoordinates.height,
-  ),
-  transform: `translate(-50%, -50%) translate(${pan.value.x}px, ${pan.value.y}px) scale(${zoom.value})`,
+  aspectRatio: String(mapAspect.value),
+  transform: `translate3d(-50%, -50%, 0) translate3d(${pan.value.x}px, ${pan.value.y}px, 0) scale(${zoom.value})`,
   width: 'max(128%, 128vh)',
 }))
 const activeColour = computed(
@@ -252,7 +295,7 @@ const mapCenterCoords = computed(() => {
   const viewport = viewportRef.value?.getBoundingClientRect()
   const canvas = canvasRef.value?.getBoundingClientRect()
   if (!viewport || !canvas) return null
-  return defaultMapPercentToWorld({
+  return mapPercentToWorld({
     x: Math.min(
       1,
       Math.max(
@@ -269,6 +312,78 @@ const mapCenterCoords = computed(() => {
     ),
   })
 })
+
+function mapToWorld(coords: MapPoint): MapPoint {
+  return {
+    x: coords.x / mapScale.x + mapOrigin.x,
+    y: coords.y / mapScale.y + mapOrigin.y,
+  }
+}
+
+function mapWorldToPercent(coords: MapPoint): MapPoint {
+  if (mapStyle.value === 'default') return defaultMapWorldToPercent(coords)
+  const world = mapToWorld(coords)
+  return {
+    x: Math.min(
+      1,
+      Math.max(
+        0,
+        (world.x - mapBounds.minX) / (mapBounds.maxX - mapBounds.minX),
+      ),
+    ),
+    y: Math.min(
+      1,
+      Math.max(
+        0,
+        (mapBounds.maxY - world.y) / (mapBounds.maxY - mapBounds.minY),
+      ),
+    ),
+  }
+}
+
+function mapPercentToWorld(point: MapPoint): MapPoint {
+  if (mapStyle.value === 'default') return defaultMapPercentToWorld(point)
+  const projected = {
+    x: mapBounds.minX + point.x * (mapBounds.maxX - mapBounds.minX),
+    y: mapBounds.maxY - point.y * (mapBounds.maxY - mapBounds.minY),
+  }
+  return {
+    x: (projected.x - mapOrigin.x) * mapScale.x,
+    y: (projected.y - mapOrigin.y) * mapScale.y,
+  }
+}
+
+function cycleMapStyle(): void {
+  const currentIndex = mapStyles.findIndex(
+    (style) => style.id === mapStyle.value,
+  )
+  mapStyle.value = mapStyles[(currentIndex + 1) % mapStyles.length].id
+}
+
+async function onMapImageLoad(event: Event): Promise<void> {
+  const image = event.target as HTMLImageElement
+  const loadedStyle = mapStyle.value
+  mapAspect.value =
+    loadedStyle === 'default'
+      ? defaultMapCoordinates.width / defaultMapCoordinates.height
+      : image.naturalWidth / image.naturalHeight
+
+  await nextTick()
+  if (!image.isConnected || mapStyle.value !== loadedStyle) return
+
+  mapMaxZoom.value =
+    loadedStyle === 'default'
+      ? 8
+      : Math.max(
+          0.85,
+          Math.min(
+            8,
+            image.naturalWidth / Math.max(1, image.offsetWidth),
+            image.naturalHeight / Math.max(1, image.offsetHeight),
+          ),
+        )
+  if (zoom.value > mapMaxZoom.value) setZoomAt(mapMaxZoom.value)
+}
 
 function t(path: string, replacements: Record<string, string> = {}): string {
   return phone.t(`Apps.crewlink.${path}`, replacements)
@@ -460,11 +575,13 @@ function markerStyle(
   coords: MapPoint,
   offset = '-50%',
 ): Record<string, string> {
-  const point = defaultMapWorldToPercent(coords)
+  const point = mapWorldToPercent(coords)
+  const canvasWidth = canvasRef.value?.offsetWidth ?? 0
+  const canvasHeight = canvasRef.value?.offsetHeight ?? 0
   return {
-    left: `${point.x * 100}%`,
-    top: `${point.y * 100}%`,
-    transform: `translate(-50%, ${offset}) scale(${1 / zoom.value})`,
+    left: `calc(50% + ${pan.value.x + (point.x - 0.5) * canvasWidth * zoom.value}px)`,
+    top: `calc(50% + ${pan.value.y + (point.y - 0.5) * canvasHeight * zoom.value}px)`,
+    transform: `translate(-50%, ${offset})`,
   }
 }
 
@@ -492,7 +609,7 @@ function openSheet(next: CrewLinkSheet): void {
   } else if (next === 'ping') {
     pingType.value = 'meeting'
     pingLabel.value = ''
-    pingAtMapCenter.value = false
+    pingCoords.value = null
   } else if (next === 'edit-group' && activeGroup.value) {
     groupName.value = activeGroup.value.name
     groupColour.value = activeGroup.value.colour
@@ -501,6 +618,7 @@ function openSheet(next: CrewLinkSheet): void {
 
 function closeSheet(): void {
   if (crew.isLoading) return
+  if (sheet.value === 'ping') pingCoords.value = null
   sheet.value = null
   selectedMember.value = null
   selectedProfilePhoto.value = null
@@ -661,8 +779,37 @@ async function toggleGroupSetting(
   }
 }
 
-function togglePingAtMapCenter(): void {
-  pingAtMapCenter.value = !pingAtMapCenter.value
+function startPingPlacement(): void {
+  sheet.value = null
+  formError.value = ''
+  pingType.value = 'meeting'
+  pingLabel.value = ''
+  pingCoords.value = null
+  placingPing.value = true
+  activeTab.value = 'map'
+}
+
+function resumePingPlacement(): void {
+  sheet.value = null
+  formError.value = ''
+  placingPing.value = true
+  activeTab.value = 'map'
+}
+
+function cancelPingPlacement(): void {
+  placingPing.value = false
+  pingCoords.value = null
+}
+
+function confirmPingPlacement(): void {
+  const center = mapCenterCoords.value
+  if (!center) {
+    showToast(errorText())
+    return
+  }
+  pingCoords.value = { x: center.x, y: center.y }
+  placingPing.value = false
+  sheet.value = 'ping'
 }
 
 function copyInviteCode(): void {
@@ -768,11 +915,14 @@ function cancelConfirmation(): void {
 }
 
 async function createPing(): Promise<void> {
-  const center = pingAtMapCenter.value ? mapCenterCoords.value : null
+  if (!pingCoords.value) {
+    formError.value = errorText()
+    return
+  }
   const response = await crew.createPing(
     pingType.value,
     pingLabel.value.trim(),
-    center ? { x: center.x, y: center.y, z: 0 } : undefined,
+    { x: pingCoords.value.x, y: pingCoords.value.y, z: 0 },
   )
   if (!response.success) {
     formError.value = errorText(response.error)
@@ -819,8 +969,8 @@ function centerOn(coords: MapPoint): void {
   const viewport = viewportRef.value?.getBoundingClientRect()
   const canvas = canvasRef.value
   if (!viewport || !canvas) return
-  const point = defaultMapWorldToPercent(coords)
-  const nextZoom = 3.8
+  const point = mapWorldToPercent(coords)
+  const nextZoom = Math.min(3.8, mapMaxZoom.value)
   zoom.value = nextZoom
   pan.value = {
     x: (0.5 - point.x) * canvas.offsetWidth * nextZoom,
@@ -832,7 +982,7 @@ function fitOnlineMembers(): void {
   const viewport = viewportRef.value
   const canvas = canvasRef.value
   const points = visibleMapMembers.value.map((member) =>
-    defaultMapWorldToPercent(member.coords!),
+    mapWorldToPercent(member.coords!),
   )
   if (!viewport || !canvas || !points.length) return
 
@@ -845,7 +995,7 @@ function fitOnlineMembers(): void {
   const nextZoom = Math.max(
     1.25,
     Math.min(
-      5,
+      mapMaxZoom.value,
       (viewport.clientWidth - 90) / horizontalSpan,
       (viewport.clientHeight - 120) / verticalSpan,
     ),
@@ -868,11 +1018,27 @@ function centerOwnLocation(): void {
   else showToast(t('locationUnavailable'))
 }
 
+function setZoomAt(nextZoom: number, clientX?: number, clientY?: number): void {
+  const viewport = viewportRef.value?.getBoundingClientRect()
+  const currentZoom = zoom.value
+  const clampedZoom = Math.max(0.85, Math.min(mapMaxZoom.value, nextZoom))
+  if (!viewport || clampedZoom === currentZoom) return
+
+  const anchorX = clientX ?? viewport.left + viewport.width / 2
+  const anchorY = clientY ?? viewport.top + viewport.height / 2
+  const offsetX = anchorX - (viewport.left + viewport.width / 2)
+  const offsetY = anchorY - (viewport.top + viewport.height / 2)
+  const scale = clampedZoom / currentZoom
+
+  pan.value = {
+    x: offsetX - (offsetX - pan.value.x) * scale,
+    y: offsetY - (offsetY - pan.value.y) * scale,
+  }
+  zoom.value = clampedZoom
+}
+
 function changeZoom(direction: -1 | 1): void {
-  zoom.value = Math.max(
-    0.85,
-    Math.min(8, zoom.value * (direction > 0 ? 1.32 : 0.76)),
-  )
+  setZoomAt(zoom.value * (direction > 0 ? 1.25 : 0.8))
 }
 
 function onPointerDown(event: PointerEvent): void {
@@ -882,30 +1048,48 @@ function onPointerDown(event: PointerEvent): void {
   pointerStart.y = event.clientY
   pointerStart.panX = pan.value.x
   pointerStart.panY = pan.value.y
+  pointerLatest.x = event.clientX
+  pointerLatest.y = event.clientY
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
 }
 
 function onPointerMove(event: PointerEvent): void {
   if (!isPointerDown.value) return
-  const deltaX = event.clientX - pointerStart.x
-  const deltaY = event.clientY - pointerStart.y
-  if (pointerFrame) cancelAnimationFrame(pointerFrame)
+  pointerLatest.x = event.clientX
+  pointerLatest.y = event.clientY
+  if (pointerFrame) return
   pointerFrame = requestAnimationFrame(() => {
     pointerFrame = undefined
     pan.value = {
-      x: pointerStart.panX + deltaX,
-      y: pointerStart.panY + deltaY,
+      x: pointerStart.panX + pointerLatest.x - pointerStart.x,
+      y: pointerStart.panY + pointerLatest.y - pointerStart.y,
     }
   })
 }
 
-function onPointerUp(): void {
+function onPointerUp(event: PointerEvent): void {
   isPointerDown.value = false
+  const target = event.currentTarget as HTMLElement
+  if (target.hasPointerCapture(event.pointerId)) {
+    target.releasePointerCapture(event.pointerId)
+  }
 }
 
 function onWheel(event: WheelEvent): void {
   event.preventDefault()
-  changeZoom(event.deltaY > 0 ? -1 : 1)
+  const viewportHeight = viewportRef.value?.clientHeight ?? 1
+  const pixelDelta =
+    event.deltaMode === 1
+      ? event.deltaY * 16
+      : event.deltaMode === 2
+        ? event.deltaY * viewportHeight
+        : event.deltaY
+  const limitedDelta = Math.max(-120, Math.min(120, pixelDelta))
+  setZoomAt(
+    zoom.value * Math.exp(-limitedDelta * 0.0018),
+    event.clientX,
+    event.clientY,
+  )
 }
 
 function onCrewLinkMessage(event: MessageEvent): void {
@@ -918,7 +1102,8 @@ function onKeydown(event: KeyboardEvent): void {
     !confirmAction.value &&
     !sheet.value &&
     !selectedMember.value &&
-    !selectedPing.value
+    !selectedPing.value &&
+    !placingPing.value
   ) {
     return
   }
@@ -930,8 +1115,10 @@ function onKeydown(event: KeyboardEvent): void {
     closeSheet()
   } else if (selectedMember.value) {
     selectedMember.value = null
-  } else {
+  } else if (selectedPing.value) {
     selectedPing.value = null
+  } else {
+    cancelPingPlacement()
   }
 }
 
@@ -1076,11 +1263,19 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else>
-      <k-navbar v-if="activeGroup" class="crewlink-navbar" :title="t('name')" />
+      <k-navbar
+        v-if="activeGroup"
+        class="crewlink-navbar"
+        :subtitle="headerSubtitle"
+        :title="headerTitle"
+      />
 
       <main
         class="crewlink-content"
-        :class="{ 'crewlink-content--empty': !activeGroup }"
+        :class="{
+          'crewlink-content--empty': !activeGroup,
+          'crewlink-content--placing': placingPing,
+        }"
       >
         <section v-if="!activeGroup" class="crewlink-group-gate">
           <button type="button" @click="openSheet('create-group')">
@@ -1138,58 +1333,69 @@ onBeforeUnmount(() => {
                 :style="canvasStyle"
               >
                 <img
-                  :src="mainlandMapUrl"
+                  :src="mapImageUrl"
                   alt=""
                   class="crewlink-map__mainland"
-                  :style="defaultMainlandStyle"
+                  :class="{
+                    'crewlink-map__mainland--default': mapStyle === 'default',
+                  }"
+                  :style="
+                    mapStyle === 'default' ? defaultMainlandStyle : undefined
+                  "
                   draggable="false"
+                  @load="onMapImageLoad"
                 />
                 <img
+                  v-if="mapStyle === 'default'"
                   :src="cayoMapUrl"
                   alt=""
                   class="crewlink-map__cayo"
                   :style="defaultCayoStyle"
                   draggable="false"
                 />
-                <button
-                  v-for="member in visibleMapMembers"
-                  :key="member.id"
-                  type="button"
-                  class="crewlink-member-marker"
-                  :class="{ 'is-self': member.id === crew.profile?.id }"
-                  :style="{
-                    ...markerStyle(member.coords!),
-                    ...activeCrewStyle,
-                  }"
-                  @pointerdown.stop
-                  @click.stop="selectedMember = member"
-                >
-                  <span>{{ memberInitials(member) }}</span>
-                  <small>{{ member.username }}</small>
-                </button>
-                <button
-                  v-for="ping in activeGroup.pings"
-                  :key="ping.id"
-                  type="button"
-                  class="crewlink-ping-marker"
-                  :style="{
-                    ...markerStyle(ping.coords, '-100%'),
-                    '--ping': pingColours[ping.type],
-                  }"
-                  @pointerdown.stop
-                  @click.stop="selectedPing = ping"
-                >
-                  <component :is="pingIcons[ping.type]" />
-                  <small>{{ ping.label }}</small>
-                </button>
               </div>
-              <div v-if="pingAtMapCenter" class="crewlink-map-crosshair">
+              <button
+                v-for="member in visibleMapMembers"
+                :key="member.id"
+                type="button"
+                class="crewlink-member-marker"
+                :class="{ 'is-self': member.id === crew.profile?.id }"
+                :style="{
+                  ...markerStyle(member.coords!),
+                  ...activeCrewStyle,
+                }"
+                @pointerdown.stop
+                @click.stop="selectedMember = member"
+              >
+                <span>
+                  <img v-if="member.avatarUrl" :src="member.avatarUrl" alt="" />
+                  <template v-else>{{ memberInitials(member) }}</template>
+                </span>
+                <small>{{ member.username }}</small>
+              </button>
+              <button
+                v-for="ping in activeGroup.pings"
+                :key="ping.id"
+                type="button"
+                class="crewlink-ping-marker"
+                :style="{
+                  ...markerStyle(ping.coords, '-100%'),
+                  '--ping': pingColours[ping.type],
+                }"
+                @pointerdown.stop
+                @click.stop="selectedPing = ping"
+              >
+                <component :is="pingIcons[ping.type]" />
+                <small>{{ ping.label }}</small>
+              </button>
+              <div v-if="placingPing" class="crewlink-map-crosshair">
                 <Crosshair />
               </div>
               <div class="crewlink-map-controls">
                 <button
                   type="button"
                   :aria-label="t('zoomIn')"
+                  @pointerdown.stop
                   @click="changeZoom(1)"
                 >
                   +
@@ -1197,6 +1403,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   :aria-label="t('zoomOut')"
+                  @pointerdown.stop
                   @click="changeZoom(-1)"
                 >
                   −
@@ -1204,6 +1411,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   :aria-label="t('myLocation')"
+                  @pointerdown.stop
                   @click="centerOwnLocation"
                 >
                   <LocateFixed />
@@ -1211,18 +1419,42 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   :aria-label="`${t('members')} · ${t('map')}`"
+                  @pointerdown.stop
                   @click="fitOnlineMembers"
                 >
                   <Users />
                 </button>
+                <button
+                  type="button"
+                  :aria-label="`${phone.t('Apps.map.switchStyle')}: ${phone.t(`Apps.map.styles.${mapStyle}`)}`"
+                  @pointerdown.stop
+                  @click="cycleMapStyle"
+                >
+                  <component :is="activeMapStyle.icon" />
+                </button>
               </div>
-              <div class="crewlink-map-legend">
+              <div v-if="!placingPing" class="crewlink-map-legend">
                 <span><i class="is-live"></i>{{ t('status.live') }}</span>
                 <span><i class="is-hidden"></i>{{ t('status.hidden') }}</span>
               </div>
             </div>
 
-            <div class="crewlink-map-actions">
+            <div v-if="placingPing" class="crewlink-ping-placement">
+              <div>
+                <strong>{{ t('placeOnMap') }}</strong>
+                <small>{{ t('placeOnMapBody') }}</small>
+              </div>
+              <div>
+                <k-button rounded outline @click="cancelPingPlacement">
+                  {{ phone.t('Common.cancel') }}
+                </k-button>
+                <k-button rounded @click="confirmPingPlacement">
+                  <MapPin />{{ t('addHere') }}
+                </k-button>
+              </div>
+            </div>
+
+            <div v-else class="crewlink-map-actions">
               <button type="button" @click="activeTab = 'group'">
                 <Users /><span
                   ><strong
@@ -1236,7 +1468,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 :disabled="!canPing"
-                @click="openSheet('ping')"
+                @click="startPingPlacement"
               >
                 <MapPin /><span
                   ><strong>{{ t('newPing') }}</strong
@@ -1389,7 +1621,7 @@ onBeforeUnmount(() => {
                 <small>{{ t('liveCoordination') }}</small>
                 <h1>{{ t('pings') }}</h1>
               </div>
-              <button v-if="canPing" type="button" @click="openSheet('ping')">
+              <button v-if="canPing" type="button" @click="startPingPlacement">
                 <Plus />
               </button>
             </div>
@@ -1591,7 +1823,7 @@ onBeforeUnmount(() => {
       </main>
 
       <k-tabbar
-        v-if="activeGroup"
+        v-if="activeGroup && !placingPing"
         component="nav"
         icons
         labels
@@ -1858,21 +2090,17 @@ onBeforeUnmount(() => {
               outline
               @input="updateValue('pingLabel', $event)"
           /></k-list>
-          <k-list inset strong class="crewlink-ping-location-list"
-            ><k-list-item
-              ><template #media><Crosshair :size="22" /></template
-              ><template #title
-                ><span class="crewlink-ping-location-copy"
-                  ><strong>{{ t('placeOnMap') }}</strong
-                  ><small>{{ t('placeOnMapBody') }}</small></span
-                ></template
-              ><template #after
-                ><k-toggle
-                  :checked="pingAtMapCenter"
-                  @click.stop.prevent="
-                    togglePingAtMapCenter
-                  " /></template></k-list-item
-          ></k-list>
+          <k-list inset strong class="crewlink-ping-location-list">
+            <k-list-item
+              :title="t('placeOnMap')"
+              :subtitle="t('positionSelected')"
+              link
+              @click="resumePingPlacement"
+            >
+              <template #media><Crosshair :size="22" /></template>
+              <template #after><MapPinned :size="19" /></template>
+            </k-list-item>
+          </k-list>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
           <k-button
             large
@@ -2196,18 +2424,26 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 .crewlink-navbar {
-  --k-navbar-bg-color: rgba(248, 252, 255, 0.78);
+  --k-safe-area-top: 46px;
   position: absolute;
   z-index: 20;
-  inset: 0 0 auto;
-  backdrop-filter: blur(20px) saturate(1.3);
+  top: 0;
+  right: 0;
+  left: 0;
 }
-.crewlink--dark .crewlink-navbar {
-  --k-navbar-bg-color: rgba(7, 16, 24, 0.8);
+.crewlink-navbar::after {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 22px;
+  background: linear-gradient(var(--cl-bg), transparent);
+  content: '';
+  pointer-events: none;
 }
 .crewlink-content {
   position: absolute;
-  inset: 94px 0 calc(80px + var(--k-safe-area-bottom));
+  inset: 0;
   overflow: hidden;
 }
 .crewlink-content--empty {
@@ -2216,7 +2452,7 @@ onBeforeUnmount(() => {
 .crewlink-scroll-tab {
   height: 100%;
   overflow-y: auto;
-  padding: 14px 11px 34px;
+  padding: 108px 11px 112px;
 }
 .crewlink-loading,
 .crewlink-onboarding {
@@ -2454,9 +2690,14 @@ onBeforeUnmount(() => {
 }
 .crewlink-map-tab {
   height: 100%;
+  padding-top: 94px;
+  padding-bottom: calc(80px + var(--k-safe-area-bottom));
   display: flex;
   flex-direction: column;
   background: #09131c;
+}
+.crewlink-content--placing .crewlink-map-tab {
+  padding-bottom: var(--k-safe-area-bottom);
 }
 .crewlink-map-summary {
   height: 64px;
@@ -2542,6 +2783,12 @@ onBeforeUnmount(() => {
   pointer-events: none;
   user-select: none;
 }
+.crewlink-map__mainland:not(.crewlink-map__mainland--default) {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .crewlink-member-marker,
 .crewlink-ping-marker {
   position: absolute;
@@ -2561,11 +2808,17 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   display: grid;
   place-items: center;
+  overflow: hidden;
   color: white;
   background: var(--crew);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   font-size: 9px;
   font-weight: 900;
+}
+.crewlink-member-marker > span img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .crewlink-member-marker.is-self > span {
   box-shadow:
@@ -2599,6 +2852,7 @@ onBeforeUnmount(() => {
 }
 .crewlink-map-controls {
   position: absolute;
+  z-index: 8;
   right: 10px;
   top: 10px;
   display: flex;
@@ -2650,15 +2904,64 @@ onBeforeUnmount(() => {
 }
 .crewlink-map-crosshair {
   position: absolute;
+  z-index: 7;
   left: 50%;
   top: 50%;
+  width: 48px;
+  height: 48px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
   transform: translate(-50%, -50%);
   color: #ff4d67;
+  background: rgba(8, 20, 30, 0.28);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
 }
 .crewlink-map-crosshair svg {
-  width: 32px;
-  height: 32px;
-  filter: drop-shadow(0 2px 4px white);
+  width: 28px;
+  height: 28px;
+  filter: drop-shadow(0 2px 4px rgba(255, 255, 255, 0.72));
+}
+.crewlink-ping-placement {
+  min-height: 112px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+  color: white;
+  background: #0c1822;
+}
+.crewlink-ping-placement > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.crewlink-ping-placement strong {
+  font-size: 14px;
+  line-height: 18px;
+}
+.crewlink-ping-placement small {
+  color: #a4b4c0;
+  font-size: 10px;
+  line-height: 13px;
+}
+.crewlink-ping-placement > div:last-child {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.crewlink-ping-placement :deep(.k-button) {
+  min-height: 44px;
+}
+.crewlink-ping-placement svg {
+  width: 16px;
+  height: 16px;
 }
 .crewlink-map-actions {
   height: 76px;
@@ -2897,9 +3200,6 @@ onBeforeUnmount(() => {
 .crewlink-section-header button svg {
   width: 22px;
   height: 22px;
-}
-.crewlink-pings-tab {
-  padding-top: 12px;
 }
 .crewlink-pings-tab .crewlink-section-header {
   margin-bottom: 12px;
@@ -3349,6 +3649,16 @@ onBeforeUnmount(() => {
 }
 .crewlink-tabbar {
   z-index: 20;
+}
+.crewlink-tabbar::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 24px;
+  background: linear-gradient(transparent, var(--cl-bg));
+  content: '';
+  pointer-events: none;
 }
 .crewlink-tabbar :deep(.crewlink-tabbar__inner) {
   width: 100% !important;
