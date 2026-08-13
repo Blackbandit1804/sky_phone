@@ -1000,7 +1000,10 @@ onMounted(async () => {
                 </div>
               </k-glass>
             </template>
-            <k-glass class="pages__logout-glass">
+            <k-glass
+              v-if="!profileEditing && pages.profile?.exists"
+              class="pages__logout-glass"
+            >
               <button
                 type="button"
                 class="pages__logout"

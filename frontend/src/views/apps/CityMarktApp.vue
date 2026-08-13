@@ -1042,7 +1042,7 @@ onMounted(async () => {
     :colors="{ bgIos: 'bg-transparent' }"
   >
     <k-navbar
-      v-if="screen === 'main' && onboardingReady"
+      v-if="screen === 'main' && onboardingReady && isAuthenticated"
       class="citymarkt-navbar"
       :subtitle="
         phone.t(
@@ -1059,7 +1059,11 @@ onMounted(async () => {
     />
 
     <div v-if="!onboardingReady" class="citymarkt__gate-loading">{{ phone.t('Common.loading') }}</div>
-    <section v-if="screen === 'main' && onboardingReady" class="citymarkt__content">
+    <section
+      v-if="screen === 'main' && onboardingReady"
+      class="citymarkt__content"
+      :class="{ 'citymarkt__content--auth': !isAuthenticated }"
+    >
       <template v-if="tab === 'discover' || tab === 'search'">
         <k-searchbar
           component="form"
@@ -2758,5 +2762,9 @@ onMounted(async () => {
   background: var(--yellow);
   color: #171816;
   box-shadow: 0 4px 12px #00000030;
+}
+
+.citymarkt__content--auth {
+  padding: 68px 18px 34px;
 }
 </style>

@@ -2238,6 +2238,7 @@ onBeforeUnmount(() => {
   --auth-accent: #20bde0;
   --panel: rgba(18, 39, 53, 0.92);
   padding: 60px 18px 30px;
+  justify-content: flex-start;
   color: #f3f8fb;
   background:
     radial-gradient(circle at 82% 8%, rgba(39, 217, 237, 0.2), transparent 34%),
@@ -2245,7 +2246,7 @@ onBeforeUnmount(() => {
   overflow-y: auto;
 }
 .crewlink-auth :deep(.app-profile-auth) {
-  margin: auto;
+  margin: 0 auto;
 }
 .crewlink-logo {
   width: 78px;

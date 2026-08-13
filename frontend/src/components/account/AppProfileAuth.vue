@@ -77,12 +77,20 @@ const canSubmit = computed(() => {
     <k-glass class="app-profile-auth__card">
       <k-segmented raised class="app-profile-auth__mode">
         <k-segmented-button
+          class="app-profile-auth__mode-button app-profile-auth__mode-button--login"
+          :class="{
+            'app-profile-auth__mode-button--active': mode === 'login',
+          }"
           :active="mode === 'login'"
           @click="emit('update:mode', 'login')"
         >
           {{ loginLabel }}
         </k-segmented-button>
         <k-segmented-button
+          class="app-profile-auth__mode-button app-profile-auth__mode-button--register"
+          :class="{
+            'app-profile-auth__mode-button--active': mode === 'register',
+          }"
           :active="mode === 'register'"
           @click="emit('update:mode', 'register')"
         >
@@ -158,7 +166,7 @@ const canSubmit = computed(() => {
 .app-profile-auth {
   width: 100%;
   max-width: 320px;
-  margin: auto;
+  margin: 0 auto;
   padding: 12px 4px 18px;
   color: inherit;
   text-align: center;
@@ -237,6 +245,21 @@ const canSubmit = computed(() => {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.16);
+}
+.app-profile-auth__mode :deep(.app-profile-auth__mode-button) {
+  border-radius: 3px;
+}
+.app-profile-auth__mode
+  :deep(
+    .app-profile-auth__mode-button--login.app-profile-auth__mode-button--active
+  ) {
+  border-radius: 10px 3px 3px 10px;
+}
+.app-profile-auth__mode
+  :deep(
+    .app-profile-auth__mode-button--register.app-profile-auth__mode-button--active
+  ) {
+  border-radius: 3px 10px 10px 3px;
 }
 .app-profile-auth__photo {
   display: flex;
