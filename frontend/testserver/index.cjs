@@ -7613,6 +7613,46 @@ app.post('/api/:endpoint', (request, response) => {
         ).length,
       }
     }
+    const bootstrapDeviceData =
+      testScenario === 'easyshare-full' &&
+      !deviceData.apps?.payload?.homeLayout
+        ? {
+            ...deviceData,
+            apps: {
+              ...deviceData.apps,
+              payload: {
+                ...deviceData.apps.payload,
+                homeLayout: {
+                  dock: ['phone', 'messages', 'camera', 'clock'],
+                  grid: [
+                    {
+                      apps: [
+                        'mail',
+                        'notes',
+                        'photos',
+                        'app-store',
+                        'settings',
+                        'map',
+                        'citymarkt',
+                        'local-pages',
+                        'calendar',
+                        'darkchat',
+                      ],
+                      id: 'folder-browser-demo-123456',
+                      name: 'Los Santos',
+                      type: 'folder',
+                    },
+                    'banking',
+                    'weather',
+                    'billing',
+                  ],
+                  hidden: [],
+                  version: 5,
+                },
+              },
+            },
+          }
+        : deviceData
     response.json({
       success: true,
       data: {
@@ -7670,7 +7710,7 @@ app.post('/api/:endpoint', (request, response) => {
                       }
                     : deviceData.appAuth,
                 }
-              : deviceData,
+              : bootstrapDeviceData,
           imei: '356938035643809',
           name: 'Personal iFruit Phone',
           sim: mockSim,

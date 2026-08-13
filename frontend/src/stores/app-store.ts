@@ -12,11 +12,16 @@ import {
 import { usePhoneStore } from '@/stores/phone'
 import type { LaunchablePhoneAppId } from '@/types/apps'
 import {
+  addHomeAppToFolder,
   addHomePage,
+  createHomeFolder,
   createDefaultHomeLayout,
   deleteHomePage,
+  extractHomeFolderApp,
+  moveHomeFolderApp,
   moveHomeApp,
   parseHomeLayout,
+  renameHomeFolder,
   removeHomeApp,
   restoreHomeApp,
   type HomeArea,
@@ -192,7 +197,10 @@ export const useAppStoreStore = defineStore('app-store', {
             (id): id is LaunchablePhoneAppId =>
               typeof id === 'string' &&
               (isPhoneAppId(id) ||
-                (layoutVersion === 3 && isValidExternalPhoneAppId(id))),
+                ((layoutVersion === 3 ||
+                  layoutVersion === 4 ||
+                  layoutVersion === 5) &&
+                  isValidExternalPhoneAppId(id))),
           )
         : []
       const installedIds = [
@@ -218,7 +226,10 @@ export const useAppStoreStore = defineStore('app-store', {
         for (const [appId, count] of Object.entries(data.launchCounts)) {
           if (
             (isPhoneAppId(appId) ||
-              (layoutVersion === 3 && isValidExternalPhoneAppId(appId))) &&
+              ((layoutVersion === 3 ||
+                layoutVersion === 4 ||
+                layoutVersion === 5) &&
+                isValidExternalPhoneAppId(appId))) &&
             typeof count === 'number' &&
             Number.isFinite(count) &&
             count > 0
@@ -278,6 +289,83 @@ export const useAppStoreStore = defineStore('app-store', {
         targetIndex,
       )
       this.persist()
+    },
+    createHomeFolder(
+      from: HomeArea,
+      sourceIndex: number,
+      to: HomeArea,
+      targetIndex: number,
+      name: string,
+    ): string | null {
+      const folderId = `folder-${globalThis.crypto.randomUUID()}`
+      const next = createHomeFolder(
+        this.homeLayout,
+        from,
+        sourceIndex,
+        to,
+        targetIndex,
+        folderId,
+        name,
+      )
+      if (next === this.homeLayout) return null
+      this.homeLayout = next
+      this.persist()
+      return folderId
+    },
+    addHomeAppToFolder(
+      from: HomeArea,
+      sourceIndex: number,
+      folderId: string,
+    ): boolean {
+      const next = addHomeAppToFolder(
+        this.homeLayout,
+        from,
+        sourceIndex,
+        folderId,
+      )
+      if (next === this.homeLayout) return false
+      this.homeLayout = next
+      this.persist()
+      return true
+    },
+    renameHomeFolder(folderId: string, name: string): void {
+      const next = renameHomeFolder(this.homeLayout, folderId, name)
+      if (next === this.homeLayout) return
+      this.homeLayout = next
+      this.persist()
+    },
+    moveHomeFolderApp(
+      folderId: string,
+      sourceIndex: number,
+      targetIndex: number,
+    ): void {
+      const next = moveHomeFolderApp(
+        this.homeLayout,
+        folderId,
+        sourceIndex,
+        targetIndex,
+      )
+      if (next === this.homeLayout) return
+      this.homeLayout = next
+      this.persist()
+    },
+    extractHomeFolderApp(
+      folderId: string,
+      sourceIndex: number,
+      to: HomeArea,
+      targetIndex: number,
+    ): boolean {
+      const next = extractHomeFolderApp(
+        this.homeLayout,
+        folderId,
+        sourceIndex,
+        to,
+        targetIndex,
+      )
+      if (next === this.homeLayout) return false
+      this.homeLayout = next
+      this.persist()
+      return true
     },
     removeHomeApp(appId: LaunchablePhoneAppId): void {
       if (isProtectedHomeApp(appId)) return

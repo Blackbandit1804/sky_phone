@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NON_REMOVABLE_PHONE_APP_IDS } from '@/config/apps'
 import { useAppStoreStore } from '@/stores/app-store'
-import { removeHomeApp } from '@/utils/homeLayout'
+import { getHomeFolder, removeHomeApp } from '@/utils/homeLayout'
 
 const mocks = vi.hoisted(() => ({
   phone: {
@@ -158,6 +158,43 @@ describe('app store', () => {
       homeLayout: apps.homeLayout,
       launchCounts: {},
     })
+  })
+
+  it('persists the complete folder lifecycle through store actions', () => {
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+    mocks.phone.saveDeviceNamespace.mockClear()
+
+    const notesIndex = apps.homeLayout.grid.indexOf('notes')
+    const clockIndex = apps.homeLayout.grid.indexOf('clock')
+    const mailIndex = apps.homeLayout.grid.indexOf('mail')
+    const folderId = apps.createHomeFolder(
+      'grid',
+      notesIndex,
+      'grid',
+      clockIndex,
+      'Utilities',
+    )
+
+    expect(folderId).toBeTruthy()
+    expect(getHomeFolder(apps.homeLayout, folderId!)?.apps).toEqual([
+      'clock',
+      'notes',
+    ])
+    expect(apps.addHomeAppToFolder('grid', mailIndex, folderId!)).toBe(true)
+    apps.moveHomeFolderApp(folderId!, 2, 0)
+    apps.renameHomeFolder(folderId!, 'Work')
+    expect(getHomeFolder(apps.homeLayout, folderId!)).toMatchObject({
+      apps: ['mail', 'notes', 'clock'],
+      name: 'Work',
+    })
+
+    const emptyIndex = apps.homeLayout.grid.indexOf(null)
+    expect(
+      apps.extractHomeFolderApp(folderId!, 0, 'grid', emptyIndex),
+    ).toBe(true)
+    expect(apps.homeLayout.grid[emptyIndex]).toBe('mail')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(5)
   })
 
   it('does not commit an installation to a different phone', () => {

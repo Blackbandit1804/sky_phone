@@ -3765,6 +3765,13 @@ const defaultLocales: LocaleTree = {
     removedFromHome: 'Removed from Home Screen',
     page: 'Page',
     pages: 'Home screen pages',
+    folders: {
+      defaultName: 'Folder',
+      close: 'Close folder',
+      rename: 'Rename Folder',
+      name: 'Folder name',
+      pages: 'Folder pages',
+    },
     groups: {
       suggestions: 'Suggestions',
       recentlyAdded: 'Recently Added',

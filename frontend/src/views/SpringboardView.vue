@@ -4,6 +4,8 @@ import { kButton, kGlass, kList, kListItem, kSheet } from 'konsta/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
+import HomeFolderIcon from '@/components/HomeFolderIcon.vue'
+import HomeFolderOverlay from '@/components/HomeFolderOverlay.vue'
 import SpringboardWidgetGrid from '@/components/SpringboardWidgetGrid.vue'
 import WidgetConfigSheet from '@/components/WidgetConfigSheet.vue'
 import WidgetPickerSheet from '@/components/WidgetPickerSheet.vue'
@@ -16,10 +18,14 @@ import type { LaunchablePhoneAppId } from '@/types/apps'
 import type { WidgetKind, WidgetSettings, WidgetSize } from '@/types/widgets'
 import {
   deleteHomePage as previewHomePageDelete,
+  getHomeFolder,
   HOME_GRID_PAGE_SIZE,
   homeKeyboardTarget,
+  isHomeFolder,
   MAX_HOME_GRID_PAGES,
   type HomeArea,
+  type HomeFolder,
+  type HomeItem,
 } from '@/utils/homeLayout'
 import type { ReorderDirection } from '@/utils/keyboard'
 import {
@@ -37,6 +43,7 @@ const APP_LIBRARY_CATEGORIES: PhoneAppCategory[] = [
   'utilities',
   'shopping',
 ]
+const HOME_FOLDER_HOVER_DURATION = 900
 const phone = usePhoneStore()
 const appStore = useAppStoreStore()
 const widgets = useWidgetsStore()
@@ -63,6 +70,9 @@ const draggingHomeApp = ref<{
   area: HomeArea
   index: number
 } | null>(null)
+const openedFolderId = ref<string | null>(null)
+const renameFolderOnOpenId = ref<string | null>(null)
+const folderHoverTarget = ref('')
 let pointerStart = 0
 let pointerStartY = 0
 let pointerStartedAt = 0
@@ -75,6 +85,7 @@ let lastWidgetPointer: { clientX: number; clientY: number } | null = null
 let edgePageTimer: number | undefined
 let edgePageDirection = 0
 let edgePageLocked = false
+let folderHoverTimer: number | undefined
 
 const installedApps = computed(() =>
   PHONE_APPS.filter((app) => appStore.isInstalled(app.id)),
@@ -87,17 +98,25 @@ const hiddenApps = computed(() =>
     appStore.homeLayout.hidden.includes(app.id),
   ),
 )
-const gridEntries = computed(() =>
-  appStore.homeLayout.grid
-    .map((id, sourceIndex) => ({
-      app: id ? (installedAppsById.value.get(id) ?? null) : null,
+const gridSlots = computed(() => {
+  const appOccurrences = new Map<string, number>()
+  return appStore.homeLayout.grid.map((item, sourceIndex) => {
+    const appId = typeof item === 'string' ? item : null
+    const folder = isHomeFolder(item) ? item : null
+    const occurrence = appId ? (appOccurrences.get(appId) ?? 0) : 0
+    if (appId) appOccurrences.set(appId, occurrence + 1)
+    return {
+      app: appId ? (installedAppsById.value.get(appId) ?? null) : null,
+      folder,
+      renderKey: folder
+        ? `grid-folder-${folder.id}`
+        : appId
+          ? `grid-app-${appId}-${occurrence}`
+          : `grid-empty-${sourceIndex}`,
       sourceIndex,
-    }))
-    .filter(
-      (entry): entry is { app: PhoneAppDefinition; sourceIndex: number } =>
-        entry.app !== null,
-    ),
-)
+    }
+  })
+})
 const previewWidgetLayout = computed(() => {
   const preview = widgetDragPreview.value
   return preview
@@ -111,9 +130,14 @@ const previewWidgetLayout = computed(() => {
     : widgets.layout
 })
 const appPages = computed(() => {
-  const entries = [...gridEntries.value]
+  const slots = [...gridSlots.value]
   const pages: Array<{
-    cells: Array<{ app: PhoneAppDefinition; sourceIndex: number } | null>
+    cells: Array<{
+      app: PhoneAppDefinition | null
+      folder: HomeFolder | null
+      renderKey: string
+      sourceIndex: number | null
+    }>
     page: number
   }> = []
   const maxWidgetPage = Math.max(
@@ -126,8 +150,8 @@ const appPages = computed(() => {
   )
   const lastHomePage = Math.max(maxWidgetPage, persistedHomePages)
   let page = 1
-  let entryIndex = 0
-  while (entryIndex < entries.length || page <= lastHomePage) {
+  let slotIndex = 0
+  while (slotIndex < slots.length || page <= lastHomePage) {
     const occupied = widgetOccupiedCells(
       previewWidgetLayout.value.instances,
       page,
@@ -137,21 +161,40 @@ const appPages = computed(() => {
         occupied.add(cell)
       }
     }
-    const cells = Array.from<{
-      app: PhoneAppDefinition
-      sourceIndex: number
-    } | null>({ length: HOME_GRID_PAGE_SIZE }).fill(null)
+    const cells: Array<{
+      app: PhoneAppDefinition | null
+      folder: HomeFolder | null
+      renderKey: string
+      sourceIndex: number | null
+    }> = Array(HOME_GRID_PAGE_SIZE)
+      .fill(null)
+      .map((_, cell) => ({
+        app: null,
+        folder: null,
+        renderKey: `grid-occupied-${page}-${cell}`,
+        sourceIndex: null,
+      }))
     for (let cell = 0; cell < HOME_GRID_PAGE_SIZE; cell += 1) {
-      if (occupied.has(cell) || entryIndex >= entries.length) continue
-      cells[cell] = entries[entryIndex]
-      entryIndex += 1
+      if (occupied.has(cell) || slotIndex >= slots.length) continue
+      cells[cell] = slots[slotIndex]
+      slotIndex += 1
     }
     pages.push({ cells, page })
     page += 1
   }
   return pages.length
     ? pages
-    : [{ cells: Array(HOME_GRID_PAGE_SIZE).fill(null), page: 1 }]
+    : [
+        {
+          cells: Array.from({ length: HOME_GRID_PAGE_SIZE }, (_, sourceIndex) => ({
+            app: null,
+            folder: null,
+            renderKey: `grid-empty-${sourceIndex}`,
+            sourceIndex,
+          })),
+          page: 1,
+        },
+      ]
 })
 const pageCount = computed(() => appPages.value.length + 2)
 const libraryPage = computed(() => pageCount.value - 1)
@@ -183,9 +226,27 @@ const canDeleteCurrentPage = computed(() => {
   )
 })
 const dockSlots = computed(() =>
-  appStore.homeLayout.dock.map((id) =>
-    id ? (installedAppsById.value.get(id) ?? null) : null,
-  ),
+  appStore.homeLayout.dock.map((item, index) => ({
+    app:
+      typeof item === 'string'
+        ? (installedAppsById.value.get(item) ?? null)
+        : null,
+    folder: isHomeFolder(item) ? item : null,
+    index,
+  })),
+)
+const openedFolder = computed(() =>
+  openedFolderId.value
+    ? getHomeFolder(appStore.homeLayout, openedFolderId.value)
+    : null,
+)
+const openedFolderApps = computed(() =>
+  openedFolder.value
+    ? openedFolder.value.apps.flatMap((appId, index) => {
+        const app = installedAppsById.value.get(appId)
+        return app ? [{ app, index }] : []
+      })
+    : [],
 )
 const filteredApps = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase(phone.lang)
@@ -567,27 +628,151 @@ async function saveWidgetConfig(
   if (configured) changePage(configured.page)
 }
 
-function targetHomeIndex(page: number, cell: number): number {
-  return Math.min(
-    Math.max(0, appStore.homeLayout.grid.length - 1),
-    (page - 1) * HOME_GRID_PAGE_SIZE + cell,
-  )
-}
-
 function startHomeDrag(area: HomeArea, index: number): void {
   draggingHomeApp.value = { area, index }
+}
+
+function clearFolderHover(): void {
+  if (folderHoverTimer !== undefined) window.clearTimeout(folderHoverTimer)
+  folderHoverTimer = undefined
+  folderHoverTarget.value = ''
+}
+
+function queueFolderHover(event: PointerEvent): void {
+  const dragged = draggingHomeApp.value
+  if (!dragged) return
+  const sourceItem = appStore.homeLayout[dragged.area][dragged.index]
+  if (typeof sourceItem !== 'string') {
+    clearFolderHover()
+    return
+  }
+
+  const targetElement = document
+    .elementsFromPoint(event.clientX, event.clientY)
+    .map((element) => element.closest<HTMLElement>('[data-home-index]'))
+    .find(
+      (element) =>
+        element && !element.closest('.app-icon-item--dragging'),
+    )
+  const area = targetElement?.dataset.homeArea as HomeArea | undefined
+  const targetIndex = Number(targetElement?.dataset.homeIndex)
+  if (
+    (area !== 'grid' && area !== 'dock') ||
+    !Number.isInteger(targetIndex) ||
+    (area === dragged.area && targetIndex === dragged.index)
+  ) {
+    clearFolderHover()
+    return
+  }
+  const targetItem = appStore.homeLayout[area][targetIndex]
+  if (typeof targetItem !== 'string' && !isHomeFolder(targetItem)) {
+    clearFolderHover()
+    return
+  }
+
+  const targetKey = `${area}:${targetIndex}`
+  if (folderHoverTarget.value === targetKey) return
+  clearFolderHover()
+  folderHoverTarget.value = targetKey
+  folderHoverTimer = window.setTimeout(() => {
+    const currentDrag = draggingHomeApp.value
+    if (!currentDrag || folderHoverTarget.value !== targetKey) return
+    const currentSource = appStore.homeLayout[currentDrag.area][currentDrag.index]
+    const currentTarget = appStore.homeLayout[area][targetIndex]
+    if (typeof currentSource !== 'string') return
+
+    let folderId: string | null = null
+    if (typeof currentTarget === 'string') {
+      folderId = appStore.createHomeFolder(
+        currentDrag.area,
+        currentDrag.index,
+        area,
+        targetIndex,
+        phone.t('Home.folders.defaultName'),
+      )
+      if (folderId) renameFolderOnOpenId.value = folderId
+    } else if (isHomeFolder(currentTarget)) {
+      folderId = appStore.addHomeAppToFolder(
+        currentDrag.area,
+        currentDrag.index,
+        currentTarget.id,
+      )
+        ? currentTarget.id
+        : null
+    }
+    if (folderId) {
+      draggingHomeApp.value = null
+      openedFolderId.value = folderId
+    }
+    clearFolderHover()
+  }, HOME_FOLDER_HOVER_DURATION)
 }
 
 function moveHomeDrag(event: PointerEvent): void {
   if (draggingHomeApp.value?.area === 'grid') {
     queueEdgePageTurn(event, 'app')
   }
+  queueFolderHover(event)
+}
+
+async function animateHomeItemDrop(
+  item: HomeItem,
+  area: HomeArea,
+  index: number,
+  from: DOMRect,
+): Promise<void> {
+  await nextTick()
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+  const appElement = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-home-item-key]'),
+  ).find(
+    (element) =>
+      element.dataset.homeItemKey ===
+        (isHomeFolder(item) ? item.id : `app-${item}`) &&
+      element.dataset.homeArea === area &&
+      Number(element.dataset.homeIndex) === index,
+  )
+  if (!appElement) return
+
+  const target = appElement.getBoundingClientRect()
+  const offsetX = from.left - target.left
+  const offsetY = from.top - target.top
+  if (Math.hypot(offsetX, offsetY) < 1) return
+
+  appElement.style.setProperty('--home-app-drop-x', `${offsetX}px`)
+  appElement.style.setProperty('--home-app-drop-y', `${offsetY}px`)
+  let cleanedUp = false
+  const cleanUpAnimation = (event: AnimationEvent): void => {
+    if (
+      event.target !== appElement ||
+      event.animationName !== 'home-app-drop-settle'
+    ) {
+      return
+    }
+    if (cleanedUp) return
+    cleanedUp = true
+    appElement.classList.remove('app-icon-item--drop-settling')
+    appElement.style.removeProperty('--home-app-drop-x')
+    appElement.style.removeProperty('--home-app-drop-y')
+    appElement.removeEventListener('animationend', cleanUpAnimation)
+    appElement.removeEventListener('animationcancel', cleanUpAnimation)
+  }
+  appElement.addEventListener('animationend', cleanUpAnimation)
+  appElement.addEventListener('animationcancel', cleanUpAnimation)
+  appElement.classList.add('app-icon-item--drop-settling')
 }
 
 function finishHomeDrag(event: PointerEvent): void {
   clearEdgePageTurn()
+  clearFolderHover()
   const dragged = draggingHomeApp.value
   if (!dragged) return
+  const draggedItem = appStore.homeLayout[dragged.area][dragged.index]
+  const draggedElement = (event.currentTarget as HTMLElement | null)?.closest(
+    '.app-icon-item',
+  )
+  const dropOrigin = draggedElement?.getBoundingClientRect()
   const target = document
     .elementsFromPoint(event.clientX, event.clientY)
     .find(
@@ -619,15 +804,23 @@ function finishHomeDrag(event: PointerEvent): void {
   }
   const area = (targetItem?.dataset.homeArea ??
     targetArea?.dataset.homeArea) as HomeArea | undefined
+  let dropArea = dragged.area
+  let dropIndex = dragged.index
   if ((area === 'grid' || area === 'dock') && targetItem) {
     const targetIndex = Number.parseInt(targetItem.dataset.homeIndex ?? '', 10)
     appStore.moveHomeApp(dragged.area, dragged.index, area, targetIndex)
+    dropArea = area
+    dropIndex = targetIndex
   }
   draggingHomeApp.value = null
+  if (draggedItem && dropOrigin) {
+    void animateHomeItemDrop(draggedItem, dropArea, dropIndex, dropOrigin)
+  }
 }
 
 function stopHomeDrag(): void {
   clearEdgePageTurn()
+  clearFolderHover()
   draggingHomeApp.value = null
 }
 
@@ -636,6 +829,11 @@ function reorderHomeApp(
   sourceIndex: number,
   direction: ReorderDirection,
 ): void {
+  const item = appStore.homeLayout[area][sourceIndex]
+  const appElement = document.querySelector<HTMLElement>(
+    `[data-home-area="${area}"][data-home-index="${sourceIndex}"]`,
+  )
+  const moveOrigin = appElement?.getBoundingClientRect()
   const targetIndex = homeKeyboardTarget(
     appStore.homeLayout,
     area,
@@ -644,6 +842,9 @@ function reorderHomeApp(
   )
   if (targetIndex === null) return
   appStore.moveHomeApp(area, sourceIndex, area, targetIndex)
+  if (item && moveOrigin) {
+    void animateHomeItemDrop(item, area, targetIndex, moveOrigin)
+  }
 }
 
 async function addHomePage(): Promise<void> {
@@ -676,6 +877,90 @@ function restoreHomeApp(appId: LaunchablePhoneAppId): void {
   appStore.restoreHomeApp(appId)
 }
 
+function folderPreviewApps(folder: HomeFolder): PhoneAppDefinition[] {
+  const apps: PhoneAppDefinition[] = []
+  for (const appId of folder.apps) {
+    const app = installedAppsById.value.get(appId)
+    if (app) apps.push(app)
+  }
+  return apps
+}
+
+function openFolder(folderId: string): void {
+  pageTransitioning.value = false
+  openedFolderId.value = folderId
+}
+
+function closeFolder(): void {
+  openedFolderId.value = null
+  renameFolderOnOpenId.value = null
+}
+
+function renameOpenedFolder(name: string): void {
+  if (!openedFolderId.value) return
+  appStore.renameHomeFolder(openedFolderId.value, name)
+}
+
+function moveOpenedFolderApp(sourceIndex: number, targetIndex: number): void {
+  if (!openedFolderId.value) return
+  appStore.moveHomeFolderApp(openedFolderId.value, sourceIndex, targetIndex)
+}
+
+function extractOpenedFolderApp(
+  sourceIndex: number,
+  event: PointerEvent,
+): void {
+  const folder = openedFolder.value
+  if (!folder) return
+  const appId = folder.apps[sourceIndex]
+  const sourceElement = (event.currentTarget as HTMLElement | null)?.closest(
+    '.app-icon-item',
+  )
+  const sourceBounds = sourceElement?.getBoundingClientRect()
+  const candidates = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-home-index][data-home-area]'),
+  ).filter((element) => {
+    const area = element.dataset.homeArea as HomeArea
+    const index = Number(element.dataset.homeIndex)
+    return (
+      (area === 'grid' || area === 'dock') &&
+      Number.isInteger(index) &&
+      appStore.homeLayout[area][index] === null
+    )
+  })
+  const target = candidates.reduce<HTMLElement | null>((closest, candidate) => {
+    if (!closest) return candidate
+    const bounds = candidate.getBoundingClientRect()
+    const closestBounds = closest.getBoundingClientRect()
+    const distance = Math.hypot(
+      event.clientX - (bounds.left + bounds.width / 2),
+      event.clientY - (bounds.top + bounds.height / 2),
+    )
+    const closestDistance = Math.hypot(
+      event.clientX - (closestBounds.left + closestBounds.width / 2),
+      event.clientY - (closestBounds.top + closestBounds.height / 2),
+    )
+    return distance < closestDistance ? candidate : closest
+  }, null)
+  if (!target) return
+
+  const area = target.dataset.homeArea as HomeArea
+  const targetIndex = Number(target.dataset.homeIndex)
+  if (
+    !appStore.extractHomeFolderApp(
+      folder.id,
+      sourceIndex,
+      area,
+      targetIndex,
+    )
+  ) {
+    return
+  }
+  if (sourceBounds) {
+    void animateHomeItemDrop(appId, area, targetIndex, sourceBounds)
+  }
+}
+
 function clearSearch(): void {
   searchQuery.value = ''
   searchFocused.value = false
@@ -690,6 +975,9 @@ function openAllApps(): void {
 watch(isEditablePage, (visible) => {
   if (!visible) editMode.value = false
 })
+watch(openedFolder, (folder) => {
+  if (!folder) closeFolder()
+})
 </script>
 
 <template>
@@ -700,6 +988,7 @@ watch(isEditablePage, (visible) => {
       {
         'springboard--dragging': dragging,
         'springboard--editing': editMode,
+        'springboard--folder-open': openedFolder !== null,
         'springboard--widget-dragging': draggingWidgetId !== null,
       },
     ]"
@@ -763,15 +1052,21 @@ watch(isEditablePage, (visible) => {
           data-home-area="grid"
         >
           <template
-            v-for="(cell, cellIndex) in page.cells"
-            :key="cell?.app.id ?? `grid-empty-${page.page}-${cellIndex}`"
+            v-for="cell in page.cells"
+            :key="cell.renderKey"
           >
             <AppIcon
-              v-if="cell"
+              v-if="cell.app && cell.sourceIndex !== null"
               :app="cell.app"
               data-home-area="grid"
+              :data-home-app-id="cell.app.id"
+              :data-home-item-key="`app-${cell.app.id}`"
               :data-home-index="cell.sourceIndex"
               :edit-mode="editMode"
+              :class="{
+                'home-item--folder-hover':
+                  folderHoverTarget === `grid:${cell.sourceIndex}`,
+              }"
               @dragcancel="stopHomeDrag"
               @dragend="finishHomeDrag"
               @dragmove="moveHomeDrag"
@@ -780,11 +1075,33 @@ watch(isEditablePage, (visible) => {
               @remove="removeHomeApp(cell.app.id)"
               @reorder="reorderHomeApp('grid', cell.sourceIndex, $event)"
             />
+            <HomeFolderIcon
+              v-else-if="cell.folder && cell.sourceIndex !== null"
+              :apps="folderPreviewApps(cell.folder)"
+              :default-name="phone.t('Home.folders.defaultName')"
+              data-home-area="grid"
+              :data-home-folder-id="cell.folder.id"
+              :data-home-item-key="cell.folder.id"
+              :data-home-index="cell.sourceIndex"
+              :edit-mode="editMode"
+              :folder="cell.folder"
+              :class="{
+                'home-item--folder-hover':
+                  folderHoverTarget === `grid:${cell.sourceIndex}`,
+              }"
+              @dragcancel="stopHomeDrag"
+              @dragend="finishHomeDrag"
+              @dragmove="moveHomeDrag"
+              @dragstart="startHomeDrag('grid', cell.sourceIndex)"
+              @edit="enterEditMode"
+              @open="openFolder(cell.folder.id)"
+              @reorder="reorderHomeApp('grid', cell.sourceIndex, $event)"
+            />
             <div
               v-else
               class="app-grid-slot"
-              data-home-area="grid"
-              :data-home-index="targetHomeIndex(page.page, cellIndex)"
+              :data-home-area="cell.sourceIndex === null ? undefined : 'grid'"
+              :data-home-index="cell.sourceIndex ?? undefined"
               aria-hidden="true"
             ></div>
           </template>
@@ -927,7 +1244,7 @@ watch(isEditablePage, (visible) => {
 
     <Transition name="edit-done">
       <k-glass
-        v-if="editMode && isEditablePage"
+        v-if="editMode && isEditablePage && !openedFolder"
         component="button"
         class="springboard-edit-add"
         type="button"
@@ -940,7 +1257,7 @@ watch(isEditablePage, (visible) => {
 
     <Transition name="edit-done">
       <k-glass
-        v-if="editMode && isEditablePage"
+        v-if="editMode && isEditablePage && !openedFolder"
         component="button"
         class="springboard-edit-done"
         type="button"
@@ -959,29 +1276,60 @@ watch(isEditablePage, (visible) => {
         data-home-area="dock"
       >
         <template
-          v-for="(app, appIndex) in dockSlots"
-          :key="app?.id ?? `dock-empty-${appIndex}`"
+          v-for="slot in dockSlots"
+          :key="
+            slot.folder?.id ?? slot.app?.id ?? `dock-empty-${slot.index}`
+          "
         >
           <AppIcon
-            v-if="app"
-            :app="app"
+            v-if="slot.app"
+            :app="slot.app"
             data-home-area="dock"
-            :data-home-index="appIndex"
+            :data-home-app-id="slot.app.id"
+            :data-home-item-key="`app-${slot.app.id}`"
+            :data-home-index="slot.index"
             :edit-mode="editMode"
             :show-label="false"
+            :class="{
+              'home-item--folder-hover':
+                folderHoverTarget === `dock:${slot.index}`,
+            }"
             @dragcancel="stopHomeDrag"
             @dragend="finishHomeDrag"
             @dragmove="moveHomeDrag"
-            @dragstart="startHomeDrag('dock', appIndex)"
+            @dragstart="startHomeDrag('dock', slot.index)"
             @edit="enterEditMode"
-            @remove="removeHomeApp(app.id)"
-            @reorder="reorderHomeApp('dock', appIndex, $event)"
+            @remove="removeHomeApp(slot.app.id)"
+            @reorder="reorderHomeApp('dock', slot.index, $event)"
+          />
+          <HomeFolderIcon
+            v-else-if="slot.folder"
+            :apps="folderPreviewApps(slot.folder)"
+            :default-name="phone.t('Home.folders.defaultName')"
+            data-home-area="dock"
+            :data-home-folder-id="slot.folder.id"
+            :data-home-item-key="slot.folder.id"
+            :data-home-index="slot.index"
+            :edit-mode="editMode"
+            :folder="slot.folder"
+            :show-label="false"
+            :class="{
+              'home-item--folder-hover':
+                folderHoverTarget === `dock:${slot.index}`,
+            }"
+            @dragcancel="stopHomeDrag"
+            @dragend="finishHomeDrag"
+            @dragmove="moveHomeDrag"
+            @dragstart="startHomeDrag('dock', slot.index)"
+            @edit="enterEditMode"
+            @open="openFolder(slot.folder.id)"
+            @reorder="reorderHomeApp('dock', slot.index, $event)"
           />
           <div
             v-else
             class="app-dock-slot"
             data-home-area="dock"
-            :data-home-index="appIndex"
+            :data-home-index="slot.index"
             aria-hidden="true"
           ></div>
         </template>
@@ -1025,6 +1373,22 @@ watch(isEditablePage, (visible) => {
         <Trash2 :size="12" :stroke-width="2.4" />
       </k-button>
     </nav>
+
+    <Transition name="home-folder">
+      <HomeFolderOverlay
+        v-if="openedFolder"
+        :apps="openedFolderApps"
+        :edit-mode="editMode"
+        :folder="openedFolder"
+        :rename-on-open="renameFolderOnOpenId === openedFolder.id"
+        @close="closeFolder"
+        @edit="enterEditMode"
+        @extract="extractOpenedFolderApp"
+        @move="moveOpenedFolderApp"
+        @rename="renameOpenedFolder"
+        @rename-opened="renameFolderOnOpenId = null"
+      />
+    </Transition>
 
     <div class="widget-action-sheet">
       <k-sheet

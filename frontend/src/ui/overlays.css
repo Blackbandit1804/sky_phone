@@ -16,6 +16,30 @@
   background: rgba(0, 0, 0, 0.48);
 }
 
+.sky-sheet-rise-enter-active .sky-overlay-backdrop,
+.sky-sheet-rise-leave-active .sky-overlay-backdrop {
+  transition: opacity 220ms ease;
+}
+
+.sky-sheet-rise-enter-active .sky-sheet__panel,
+.sky-sheet-rise-leave-active .sky-sheet__panel {
+  transition:
+    opacity 220ms ease,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.sky-sheet-rise-enter-from .sky-overlay-backdrop,
+.sky-sheet-rise-leave-to .sky-overlay-backdrop {
+  opacity: 0;
+}
+
+.sky-sheet-rise-enter-from .sky-sheet__panel,
+.sky-sheet-rise-leave-to .sky-sheet__panel {
+  opacity: 0;
+  transform: translateY(100%);
+}
+
 .sky-sheet__panel,
 .sky-action-sheet__panel {
   position: absolute;
@@ -263,4 +287,13 @@
 .sky-dialog-button:disabled,
 .sky-messagebar textarea:disabled {
   opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sky-sheet-rise-enter-active .sky-overlay-backdrop,
+  .sky-sheet-rise-leave-active .sky-overlay-backdrop,
+  .sky-sheet-rise-enter-active .sky-sheet__panel,
+  .sky-sheet-rise-leave-active .sky-sheet__panel {
+    transition-duration: 0.01ms !important;
+  }
 }

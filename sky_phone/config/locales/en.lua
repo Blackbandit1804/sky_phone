@@ -106,6 +106,7 @@ Locales["en"] = {
         Home = {
             appLibrary = "App Library", appLibrarySearch = "Search apps", allApps = "All Apps", apps = "Apps",
             dock = "Dock", noApps = "No apps found", removeApp = "Remove {app} from Home Screen", addToHome = "Add {app} to Home Screen", addPage = "Add Home Screen page", deletePage = "Delete current Home Screen page", removedFromHome = "Removed from Home Screen", page = "Page", pages = "Home screen pages",
+            folders = { defaultName = "Folder", close = "Close folder", rename = "Rename Folder", name = "Folder name", pages = "Folder pages" },
             groups = {
                 suggestions = "Suggestions", recentlyAdded = "Recently Added", games = "Games",
                 productivity = "Productivity", shopping = "Shopping", social = "Social Networks", utilities = "Utilities",
