@@ -34,8 +34,5 @@ describe('SettingsApp Sky UI contract', () => {
     expect(source).toMatch(
       /\.settings-content--subpage\s*\{[^}]*padding-top:\s*0/,
     )
-    expect(source).toMatch(
-      /\.settings-content--subpage[\s\S]*?:deep\(\s*\.sky-settings-group:first-child\s*>\s*\.sky-settings-group__title:first-child\s*\)\s*\{[^}]*margin-top:\s*0/,
-    )
   })
 })

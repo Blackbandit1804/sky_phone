@@ -12,6 +12,10 @@
   line-height: 18px;
 }
 
+.sky-settings-group:first-child > .sky-settings-group__title:first-child {
+  margin-top: 0;
+}
+
 .sky-settings-group__list {
   min-width: 0;
   margin: 0;

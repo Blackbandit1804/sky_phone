@@ -1506,13 +1506,6 @@ onBeforeUnmount(() => {
   padding-top: 0;
 }
 
-.settings-content--subpage
-  > :deep(
-    .sky-settings-group:first-child > .sky-settings-group__title:first-child
-  ) {
-  margin-top: 0;
-}
-
 .settings-copy {
   margin: 0 var(--sky-space-1) var(--sky-space-4);
   color: var(--sky-muted);
