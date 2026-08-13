@@ -2338,28 +2338,6 @@ const defaultLocales: LocaleTree = {
       unavailable: 'Weather is unavailable',
       stale: 'Showing the last available weather update.',
       tryAgain: 'Try Again',
-      webcam: {
-        title: 'Weather Cameras',
-        live: 'LIVE',
-        view: 'View Live Camera',
-        subtitle: 'A live look at current conditions',
-        unavailable: 'No weather cameras are available.',
-        locations: {
-          legion_square: 'Legion Square',
-          sandy_shores: 'Sandy Shores',
-          cayo_airstrip: 'Cayo Perico Airstrip',
-        },
-        errors: {
-          camera_disabled: 'Weather cameras are currently disabled.',
-          camera_not_found: 'This weather camera is no longer available.',
-          camera_requires_safe_position:
-            'Stand still and exit your vehicle before opening a camera.',
-          camera_active: 'A weather camera is already open.',
-          rate_limited: 'Too many camera requests. Try again shortly.',
-          request_failed: 'The weather camera could not be opened.',
-          not_authenticated: 'Unlock the phone before opening a camera.',
-        },
-      },
       regions: {
         los_santos: 'Los Santos',
         blaine_county: 'Blaine County',

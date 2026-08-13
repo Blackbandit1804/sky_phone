@@ -4779,28 +4779,6 @@ app.post('/api/:endpoint', (request, response) => {
     })
     return
   }
-  if (endpoint === 'weather:cameras') {
-    response.json({
-      success: true,
-      data: {
-        cameras: [
-          { id: 'legion_square', region: 'los_santos' },
-          { id: 'sandy_shores', region: 'blaine_county' },
-          { id: 'cayo_airstrip', region: 'cayo_perico' },
-        ],
-      },
-    })
-    return
-  }
-  if (endpoint === 'weather:camera-open') {
-    const ids = ['legion_square', 'sandy_shores', 'cayo_airstrip']
-    response.json(
-      ids.includes(request.body?.id)
-        ? { success: true }
-        : { success: false, error: 'camera_not_found' },
-    )
-    return
-  }
   if (endpoint === 'map:getPlayerCoords') {
     response.json({
       success: true,

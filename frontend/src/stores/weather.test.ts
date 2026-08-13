@@ -61,24 +61,4 @@ describe('weather store', () => {
     expect(weather.error).toBe('offline')
   })
 
-  it('loads the server-approved camera list and opens a camera by id', async () => {
-    vi.mocked(nuiCall)
-      .mockResolvedValueOnce({
-        data: { cameras: [{ id: 'legion_square', region: 'los_santos' }] },
-        success: true,
-      })
-      .mockResolvedValueOnce({ success: true })
-    const weather = useWeatherStore()
-
-    await weather.loadCameras()
-    const opened = await weather.openCamera('legion_square')
-
-    expect(weather.cameras).toEqual([
-      { id: 'legion_square', region: 'los_santos' },
-    ])
-    expect(nuiCall).toHaveBeenLastCalledWith('weather:camera-open', {
-      id: 'legion_square',
-    })
-    expect(opened).toBe(true)
-  })
 })

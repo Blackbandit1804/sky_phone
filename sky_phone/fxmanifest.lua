@@ -32,7 +32,6 @@ client_scripts {
     'source/client/skyride.lua',
     'source/client/housing.lua',
     'source/client/crewlink.lua',
-    'source/client/weather_camera.lua',
     'source/bridge/client/radio.lua',
     'source/client/payphones.lua',
     'source/client/main.lua',
@@ -42,7 +41,6 @@ client_scripts {
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'config/config.lua',
-    'config/weather_cameras.lua',
     'config/media.lua',
     'config/music.lua',
     'config/locales/*.lua',
@@ -57,7 +55,6 @@ server_scripts {
     'source/bridge/server/inventory/*.lua',
     'source/server/db_migrate.lua',
     'source/server/phone.lua',
-    'source/server/weather.lua',
     'source/server/sim.lua',
     'source/server/calls.lua',
     'source/server/media.lua',

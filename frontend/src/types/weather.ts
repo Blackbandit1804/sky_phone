@@ -10,11 +10,6 @@ export type WeatherConditionId =
 
 export type WeatherRegionId = 'los_santos' | 'blaine_county' | 'cayo_perico'
 
-export type WeatherCamera = {
-  id: string
-  region: WeatherRegionId
-}
-
 export type WeatherClock = {
   day: number
   hour: number
