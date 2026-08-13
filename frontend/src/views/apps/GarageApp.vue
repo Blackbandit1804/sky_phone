@@ -231,6 +231,7 @@ onBeforeUnmount(() => {
     accent-soft="rgba(10, 132, 255, 0.15)"
   >
     <SkyNavbar
+      class="garage-navbar"
       variant="large"
       :subtitle="phone.t('Apps.garage.subtitle')"
       :title="phone.t('Apps.garage.name')"
@@ -561,6 +562,9 @@ onBeforeUnmount(() => {
   --garage-text: var(--sky-text);
   --garage-secondary: var(--sky-muted);
   --garage-separator: var(--sky-hairline);
+}
+.garage-navbar :deep(.sky-navbar__title-container > div) {
+  transform: translateY(-6px);
 }
 .garage-scroll {
   padding-top: 0;
