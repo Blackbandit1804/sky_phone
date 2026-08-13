@@ -9,7 +9,6 @@ vi.mock('@/utils/nui', () => ({ nuiCall: vi.fn() }))
 
 const mockNuiCall = vi.mocked(nuiCall)
 const overview: GarageOverview = {
-  system: 'esx',
   valet: {
     account: 'bank',
     enabled: true,

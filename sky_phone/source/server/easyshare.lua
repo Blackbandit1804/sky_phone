@@ -26,7 +26,6 @@ local valid_apps = {
     feather = true,
     flare = true,
     fliptok = true,
-    garage = true,
     house = true,
     ["local-pages"] = true,
     mail = true,
@@ -484,8 +483,6 @@ local function canonical_document(source, device, app_id, id)
                 link = "skyphone://mail/message/" .. id,
             }
         end
-    elseif app_id == "garage" then
-        return SkyPhoneGarage.ResolveShare(source, id)
     elseif app_id == "house" then
         return SkyPhoneHousing.ResolveShare(source, id)
     end

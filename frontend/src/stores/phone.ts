@@ -2031,7 +2031,7 @@ const defaultLocales: LocaleTree = {
       body: 'Body',
       vin: 'Vehicle Identification Number',
       notAvailable: '—',
-      provider: 'Vehicle data · {system}',
+      filtersLabel: 'Filter vehicles',
       valet: {
         title: 'Sky Valet',
         eyebrow: 'Premium delivery',

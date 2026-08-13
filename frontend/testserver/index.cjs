@@ -4358,15 +4358,6 @@ const easyShareCatalog = [
     title: 'Project handoff',
   },
   {
-    appId: 'garage',
-    copyText: 'Comet Retro Custom\nSKY 2048',
-    id: 'SKY 2048',
-    kind: 'document',
-    link: 'skyphone://garage/vehicle/SKY%202048',
-    subtitle: 'SKY 2048',
-    title: 'Comet Retro Custom',
-  },
-  {
     appId: 'house',
     copyText: 'Vespucci Canals Apartment',
     id: 'vespucci-apartment-4',
@@ -7140,7 +7131,6 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({
       success: true,
       data: {
-        system: 'jg',
         valet: {
           account: 'bank',
           enabled: true,

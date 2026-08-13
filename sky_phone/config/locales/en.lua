@@ -977,7 +977,7 @@ Locales["en"] = {
                 unknownVehicle = "Unknown Vehicle", unknownLocation = "Location unavailable",
                 location = "Current location", fuel = "Fuel", engine = "Engine", body = "Body",
                 vin = "Vehicle Identification Number", notAvailable = "—",
-                provider = "Vehicle data · {system}",
+                filtersLabel = "Filter vehicles",
                 valetDelivered = "Your vehicle has arrived.",
                 valet = {
                     title = "Sky Valet", eyebrow = "Premium delivery",
