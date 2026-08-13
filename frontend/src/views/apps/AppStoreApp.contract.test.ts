@@ -6,6 +6,10 @@ const source = readFileSync(
   new URL('./AppStoreApp.vue', import.meta.url),
   'utf8',
 )
+const navigationSource = source.slice(
+  source.indexOf('<SkyPillNavigation'),
+  source.indexOf('</SkyPillNavigation>') + '</SkyPillNavigation>'.length,
+)
 
 describe('AppStoreApp Sky navigation contract', () => {
   it('uses only the first-party Sky UI surface', () => {
@@ -32,6 +36,8 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toContain(':item-count="tabs.length"')
     expect(source).toContain('<SkySegmentedButton')
     expect(source).toContain(':active="tab === item.id"')
+    expect(navigationSource).toContain('class="app-store-navigation__item"')
+    expect(navigationSource).not.toContain('compact')
   })
 
   it('keeps one scroll owner and accessible 44px app actions', () => {

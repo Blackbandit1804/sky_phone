@@ -102,6 +102,42 @@ describe('SkySegmented navigation', () => {
     )
   })
 
+  it('keeps text-only Glass navigation compact with 44px targets', async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(
+            SkySegmented,
+            {
+              activeIndex: 1,
+              ariaLabel: 'Availability',
+              compact: true,
+              itemCount: 3,
+              navigation: true,
+            },
+            {
+              default: () =>
+                ['Available', 'Busy', 'Closed'].map((label, index) =>
+                  h(SkySegmentedButton, { active: index === 1 }, () => label),
+                ),
+            },
+          ),
+      }),
+    )
+
+    expect(html).toContain('sky-segmented--compact')
+    expect(html).toContain('width:calc(33.3333% - 5.3333px)')
+    expect(controls).toMatch(
+      /\.sky-glass\.sky-segmented--navigation\.sky-segmented--compact\s*\{[^}]*height:\s*48px[^}]*min-height:\s*48px[^}]*padding-block:\s*2px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-segmented--navigation\.sky-segmented--compact \.sky-segmented-button\s*\{[^}]*height:\s*var\(--sky-touch-target, 44px\)[^}]*font-size:\s*15px[^}]*font-weight:\s*500/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-segmented--compact \.sky-segmented__highlight\s*\{[^}]*top:\s*2px[^}]*bottom:\s*2px/s,
+    )
+  })
+
   it('lets subnavbar search controls fill the available Konsta row', () => {
     expect(controls).toMatch(
       /\.sky-searchbar\s*\{[^}]*width:\s*100%[^}]*flex:\s*1 1 auto/s,

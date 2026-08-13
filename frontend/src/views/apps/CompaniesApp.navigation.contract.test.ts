@@ -31,6 +31,7 @@ describe('CompaniesApp Sky pill navigation contract', () => {
     expect(source).toContain(':data-active-tab="activeTab"')
     expect(source).toContain(':item-count="3"')
     expect(navigationSource.match(/<SkySegmentedButton\b/g)).toHaveLength(3)
+    expect(navigationSource).not.toContain('compact')
   })
 
   it('keeps directory, requests and work actions with unread badges', () => {
@@ -50,6 +51,7 @@ describe('CompaniesApp Sky pill navigation contract', () => {
 
   it('uses the shared sliding Glass system for the request-state filter', () => {
     expect(requestFilterSource).toContain('<SkySegmented')
+    expect(requestFilterSource).toContain('compact')
     expect(requestFilterSource).toContain('navigation')
     expect(requestFilterSource).toContain(':item-count="2"')
     expect(requestFilterSource).toContain(
@@ -59,5 +61,24 @@ describe('CompaniesApp Sky pill navigation contract', () => {
       ':aria-label="phone.t(\'Apps.companies.tabs.requests\')"',
     )
     expect(requestFilterSource.match(/<SkySegmentedButton\b/g)).toHaveLength(2)
+  })
+
+  it('uses compact sliding Glass for both availability controls', () => {
+    expect(source.match(/class="availability-segmented"/g)).toHaveLength(2)
+    expect(
+      source.match(
+        /:active-index="availabilityValues\.indexOf\(workCompany\.availability\)"/g,
+      ),
+    ).toHaveLength(2)
+    expect(
+      source.match(/:item-count="availabilityValues\.length"/g),
+    ).toHaveLength(2)
+    expect(source.match(/\s+compact\s+navigation/g)).toHaveLength(3)
+    expect(source).toContain(
+      ':aria-label="phone.t(\'Apps.companies.work.publicAvailability\')"',
+    )
+    expect(source).toContain(
+      ':aria-label="phone.t(\'Apps.companies.manager.availability\')"',
+    )
   })
 })

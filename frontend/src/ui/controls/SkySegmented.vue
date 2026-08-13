@@ -10,6 +10,7 @@ const props = withDefaults(
   defineProps<{
     activeIndex?: number
     ariaLabel?: string
+    compact?: boolean
     glassHighlight?: boolean
     itemCount?: number
     navigation?: boolean
@@ -21,6 +22,7 @@ const props = withDefaults(
   {
     activeIndex: 0,
     ariaLabel: '',
+    compact: false,
     glassHighlight: true,
     itemCount: 0,
     navigation: undefined,
@@ -65,6 +67,7 @@ const indicatorStyle = computed<CSSProperties | undefined>(() => {
     class="sky-segmented"
     :class="{
       'sky-segmented--navigation': isNavigation,
+      'sky-segmented--compact': compact,
       'sky-segmented--outline': outline,
       'sky-segmented--raised': raised,
       'sky-segmented--rounded': rounded,

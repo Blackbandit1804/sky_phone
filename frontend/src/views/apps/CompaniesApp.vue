@@ -1201,7 +1201,9 @@ onBeforeUnmount(() => {
           :active-index="requestList === 'open' ? 0 : 1"
           :aria-label="phone.t('Apps.companies.tabs.requests')"
           :item-count="2"
+          compact
           navigation
+          rounded
         >
           <SkySegmentedButton
             :active="requestList === 'open'"
@@ -1358,7 +1360,15 @@ onBeforeUnmount(() => {
           <SkyBlockTitle>{{
             phone.t('Apps.companies.work.publicAvailability')
           }}</SkyBlockTitle>
-          <SkySegmented class="availability-segmented">
+          <SkySegmented
+            class="availability-segmented"
+            :active-index="availabilityValues.indexOf(workCompany.availability)"
+            :aria-label="phone.t('Apps.companies.work.publicAvailability')"
+            :item-count="availabilityValues.length"
+            compact
+            navigation
+            rounded
+          >
             <SkySegmentedButton
               v-for="availability in availabilityValues"
               :key="availability"
@@ -1773,7 +1783,15 @@ onBeforeUnmount(() => {
       <SkyBlockTitle>{{
         phone.t('Apps.companies.manager.availability')
       }}</SkyBlockTitle>
-      <SkySegmented class="availability-segmented">
+      <SkySegmented
+        class="availability-segmented"
+        :active-index="availabilityValues.indexOf(workCompany.availability)"
+        :aria-label="phone.t('Apps.companies.manager.availability')"
+        :item-count="availabilityValues.length"
+        compact
+        navigation
+        rounded
+      >
         <SkySegmentedButton
           v-for="availability in availabilityValues"
           :key="availability"

@@ -1660,6 +1660,27 @@ label.sky-list-item__row {
   transition-duration: 0ms;
 }
 
+.sky-glass.sky-segmented--navigation.sky-segmented--compact {
+  height: 48px;
+  min-height: 48px;
+  padding-block: 2px;
+}
+
+.sky-segmented--navigation.sky-segmented--compact .sky-segmented-button {
+  height: var(--sky-touch-target, 44px);
+  min-height: var(--sky-touch-target, 44px);
+  flex-direction: row;
+  gap: 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.sky-segmented--compact .sky-segmented__highlight {
+  top: 2px;
+  bottom: 2px;
+}
+
 .sky-segmented__highlight {
   position: absolute;
   z-index: 0;
