@@ -2351,6 +2351,7 @@ button {
   padding-top: 82px;
   overflow: hidden;
 }
+.springboard--home-dragging .springboard-page--apps,
 .springboard--widget-dragging .springboard-page--apps,
 .springboard--widget-dragging .springboard-page--widgets,
 .springboard--widget-dragging .springboard-widget-page-scroll {
@@ -2385,7 +2386,7 @@ button {
 }
 .app-icon-item--dragging {
   z-index: 20;
-  opacity: 0.35;
+  opacity: 1;
   transition: transform var(--springboard-page-duration)
     var(--springboard-page-easing);
 }

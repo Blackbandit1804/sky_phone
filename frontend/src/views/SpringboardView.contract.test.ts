@@ -14,6 +14,10 @@ const folderIconSource = readFileSync(
   new URL('../components/HomeFolderIcon.vue', import.meta.url),
   'utf8',
 )
+const mainCss = readFileSync(
+  new URL('../assets/main.css', import.meta.url),
+  'utf8',
+)
 describe('Springboard page swipe contract', () => {
   it('allows page swipes to start on home apps and widget surfaces', () => {
     expect(viewSource).toContain(
@@ -37,6 +41,17 @@ describe('Springboard page swipe contract', () => {
     expect(folderIconSource).toContain('springboardPageDragCompensation')
     expect(appIconSource).toContain(':style="dragPointerStyle"')
     expect(folderIconSource).toContain(':style="dragPointerStyle"')
+  })
+
+  it('keeps the held app visible while its source page moves away', () => {
+    expect(viewSource).toContain(
+      "'springboard--home-dragging': draggingHomeApp !== null",
+    )
+    expect(mainCss).toMatch(
+      /\.springboard--home-dragging\s+\.springboard-page--apps,?[\s\S]*?\{\s*overflow:\s*visible;/,
+    )
+    expect(mainCss).toMatch(/\.springboard\s*\{[\s\S]*?overflow:\s*hidden;/)
+    expect(mainCss).toMatch(/\.app-icon-item--dragging\s*\{[^}]*opacity:\s*1;/)
   })
 
   it('targets the active visual page and lets grid or dock drags turn pages', () => {

@@ -1157,6 +1157,7 @@ onBeforeUnmount(() => {
         'springboard--dragging': dragging,
         'springboard--editing': editMode,
         'springboard--folder-open': openedFolder !== null,
+        'springboard--home-dragging': draggingHomeApp !== null,
         'springboard--widget-dragging': draggingWidgetId !== null,
       },
     ]"
