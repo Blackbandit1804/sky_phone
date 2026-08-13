@@ -28,5 +28,7 @@ const spinnerStyle = computed<CSSProperties>(() => {
     :aria-hidden="label ? undefined : true"
     :aria-label="label || undefined"
     :role="label ? 'status' : undefined"
-  />
+  >
+    <i v-for="index in 8" :key="index" aria-hidden="true" />
+  </span>
 </template>

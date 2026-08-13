@@ -43,7 +43,6 @@ export type GarageValetState = {
 }
 
 export type GarageOverview = {
-  system: string
   valet: GarageValetConfig
   vehicles: GarageVehicle[]
 }

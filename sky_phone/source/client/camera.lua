@@ -453,6 +453,42 @@ RegisterNUICallback("gallery:delete", function(data, cb)
     cb({ success = true })
 end)
 
+RegisterNUICallback("memos:requestUpload", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    TriggerServerEvent("sky_phone:memos:request-upload", data)
+    cb({ success = true })
+end)
+
+RegisterNUICallback("memos:completeUpload", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    TriggerServerEvent("sky_phone:memos:complete-upload", data)
+    cb({ success = true })
+end)
+
+RegisterNUICallback("memos:cancelUpload", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    TriggerServerEvent("sky_phone:memos:cancel-upload", data)
+    cb({ success = true })
+end)
+
+RegisterNUICallback("memos:failUpload", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    TriggerServerEvent("sky_phone:memos:fail-upload", data)
+    cb({ success = true })
+end)
+
 RegisterNetEvent("sky_phone:media:upload-ready", function(data)
     SendNUIMessage({ type = "media:uploadReady", data = data })
 end)
@@ -463,6 +499,14 @@ end)
 
 RegisterNetEvent("sky_phone:media:delete-result", function(data)
     SendNUIMessage({ type = "media:deleteResult", data = data })
+end)
+
+RegisterNetEvent("sky_phone:memos:upload-ready", function(data)
+    SendNUIMessage({ type = "memos:uploadReady", data = data })
+end)
+
+RegisterNetEvent("sky_phone:memos:upload-result", function(data)
+    SendNUIMessage({ type = "memos:uploadResult", data = data })
 end)
 
 AddEventHandler("sky_phone:nuiClosed", function()

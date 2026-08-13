@@ -6,25 +6,35 @@ defineOptions({ inheritAttrs: false })
 const props = withDefaults(
   defineProps<{
     block?: boolean
+    clear?: boolean
     component?: 'a' | 'button'
     disabled?: boolean
     href?: string
     iconOnly?: boolean
+    inline?: boolean
     large?: boolean
     outline?: boolean
+    raised?: boolean
     rounded?: boolean
+    small?: boolean
+    tonal?: boolean
     type?: 'button' | 'reset' | 'submit'
     variant?: 'danger' | 'plain' | 'primary' | 'secondary'
   }>(),
   {
     block: false,
+    clear: false,
     component: 'button',
     disabled: false,
     href: undefined,
     iconOnly: false,
+    inline: false,
     large: false,
     outline: false,
+    raised: false,
     rounded: false,
+    small: false,
+    tonal: false,
     type: 'button',
     variant: 'primary',
   },
@@ -69,10 +79,15 @@ function handleClick(event: MouseEvent): void {
       `sky-button--${variant}`,
       {
         'sky-button--block': block,
+        'sky-button--clear': clear,
         'sky-button--icon-only': iconOnly,
+        'sky-button--inline': inline,
         'sky-button--large': large,
         'sky-button--outline': outline,
+        'sky-button--raised': raised,
         'sky-button--rounded': rounded,
+        'sky-button--small': small && !large,
+        'sky-button--tonal': tonal,
       },
     ]"
     @click="handleClick"

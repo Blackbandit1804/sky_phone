@@ -9,6 +9,7 @@ import type {
   SkyRideQuote,
   SkyRideQuoteOption,
   SkyRideRide,
+  SkyRideProfileInput,
   SkyRideStateUpdate,
 } from '@/types/skyride'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
@@ -72,6 +73,23 @@ export const useSkyRideStore = defineStore('skyride', {
       this.history = response.data.items
       this.error = ''
       return true
+    },
+    async updateProfile(
+      profile: SkyRideProfileInput,
+    ): Promise<NuiResponse<SkyRideStateUpdate>> {
+      this.isActionPending = true
+      const response = await nuiCall<SkyRideStateUpdate>(
+        'skyride:update-profile',
+        profile,
+      )
+      this.isActionPending = false
+      if (response.success) {
+        if (response.data) this.applyUpdate(response.data)
+        this.error = ''
+      } else {
+        this.error = response.error ?? 'request_failed'
+      }
+      return response
     },
     async createQuote(
       pickup: SkyRideLocation,

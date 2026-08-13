@@ -1,21 +1,5 @@
 <script setup lang="ts">
 import {
-  kButton,
-  kCard,
-  kDialog,
-  kDialogButton,
-  kGlass,
-  kLink,
-  kNavbar,
-  kPage,
-  kPreloader,
-  kSearchbar,
-  kSegmented,
-  kSegmentedButton,
-  kSheet,
-  kToast,
-} from 'konsta/vue'
-import {
   Bike,
   CarFront,
   CheckCircle2,
@@ -27,7 +11,6 @@ import {
   Navigation,
   Plane,
   Route,
-  Share2,
   Sparkles,
   Sailboat,
   ShieldAlert,
@@ -38,7 +21,6 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { useGarageStore } from '@/stores/garage'
-import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type {
   GarageVehicle,
@@ -47,12 +29,28 @@ import type {
   GarageValetState,
 } from '@/types/garage'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
+import {
+  SkyAppPage,
+  SkyButton,
+  SkyDialog,
+  SkyDialogButton,
+  SkyEmptyState,
+  SkyGlass,
+  SkyLink,
+  SkyNavbar,
+  SkyScrollArea,
+  SkySearchbar,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySheet,
+  SkySpinner,
+  SkyToast,
+} from '@/ui'
 
 type GarageFilter = 'all' | GarageVehicleStatus
 
 const phone = usePhoneStore()
 const garage = useGarageStore()
-const easyShare = useEasyShareStore()
 const activeFilter = ref<GarageFilter>('all')
 const query = ref('')
 const selectedVehicle = ref<GarageVehicle | null>(null)
@@ -113,26 +111,10 @@ function displayName(vehicle: GarageVehicle): string {
   return phone.t('Apps.garage.unknownVehicle')
 }
 
-function shareVehicle(vehicle: GarageVehicle): void {
-  easyShare.open({
-    appId: 'garage',
-    copyText: `${displayName(vehicle)}\n${vehicle.plate}`,
-    id: vehicle.plate,
-    kind: 'document',
-    link: `skyphone://garage/vehicle/${vehicle.plate}`,
-    subtitle: vehicle.plate,
-    title: displayName(vehicle),
-  })
-}
-
 function modelName(vehicle: GarageVehicle): string {
   if (vehicle.name && vehicle.nickname) return vehicle.name
   if (typeof vehicle.model === 'string' && vehicle.model) return vehicle.model
   return phone.t(`Apps.garage.kinds.${vehicle.kind}`)
-}
-
-function updateSearch(event: Event): void {
-  query.value = (event.target as HTMLInputElement).value
 }
 
 function conditionValue(vehicle: GarageVehicle): number | null {
@@ -241,29 +223,41 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page component="main" class="garage-page !pt-[44px] !pb-[25px]">
-    <k-navbar
-      class="garage-navbar"
+  <SkyAppPage
+    class="garage-page"
+    :label="phone.t('Apps.garage.name')"
+    :dark="phone.isDarkMode"
+    accent="#0a84ff"
+    accent-soft="rgba(10, 132, 255, 0.15)"
+  >
+    <SkyNavbar
+      variant="large"
       :subtitle="phone.t('Apps.garage.subtitle')"
       :title="phone.t('Apps.garage.name')"
     />
 
     <div v-if="garage.isLoading && !garage.overview" class="garage-state">
-      <k-preloader />
+      <SkySpinner />
       <span>{{ phone.t('Common.loading') }}</span>
     </div>
 
-    <div v-else-if="!garage.overview" class="garage-state">
-      <span class="garage-state__icon"><Wrench :size="31" /></span>
-      <strong>{{ phone.t('Apps.garage.unavailable') }}</strong>
-      <p>{{ errorMessage() }}</p>
-      <k-button rounded @click="garage.load()">
-        {{ phone.t('Apps.garage.tryAgain') }}
-      </k-button>
-    </div>
+    <SkyEmptyState
+      v-else-if="!garage.overview"
+      class="garage-state"
+      tone="danger"
+      :title="phone.t('Apps.garage.unavailable')"
+      :body="errorMessage()"
+    >
+      <template #icon><Wrench :size="31" /></template>
+      <template #actions>
+        <SkyButton rounded @click="garage.load()">
+          {{ phone.t('Apps.garage.tryAgain') }}
+        </SkyButton>
+      </template>
+    </SkyEmptyState>
 
-    <div v-else class="garage-scroll">
-      <k-glass class="garage-summary">
+    <SkyScrollArea v-else class="garage-scroll">
+      <SkyGlass class="garage-summary">
         <div class="garage-summary__heading">
           <span>
             <small>{{ phone.t('Apps.garage.myVehicles') }}</small>
@@ -288,9 +282,9 @@ onBeforeUnmount(() => {
             {{ phone.t('Apps.garage.filters.impounded') }}
           </span>
         </div>
-      </k-glass>
+      </SkyGlass>
 
-      <k-glass v-if="garage.valet" class="garage-valet-live">
+      <SkyGlass v-if="garage.valet" class="garage-valet-live">
         <div class="garage-valet-live__icon">
           <Navigation v-if="garage.valet.status !== 'delivered'" :size="24" />
           <CheckCircle2 v-else :size="24" />
@@ -304,7 +298,7 @@ onBeforeUnmount(() => {
           </span>
           <div class="garage-valet-live__track"><i /></div>
         </div>
-        <k-button
+        <SkyButton
           v-if="garage.valet.canCancel"
           clear
           rounded
@@ -313,18 +307,22 @@ onBeforeUnmount(() => {
           @click="cancelValet"
         >
           {{ phone.t('Apps.garage.valet.cancel') }}
-        </k-button>
-      </k-glass>
-      <k-searchbar
+        </SkyButton>
+      </SkyGlass>
+      <SkySearchbar
+        v-model="query"
         class="garage-search"
+        :clear-label="phone.t('Common.clear')"
         :placeholder="phone.t('Apps.garage.searchPlaceholder')"
-        :value="query"
-        @clear="query = ''"
-        @input="updateSearch"
       />
 
-      <k-segmented strong rounded class="garage-filters">
-        <k-segmented-button
+      <SkySegmented
+        strong
+        rounded
+        class="garage-filters"
+        :aria-label="phone.t('Apps.garage.filtersLabel')"
+      >
+        <SkySegmentedButton
           v-for="filter in filters"
           :key="filter.id"
           :active="activeFilter === filter.id"
@@ -332,11 +330,11 @@ onBeforeUnmount(() => {
         >
           <span>{{ filter.label }}</span>
           <small>{{ filter.count }}</small>
-        </k-segmented-button>
-      </k-segmented>
+        </SkySegmentedButton>
+      </SkySegmented>
 
       <section v-if="filteredVehicles.length" class="garage-vehicles">
-        <k-glass
+        <SkyGlass
           v-for="vehicle in filteredVehicles"
           :key="vehicle.id"
           component="button"
@@ -369,142 +367,142 @@ onBeforeUnmount(() => {
               >
             </span>
           </span>
-        </k-glass>
+        </SkyGlass>
       </section>
 
-      <k-card v-else class="garage-empty">
-        <Warehouse :size="37" />
-        <strong>{{
+      <SkyEmptyState
+        v-else
+        compact
+        class="garage-empty"
+        :title="
           query
             ? phone.t('Apps.garage.noResults')
             : phone.t('Apps.garage.noVehicles')
-        }}</strong>
-        <p>
-          {{
-            query
-              ? phone.t('Apps.garage.noResultsBody')
-              : phone.t('Apps.garage.noVehiclesBody')
-          }}
-        </p>
-      </k-card>
-
-      <p class="garage-provider">
-        {{
-          phone.t('Apps.garage.provider', { system: garage.overview.system })
-        }}
-      </p>
-    </div>
+        "
+        :body="
+          query
+            ? phone.t('Apps.garage.noResultsBody')
+            : phone.t('Apps.garage.noVehiclesBody')
+        "
+      >
+        <template #icon><Warehouse :size="37" /></template>
+      </SkyEmptyState>
+    </SkyScrollArea>
 
     <div class="garage-sheet">
-      <k-sheet
+      <SkySheet
         :opened="Boolean(selectedVehicle)"
+        :aria-label="selectedVehicle ? displayName(selectedVehicle) : undefined"
         @backdropclick="selectedVehicle = null"
+        @escape="selectedVehicle = null"
       >
-      <section v-if="selectedVehicle" class="garage-detail">
-        <k-link
-          component="button"
-          icon-only
-          class="garage-detail__close"
-          :aria-label="phone.t('Common.close')"
-          :link-props="{ type: 'button' }"
-          @click="selectedVehicle = null"
-        >
-          <X :size="18" />
-        </k-link>
-        <span
-          class="garage-detail__visual"
-          :class="`is-${selectedVehicle.kind}`"
-        >
-          <component :is="kindIcons[selectedVehicle.kind]" :size="62" />
-        </span>
-        <span
-          class="garage-detail__status"
-          :class="`is-${selectedVehicle.status}`"
-        >
-          {{ phone.t(`Apps.garage.status.${selectedVehicle.status}`) }}
-        </span>
-        <h2>{{ displayName(selectedVehicle) }}</h2>
-        <p>{{ modelName(selectedVehicle) }} · {{ selectedVehicle.plate }}</p>
-
-        <div class="garage-detail__location">
-          <MapPin :size="18" />
-          <span>
-            <small>{{ phone.t('Apps.garage.location') }}</small>
-            <strong>{{
-              selectedVehicle.location || phone.t('Apps.garage.unknownLocation')
-            }}</strong>
-          </span>
-        </div>
-
-        <div class="garage-metrics">
-          <article>
-            <span><Fuel :size="17" />{{ phone.t('Apps.garage.fuel') }}</span>
-            <strong>{{ metricLabel(selectedVehicle.fuel) }}</strong>
-            <i><b :style="{ width: `${selectedVehicle.fuel ?? 0}%` }" /></i>
-          </article>
-          <article>
-            <span><Gauge :size="17" />{{ phone.t('Apps.garage.engine') }}</span>
-            <strong>{{ metricLabel(selectedVehicle.engine) }}</strong>
-            <i><b :style="{ width: `${selectedVehicle.engine ?? 0}%` }" /></i>
-          </article>
-          <article>
-            <span
-              ><ShieldAlert :size="17" />{{ phone.t('Apps.garage.body') }}</span
-            >
-            <strong>{{ metricLabel(selectedVehicle.body) }}</strong>
-            <i><b :style="{ width: `${selectedVehicle.body ?? 0}%` }" /></i>
-          </article>
-        </div>
-
-        <k-glass
-          v-if="garage.overview?.valet.enabled"
-          class="garage-valet-offer"
-        >
-          <div class="garage-valet-offer__top">
-            <span><Sparkles :size="22" /></span>
-            <div>
-              <small>{{ phone.t('Apps.garage.valet.eyebrow') }}</small>
-              <strong>{{ phone.t('Apps.garage.valet.title') }}</strong>
-            </div>
-            <b>{{ formatPrice(garage.overview?.valet.price ?? 0) }}</b>
-          </div>
-          <p>{{ valetAvailability(selectedVehicle) }}</p>
-          <div class="garage-valet-offer__facts">
-            <span
-              ><Route :size="15" />{{
-                phone.t('Apps.garage.valet.tracked')
-              }}</span
-            >
-            <span
-              ><Clock3 :size="15" />{{
-                phone.t('Apps.garage.valet.onDemand')
-              }}</span
-            >
-          </div>
-          <k-button
-            large
-            rounded
-            :disabled="!canRequestValet(selectedVehicle)"
-            @click="valetCandidate = selectedVehicle"
+        <section v-if="selectedVehicle" class="garage-detail">
+          <SkyLink
+            component="button"
+            icon-only
+            class="garage-detail__close"
+            :aria-label="phone.t('Common.close')"
+            @click="selectedVehicle = null"
           >
-            <CircleDollarSign :size="18" />
-            {{ phone.t('Apps.garage.valet.deliver') }}
-          </k-button>
-        </k-glass>
-        <div v-if="selectedVehicle.vin" class="garage-detail__vin">
-          <small>{{ phone.t('Apps.garage.vin') }}</small>
-          <strong>{{ selectedVehicle.vin }}</strong>
-        </div>
-        <k-button large rounded outline @click="shareVehicle(selectedVehicle)">
-          <Share2 :size="18" />{{ phone.t('Apps.easyShare.share') }}
-        </k-button>
-      </section>
-      </k-sheet>
+            <X :size="18" />
+          </SkyLink>
+          <span
+            class="garage-detail__visual"
+            :class="`is-${selectedVehicle.kind}`"
+          >
+            <component :is="kindIcons[selectedVehicle.kind]" :size="62" />
+          </span>
+          <span
+            class="garage-detail__status"
+            :class="`is-${selectedVehicle.status}`"
+          >
+            {{ phone.t(`Apps.garage.status.${selectedVehicle.status}`) }}
+          </span>
+          <h2>{{ displayName(selectedVehicle) }}</h2>
+          <p>{{ modelName(selectedVehicle) }} · {{ selectedVehicle.plate }}</p>
+
+          <div class="garage-detail__location">
+            <MapPin :size="18" />
+            <span>
+              <small>{{ phone.t('Apps.garage.location') }}</small>
+              <strong>{{
+                selectedVehicle.location ||
+                phone.t('Apps.garage.unknownLocation')
+              }}</strong>
+            </span>
+          </div>
+
+          <div class="garage-metrics">
+            <article>
+              <span><Fuel :size="17" />{{ phone.t('Apps.garage.fuel') }}</span>
+              <strong>{{ metricLabel(selectedVehicle.fuel) }}</strong>
+              <i><b :style="{ width: `${selectedVehicle.fuel ?? 0}%` }" /></i>
+            </article>
+            <article>
+              <span
+                ><Gauge :size="17" />{{ phone.t('Apps.garage.engine') }}</span
+              >
+              <strong>{{ metricLabel(selectedVehicle.engine) }}</strong>
+              <i><b :style="{ width: `${selectedVehicle.engine ?? 0}%` }" /></i>
+            </article>
+            <article>
+              <span
+                ><ShieldAlert :size="17" />{{
+                  phone.t('Apps.garage.body')
+                }}</span
+              >
+              <strong>{{ metricLabel(selectedVehicle.body) }}</strong>
+              <i><b :style="{ width: `${selectedVehicle.body ?? 0}%` }" /></i>
+            </article>
+          </div>
+
+          <SkyGlass
+            v-if="garage.overview?.valet.enabled"
+            class="garage-valet-offer"
+          >
+            <div class="garage-valet-offer__top">
+              <span><Sparkles :size="22" /></span>
+              <div>
+                <small>{{ phone.t('Apps.garage.valet.eyebrow') }}</small>
+                <strong>{{ phone.t('Apps.garage.valet.title') }}</strong>
+              </div>
+              <b>{{ formatPrice(garage.overview?.valet.price ?? 0) }}</b>
+            </div>
+            <p>{{ valetAvailability(selectedVehicle) }}</p>
+            <div class="garage-valet-offer__facts">
+              <span
+                ><Route :size="15" />{{
+                  phone.t('Apps.garage.valet.tracked')
+                }}</span
+              >
+              <span
+                ><Clock3 :size="15" />{{
+                  phone.t('Apps.garage.valet.onDemand')
+                }}</span
+              >
+            </div>
+            <SkyButton
+              large
+              rounded
+              :disabled="!canRequestValet(selectedVehicle)"
+              @click="valetCandidate = selectedVehicle"
+            >
+              <CircleDollarSign :size="18" />
+              {{ phone.t('Apps.garage.valet.deliver') }}
+            </SkyButton>
+          </SkyGlass>
+          <div v-if="selectedVehicle.vin" class="garage-detail__vin">
+            <small>{{ phone.t('Apps.garage.vin') }}</small>
+            <strong>{{ selectedVehicle.vin }}</strong>
+          </div>
+        </section>
+      </SkySheet>
     </div>
-    <k-dialog
+    <SkyDialog
       :opened="Boolean(valetCandidate)"
       class="garage-valet-confirm"
       @backdropclick="valetCandidate = null"
+      @escape="valetCandidate = null"
     >
       <template #title>{{
         phone.t('Apps.garage.valet.confirmTitle')
@@ -528,10 +526,10 @@ onBeforeUnmount(() => {
         </small>
       </div>
       <template #buttons>
-        <k-dialog-button @click="valetCandidate = null">
+        <SkyDialogButton @click="valetCandidate = null">
           {{ phone.t('Common.cancel') }}
-        </k-dialog-button>
-        <k-dialog-button
+        </SkyDialogButton>
+        <SkyDialogButton
           strong
           :disabled="garage.isValetRequesting"
           @click="confirmValet"
@@ -541,60 +539,35 @@ onBeforeUnmount(() => {
               ? phone.t('Apps.garage.valet.ordering')
               : phone.t('Apps.garage.valet.confirm')
           }}
-        </k-dialog-button>
+        </SkyDialogButton>
       </template>
-    </k-dialog>
+    </SkyDialog>
 
-    <k-toast
+    <SkyToast
       :opened="toastOpened"
       position="center"
+      vertical-position="center"
       @click="toastOpened = false"
     >
       {{ toastText }}
-    </k-toast>
-  </k-page>
+    </SkyToast>
+  </SkyAppPage>
 </template>
 
 <style scoped>
 .garage-page {
-  --garage-blue: #2478ff;
-  --garage-cyan: #52d7ff;
-  --garage-background: #f2f2f7;
-  --garage-surface: rgb(255 255 255 / 88%);
-  --garage-surface-solid: #fff;
-  --garage-surface-muted: #f7f7fa;
-  --garage-text: #111114;
-  --garage-secondary: #5f5f65;
-  --garage-separator: rgb(60 60 67 / 13%);
-  --garage-shadow: 0 1px 3px rgb(29 29 31 / 7%);
-  position: relative;
-  overflow: hidden;
-  background: var(--garage-background) !important;
-  color: var(--garage-text);
-}
-.garage-navbar {
-  position: relative;
-  z-index: 3;
-  padding-top: max(24px, var(--k-safe-area-top)) !important;
-  border-bottom: 0.5px solid var(--garage-separator);
-  background: rgb(248 248 250 / 72%);
-  backdrop-filter: saturate(180%) blur(24px);
-  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  --garage-blue: var(--sky-app-accent);
+  --garage-surface-muted: var(--sky-surface-muted);
+  --garage-text: var(--sky-text);
+  --garage-secondary: var(--sky-muted);
+  --garage-separator: var(--sky-hairline);
 }
 .garage-scroll {
-  position: relative;
-  z-index: 1;
-  height: calc(100% - 52px);
-  padding: 12px 12px 32px;
-  overflow-y: auto;
+  padding-top: 0;
 }
 .garage-summary {
   padding: 16px;
-  border: 0.5px solid rgb(255 255 255 / 75%);
-  border-radius: 16px;
-  background: var(--garage-surface) !important;
-  box-shadow: var(--garage-shadow);
-  color: var(--garage-text);
+  border-radius: var(--sky-radius-card);
 }
 .garage-summary__heading {
   display: flex;
@@ -623,7 +596,7 @@ onBeforeUnmount(() => {
   height: 46px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  border-radius: var(--sky-radius-control);
   background: var(--garage-blue);
   color: #fff;
 }
@@ -640,8 +613,8 @@ onBeforeUnmount(() => {
   grid-template-columns: 7px auto;
   align-items: center;
   column-gap: 5px;
-  border-radius: 13px;
-  border: 0.5px solid var(--garage-separator);
+  border-radius: var(--sky-radius-control);
+  border: 1px solid var(--garage-separator);
   background: var(--garage-surface-muted);
   color: var(--garage-secondary);
   font-size: 11px;
@@ -672,27 +645,8 @@ onBeforeUnmount(() => {
 .garage-search {
   margin: 13px 0 10px;
 }
-.garage-search > :deep(.k-glass) {
-  overflow: hidden;
-  border: 0.5px solid var(--garage-separator);
-  background: rgb(118 118 128 / 12%) !important;
-  box-shadow: none !important;
-}
-.garage-search :deep(input) {
-  border: 0;
-  background: transparent !important;
-  color: var(--garage-text);
-  font-size: 13px;
-}
-.garage-search :deep(input::placeholder) {
-  color: var(--garage-secondary);
-  opacity: 1;
-}
 .garage-filters {
   margin-bottom: 13px;
-  padding: 2px;
-  border: 0.5px solid var(--garage-separator);
-  background: rgb(118 118 128 / 10%);
 }
 .garage-filters :deep(button) {
   min-width: 0;
@@ -722,10 +676,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   display: flex;
   flex-direction: row;
-  border: 0.5px solid var(--garage-separator);
-  border-radius: 15px;
-  background: var(--garage-surface-solid) !important;
-  box-shadow: var(--garage-shadow);
+  border-radius: var(--sky-radius-card);
   color: var(--garage-text);
   text-align: left;
   transition:
@@ -743,9 +694,9 @@ onBeforeUnmount(() => {
   min-height: 104px;
   display: grid;
   place-items: center;
-  border-right: 0.5px solid rgb(10 132 255 / 12%);
-  background: #eaf3ff;
-  color: #2671c9;
+  border-right: 1px solid var(--garage-separator);
+  background: var(--sky-app-accent-soft);
+  color: var(--garage-blue);
 }
 .garage-vehicle__visual.is-bike {
   background: #f2eaff;
@@ -774,7 +725,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   box-sizing: border-box;
   border-radius: 999px;
-  background: rgb(20 92 48 / 78%);
+  background: var(--sky-success);
   color: #fff;
   font-size: 7px;
   font-style: normal;
@@ -783,14 +734,13 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  backdrop-filter: blur(12px);
   transform: translateX(-50%);
 }
 .garage-vehicle__visual > i.is-out {
-  background: rgb(176 91 0 / 82%);
+  background: var(--sky-warning);
 }
 .garage-vehicle__visual > i.is-impounded {
-  background: rgb(176 28 34 / 84%);
+  background: var(--sky-danger);
 }
 .garage-vehicle__content {
   min-width: 0;
@@ -827,7 +777,7 @@ onBeforeUnmount(() => {
 .garage-vehicle__title > b {
   flex: none;
   padding: 2px 5px;
-  border: 0.5px solid var(--garage-separator);
+  border: 1px solid var(--garage-separator);
   border-radius: 5px;
   background: var(--garage-surface-muted);
   color: var(--garage-text);
@@ -854,36 +804,14 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.garage-provider {
-  margin: 16px 0 0;
-  color: var(--garage-secondary);
-  font-size: 11px;
-  text-align: center;
-}
 .garage-empty {
-  margin: 25px 0 !important;
-  padding: 28px 22px !important;
-  background: var(--garage-surface-solid) !important;
-  color: var(--garage-secondary);
-  text-align: center;
-}
-.garage-empty svg {
-  margin: 0 auto 12px;
-  color: var(--garage-blue);
-}
-.garage-empty strong {
-  display: block;
-  color: var(--garage-text);
-  font-size: 16px;
-}
-.garage-empty p {
-  margin: 5px 0 0;
-  font-size: 13px;
-  line-height: 1.45;
+  margin: var(--sky-space-5) 0;
 }
 .garage-state {
-  height: calc(100% - 52px);
-  padding: 30px;
+  min-height: 0;
+  margin: 0 var(--sky-page-gutter) var(--sky-space-3);
+  padding: var(--sky-space-6);
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -892,28 +820,10 @@ onBeforeUnmount(() => {
   color: var(--garage-secondary);
   text-align: center;
 }
-.garage-state__icon {
-  width: 60px;
-  height: 60px;
-  display: grid;
-  place-items: center;
-  border-radius: 20px;
-  background: rgb(36 120 255 / 12%);
-  color: var(--garage-blue);
-}
-.garage-state strong {
-  color: var(--garage-text);
-  font-size: 18px;
-}
-.garage-state p {
-  margin: 0 0 5px;
-  font-size: 13px;
-  line-height: 1.45;
-}
 .garage-detail {
   position: relative;
   padding: 12px 18px 28px;
-  background: var(--garage-surface-solid);
+  background: var(--sky-surface);
   color: var(--garage-text);
   text-align: center;
 }
@@ -927,8 +837,8 @@ onBeforeUnmount(() => {
   padding: 0;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  background: rgb(118 118 128 / 12%);
+  border-radius: var(--sky-radius-pill);
+  background: var(--sky-surface-muted);
   color: var(--garage-secondary);
 }
 .garage-detail__visual {
@@ -937,9 +847,9 @@ onBeforeUnmount(() => {
   margin: 4px auto 9px;
   display: grid;
   place-items: center;
-  border-radius: 18px;
-  background: #eaf3ff;
-  color: #24518f;
+  border-radius: var(--sky-radius-card);
+  background: var(--sky-app-accent-soft);
+  color: var(--garage-blue);
 }
 .garage-detail__visual.is-bike {
   background: #f2eaff;
@@ -958,19 +868,19 @@ onBeforeUnmount(() => {
   display: inline-flex;
   padding: 4px 9px;
   border-radius: 999px;
-  background: rgb(52 199 89 / 13%);
-  color: #21813b;
+  background: var(--sky-success-soft);
+  color: var(--sky-success);
   font-size: 12px;
   font-weight: 720;
   text-transform: uppercase;
 }
 .garage-detail__status.is-out {
-  background: rgb(255 159 10 / 14%);
-  color: #b66500;
+  background: var(--sky-warning-soft);
+  color: var(--sky-warning);
 }
 .garage-detail__status.is-impounded {
-  background: rgb(255 69 58 / 13%);
-  color: #c12922;
+  background: var(--sky-danger-soft);
+  color: var(--sky-danger);
 }
 .garage-detail h2 {
   margin: 8px 0 1px;
@@ -990,9 +900,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  border-radius: 16px;
-  border: 0.5px solid rgb(10 132 255 / 12%);
-  background: rgb(10 132 255 / 8%);
+  border-radius: var(--sky-radius-card);
+  border: 1px solid var(--sky-hairline);
+  background: var(--sky-app-accent-soft);
   color: var(--garage-blue);
   text-align: left;
 }
@@ -1016,8 +926,8 @@ onBeforeUnmount(() => {
 }
 .garage-metrics article {
   padding: 10px 8px;
-  border-radius: 15px;
-  border: 0.5px solid var(--garage-separator);
+  border-radius: var(--sky-radius-control);
+  border: 1px solid var(--garage-separator);
   background: var(--garage-surface-muted);
   text-align: left;
 }
@@ -1070,17 +980,14 @@ onBeforeUnmount(() => {
   grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  border: 0.5px solid rgb(10 132 255 / 22%);
-  border-radius: 15px;
-  background: var(--garage-surface-solid) !important;
-  color: var(--garage-text);
+  border-radius: var(--sky-radius-card);
 }
 .garage-valet-live__icon {
   width: 42px;
   height: 42px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  border-radius: var(--sky-radius-control);
   background: var(--garage-blue);
   color: white;
 }
@@ -1129,9 +1036,7 @@ onBeforeUnmount(() => {
 .garage-valet-offer {
   margin-top: 13px;
   padding: 14px;
-  border: 0.5px solid rgb(10 132 255 / 18%);
-  border-radius: 15px;
-  background: var(--garage-surface-muted) !important;
+  border-radius: var(--sky-radius-card);
   text-align: left;
 }
 .garage-valet-offer__top {
@@ -1145,7 +1050,7 @@ onBeforeUnmount(() => {
   height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 13px;
+  border-radius: var(--sky-radius-control);
   background: var(--garage-blue);
   color: #fff;
 }
@@ -1198,19 +1103,13 @@ onBeforeUnmount(() => {
   color: var(--garage-secondary);
   text-align: center;
 }
-.garage-valet-confirm {
-  border: 1px solid rgb(60 60 67 / 18%);
-  background: rgb(250 250 252 / 98%) !important;
-  box-shadow: 0 24px 70px rgb(0 0 0 / 32%);
-  color: var(--garage-text);
-}
 .garage-valet-dialog > span {
   width: 48px;
   height: 48px;
   margin-bottom: 8px;
   display: grid;
   place-items: center;
-  border-radius: 16px;
+  border-radius: var(--sky-radius-card);
   background: var(--garage-blue);
   color: #fff;
 }
@@ -1224,18 +1123,6 @@ onBeforeUnmount(() => {
   color: var(--garage-blue);
   font-size: 11px;
 }
-:global(.phone-app.dark .garage-valet-live) {
-  background: var(--garage-surface-solid) !important;
-}
-:global(.phone-app.dark .garage-valet-offer) {
-  background: var(--garage-surface-muted) !important;
-}
-:global(.phone-app.dark .garage-valet-confirm) {
-  border-color: rgb(255 255 255 / 14%);
-  background: rgb(28 28 30 / 98%) !important;
-  box-shadow: 0 24px 70px rgb(0 0 0 / 72%);
-  color: #f5f5f7;
-}
 @keyframes garage-valet-track {
   from {
     transform: translateX(-18%);
@@ -1244,78 +1131,22 @@ onBeforeUnmount(() => {
     transform: translateX(155%);
   }
 }
-:global(.phone-app.dark .garage-page) {
-  --garage-background: #000;
-  --garage-surface: rgb(28 28 30 / 88%);
-  --garage-surface-solid: #1c1c1e;
-  --garage-surface-muted: #2c2c2e;
-  --garage-text: #f5f5f7;
-  --garage-secondary: #b4b4ba;
-  --garage-separator: rgb(84 84 88 / 52%);
-  --garage-shadow: 0 1px 3px rgb(0 0 0 / 28%);
-  background: var(--garage-background) !important;
-}
-:global(.phone-app.dark .garage-navbar) {
-  background: rgb(18 18 20 / 72%);
-}
-:global(.phone-app.dark .garage-summary),
-:global(.phone-app.dark .garage-vehicle) {
-  color: #f5f7fb;
-}
-:global(.phone-app.dark .garage-summary__heading strong),
-:global(.phone-app.dark .garage-summary__stats b),
-:global(.phone-app.dark .garage-vehicle__title strong),
-:global(.phone-app.dark .garage-empty strong),
-:global(.phone-app.dark .garage-state strong) {
-  color: #f5f7fb;
-}
-:global(.phone-app.dark .garage-summary__stats span) {
-  background: var(--garage-surface-muted);
-}
-:global(.phone-app.dark .garage-vehicle__title > b) {
-  background: var(--garage-surface-muted);
-}
-:global(.phone-app.dark .garage-search > .k-glass) {
-  background: rgb(118 118 128 / 24%) !important;
-}
-:global(.phone-app.dark .garage-search input) {
-  background: transparent !important;
-  color: var(--garage-text);
-}
-:global(.phone-app.dark .garage-filters) {
-  background: rgb(118 118 128 / 24%);
-}
-:global(.phone-app.dark .garage-vehicle__visual) {
+.garage-page.sky-app-page--dark .garage-vehicle__visual {
   border-color: rgb(10 132 255 / 18%);
   background: #17263a;
   color: #64aaff;
 }
-:global(.phone-app.dark .garage-vehicle__visual.is-bike) {
+.garage-page.sky-app-page--dark .garage-vehicle__visual.is-bike {
   background: #352445;
   color: #d3a4ff;
 }
-:global(.phone-app.dark .garage-vehicle__visual.is-boat) {
+.garage-page.sky-app-page--dark .garage-vehicle__visual.is-boat {
   background: #153740;
   color: #70e5f4;
 }
-:global(.phone-app.dark .garage-vehicle__visual.is-plane),
-:global(.phone-app.dark .garage-vehicle__visual.is-helicopter) {
+.garage-page.sky-app-page--dark .garage-vehicle__visual.is-plane,
+.garage-page.sky-app-page--dark .garage-vehicle__visual.is-helicopter {
   background: #3d2d17;
   color: #ffd37a;
-}
-:global(.phone-app.dark .garage-detail) {
-  color: #f5f7fb;
-}
-:global(.phone-app.dark .garage-detail__close) {
-  background: rgb(118 118 128 / 28%);
-  color: #d1d1d6;
-}
-:global(.phone-app.dark .garage-detail__location),
-:global(.phone-app.dark .garage-metrics article) {
-  background: var(--garage-surface-muted);
-}
-:global(.phone-app.dark .garage-detail__location strong),
-:global(.phone-app.dark .garage-detail__vin strong) {
-  color: #f5f7fb;
 }
 </style>

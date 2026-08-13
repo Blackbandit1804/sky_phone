@@ -1,4 +1,31 @@
-export type CalculatorOperator = 'add' | 'subtract' | 'multiply' | 'divide'
+export type CalculatorOperator =
+  | 'add'
+  | 'subtract'
+  | 'multiply'
+  | 'divide'
+  | 'power'
+  | 'root'
+
+export type CalculatorUnaryOperation =
+  | 'reciprocal'
+  | 'square'
+  | 'cube'
+  | 'exp'
+  | 'tenPower'
+  | 'sqrt'
+  | 'cbrt'
+  | 'ln'
+  | 'log10'
+  | 'factorial'
+  | 'sin'
+  | 'cos'
+  | 'tan'
+  | 'asin'
+  | 'acos'
+  | 'atan'
+  | 'sinh'
+  | 'cosh'
+  | 'tanh'
 
 export type CalculatorState = {
   accumulator: number | null
@@ -23,9 +50,11 @@ const OPERATOR_SYMBOLS: Record<CalculatorOperator, string> = {
   subtract: '−',
   multiply: '×',
   divide: '÷',
+  power: '^',
+  root: 'ʸ√',
 }
 
-function formatNumber(value: number): string {
+export function formatCalculatorNumber(value: number): string {
   if (!Number.isFinite(value)) return 'Error'
   const rounded = Number(value.toPrecision(12))
   const rendered = String(rounded)
@@ -40,8 +69,53 @@ export function calculate(
   if (operator === 'add') return left + right
   if (operator === 'subtract') return left - right
   if (operator === 'multiply') return left * right
-  if (right === 0) return null
-  return left / right
+  if (operator === 'divide') return right === 0 ? null : left / right
+  if (operator === 'power') return left ** right
+  if (left === 0) return null
+  return right < 0 && left % 2 === 0
+    ? null
+    : Math.sign(right) * Math.abs(right) ** (1 / left)
+}
+
+export function applyCalculatorUnary(
+  value: number,
+  operation: CalculatorUnaryOperation,
+  angleUnit: 'degrees' | 'radians' = 'radians',
+): number | null {
+  const angle = angleUnit === 'degrees' ? (value * Math.PI) / 180 : value
+  let result: number
+  if (operation === 'reciprocal') return value === 0 ? null : 1 / value
+  if (operation === 'square') result = value ** 2
+  else if (operation === 'cube') result = value ** 3
+  else if (operation === 'exp') result = Math.exp(value)
+  else if (operation === 'tenPower') result = 10 ** value
+  else if (operation === 'sqrt')
+    result = value < 0 ? Number.NaN : Math.sqrt(value)
+  else if (operation === 'cbrt') result = Math.cbrt(value)
+  else if (operation === 'ln')
+    result = value <= 0 ? Number.NaN : Math.log(value)
+  else if (operation === 'log10')
+    result = value <= 0 ? Number.NaN : Math.log10(value)
+  else if (operation === 'factorial') {
+    if (value < 0 || !Number.isInteger(value) || value > 170) return null
+    result = 1
+    for (let factor = 2; factor <= value; factor += 1) result *= factor
+  } else if (operation === 'sin') result = Math.sin(angle)
+  else if (operation === 'cos') result = Math.cos(angle)
+  else if (operation === 'tan') result = Math.tan(angle)
+  else if (operation === 'asin') {
+    result = Math.asin(value)
+    if (angleUnit === 'degrees') result = (result * 180) / Math.PI
+  } else if (operation === 'acos') {
+    result = Math.acos(value)
+    if (angleUnit === 'degrees') result = (result * 180) / Math.PI
+  } else if (operation === 'atan') {
+    result = Math.atan(value)
+    if (angleUnit === 'degrees') result = (result * 180) / Math.PI
+  } else if (operation === 'sinh') result = Math.sinh(value)
+  else if (operation === 'cosh') result = Math.cosh(value)
+  else result = Math.tanh(value)
+  return Number.isFinite(result) ? result : null
 }
 
 export function clearCalculator(): CalculatorState {
@@ -94,7 +168,10 @@ export function toggleCalculatorSign(state: CalculatorState): CalculatorState {
 
 export function calculatorPercent(state: CalculatorState): CalculatorState {
   if (state.error) return state
-  return { ...state, display: formatNumber(Number(state.display) / 100) }
+  return {
+    ...state,
+    display: formatCalculatorNumber(Number(state.display) / 100),
+  }
 }
 
 export function chooseCalculatorOperator(
@@ -132,7 +209,7 @@ export function chooseCalculatorOperator(
   return {
     accumulator,
     calculation,
-    display: formatNumber(accumulator),
+    display: formatCalculatorNumber(accumulator),
     error: false,
     pendingOperator: operator,
     waitingForOperand: true,
@@ -152,7 +229,7 @@ export function resolveCalculator(state: CalculatorState): CalculatorState {
   return {
     accumulator: null,
     calculation: `${state.calculation} ${state.display} =`,
-    display: formatNumber(result),
+    display: formatCalculatorNumber(result),
     error: false,
     pendingOperator: null,
     waitingForOperand: true,

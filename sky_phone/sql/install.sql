@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS `sky_phone_media` (
     `device_imei` CHAR(15) CHARACTER SET ascii COLLATE ascii_bin NULL,
     `url` TEXT NOT NULL,
     `remote_id` VARCHAR(128) NOT NULL,
-    `media_type` ENUM('photo', 'video') NOT NULL,
+    `media_type` ENUM('photo', 'video', 'audio') NOT NULL,
     `mime_type` VARCHAR(120) NULL,
     `origin` ENUM('phone_upload', 'website_import') NOT NULL DEFAULT 'phone_upload',
     `source_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
@@ -165,6 +165,24 @@ CREATE TABLE IF NOT EXISTS `sky_phone_media` (
     KEY `idx_sky_phone_media_device` (`device_imei`, `created_at`, `id`),
     FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`device_imei`) REFERENCES `sky_phone_devices` (`imei`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_voice_memos` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `media_id` BIGINT UNSIGNED NOT NULL,
+    `title` VARCHAR(120) NOT NULL,
+    `note` VARCHAR(2000) NOT NULL DEFAULT '',
+    `duration_ms` INT UNSIGNED NOT NULL,
+    `size_bytes` INT UNSIGNED NOT NULL,
+    `waveform` TEXT NOT NULL,
+    `pinned` TINYINT(1) NOT NULL DEFAULT 0,
+    `revision` INT UNSIGNED NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_voice_memos_media` (`media_id`),
+    KEY `idx_sky_phone_voice_memos_list` (`pinned`, `updated_at`, `id`),
+    FOREIGN KEY (`media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `sky_phone_contacts` (
@@ -777,9 +795,13 @@ CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_moderation_audit` (
 CREATE TABLE IF NOT EXISTS `sky_phone_skyride_profiles` (
     `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `owner_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `display_name` VARCHAR(50) NULL,
+    `avatar_media_id` BIGINT UNSIGNED NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uniq_sky_phone_skyride_owner` (`owner_identifier`)
+    UNIQUE KEY `uniq_sky_phone_skyride_owner` (`owner_identifier`),
+    KEY `idx_sky_phone_skyride_profile_avatar` (`avatar_media_id`),
+    FOREIGN KEY (`avatar_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `sky_phone_skyride_rides` (

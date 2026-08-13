@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type CSSProperties } from 'vue'
+
+import { provideSkyPageScroll } from './page-scroll-context'
+import { useSkyTheme } from './theme'
 
 defineOptions({ inheritAttrs: false })
 
@@ -13,19 +16,38 @@ const props = withDefaults(
   {
     accent: '',
     accentSoft: '',
-    dark: false,
+    dark: undefined,
   },
 )
 
+const theme = useSkyTheme()
+const pageScroll = provideSkyPageScroll()
+const isDark = computed(() => props.dark ?? theme?.dark.value ?? false)
+const effectiveAccent = computed(
+  () => props.accent || theme?.accent.value || '',
+)
+const effectiveAccentSoft = computed(
+  () => props.accentSoft || theme?.accentSoft.value || '',
+)
+
 const accentStyle = computed(() =>
-  props.accent || props.accentSoft
+  effectiveAccent.value || effectiveAccentSoft.value
     ? {
-        ...(props.accent ? { '--sky-app-accent': props.accent } : {}),
-        ...(props.accentSoft
-          ? { '--sky-app-accent-soft': props.accentSoft }
+        ...(effectiveAccent.value
+          ? { '--sky-app-accent': effectiveAccent.value }
+          : {}),
+        ...(effectiveAccentSoft.value
+          ? { '--sky-app-accent-soft': effectiveAccentSoft.value }
           : {}),
       }
     : undefined,
+)
+const pageStyle = computed<CSSProperties>(
+  () =>
+    ({
+      ...(accentStyle.value ?? {}),
+      '--sky-page-collapse-offset': `${pageScroll.collapseOffset.value}px`,
+    }) as CSSProperties,
 )
 </script>
 
@@ -33,8 +55,8 @@ const accentStyle = computed(() =>
   <main
     v-bind="$attrs"
     class="sky-app-page"
-    :class="{ 'sky-app-page--dark': dark }"
-    :style="accentStyle"
+    :class="{ 'sky-app-page--dark': isDark }"
+    :style="pageStyle"
     :aria-label="label"
   >
     <div class="sky-app-page__backdrop" aria-hidden="true"></div>

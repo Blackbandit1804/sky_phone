@@ -9,7 +9,7 @@ import type {
 import type { ReorderDirection } from '@/utils/keyboard'
 
 export const WIDGET_GRID_COLUMNS = 4
-export const WIDGET_HOME_ROWS = 5
+export const WIDGET_HOME_ROWS = 6
 export const WIDGET_PAGE_ROWS = 10
 const MAX_WIDGET_HOME_PAGES = 5
 

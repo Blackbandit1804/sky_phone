@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyCalculatorUnary,
   calculate,
   chooseCalculatorOperator,
   clearCalculator,
@@ -13,6 +14,14 @@ describe('calculator', () => {
     expect(calculate(8, 2, 'subtract')).toBe(6)
     expect(calculate(8, 2, 'multiply')).toBe(16)
     expect(calculate(8, 2, 'divide')).toBe(4)
+  })
+  it('calculates scientific unary and binary operations', () => {
+    expect(calculate(2, 8, 'power')).toBe(256)
+    expect(calculate(3, 27, 'root')).toBe(3)
+    expect(applyCalculatorUnary(5, 'factorial')).toBe(120)
+    expect(applyCalculatorUnary(90, 'sin', 'degrees')).toBeCloseTo(1)
+    expect(applyCalculatorUnary(9, 'sqrt')).toBe(3)
+    expect(applyCalculatorUnary(-1, 'sqrt')).toBeNull()
   })
   it('chains operations and handles division by zero', () => {
     let state = inputDigit(clearCalculator(), '8')

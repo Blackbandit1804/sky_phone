@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, toRef, watch } from 'vue'
+import { computed, nextTick, ref, toRef, watch } from 'vue'
 import { useOverlayFocusTrap } from './useOverlayFocusTrap'
 
 defineOptions({ inheritAttrs: false })
@@ -10,23 +10,34 @@ const props = withDefaults(
     ariaLabel?: string
     ariaLabelledby?: string
     ariaModal?: boolean | 'false' | 'true'
+    backdrop?: boolean
+    component?: string
     opened: boolean
     role?: 'alertdialog' | 'dialog' | 'none' | 'presentation'
     tabindex?: number | string
   }>(),
   {
     ariaModal: true,
+    backdrop: true,
+    component: 'div',
     tabindex: -1,
   },
 )
 const emit = defineEmits<{
-  backdropclick: []
+  backdropclick: [event: MouseEvent]
   escape: [event: KeyboardEvent]
 }>()
 
 const root = ref<HTMLElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
 const inferredRole = ref<'alertdialog' | 'dialog' | 'none' | 'presentation'>()
+const effectiveRole = computed(() => {
+  const role = inferredRole.value
+  const isDialog = role === 'dialog' || role === 'alertdialog'
+  return isDialog && !props.ariaLabel && !props.ariaLabelledby
+    ? 'presentation'
+    : role
+})
 
 watch(
   [toRef(props, 'opened'), toRef(props, 'role')],
@@ -54,27 +65,37 @@ useOverlayFocusTrap({
 </script>
 
 <template>
-  <div v-if="opened" ref="root" v-bind="$attrs" class="sky-sheet">
-    <div
-      class="sky-overlay-backdrop"
-      aria-hidden="true"
-      @click="emit('backdropclick')"
-    ></div>
-    <div
-      ref="panel"
-      class="sky-sheet__panel"
-      :role="inferredRole"
-      :aria-modal="
-        inferredRole === 'dialog' || inferredRole === 'alertdialog'
-          ? ariaModal
-          : undefined
-      "
-      :aria-label="inferredRole ? ariaLabel : undefined"
-      :aria-labelledby="inferredRole ? ariaLabelledby : undefined"
-      :aria-describedby="inferredRole ? ariaDescribedby : undefined"
-      :tabindex="tabindex"
-    >
-      <slot />
+  <Transition
+    name="sky-sheet-rise"
+    :duration="{ enter: 400, leave: 400 }"
+    appear
+  >
+    <div v-if="opened" ref="root" v-bind="$attrs" class="sky-sheet">
+      <div
+        v-if="backdrop"
+        class="sky-overlay-backdrop"
+        aria-hidden="true"
+        @click="emit('backdropclick', $event)"
+      ></div>
+      <component
+        :is="component"
+        ref="panel"
+        class="sky-sheet__panel"
+        :role="effectiveRole"
+        :aria-modal="
+          effectiveRole === 'dialog' || effectiveRole === 'alertdialog'
+            ? ariaModal
+            : undefined
+        "
+        :aria-label="effectiveRole ? ariaLabel : undefined"
+        :aria-labelledby="
+          effectiveRole && !ariaLabel ? ariaLabelledby : undefined
+        "
+        :aria-describedby="effectiveRole ? ariaDescribedby : undefined"
+        :tabindex="tabindex"
+      >
+        <slot />
+      </component>
     </div>
-  </div>
+  </Transition>
 </template>

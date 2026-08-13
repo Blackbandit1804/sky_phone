@@ -354,6 +354,20 @@ button {
 .phone-app--performance.phone-app--light {
   --phone-performance-glass: rgb(245 245 248 / 97%);
 }
+.phone-app--performance .sky-ui-provider,
+.phone-app--performance .sky-app,
+.phone-app--performance .sky-app-page {
+  --sky-glass: var(--phone-performance-glass);
+  --sky-glass-solid: var(--phone-performance-glass);
+  --sky-navbar-glass: var(--sky-bg);
+  --sky-hold-thumb-scale: 1;
+  --sky-range-hold-background: #ffffff;
+  --sky-range-hold-shadow: var(--sky-shadow-thumb);
+  --sky-toggle-hold-background: #ffffff;
+  --sky-toggle-hold-glass-opacity: 0;
+  --sky-toggle-hold-glow-opacity: 0;
+  --sky-toggle-hold-track-scale: 1;
+}
 .phone-device.phone-app--performance {
   filter: none;
 }
@@ -366,6 +380,41 @@ button {
 }
 .phone-app--performance .k-glass {
   background-color: var(--phone-performance-glass) !important;
+  scale: 1 !important;
+}
+.phone-app--performance .k-glass > [class~='rounded-[inherit]'] {
+  display: none !important;
+}
+.phone-app--performance
+  .k-range
+  [class~='group-has-[input:active]/range:scale-[1.4]'] {
+  background-color: #ffffff !important;
+  scale: 1 !important;
+}
+.phone-app--performance
+  .k-range
+  [class~='group-has-[input:active]/range:opacity-100'] {
+  opacity: 0 !important;
+}
+.phone-app--performance .k-toggle [class~='group-active:scale-[0.75]'],
+.phone-app--performance .k-toggle [class~='group-active:scale-[1.4]'] {
+  scale: 1 !important;
+}
+.phone-app--performance .k-toggle [class~='group-active:bg-transparent'] {
+  background-color: #ffffff !important;
+}
+.phone-app--performance .k-toggle [class~='group-active:opacity-100'] {
+  opacity: 0 !important;
+}
+.phone-app--performance .sky-glass--highlight-visible::after {
+  opacity: 0;
+}
+.phone-app--performance .sky-glass--touch-highlight {
+  transform: none;
+}
+.phone-app--performance .sky-segmented--navigation {
+  background: var(--phone-performance-glass);
+  box-shadow: none;
 }
 .phone-app--performance .control-center__backdrop {
   background: rgb(20 20 24 / 92%);
@@ -2263,12 +2312,35 @@ button {
   display: flex;
   touch-action: pan-y;
   transform: translateX(calc(var(--springboard-offset) + var(--drag-offset)));
-  transition: transform var(--springboard-page-duration)
-    var(--springboard-page-easing);
+  transition:
+    transform var(--springboard-page-duration) var(--springboard-page-easing),
+    filter 0.22s ease;
   will-change: transform;
 }
 .springboard--dragging .springboard-track {
   transition: none;
+}
+.springboard--folder-open .springboard-track,
+.springboard--folder-open .app-dock,
+.springboard--folder-open .page-indicator,
+.springboard--folder-open .springboard-edit-add,
+.springboard--folder-open .springboard-edit-done {
+  filter: blur(6px) brightness(0.72) saturate(0.88);
+  pointer-events: none;
+}
+
+.home-folder-enter-active,
+.home-folder-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.24s cubic-bezier(0.22, 0.75, 0.18, 1);
+  transform-origin: 50% 42%;
+}
+
+.home-folder-enter-from,
+.home-folder-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
 }
 .springboard-page {
   position: relative;
@@ -3724,64 +3796,6 @@ button {
   background: #1c1c1e;
   color: #a0a0a7;
 }
-.calculator-app {
-  padding: 85px 19px 29px;
-  display: flex;
-  flex-direction: column;
-}
-.calculator-display {
-  height: 145px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: flex-end;
-  padding: 0 8px 12px;
-  overflow: hidden;
-  font-size: 65px;
-  font-weight: 250;
-  white-space: nowrap;
-}
-.calculator-result {
-  max-width: 100%;
-  overflow: hidden;
-}
-.calculator-calculation {
-  max-width: 100%;
-  overflow: hidden;
-  color: #8e8e93;
-  font-size: 20px;
-  font-weight: 400;
-  letter-spacing: 0;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-}
-.calculator-pad {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 11px;
-}
-.calculator-pad button {
-  aspect-ratio: 1;
-  border: 0;
-  border-radius: 50%;
-  background: #333336;
-  color: white;
-  font-size: 29px;
-}
-.calculator-pad button.utility {
-  background: #a5a5aa;
-  color: #000;
-}
-.calculator-pad button.operator {
-  background: #ff9f0a;
-}
-.calculator-pad button.zero {
-  grid-column: span 2;
-  aspect-ratio: auto;
-  border-radius: 50px;
-  text-align: left;
-  padding-left: 27px;
-}
 .clock-content {
   min-height: 0;
   flex: 1;
@@ -4132,23 +4146,6 @@ button {
   font-size: 13px;
 }
 /* Reference-accurate app surfaces. These remain scoped to the phone resource. */
-.calculator-app {
-  padding: 54px 16px 27px;
-}
-.calculator-display {
-  height: 226px;
-  padding: 0 5px 4px;
-  font-size: 78px;
-  letter-spacing: -5px;
-}
-.calculator-pad {
-  gap: 11px 14px;
-}
-.calculator-pad button {
-  font-size: 28px;
-  font-weight: 400;
-}
-
 .reference-tabbar {
   position: absolute;
   z-index: 6;
@@ -6606,7 +6603,7 @@ button {
   display: none;
 }
 .app-grid {
-  grid-template-rows: repeat(5, var(--springboard-grid-row));
+  grid-template-rows: repeat(6, var(--springboard-grid-row));
   gap: var(--springboard-grid-row-gap) var(--springboard-grid-column-gap);
 }
 .app-grid-slot {
@@ -6648,8 +6645,36 @@ button {
 }
 .app-reflow-move {
   z-index: 1;
-  transition: transform 0.58s cubic-bezier(0.2, 0.82, 0.2, 1);
+  transition: transform 0.34s cubic-bezier(0.22, 0.75, 0.18, 1);
   will-change: transform;
+  backface-visibility: hidden;
+}
+.app-icon-item--drop-settling {
+  z-index: 2;
+  animation: home-app-drop-settle 0.26s cubic-bezier(0.22, 0.75, 0.18, 1);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.home-item--folder-hover:not(.app-icon-item--dragging) {
+  z-index: 3;
+  animation: home-folder-hover 0.58s ease-in-out infinite alternate;
+}
+@keyframes home-folder-hover {
+  to {
+    transform: scale(1.1);
+  }
+}
+@keyframes home-app-drop-settle {
+  from {
+    transform: translate3d(
+      var(--home-app-drop-x, 0),
+      var(--home-app-drop-y, 0),
+      0
+    );
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 .springboard-page-add {

@@ -60,6 +60,7 @@ local RESERVED_APP_IDS = {
     music = true,
     ["neon-drop"] = true,
     notes = true,
+    memos = true,
     ["number-merge"] = true,
     phone = true,
     photos = true,

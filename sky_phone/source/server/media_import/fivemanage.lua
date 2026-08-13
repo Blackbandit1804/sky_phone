@@ -1,9 +1,9 @@
 local function api_key(website)
-    local convar = website.ApiKeyConvar or Config.Media.FiveManage.ApiKeyConvar
-    if type(convar) ~= "string" or convar == "" then
+    local configured_key = website.ApiKey or Config.Media.FiveManage.ApiKey
+    if type(configured_key) ~= "string" then
         return ""
     end
-    return GetConvar(convar, "")
+    return configured_key:match("^%s*(.-)%s*$")
 end
 
 local function provider_error(response, not_found_error)

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 import { createSSRApp } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { describe, expect, it } from 'vitest'
@@ -40,5 +43,22 @@ describe('SkyRange', () => {
     expect(html).toContain('aria-hidden="true"')
     expect(html).toContain('Volume')
     expect(html).toContain('aria-label="Radio volume"')
+  })
+
+  it('keeps the Konsta glass hold state on enabled range thumbs', () => {
+    const uiDirectory = fileURLToPath(new URL('..', import.meta.url))
+    const controls = readFileSync(`${uiDirectory}/controls.css`, 'utf8')
+    const tokens = readFileSync(`${uiDirectory}/tokens.css`, 'utf8')
+
+    expect(controls).toMatch(
+      /\.sky-range__input:not\(:disabled\):active::-webkit-slider-thumb\s*\{[\s\S]*?--sky-range-hold-background[\s\S]*?--sky-glass-thumb-active-background[\s\S]*?--sky-range-hold-shadow[\s\S]*?--sky-shadow-thumb[\s\S]*?--sky-shadow-glass-thumb[\s\S]*?--sky-shadow-glass-thumb-glow[\s\S]*?--sky-hold-thumb-scale, 1\.4/,
+    )
+    expect(controls).toMatch(
+      /\.sky-range__input:not\(:disabled\):focus-visible:active::-webkit-slider-thumb/,
+    )
+    expect(controls).not.toContain(
+      '.sky-range__input:active::-webkit-slider-runnable-track',
+    )
+    expect(tokens).toContain('--sky-shadow-glass-thumb-glow')
   })
 })

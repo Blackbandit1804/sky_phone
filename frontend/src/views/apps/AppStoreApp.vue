@@ -1,12 +1,4 @@
 <script setup lang="ts">
-import {
-  kNavbar,
-  kPage,
-  kPreloader,
-  kSearchbar,
-  kSegmented,
-  kSegmentedButton,
-} from 'konsta/vue'
 import { Gamepad2, Grid2X2, Search } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -22,6 +14,16 @@ import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
 } from '@/types/apps'
+import {
+  SkyAppPage,
+  SkyNavbar,
+  SkyPillNavigation,
+  SkyScrollArea,
+  SkySearchbar,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySpinner,
+} from '@/ui'
 
 const phone = usePhoneStore()
 const appStore = useAppStoreStore()
@@ -34,9 +36,9 @@ const tabs = [
   { id: 'games', icon: Gamepad2 },
   { id: 'search', icon: Search },
 ] as const
-const tabBarColors = {
-  strongHighlightBgIos: 'bg-[#e5e5ea] dark:bg-[#2c2c2e]',
-}
+const activeTabIndex = computed(() =>
+  tabs.findIndex((item) => item.id === tab.value),
+)
 const catalog = computed(() =>
   PHONE_APPS.filter((app): app is LaunchablePhoneAppDefinition => {
     if (!isLaunchablePhoneApp(app) || app.id === 'app-store') {
@@ -67,10 +69,6 @@ const shownApps = computed(() => {
       .includes(search),
   )
 })
-
-function updateSearch(event: Event): void {
-  query.value = (event.target as HTMLInputElement).value
-}
 
 function appAction(
   app: LaunchablePhoneAppDefinition,
@@ -103,24 +101,29 @@ function handleApp(app: LaunchablePhoneAppDefinition): void {
 </script>
 
 <template>
-  <k-page component="main" class="native-app app-store-page">
-    <k-navbar
-      large
+  <SkyAppPage
+    class="app-store-page"
+    accent="#0a84ff"
+    accent-soft="rgba(10, 132, 255, 0.16)"
+    :dark="phone.isDarkMode"
+    :label="phone.t('Apps.appStore.name')"
+  >
+    <SkyNavbar
       transparent
       :title="phone.t('Apps.appStore.name')"
-      class="top-0 sticky"
+      variant="large"
     >
       <template v-if="tab === 'search'" #subnavbar>
-        <k-searchbar
-          :value="query"
+        <SkySearchbar
+          v-model="query"
+          :clear-label="phone.t('Common.clear')"
+          :label="phone.t('Apps.appStore.searchPlaceholder')"
           :placeholder="phone.t('Apps.appStore.searchPlaceholder')"
-          @input="updateSearch"
-          @clear="query = ''"
         />
       </template>
-    </k-navbar>
+    </SkyNavbar>
 
-    <section class="store-scroll">
+    <SkyScrollArea class="store-scroll" with-tabbar>
       <section class="store-list">
         <article v-for="app in shownApps" :key="app.id">
           <img
@@ -141,7 +144,7 @@ function handleApp(app: LaunchablePhoneAppDefinition): void {
             )}`"
             @click="handleApp(app)"
           >
-            <k-preloader
+            <SkySpinner
               v-if="appStore.installingApps[app.id]"
               class="store-installing"
             />
@@ -154,35 +157,89 @@ function handleApp(app: LaunchablePhoneAppDefinition): void {
           {{ phone.t('Home.noApps') }}
         </p>
       </section>
-    </section>
+    </SkyScrollArea>
 
-    <k-navbar component="nav" :aria-label="phone.t('Apps.appStore.name')">
-      <template #subnavbar>
-        <k-segmented
-          strong
-          rounded
-          :colors="tabBarColors"
-          :data-active-tab="tab"
+    <SkyPillNavigation
+      class="app-store-navigation"
+      layout="full"
+      :label="phone.t('Apps.appStore.name')"
+    >
+      <SkySegmented
+        strong
+        rounded
+        navigation
+        :active-index="activeTabIndex"
+        :aria-label="phone.t('Apps.appStore.name')"
+        :data-active-tab="tab"
+        :item-count="tabs.length"
+      >
+        <SkySegmentedButton
+          v-for="item in tabs"
+          :key="item.id"
+          :active="tab === item.id"
+          :aria-label="phone.t(`Apps.appStore.tabs.${item.id}`)"
+          @click="tab = item.id"
         >
-          <k-segmented-button
-            v-for="item in tabs"
-            :key="item.id"
-            large
-            :active="tab === item.id"
-            :class="tab === item.id ? 'text-primary' : 'text-[#8e8e93]'"
-            :aria-label="phone.t(`Apps.appStore.tabs.${item.id}`)"
-            :aria-pressed="tab === item.id"
-            @click="tab = item.id"
-          >
-            <span
-              class="flex flex-col items-center gap-0.5 text-[10px] leading-none"
-            >
-              <component :is="item.icon" class="h-5 w-5" aria-hidden="true" />
-              <span>{{ phone.t(`Apps.appStore.tabs.${item.id}`) }}</span>
-            </span>
-          </k-segmented-button>
-        </k-segmented>
-      </template>
-    </k-navbar>
-  </k-page>
+          <span class="app-store-navigation__item">
+            <component
+              :is="item.icon"
+              :size="20"
+              :stroke-width="2"
+              aria-hidden="true"
+            />
+            <span>{{ phone.t(`Apps.appStore.tabs.${item.id}`) }}</span>
+          </span>
+        </SkySegmentedButton>
+      </SkySegmented>
+    </SkyPillNavigation>
+  </SkyAppPage>
 </template>
+
+<style scoped>
+.app-store-page {
+  padding: 0;
+  background: var(--sky-bg);
+  color: var(--sky-text);
+}
+
+.store-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  padding-top: 0;
+  padding-right: calc(var(--sky-page-gutter) + var(--sky-safe-area-right));
+  padding-left: calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
+  overflow-y: auto;
+}
+
+.store-list {
+  padding: 0;
+}
+
+.store-list article {
+  border-color: var(--sky-hairline);
+}
+
+.store-list small,
+.store-empty {
+  color: var(--sky-muted);
+}
+
+.store-list article > button {
+  min-height: var(--sky-touch-target);
+  color: var(--sky-app-accent);
+  background: var(--sky-surface-muted);
+}
+
+.store-installing {
+  color: var(--sky-app-accent);
+}
+
+.app-store-navigation__item {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1;
+}
+</style>

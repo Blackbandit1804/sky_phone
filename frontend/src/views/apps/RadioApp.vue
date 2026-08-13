@@ -20,6 +20,7 @@ import {
   SkyList,
   SkyListItem,
   SkyNavbar,
+  SkyPillNavigation,
   SkyRange,
   SkyScrollArea,
   SkySection,
@@ -228,26 +229,10 @@ onBeforeUnmount(() => {
   >
     <SkyNavbar :title="phone.t('Apps.radio.name')" />
 
-    <div class="radio-tab-switcher">
-      <SkySegmented class="radio-tabs" :aria-label="phone.t('Apps.radio.name')">
-        <SkySegmentedButton :active="tab === 'radio'" @click="tab = 'radio'">
-          <RadioTower :size="16" aria-hidden="true" />
-          {{ phone.t('Apps.radio.tabs.radio') }}
-        </SkySegmentedButton>
-        <SkySegmentedButton
-          :active="tab === 'settings'"
-          @click="tab = 'settings'"
-        >
-          <Settings :size="16" aria-hidden="true" />
-          {{ phone.t('Apps.radio.tabs.settings') }}
-        </SkySegmentedButton>
-      </SkySegmented>
-    </div>
-
-    <SkyScrollArea class="radio-content">
+    <SkyScrollArea class="radio-content" with-tabbar>
       <div v-if="radio.isLoading && !radio.data.provider" class="radio-loading">
         <SkySpinner :label="phone.t('Common.loading')" />
-        <span>{{ phone.t('Common.loading') }}</span>
+        <span aria-hidden="true">{{ phone.t('Common.loading') }}</span>
       </div>
 
       <template v-else-if="tab === 'radio'">
@@ -453,9 +438,49 @@ onBeforeUnmount(() => {
       </template>
     </SkyScrollArea>
 
+    <SkyPillNavigation
+      class="radio-navigation"
+      layout="full"
+      :label="phone.t('Apps.radio.name')"
+    >
+      <SkySegmented
+        navigation
+        rounded
+        strong
+        :active-index="tab === 'radio' ? 0 : 1"
+        :aria-label="phone.t('Apps.radio.name')"
+        :data-active-tab="tab"
+        :item-count="2"
+      >
+        <SkySegmentedButton
+          :active="tab === 'radio'"
+          :aria-label="phone.t('Apps.radio.tabs.radio')"
+          type="button"
+          @click="tab = 'radio'"
+        >
+          <span class="radio-navigation__item">
+            <RadioTower :size="20" aria-hidden="true" />
+            <span>{{ phone.t('Apps.radio.tabs.radio') }}</span>
+          </span>
+        </SkySegmentedButton>
+        <SkySegmentedButton
+          :active="tab === 'settings'"
+          :aria-label="phone.t('Apps.radio.tabs.settings')"
+          type="button"
+          @click="tab = 'settings'"
+        >
+          <span class="radio-navigation__item">
+            <Settings :size="20" aria-hidden="true" />
+            <span>{{ phone.t('Apps.radio.tabs.settings') }}</span>
+          </span>
+        </SkySegmentedButton>
+      </SkySegmented>
+    </SkyPillNavigation>
+
     <SkyToast
       :opened="Boolean(feedback)"
       position="center"
+      vertical-position="center"
       @click="feedback = ''"
     >
       {{ feedback }}
@@ -464,13 +489,21 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.radio-tab-switcher {
-  padding: 4px var(--sky-page-gutter) 8px;
-  flex: none;
+.radio-navigation__item {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1;
 }
 
-.radio-tabs :deep(.sky-segmented-button) {
-  gap: 6px;
+.radio-navigation__item > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .radio-content {

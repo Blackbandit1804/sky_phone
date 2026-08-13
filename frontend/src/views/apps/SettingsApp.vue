@@ -6,6 +6,7 @@ import {
   EyeOff,
   KeyRound,
   Monitor,
+  PanelsTopLeft,
   Moon,
   Plane,
   RotateCcw,
@@ -24,6 +25,7 @@ import {
   ref,
   type ComponentPublicInstance,
 } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { PHONE_FRAME_COLORS } from '@/config/appearance'
 import {
@@ -115,6 +117,8 @@ type PasscodeFlow =
 const FACTORY_RESET_DURATION_MS = 60_000
 
 const phone = usePhoneStore()
+const router = useRouter()
+const isDevelopment = import.meta.env.DEV
 const account = useAccountStore()
 const appAuth = useAppAuthStore()
 const query = ref('')
@@ -211,6 +215,11 @@ const preferenceRows = [
     iconColor: '#32ade6',
   },
 ]
+
+function openSkyUiKitchenSink(): void {
+  if (!isDevelopment) return
+  void router.push({ name: 'development-sky-ui' })
+}
 
 const connectivityRows = [
   {
@@ -607,9 +616,8 @@ onBeforeUnmount(() => {
       :back-label="phone.t('Apps.settings.back')"
       @back="goBack"
     >
-      <template #right>
+      <template v-if="activeView === 'account' && !account.email" #right>
         <SkyLink
-          v-if="activeView === 'account' && !account.email"
           @click="accountMode = accountMode === 'login' ? 'register' : 'login'"
         >
           {{
@@ -623,7 +631,11 @@ onBeforeUnmount(() => {
       </template>
     </SkyNavbar>
 
-    <SkyScrollArea ref="settingsPage" class="settings-content">
+    <SkyScrollArea
+      ref="settingsPage"
+      class="settings-content"
+      :class="{ 'settings-content--subpage': activeView !== 'root' }"
+    >
       <template v-if="activeView === 'root'">
         <div class="settings-search" role="search">
           <SkySearchbar
@@ -713,6 +725,24 @@ onBeforeUnmount(() => {
             <template #leading>
               <SkySettingsIcon :color="row.iconColor">
                 <component :is="row.icon" aria-hidden="true" />
+              </SkySettingsIcon>
+            </template>
+          </SkySettingsRow>
+        </SkySettingsGroup>
+
+        <SkySettingsGroup
+          v-if="isDevelopment && matchesSearch('development')"
+          :title="phone.t('Apps.settings.development')"
+        >
+          <SkySettingsRow
+            kind="navigation"
+            :title="phone.t('Apps.settings.skyUiKitchenSink')"
+            :description="phone.t('Apps.settings.skyUiKitchenSinkDescription')"
+            @activate="openSkyUiKitchenSink"
+          >
+            <template #leading>
+              <SkySettingsIcon color="#5856d6">
+                <PanelsTopLeft aria-hidden="true" />
               </SkySettingsIcon>
             </template>
           </SkySettingsRow>
@@ -1455,6 +1485,7 @@ onBeforeUnmount(() => {
     <SkyToast
       :opened="Boolean(accountToast)"
       position="center"
+      vertical-position="center"
       @click="accountToast = ''"
     >
       {{ accountToast }}
@@ -1469,6 +1500,10 @@ onBeforeUnmount(() => {
 
 .settings-content {
   padding-top: var(--sky-space-2);
+}
+
+.settings-content--subpage {
+  padding-top: 0;
 }
 
 .settings-copy {

@@ -30,7 +30,7 @@ describe('widget layout', () => {
       instance.id.startsWith('wallet-'),
     )
 
-    expect(added).toMatchObject({ column: 0, page: 2, row: 0, size: 'small' })
+    expect(added).toMatchObject({ column: 0, page: 1, row: 4, size: 'small' })
   })
 
   it('moves a widget and reflows a displaced neighbor', () => {

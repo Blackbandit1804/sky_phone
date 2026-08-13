@@ -10,22 +10,25 @@ import {
   kNavbar,
   kNavbarBackLink,
   kPage,
-  kPopover,
   kSearchbar,
 } from 'konsta/vue'
-import { Ellipsis, Pin, PinOff, Share2, SquarePen, Trash2 } from 'lucide-vue-next'
 import {
-  computed,
-  type ComponentPublicInstance,
-  type CSSProperties,
-  nextTick,
-  ref,
-} from 'vue'
+  Ellipsis,
+  Pin,
+  PinOff,
+  Share2,
+  SquarePen,
+  Trash2,
+} from 'lucide-vue-next'
+import { computed, ref } from 'vue'
 
+import NotesRichTextEditor from '@/components/NotesRichTextEditor.vue'
 import { useNotesStore } from '@/stores/notes'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
+import { SkyActionButton, SkyActionGroup, SkyActionSheet } from '@/ui'
 import type { Note } from '@/utils/notes'
+import { noteBodyToPlainText } from '@/utils/noteRichText'
 
 const phone = usePhoneStore()
 const notes = useNotesStore()
@@ -35,25 +38,7 @@ const editorId = ref<string | null>(null)
 const editorOpened = ref(false)
 const draftTitle = ref('')
 const draftBody = ref('')
-const menuButton = ref<ComponentPublicInstance | null>(null)
 const menuOpened = ref(false)
-const menuTarget = computed(
-  () => menuButton.value?.$el as HTMLElement | undefined,
-)
-const menuTargetStyle = ref<CSSProperties>({})
-const pinActionColors = computed(() => ({
-  textIos: phone.isDarkMode ? 'text-white' : 'text-black',
-  textMaterial: phone.isDarkMode ? 'text-white' : 'text-black',
-}))
-const deleteActionColors = {
-  textIos: 'text-red-500',
-  textMaterial: 'text-red-500',
-}
-const noteBodyStyle: CSSProperties = {
-  height: '617px',
-  maxHeight: 'calc(100% - 210px)',
-  resize: 'none',
-}
 const currentNote = computed(() =>
   editorId.value
     ? notes.notes.find((note) => note.id === editorId.value)
@@ -65,7 +50,7 @@ const visibleNotes = computed(() => {
   return [...notes.notes]
     .filter((note) => {
       if (!query) return true
-      return `${note.title}\n${note.body}`
+      return `${note.title}\n${noteBodyToPlainText(note.body)}`
         .toLocaleLowerCase(phone.lang)
         .includes(query)
     })
@@ -75,13 +60,30 @@ const visibleNotes = computed(() => {
         right.updatedAt - left.updatedAt,
     )
 })
+const editorLabels = computed(() => ({
+  bold: phone.t('Apps.notes.tools.bold'),
+  bulletList: phone.t('Apps.notes.tools.bulletList'),
+  decreaseText: phone.t('Apps.notes.tools.decreaseText'),
+  increaseText: phone.t('Apps.notes.tools.increaseText'),
+  italic: phone.t('Apps.notes.tools.italic'),
+  numberedList: phone.t('Apps.notes.tools.numberedList'),
+  quote: phone.t('Apps.notes.tools.quote'),
+  redo: phone.t('Apps.notes.tools.redo'),
+  strike: phone.t('Apps.notes.tools.strike'),
+  toolbar: phone.t('Apps.notes.tools.toolbar'),
+  underline: phone.t('Apps.notes.tools.underline'),
+  undo: phone.t('Apps.notes.tools.undo'),
+}))
 
 function noteTitle(note: Note): string {
   return note.title.trim() || phone.t('Apps.notes.untitled')
 }
 
 function notePreview(note: Note): string {
-  return note.body.trim().replace(/\s+/g, ' ') || phone.t('Apps.notes.noText')
+  return (
+    noteBodyToPlainText(note.body).trim().replace(/\s+/g, ' ') ||
+    phone.t('Apps.notes.noText')
+  )
 }
 
 function noteDate(note: Note): string {
@@ -106,10 +108,6 @@ function updateTitle(event: Event): void {
   draftTitle.value = (event.target as HTMLInputElement).value
 }
 
-function updateBody(event: Event): void {
-  draftBody.value = (event.target as HTMLTextAreaElement).value
-}
-
 function createNote(): void {
   editorId.value = null
   draftTitle.value = ''
@@ -126,7 +124,7 @@ function editNote(note: Note): void {
 
 function persistDraft(): Note | undefined {
   const draft = {
-    body: draftBody.value.trim(),
+    body: draftBody.value,
     title: draftTitle.value.trim(),
   }
 
@@ -134,7 +132,7 @@ function persistDraft(): Note | undefined {
     notes.updateNote(editorId.value, draft)
     return notes.notes.find((note) => note.id === editorId.value)
   }
-  if (!draft.title && !draft.body) return undefined
+  if (!draft.title && !noteBodyToPlainText(draft.body).trim()) return undefined
 
   const note = notes.createNote(draft)
   editorId.value = note.id
@@ -147,23 +145,8 @@ function saveAndClose(): void {
   editorOpened.value = false
 }
 
-async function openMenu(): Promise<void> {
+function openMenu(): void {
   if (!persistDraft()) return
-
-  const target = menuTarget.value
-  const screen = target?.closest('.phone-screen')
-  if (target && screen) {
-    const screenRect = screen.getBoundingClientRect()
-    menuTargetStyle.value = {
-      '--k-safe-area-left': `${Math.round(screenRect.left + 2)}px`,
-      '--k-safe-area-right': `${Math.round(
-        document.body.offsetWidth - screenRect.right + 2,
-      )}px`,
-      '--k-safe-area-top': `${Math.round(screenRect.top + 8)}px`,
-    }
-    await nextTick()
-  }
-
   menuOpened.value = true
 }
 
@@ -188,14 +171,13 @@ function shareNote(): void {
   menuOpened.value = false
   easyShare.open({
     appId: 'notes',
-    copyText: note.body || note.title,
+    copyText: noteBodyToPlainText(note.body) || note.title,
     id: note.id,
     kind: 'note',
     subtitle: notePreview(note),
     title: noteTitle(note),
   })
 }
-
 </script>
 
 <template>
@@ -204,11 +186,7 @@ function shareNote(): void {
     class="!pt-[44px] !pb-[25px]"
     :aria-label="phone.t('Apps.notes.name')"
   >
-    <k-navbar
-      large
-      transparent
-      :title="phone.t('Apps.notes.name')"
-    >
+    <k-navbar large transparent :title="phone.t('Apps.notes.name')">
       <template #right>
         <k-link
           component="button"
@@ -263,7 +241,7 @@ function shareNote(): void {
     </template>
   </k-page>
 
-  <k-page v-else class="!pt-[44px] !pb-[25px]">
+  <k-page v-else class="notes-editor-page !pt-[44px] !pb-0">
     <k-navbar :title="phone.t('Apps.notes.note')">
       <template #left>
         <k-navbar-back-link
@@ -275,10 +253,8 @@ function shareNote(): void {
       </template>
       <template #right>
         <k-link
-          ref="menuButton"
           component="button"
           icon-only
-          :style="menuTargetStyle"
           :aria-label="phone.t('Apps.notes.actions')"
           @click="openMenu"
         >
@@ -287,49 +263,46 @@ function shareNote(): void {
       </template>
     </k-navbar>
 
-    <k-list nested :dividers="false">
-      <k-list-input
-        :value="draftTitle"
-        :label="phone.t('Apps.notes.title')"
-        :placeholder="phone.t('Apps.notes.titlePlaceholder')"
-        maxlength="120"
-        clear-button
-        @input="updateTitle"
-        @clear="draftTitle = ''"
-      />
-      <k-list-input
-        type="textarea"
-        :value="draftBody"
-        :label="phone.t('Apps.notes.body')"
+    <div class="notes-editor-layout">
+      <k-list class="notes-editor-title" nested :dividers="false">
+        <k-list-input
+          :value="draftTitle"
+          :label="phone.t('Apps.notes.title')"
+          :placeholder="phone.t('Apps.notes.titlePlaceholder')"
+          maxlength="120"
+          clear-button
+          @input="updateTitle"
+          @clear="draftTitle = ''"
+        />
+      </k-list>
+      <NotesRichTextEditor
+        v-model="draftBody"
+        :dark="phone.isDarkMode"
+        :labels="editorLabels"
         :placeholder="phone.t('Apps.notes.bodyPlaceholder')"
-        :input-style="noteBodyStyle"
-        maxlength="20000"
-        @input="updateBody"
       />
-    </k-list>
+    </div>
 
-    <Teleport to="body">
-      <k-popover
-        :opened="menuOpened"
-        :target="menuTarget"
-        :class="{
-          dark: phone.isDarkMode,
-          'phone-app--light': !phone.isDarkMode,
-          [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
-        }"
-        angle
-        @backdropclick="menuOpened = false"
-      >
-        <k-list nested>
-          <k-list-button link-component="button" :colors="pinActionColors" @click="shareNote">
+    <SkyActionSheet
+      class="notes-action-sheet"
+      :opened="menuOpened"
+      :label="phone.t('Apps.notes.actions')"
+      @backdropclick="menuOpened = false"
+      @escape="menuOpened = false"
+    >
+      <div class="notes-action-sheet__handle" aria-hidden="true"></div>
+      <p class="notes-action-sheet__title">
+        {{ phone.t('Apps.notes.actions') }}
+      </p>
+      <SkyActionGroup>
+        <SkyActionButton @click="shareNote">
+          <span class="notes-action-button__content">
             <Share2 :size="18" />
             {{ phone.t('Apps.easyShare.name') }}
-          </k-list-button>
-          <k-list-button
-            link-component="button"
-            :colors="pinActionColors"
-            @click="togglePinned"
-          >
+          </span>
+        </SkyActionButton>
+        <SkyActionButton @click="togglePinned">
+          <span class="notes-action-button__content">
             <PinOff v-if="currentNote?.pinned" :size="18" />
             <Pin v-else :size="18" />
             {{
@@ -337,17 +310,83 @@ function shareNote(): void {
                 currentNote?.pinned ? 'Apps.notes.unpin' : 'Apps.notes.pin',
               )
             }}
-          </k-list-button>
-          <k-list-button
-            link-component="button"
-            :colors="deleteActionColors"
-            @click="deleteNote"
-          >
+          </span>
+        </SkyActionButton>
+        <SkyActionButton class="notes-action-button--danger" @click="deleteNote">
+          <span class="notes-action-button__content">
             <Trash2 :size="18" />
             {{ phone.t('Apps.notes.deleteNote') }}
-          </k-list-button>
-        </k-list>
-      </k-popover>
-    </Teleport>
+          </span>
+        </SkyActionButton>
+      </SkyActionGroup>
+      <SkyActionGroup>
+        <SkyActionButton bold @click="menuOpened = false">
+          {{ phone.t('Common.cancel') }}
+        </SkyActionButton>
+      </SkyActionGroup>
+    </SkyActionSheet>
   </k-page>
 </template>
+
+<style scoped>
+.notes-editor-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notes-editor-layout {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notes-editor-title {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.notes-action-button__content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+.notes-action-button--danger {
+  color: var(--sky-danger);
+}
+
+.notes-action-sheet :deep(.sky-action-sheet__panel) {
+  padding: 8px var(--sky-page-gutter)
+    calc(var(--sky-safe-area-bottom) + 10px);
+  border: 1px solid var(--sky-hairline);
+  border-bottom: 0;
+  border-radius: 30px 30px 0 0;
+  background: var(--sky-surface);
+  box-shadow: 0 -18px 50px rgb(0 0 0 / 32%);
+}
+
+.notes-action-sheet :deep(.sky-action-group) {
+  margin-top: 9px;
+  background: var(--sky-surface-muted);
+}
+
+.notes-action-sheet__handle {
+  width: 38px;
+  height: 5px;
+  margin: 0 auto 7px;
+  border-radius: 999px;
+  background: var(--sky-hairline-strong, rgb(142 142 147 / 65%));
+}
+
+.notes-action-sheet__title {
+  margin: 0;
+  color: var(--sky-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+</style>

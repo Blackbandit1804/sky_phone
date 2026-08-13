@@ -6,7 +6,6 @@ import {
   kDialog,
   kDialogButton,
   kGlass,
-  kIcon,
   kLink,
   kList,
   kListButton,
@@ -19,10 +18,7 @@ import {
   kRange,
   kSearchbar,
   kSheet,
-  kTabbar,
-  kTabbarLink,
   kToast,
-  kToolbarPane,
 } from 'konsta/vue'
 import {
   Check,
@@ -55,6 +51,7 @@ import type { MusicPlaylist, MusicTrack } from '@/types/music'
 import { easyShareMusicTarget } from '@/utils/easyshare'
 import { consumeEscape, handleEnterAction } from '@/utils/keyboard'
 import { musicEscapeLayer } from '@/utils/musicEscape'
+import { SkyPillNavigation, SkySegmented, SkySegmentedButton } from '@/ui'
 
 type MusicTab = 'library' | 'playlists' | 'search'
 type MusicSheet =
@@ -75,6 +72,14 @@ const easyShare = useEasyShareStore()
 const phone = usePhoneStore()
 const route = useRoute()
 const activeTab = ref<MusicTab>('library')
+const tabs = [
+  { id: 'library', icon: Library },
+  { id: 'playlists', icon: ListMusic },
+  { id: 'search', icon: Search },
+] as const
+const activeTabIndex = computed(() =>
+  tabs.findIndex((item) => item.id === activeTab.value),
+)
 const activePlaylist = ref<MusicPlaylist | null>(null)
 const addMenuOpened = ref(false)
 const actionMenuOpened = ref(false)
@@ -566,10 +571,11 @@ onBeforeUnmount(() => {
 <template>
   <k-page
     component="main"
-    class="music-app"
+    class="music-app sky-ui-provider"
     :class="{
       'music-app--playlist': activePlaylist,
       'music-app--playing': music.currentTrack,
+      'sky-ui-provider--dark': phone.isDarkMode,
     }"
   >
     <k-navbar
@@ -952,50 +958,41 @@ onBeforeUnmount(() => {
       </button>
     </k-glass>
 
-    <k-tabbar
+    <SkyPillNavigation
       v-if="!activePlaylist"
-      component="nav"
-      icons
-      labels
-      class="music-tabbar"
-      :aria-label="phone.t('Apps.music.navigation')"
+      class="music-navigation"
+      layout="full"
+      :label="phone.t('Apps.music.navigation')"
     >
-      <k-toolbar-pane>
-        <k-tabbar-link
-          component="button"
-          :active="activeTab === 'library'"
-          :link-props="{ type: 'button' }"
-          @click="selectTab('library')"
+      <SkySegmented
+        strong
+        rounded
+        navigation
+        :active-index="activeTabIndex"
+        :aria-label="phone.t('Apps.music.navigation')"
+        :data-active-tab="activeTab"
+        :item-count="tabs.length"
+      >
+        <SkySegmentedButton
+          v-for="item in tabs"
+          :key="item.id"
+          :active="activeTab === item.id"
+          :aria-label="phone.t(`Apps.music.tabs.${item.id}`)"
+          type="button"
+          @click="selectTab(item.id)"
         >
-          <template #icon
-            ><k-icon><Library class="w-7 h-7" /></k-icon
-          ></template>
-          <template #label>{{ phone.t('Apps.music.tabs.library') }}</template>
-        </k-tabbar-link>
-        <k-tabbar-link
-          component="button"
-          :active="activeTab === 'playlists'"
-          :link-props="{ type: 'button' }"
-          @click="selectTab('playlists')"
-        >
-          <template #icon
-            ><k-icon><ListMusic class="w-7 h-7" /></k-icon
-          ></template>
-          <template #label>{{ phone.t('Apps.music.tabs.playlists') }}</template>
-        </k-tabbar-link>
-        <k-tabbar-link
-          component="button"
-          :active="activeTab === 'search'"
-          :link-props="{ type: 'button' }"
-          @click="selectTab('search')"
-        >
-          <template #icon
-            ><k-icon><Search class="w-7 h-7" /></k-icon
-          ></template>
-          <template #label>{{ phone.t('Apps.music.tabs.search') }}</template>
-        </k-tabbar-link>
-      </k-toolbar-pane>
-    </k-tabbar>
+          <span class="music-navigation__item">
+            <component
+              :is="item.icon"
+              :size="20"
+              :stroke-width="2"
+              aria-hidden="true"
+            />
+            <span>{{ phone.t(`Apps.music.tabs.${item.id}`) }}</span>
+          </span>
+        </SkySegmentedButton>
+      </SkySegmented>
+    </SkyPillNavigation>
 
     <button
       v-if="addMenuOpened || actionMenuOpened"
@@ -1458,6 +1455,11 @@ onBeforeUnmount(() => {
 <style scoped>
 .music-app {
   --music-accent: #fa2d48;
+  --music-mini-player-bottom: calc(
+    var(--sky-safe-area-bottom) + var(--sky-tabbar-height) + var(--sky-space-2)
+  );
+  --music-mini-player-height: 58px;
+  --sky-app-accent: var(--music-accent);
   --music-bg: #f7f7fa;
   --music-card: rgb(255 255 255 / 88%);
   --music-label: #111114;
@@ -1498,7 +1500,11 @@ onBeforeUnmount(() => {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  padding: 8px 0 24px;
+  padding: 8px 0
+    calc(
+      var(--sky-safe-area-bottom) + var(--sky-tabbar-height) +
+        var(--sky-space-3)
+    );
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
@@ -1506,7 +1512,10 @@ onBeforeUnmount(() => {
 }
 
 .music-app--playing .music-scroll {
-  padding-bottom: 82px;
+  padding-bottom: calc(
+    var(--music-mini-player-bottom) + var(--music-mini-player-height) +
+      var(--sky-space-3)
+  );
 }
 
 .music-app--playlist .music-scroll {
@@ -1835,9 +1844,9 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 32;
   right: 8px;
-  bottom: 111px;
+  bottom: var(--music-mini-player-bottom);
   left: 8px;
-  height: 58px;
+  height: var(--music-mini-player-height);
   padding: 6px 10px 6px 7px;
   border-radius: 17px;
   display: grid;
@@ -1888,18 +1897,25 @@ onBeforeUnmount(() => {
   color: var(--music-label);
 }
 
-.music-tabbar {
+.music-navigation {
   z-index: 31;
-  flex: 0 0 auto;
 }
 
-.music-tabbar :deep(.k-toolbar-pane) {
-  width: 100% !important;
+.music-navigation__item {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1;
 }
 
-.music-tabbar :deep(.k-toolbar-pane > .k-link) {
-  min-width: 0 !important;
-  flex: 1 1 33.333%;
+.music-navigation__item > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .music-form-sheet,

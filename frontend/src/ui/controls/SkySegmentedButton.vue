@@ -5,11 +5,13 @@ withDefaults(
   defineProps<{
     active?: boolean
     disabled?: boolean
+    tab?: boolean
     type?: 'button' | 'reset' | 'submit'
   }>(),
   {
     active: false,
     disabled: false,
+    tab: false,
     type: 'button',
   },
 )
@@ -24,7 +26,9 @@ defineEmits<{
     v-bind="$attrs"
     class="sky-segmented-button"
     :class="{ 'sky-segmented-button--active': active }"
-    :aria-pressed="active"
+    :role="tab ? 'tab' : undefined"
+    :aria-pressed="tab ? undefined : active"
+    :aria-selected="tab ? active : undefined"
     :disabled="disabled"
     :type="type"
     @click="$emit('click', $event)"

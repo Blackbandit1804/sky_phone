@@ -3,16 +3,25 @@ defineOptions({ inheritAttrs: false })
 
 withDefaults(
   defineProps<{
+    component?: string
+    small?: boolean
     tone?: 'danger' | 'info' | 'neutral' | 'success' | 'warning'
   }>(),
   {
+    component: 'span',
+    small: false,
     tone: 'neutral',
   },
 )
 </script>
 
 <template>
-  <span v-bind="$attrs" class="sky-badge" :class="`sky-badge--${tone}`">
+  <component
+    :is="component"
+    v-bind="$attrs"
+    class="sky-badge"
+    :class="[`sky-badge--${tone}`, { 'sky-badge--small': small }]"
+  >
     <slot />
-  </span>
+  </component>
 </template>

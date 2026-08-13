@@ -77,7 +77,7 @@ describe('preferences', () => {
 
     expect(value.settings.appearanceMode).toBe('automatic')
     expect(value.settings.frame).toBe('black')
-    expect(value.settings.graphicsMode).toBe('performance')
+    expect(value.settings.graphicsMode).toBe('ultimate')
     expect(value.settings.notificationVolume).toBe(0)
     expect(value.settings.notificationDurationSeconds).toBe(30)
     expect(value.settings.phoneScale).toBe(150)
@@ -127,7 +127,7 @@ describe('preferences', () => {
       bluetoothEnabled: true,
       cellularEnabled: true,
       focusMode: false,
-      graphicsMode: 'performance',
+      graphicsMode: 'ultimate',
       screenBrightness: 100,
       wifiEnabled: true,
     })

@@ -193,6 +193,20 @@ Config.Messages = {
     DeleteBatchSize = 20,
 }
 
+Config.Memos = {
+    MaximumCount = 100,
+    MaximumDurationMs = 300000,
+    MaximumBytes = 2 * 1024 * 1024,
+    MaximumWaveformSamples = 96,
+    TitleMaxLength = 120,
+    NoteMaxLength = 2000,
+    UploadsPerMinute = 10,
+    WritesPerMinute = 60,
+    ListsPerMinute = 60,
+    MaximumPendingUploads = 1,
+    UploadSessionTimeoutMs = 60000,
+}
+
 Config.EasyShare = {
     Enabled = true,
     DefaultVisibility = "everyone", -- everyone, contacts or hidden
@@ -475,6 +489,8 @@ Config.Calendar = {
 Config.SkyRide = {
     PaymentAccount = "bank",
     Currency = "$",
+    ProfileNameMinLength = 2,
+    ProfileNameMaxLength = 50,
     DistanceUnit = "kilometer", -- kilometer or mile
     QuoteLifetimeSeconds = 120,
     HistoryLimit = 50,
