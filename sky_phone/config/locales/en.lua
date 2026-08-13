@@ -1141,7 +1141,11 @@ Locales["en"] = {
                     device_locked = "Unlock the phone to manage your homes.", request_failed = "The housing request failed.", default = "The housing request failed.",
                  },
             },
-            calculator = { name = "Calculator" },
+            calculator = {
+                name = "Calculator", history = "Calculation history", changeMode = "Change calculator mode",
+                scientificFunctions = "Scientific functions", edit = "Edit", done = "Done", closeHistory = "Close history",
+                today = "Today", yesterday = "Yesterday", earlier = "Earlier", noHistory = "No calculations yet", clearHistory = "Clear History",
+            },
             snake = {
                 name = "Snake", backToMenu = "Back to game menu", board = "Snake game board",
                 controls = "Direction controls",
