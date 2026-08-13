@@ -26,7 +26,7 @@ describe('GarageApp Sky UI contract', () => {
   it('raises only the Garage title block', () => {
     expect(source).toContain('class="garage-navbar"')
     expect(source).toMatch(
-      /\.garage-navbar :deep\(\.sky-navbar__title-container > div\)\s*\{[^}]*translateY\(-6px\)/s,
+      /\.garage-navbar :deep\(\.sky-navbar__title-container > div\)\s*\{[^}]*translateY\(-14px\)/s,
     )
   })
 })

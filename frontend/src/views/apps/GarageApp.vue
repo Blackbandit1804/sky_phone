@@ -564,7 +564,7 @@ onBeforeUnmount(() => {
   --garage-separator: var(--sky-hairline);
 }
 .garage-navbar :deep(.sky-navbar__title-container > div) {
-  transform: translateY(-6px);
+  transform: translateY(-14px);
 }
 .garage-scroll {
   padding-top: 0;
