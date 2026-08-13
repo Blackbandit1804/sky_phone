@@ -19,6 +19,7 @@ import {
   Share2,
   ShieldCheck,
   ShieldOff,
+  Smile,
   Trash2,
   UserRound,
   UserMinus,
@@ -1059,7 +1060,7 @@ onBeforeUnmount(() => {
 }
 
 .dc-inbox-navbar :deep(.sky-navbar__title-container > div) {
-  transform: translateY(-6px);
+  transform: translateY(-14px);
 }
 
 .dc-scroll-content {
@@ -1432,17 +1433,44 @@ onBeforeUnmount(() => {
 
 .dc-attachments {
   display: grid;
-  padding: 10px 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  padding: 9px 10px 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
   border-top: 1px solid var(--dc-border);
   background: var(--dc-surface);
 }
 
-.dc-attachments :deep(.sky-button) {
+.dc-attachment-action {
   min-width: 0;
-  min-height: 42px;
-  font-size: 11px;
+  min-height: 72px;
+  display: flex;
+  padding: 7px 2px 6px;
+  align-items: center;
+  flex-direction: column;
+  gap: 5px;
+  border-radius: 18px;
+  color: var(--dc-label);
+}
+
+.dc-attachment-action > span {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  border-radius: 50%;
+  color: var(--dc-accent);
+  background: var(--sky-app-accent-soft);
+  place-items: center;
+}
+
+.dc-attachment-action > small {
+  width: 100%;
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 12px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dc-gif-panel {
@@ -2093,21 +2121,46 @@ onBeforeUnmount(() => {
           <SkyLink icon-only @click="replyTo = null"><X :size="17" /></SkyLink>
         </div>
         <div v-if="attachmentOpen" class="dc-attachments">
-          <SkyButton tonal rounded @click="openMediaApp('photos', 'photo')">
-            <Images :size="19" />{{ t('attachPhoto') }}
-          </SkyButton>
-          <SkyButton tonal rounded @click="openMediaApp('camera', 'photo')">
-            <Camera :size="19" />{{ t('takePhoto') }}
-          </SkyButton>
-          <SkyButton tonal rounded @click="openEmojiPanel">
-            <span>😀</span>{{ t('emoji') }}
-          </SkyButton>
-          <SkyButton tonal rounded @click="openGifPanel">
-            <ImagePlay :size="19" />{{ t('attachGif') }}
-          </SkyButton>
-          <SkyButton tonal rounded @click="openMediaApp('photos', 'video')">
-            <Video :size="19" />{{ t('attachVideo') }}
-          </SkyButton>
+          <SkyGlass
+            component="button"
+            class="dc-attachment-action"
+            @click="openMediaApp('photos', 'photo')"
+          >
+            <span><Images :size="19" /></span>
+            <small>{{ t('photo') }}</small>
+          </SkyGlass>
+          <SkyGlass
+            component="button"
+            class="dc-attachment-action"
+            @click="openMediaApp('camera', 'photo')"
+          >
+            <span><Camera :size="19" /></span>
+            <small>{{ t('takePhoto') }}</small>
+          </SkyGlass>
+          <SkyGlass
+            component="button"
+            class="dc-attachment-action"
+            @click="openEmojiPanel"
+          >
+            <span><Smile :size="19" /></span>
+            <small>{{ t('emoji') }}</small>
+          </SkyGlass>
+          <SkyGlass
+            component="button"
+            class="dc-attachment-action"
+            @click="openGifPanel"
+          >
+            <span><ImagePlay :size="19" /></span>
+            <small>{{ t('gif') }}</small>
+          </SkyGlass>
+          <SkyGlass
+            component="button"
+            class="dc-attachment-action"
+            @click="openMediaApp('photos', 'video')"
+          >
+            <span><Video :size="19" /></span>
+            <small>{{ t('video') }}</small>
+          </SkyGlass>
         </div>
         <SkyCard v-if="gifOpen" class="dc-gif-panel" outline>
           <header>

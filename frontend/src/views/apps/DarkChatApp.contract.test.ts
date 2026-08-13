@@ -60,10 +60,24 @@ describe('DarkChatApp Sky UI contract', () => {
     )
   })
 
+  it('presents attachments as a compact five-action Sky glass rail', () => {
+    const attachmentsStart = source.indexOf(
+      'v-if="attachmentOpen" class="dc-attachments"',
+    )
+    const attachmentsEnd = source.indexOf('</div>', attachmentsStart)
+    const attachments = source.slice(attachmentsStart, attachmentsEnd)
+
+    expect(attachments.match(/class="dc-attachment-action"/g)).toHaveLength(5)
+    expect(attachments.match(/<SkyGlass/g)).toHaveLength(5)
+    expect(source).toMatch(
+      /\.dc-attachments\s*\{[^}]*grid-template-columns:\s*repeat\(5,/s,
+    )
+  })
+
   it('raises only the DarkChat inbox title block', () => {
     expect(source).toContain('class="dc-inbox-navbar"')
     expect(source).toMatch(
-      /\.dc-inbox-navbar :deep\(\.sky-navbar__title-container > div\)\s*\{[^}]*translateY\(-6px\)/s,
+      /\.dc-inbox-navbar :deep\(\.sky-navbar__title-container > div\)\s*\{[^}]*translateY\(-14px\)/s,
     )
   })
 })
