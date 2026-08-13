@@ -44,6 +44,7 @@ local server_callbacks = {
     "mail:get-draft",
     "mail:save-draft",
     "mail:delete-draft",
+    "mail:delete-many",
     "mail:send",
     "mail:set-read",
     "mail:trash",

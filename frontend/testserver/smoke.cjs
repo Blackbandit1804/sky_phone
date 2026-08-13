@@ -297,7 +297,73 @@ async function verifyStatefulActions(baseUrl) {
     true,
   )
   assert.equal(storedDraft.subject, 'Browser test mail')
-  await expectSuccess(baseUrl, 'mail:delete-draft', { id: draft.id })
+  await expectSuccess(baseUrl, 'mail:delete-many', {
+    folder: 'drafts',
+    ids: [draft.id],
+  })
+  const drafts = await expectSuccess(
+    baseUrl,
+    'mail:list',
+    { folder: 'drafts' },
+    true,
+  )
+  assert.equal(drafts.items.length, 0, 'mail:delete-many kept selected draft')
+
+  await expectSuccess(baseUrl, 'mail:delete-many', {
+    folder: 'inbox',
+    ids: [1],
+  })
+  const inbox = await expectSuccess(
+    baseUrl,
+    'mail:list',
+    { folder: 'inbox' },
+    true,
+  )
+  assert(
+    inbox.items.some((message) => message.id === 2),
+    'mail:delete-many removed a non-selected inbox message',
+  )
+  const trash = await expectSuccess(
+    baseUrl,
+    'mail:list',
+    { folder: 'trash' },
+    true,
+  )
+  assert(
+    trash.items.some((message) => message.id === 1),
+    'mail:delete-many did not move selected inbox mail to trash',
+  )
+
+  await expectSuccess(baseUrl, 'mail:delete-many', {
+    folder: 'sent',
+    ids: [3],
+  })
+  const sent = await expectSuccess(
+    baseUrl,
+    'mail:list',
+    { folder: 'sent' },
+    true,
+  )
+  assert.equal(sent.items.length, 0, 'mail:delete-many kept selected sent mail')
+
+  await expectSuccess(baseUrl, 'mail:delete-many', {
+    folder: 'trash',
+    ids: [1],
+  })
+  const remainingTrash = await expectSuccess(
+    baseUrl,
+    'mail:list',
+    { folder: 'trash' },
+    true,
+  )
+  assert(
+    !remainingTrash.items.some((message) => message.id === 1),
+    'mail:delete-many kept permanently deleted trash mail',
+  )
+  assert(
+    remainingTrash.items.some((message) => message.id === 4),
+    'mail:delete-many removed non-selected trash mail',
+  )
 }
 
 async function main() {

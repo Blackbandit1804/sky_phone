@@ -86,6 +86,74 @@ describe('mail store', () => {
     })
   })
 
+  it('deletes selected mail in one batch and reloads the remaining entries', async () => {
+    const remaining = listItem(3)
+    mockNuiCall
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ data: counts, success: true })
+      .mockResolvedValueOnce({
+        data: { hasMore: false, items: [remaining], offset: 0 },
+        success: true,
+      })
+
+    const mail = useMailStore()
+    mail.folder = 'sent'
+    mail.search = 'plans'
+    mail.items = [listItem(1), listItem(2), remaining]
+
+    const success = await mail.deleteMany([1, 2])
+
+    expect(success).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledTimes(3)
+    expect(mockNuiCall).toHaveBeenNthCalledWith(1, 'mail:delete-many', {
+      folder: 'sent',
+      ids: [1, 2],
+    })
+    expect(mockNuiCall).toHaveBeenNthCalledWith(2, 'mail:counts')
+    expect(mockNuiCall).toHaveBeenNthCalledWith(3, 'mail:list', {
+      folder: 'sent',
+      offset: 0,
+      search: 'plans',
+    })
+    expect(mail.items.map((item) => item.id)).toEqual([3])
+  })
+
+  it('does not refresh a cleared session after a batch delete returns', async () => {
+    let resolveDelete!: (response: NuiResponse) => void
+    mockNuiCall.mockReturnValueOnce(
+      new Promise<NuiResponse>((resolve) => {
+        resolveDelete = resolve
+      }),
+    )
+    const mail = useMailStore()
+
+    const deletion = mail.deleteMany([1, 2])
+    await mail.bootstrap('')
+    resolveDelete({ success: true })
+
+    expect(await deletion).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends the mail read state with the server contract field', async () => {
+    mockNuiCall
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ data: counts, success: true })
+      .mockResolvedValueOnce({
+        data: { hasMore: false, items: [listItem(2)], offset: 0 },
+        success: true,
+      })
+    const mail = useMailStore()
+
+    expect(await mail.mutateEntry('mail:set-read', 2, { read: true })).toBe(
+      true,
+    )
+    expect(mockNuiCall).toHaveBeenNthCalledWith(1, 'mail:set-read', {
+      id: 2,
+      read: true,
+    })
+  })
+
   it('logs out the active session and resets mailbox state', async () => {
     mockNuiCall
       .mockResolvedValueOnce({

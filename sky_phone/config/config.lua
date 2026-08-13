@@ -240,6 +240,8 @@ Config.Mail = {
     MaxRecipients = 10,
     PageSize = 50,
     AuthAttemptsPerMinute = 5,
+    DeleteBatchSize = 50,
+    DeleteRequestsPerMinute = 12,
 }
 
 Config.Banking = {

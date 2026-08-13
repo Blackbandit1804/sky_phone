@@ -1389,7 +1389,9 @@ const accountDevices = [
 const messages = [
   {
     body: '## Welcome to iFruit Mail\n\nYour shared mailbox is **ready to use**.\n\n- Send formatted messages\n- Keep drafts on every linked device\n- Reply without losing the conversation\n\n> Tip: use the small formatting bar while composing.',
-    created_at: '2026-08-04 11:30:00',
+    // Database dates may cross the NUI boundary as Unix timestamps.
+    // Keep one received message numeric so the browser preview covers that contract.
+    created_at: Date.parse('2026-08-04T11:30:00'),
     folder: 'inbox',
     id: 1,
     is_read: false,
@@ -7064,7 +7066,13 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'housing:overview') {
-    response.json({ success: true, data: mockHousingOverview })
+    response.json({
+      success: true,
+      data:
+        testScenario === 'house-empty'
+          ? { ...mockHousingOverview, properties: [] }
+          : mockHousingOverview,
+    })
     return
   }
   if (endpoint === 'housing:key-candidates') {
@@ -9001,6 +9009,41 @@ app.post('/api/:endpoint', (request, response) => {
   if (endpoint === 'mail:send') {
     draft = null
     response.json({ success: true, data: { id: 'mock-sent-message' } })
+    return
+  }
+  if (endpoint === 'mail:delete-many') {
+    const { folder, ids } = request.body
+    if (
+      !['drafts', 'inbox', 'sent', 'trash'].includes(folder) ||
+      !Array.isArray(ids)
+    ) {
+      response.json({ success: false, error: 'invalid_request' })
+      return
+    }
+
+    const selectedIds = new Set(ids.map(String))
+    if (folder === 'drafts') {
+      if (draft && selectedIds.has(String(draft.id))) draft = null
+    } else if (folder === 'trash') {
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index]
+        if (message.trashed_at && selectedIds.has(String(message.id))) {
+          messages.splice(index, 1)
+        }
+      }
+    } else {
+      for (const message of messages) {
+        if (
+          message.folder === folder &&
+          !message.trashed_at &&
+          selectedIds.has(String(message.id))
+        ) {
+          message.trashed_at = '2026-08-04 12:00:00'
+        }
+      }
+    }
+
+    response.json({ success: true })
     return
   }
   if (endpoint === 'mail:trash' || endpoint === 'mail:restore') {

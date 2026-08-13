@@ -1,5 +1,13 @@
 Bridge.Database.AfterMigration("sky_phone", function()
 
+local MAX_SAFE_INTEGER = 9007199254740991
+local DELETE_FOLDERS = {
+    drafts = true,
+    inbox = true,
+    sent = true,
+    trash = true,
+}
+
 local function trim(value)
     if type(value) ~= "string" then
         return nil
@@ -89,6 +97,79 @@ local function normalize_recipients(values, strict)
     end
 
     return recipients
+end
+
+local function normalize_delete_ids(folder, values)
+    if type(values) ~= "table" then
+        return nil
+    end
+
+    local input_count = 0
+    for key in pairs(values) do
+        if type(key) ~= "number"
+            or key < 1
+            or key > Config.Mail.DeleteBatchSize
+            or key ~= math.floor(key)
+        then
+            return nil
+        end
+        input_count = input_count + 1
+    end
+    if input_count == 0 or input_count > Config.Mail.DeleteBatchSize then
+        return nil
+    end
+
+    local ids = {}
+    local seen = {}
+    for index = 1, input_count do
+        local value = values[index]
+        if value == nil then
+            return nil
+        end
+
+        local id
+        if folder == "drafts" then
+            if type(value) ~= "string"
+                or not value:match(
+                    "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$"
+                )
+            then
+                return nil
+            end
+            id = value:lower()
+        else
+            if type(value) ~= "number"
+                or value ~= value
+                or value < 1
+                or value > MAX_SAFE_INTEGER
+                or value ~= math.floor(value)
+            then
+                return nil
+            end
+            id = value
+        end
+
+        if not seen[id] then
+            seen[id] = true
+            ids[#ids + 1] = id
+        end
+    end
+
+    return ids
+end
+
+local function make_placeholders(count)
+    local placeholders = {}
+    for index = 1, count do
+        placeholders[index] = "?"
+    end
+    return table.concat(placeholders, ", ")
+end
+
+local function append_values(target, values)
+    for index = 1, #values do
+        target[#target + 1] = values[index]
+    end
 end
 
 local function require_session(source)
@@ -558,6 +639,94 @@ Bridge.Callbacks.Register("sky_phone:mail:delete-forever", function(source, data
         LEFT JOIN `sky_phone_mail_entries` e ON e.`message_id` = m.`id`
         WHERE e.`id` IS NULL
     ]], {})
+    broadcast_mailbox_changed(session.id)
+    return { success = true }
+end)
+
+Bridge.Callbacks.Register("sky_phone:mail:delete-many", function(source, data)
+    local session, error_response = require_session(source)
+    if not session then
+        return error_response
+    end
+    if not SkyPhone.AllowOperation(source, "mail_delete_many", Config.Mail.DeleteRequestsPerMinute, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+
+    data = validate_payload(source, "delete-many", data)
+    if not data then
+        return { success = false, error = "invalid_request" }
+    end
+
+    local folder = data.folder
+    if type(folder) ~= "string" or not DELETE_FOLDERS[folder] then
+        return { success = false, error = "invalid_folder" }
+    end
+
+    local ids = normalize_delete_ids(folder, data.ids)
+    if not ids then
+        return { success = false, error = "invalid_request" }
+    end
+
+    local placeholders = make_placeholders(#ids)
+    if folder == "drafts" then
+        local parameters = { session.id }
+        append_values(parameters, ids)
+        Bridge.Database.Query(([[
+            DELETE FROM `sky_phone_mail_drafts`
+            WHERE `account_id` = ? AND `id` IN (%s)
+        ]]):format(placeholders), parameters)
+    elseif folder == "inbox" or folder == "sent" then
+        local parameters = { session.id, folder }
+        append_values(parameters, ids)
+        Bridge.Database.Query(([[
+            UPDATE `sky_phone_mail_entries` SET `trashed_at` = CURRENT_TIMESTAMP
+            WHERE `account_id` = ? AND `folder` = ? AND `trashed_at` IS NULL
+                AND `id` IN (%s)
+        ]]):format(placeholders), parameters)
+    else
+        local orphan_parameters = { session.id }
+        append_values(orphan_parameters, ids)
+        orphan_parameters[#orphan_parameters + 1] = session.id
+        append_values(orphan_parameters, ids)
+
+        local delete_parameters = { session.id }
+        append_values(delete_parameters, ids)
+
+        local statements = {
+            {
+                query = ([[
+                    DELETE m
+                    FROM `sky_phone_mail_messages` m
+                    JOIN `sky_phone_mail_entries` target ON target.`message_id` = m.`id`
+                    WHERE target.`account_id` = ? AND target.`trashed_at` IS NOT NULL
+                        AND target.`id` IN (%s)
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM `sky_phone_mail_entries` remaining
+                            WHERE remaining.`message_id` = m.`id`
+                                AND NOT (
+                                    remaining.`account_id` = ?
+                                    AND remaining.`trashed_at` IS NOT NULL
+                                    AND remaining.`id` IN (%s)
+                                )
+                        )
+                ]]):format(placeholders, placeholders),
+                params = orphan_parameters,
+            },
+            {
+                query = ([[
+                    DELETE FROM `sky_phone_mail_entries`
+                    WHERE `account_id` = ? AND `trashed_at` IS NOT NULL
+                        AND `id` IN (%s)
+                ]]):format(placeholders),
+                params = delete_parameters,
+            },
+        }
+        if not Bridge.Database.Transaction(statements) then
+            return { success = false, error = "request_failed" }
+        end
+    end
+
     broadcast_mailbox_changed(session.id)
     return { success = true }
 end)

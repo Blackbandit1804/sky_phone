@@ -209,6 +209,21 @@ export const useMailStore = defineStore('mail', () => {
     return response.success
   }
 
+  async function deleteMany(ids: Array<number | string>): Promise<boolean> {
+    const activeFolder = folder.value
+    const session = sessionGeneration
+    const response = await nuiCall('mail:delete-many', {
+      folder: activeFolder,
+      ids,
+    })
+    if (!response.success || session !== sessionGeneration) {
+      return response.success
+    }
+
+    await Promise.all([refreshCounts(), loadFolder(folder.value, search.value)])
+    return true
+  }
+
   async function emptyTrash(): Promise<boolean> {
     const response = await nuiCall('mail:empty-trash')
     if (response.success) {
@@ -222,6 +237,7 @@ export const useMailStore = defineStore('mail', () => {
     bootstrap,
     counts,
     deleteDraft,
+    deleteMany,
     emptyTrash,
     folder,
     hasMore,
