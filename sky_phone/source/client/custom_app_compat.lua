@@ -388,6 +388,75 @@ local function close_phone_app(options)
     return core.CloseActive(owner_resource)
 end
 
+local function normalize_lb_notification_text(value, maximum_length, error_code)
+    if type(value) ~= "string" then
+        return nil, error_code
+    end
+
+    local normalized = value:match("^%s*(.-)%s*$")
+    if normalized == "" or #normalized > maximum_length then
+        return nil, error_code
+    end
+    return normalized
+end
+
+local function send_lb_notification(data)
+    local owner_resource, owner_error = get_calling_resource("SendNotification")
+    if not owner_resource then
+        return false, owner_error
+    end
+    if type(data) ~= "table" then
+        return false, "invalid_notification"
+    end
+
+    local app_id = data.app or data.identifier
+    local valid_app_id, app_id_error = SkyPhoneApps.ValidateAppId(app_id)
+    if not valid_app_id then
+        return false, app_id_error
+    end
+
+    local registered_record = provider_apps[app_id]
+    if registered_record then
+        local record, record_error = get_provider_app(owner_resource, app_id, {
+            [providers.lb] = true,
+        })
+        if not record then
+            return false, record_error
+        end
+    elseif not SkyPhoneApps.ReservedAppIds[app_id] then
+        return false, "app_not_found"
+    end
+
+    local title, title_error = normalize_lb_notification_text(
+        data.title,
+        128,
+        "invalid_notification_title"
+    )
+    if not title then
+        return false, title_error
+    end
+
+    local content, content_error = normalize_lb_notification_text(
+        data.content or data.message or data.text,
+        512,
+        "invalid_notification_text"
+    )
+    if not content then
+        return false, content_error
+    end
+
+    SendNUIMessage({
+        type = "notification:show",
+        data = {
+            appId = app_id,
+            route = "/apps/" .. app_id,
+            text = content,
+            title = title,
+        },
+    })
+    return true
+end
+
 local function register_high_server_app(owner_resource, definition, revision)
     if type(owner_resource) ~= "string"
         or type(definition) ~= "table"
@@ -570,9 +639,11 @@ exports("getCustomApps", get_quasar_apps)
 exports("OpenPhoneApp", open_quasar_app)
 exports("OpenApp", open_phone_app)
 exports("CloseApp", close_phone_app)
+exports("SendNotification", send_lb_notification)
 
 SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "OpenApp", open_phone_app)
 SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "CloseApp", close_phone_app)
+SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "SendNotification", send_lb_notification)
 
 SkyPhoneCompatibility.RegisterExportAlias("17mov_Phone", "AddApplication", add_17mov_application)
 SkyPhoneCompatibility.RegisterExportAlias("17mov_Phone", "RemoveApplication", remove_17mov_application)

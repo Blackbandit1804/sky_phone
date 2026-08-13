@@ -121,6 +121,7 @@ local lb_remove_custom_app = get_alias_export("lb-phone", "RemoveCustomApp")
 local lb_send_custom_app_message = get_alias_export("lb-phone", "SendCustomAppMessage")
 local lb_open_app = get_alias_export("lb-phone", "OpenApp")
 local lb_close_app = get_alias_export("lb-phone", "CloseApp")
+local lb_send_notification = get_alias_export("lb-phone", "SendNotification")
 local mov_add_application = get_alias_export("17mov_Phone", "AddApplication")
 local mov_remove_application = get_alias_export("17mov_Phone", "RemoveApplication")
 local mov_send_app_message = get_alias_export("17mov_Phone", "SendAppMessage")
@@ -157,6 +158,25 @@ for resource_name in pairs(expected_provider_resources) do
     assert(resource_start_events[resource_name], ("Missing %s provider start signal"):format(resource_name))
 end
 assert(yseries_get_data_loaded(), "YSeries must see the compatibility provider as loaded")
+
+invoking_resource = "sky_base"
+assert(lb_send_notification({
+    app = "calendar",
+    title = "Hospital",
+    content = "Your appointment has been confirmed.",
+}), "LB notifications for bundled phone apps must be accepted")
+local lb_notification_message = nui_messages[#nui_messages]
+assert(lb_notification_message.type == "notification:show", "LB notifications must reach the phone notification UI")
+assert(lb_notification_message.data.appId == "calendar", "LB notifications must preserve the target app")
+assert(lb_notification_message.data.route == "/apps/calendar", "LB notifications must link to the target app")
+assert(lb_notification_message.data.text == "Your appointment has been confirmed.", "LB notification content must be preserved")
+
+local unknown_notification_success, unknown_notification_error = lb_send_notification({
+    app = "unknown-provider-app",
+    title = "Hospital",
+    content = "Unknown target",
+})
+assert(not unknown_notification_success and unknown_notification_error == "app_not_found", "LB notifications must reject unknown app IDs")
 
 invoking_resource = "lb_app"
 local lifecycle_response_delivered = false
