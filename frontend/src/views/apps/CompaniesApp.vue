@@ -1197,7 +1197,12 @@ onBeforeUnmount(() => {
       with-tabbar
     >
       <div class="companies-segment-wrap">
-        <SkySegmented>
+        <SkySegmented
+          :active-index="requestList === 'open' ? 0 : 1"
+          :aria-label="phone.t('Apps.companies.tabs.requests')"
+          :item-count="2"
+          navigation
+        >
           <SkySegmentedButton
             :active="requestList === 'open'"
             @click="requestList = 'open'"

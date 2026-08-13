@@ -10,6 +10,13 @@ const navigationSource = source.slice(
   source.indexOf('<SkyPillNavigation'),
   source.indexOf('</SkyPillNavigation>') + '</SkyPillNavigation>'.length,
 )
+const requestFilterSource = source.slice(
+  source.indexOf('<div class="companies-segment-wrap">'),
+  source.indexOf(
+    '</div>',
+    source.indexOf('<div class="companies-segment-wrap">'),
+  ) + '</div>'.length,
+)
 
 describe('CompaniesApp Sky pill navigation contract', () => {
   it('uses the full-width sliding glass navigation on the root screen', () => {
@@ -39,5 +46,18 @@ describe('CompaniesApp Sky pill navigation contract', () => {
 
   it('retains tabbar-aware padding on all three root scroll owners', () => {
     expect(source.match(/with-tabbar/g)).toHaveLength(3)
+  })
+
+  it('uses the shared sliding Glass system for the request-state filter', () => {
+    expect(requestFilterSource).toContain('<SkySegmented')
+    expect(requestFilterSource).toContain('navigation')
+    expect(requestFilterSource).toContain(':item-count="2"')
+    expect(requestFilterSource).toContain(
+      ':active-index="requestList === \'open\' ? 0 : 1"',
+    )
+    expect(requestFilterSource).toContain(
+      ':aria-label="phone.t(\'Apps.companies.tabs.requests\')"',
+    )
+    expect(requestFilterSource.match(/<SkySegmentedButton\b/g)).toHaveLength(2)
   })
 })
