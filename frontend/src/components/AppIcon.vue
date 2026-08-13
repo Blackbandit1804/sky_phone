@@ -12,6 +12,10 @@ import { useMarketplaceStore } from '@/stores/marketplace'
 import { useDarkChatStore } from '@/stores/darkchat'
 import { usePhoneStore } from '@/stores/phone'
 import type { PhoneAppDefinition } from '@/types/apps'
+import {
+  reorderDirectionFromKeyboard,
+  type ReorderDirection,
+} from '@/utils/keyboard'
 
 const props = withDefaults(
   defineProps<{
@@ -33,6 +37,7 @@ const emit = defineEmits<{
   dragstart: [event: PointerEvent]
   edit: []
   remove: []
+  reorder: [direction: ReorderDirection]
 }>()
 
 const phone = usePhoneStore()
@@ -65,6 +70,8 @@ const suppressClick = ref(false)
 let holdTimer: number | undefined
 let calendarTimer: number | undefined
 let pointerStart = { x: 0, y: 0 }
+let pointerTarget: HTMLElement | null = null
+let pointerId: number | null = null
 
 watch(
   () => props.app.iconImage,
@@ -135,6 +142,9 @@ function clearHold(): void {
 
 function onPointerDown(event: PointerEvent): void {
   if (props.compact || event.button !== 0) return
+  pointerTarget = event.currentTarget as HTMLElement
+  pointerId = event.pointerId
+  pointerTarget.setPointerCapture(pointerId)
   pointerStart = { x: event.clientX, y: event.clientY }
   clearHold()
   if (props.editMode) {
@@ -173,35 +183,48 @@ function beginPointerDrag(event: PointerEvent): void {
       .closest<HTMLElement>('.springboard-page')
       ?.getBoundingClientRect().width ?? 0
   isDragging.value = true
-  window.addEventListener('pointermove', onPointerMove)
-  window.addEventListener('pointerup', onPointerUp)
-  window.addEventListener('pointercancel', cancelPointerDrag)
   emit('dragstart', event)
 }
 
 function onPointerUp(event: PointerEvent): void {
   clearHold()
-  if (!isDragging.value) return
-  suppressClick.value = true
-  emit('dragend', event)
-  isDragging.value = false
-  dragOffset.value = { x: 0, y: 0 }
-  removeDragListeners()
+  if (isDragging.value) {
+    suppressClick.value = true
+    emit('dragend', event)
+    isDragging.value = false
+    dragOffset.value = { x: 0, y: 0 }
+  }
+  releasePointerCapture()
 }
 
 function cancelPointerDrag(): void {
   clearHold()
-  if (!isDragging.value) return
+  const wasDragging = isDragging.value
   isDragging.value = false
   dragOffset.value = { x: 0, y: 0 }
-  removeDragListeners()
-  emit('dragcancel')
+  releasePointerCapture()
+  if (wasDragging) emit('dragcancel')
 }
 
-function removeDragListeners(): void {
-  window.removeEventListener('pointermove', onPointerMove)
-  window.removeEventListener('pointerup', onPointerUp)
-  window.removeEventListener('pointercancel', cancelPointerDrag)
+function releasePointerCapture(): void {
+  if (
+    pointerTarget &&
+    pointerId !== null &&
+    pointerTarget.hasPointerCapture(pointerId)
+  ) {
+    pointerTarget.releasePointerCapture(pointerId)
+  }
+  pointerTarget = null
+  pointerId = null
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (!props.editMode) return
+  const direction = reorderDirectionFromKeyboard(event)
+  if (!direction) return
+  event.preventDefault()
+  event.stopPropagation()
+  emit('reorder', direction)
 }
 
 onMounted(() => {
@@ -214,7 +237,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearHold()
   if (calendarTimer !== undefined) window.clearInterval(calendarTimer)
-  removeDragListeners()
+  releasePointerCapture()
 })
 </script>
 
@@ -234,10 +257,15 @@ onBeforeUnmount(() => {
       type="button"
       :aria-label="getPhoneAppLabel(app, phone.t)"
       :aria-disabled="!app.route"
+      :aria-keyshortcuts="
+        editMode ? 'ArrowLeft ArrowRight ArrowUp ArrowDown' : undefined
+      "
       @click="launch"
       @contextmenu.prevent
+      @keydown="onKeydown"
       @pointercancel="cancelPointerDrag"
       @pointerdown="onPointerDown"
+      @lostpointercapture="cancelPointerDrag"
       @pointerleave="isDragging || clearHold()"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"

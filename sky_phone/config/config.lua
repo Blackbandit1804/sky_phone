@@ -20,6 +20,13 @@ Config.Phone = {
     DeviceName = "iFruit Phone",
 }
 
+Config.TestData = {
+    Enabled = true,
+    Command = "phonetestdata",
+    AdminOnly = false, -- enable only on development servers; every run is scoped to the executing player's phone
+    AdminGroups = { "admin", "superadmin" },
+}
+
 Config.CustomApps = {
     Enabled = true,
     BundledApps = true,
@@ -186,6 +193,20 @@ Config.Messages = {
     DeleteBatchSize = 20,
 }
 
+Config.EasyShare = {
+    Enabled = true,
+    DefaultVisibility = "everyone", -- everyone, contacts or hidden
+    MaximumDistance = 15.0,
+    HistoryLimit = 50,
+    PendingSeconds = 30,
+    TransferDurationMs = 3000,
+    RequestsPerMinute = 12,
+    BootstrapRequestsPerMinute = 30,
+    VisibilityUpdatesPerMinute = 10,
+    ActionsPerMinute = 30,
+    PayloadMaxBytes = 24000,
+}
+
 Config.DarkChat = {
     AliasMaxLength = 32,
     BodyMaxLength = 2000,
@@ -346,6 +367,9 @@ Config.Marketplace = {
 Config.LocalPages = {
     PageSize = 20,
     MaxImages = 6,
+    ProfileHandleMinLength = 3,
+    ProfileHandleMaxLength = 24,
+    ProfileBioMaxLength = 160,
     TitleMinLength = 5,
     TitleMaxLength = 80,
     BodyMinLength = 10,

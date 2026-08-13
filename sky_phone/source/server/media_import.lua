@@ -121,6 +121,24 @@ local function normalize_media(website, item)
         return nil, "import_media_not_allowed"
     end
 
+    local mime_type = type(item.mimeType) == "string"
+        and item.mimeType:lower():match("^%s*([^;%s]+)") or nil
+    if not mime_type or media_types_by_mime[mime_type] ~= media_type then
+        local path = type(item.url) == "string" and item.url:match("^https://[^/]+(/[^?#]*)") or nil
+        local extension = path and path:match("%.([%w]+)$") or nil
+        local mime_by_extension = {
+            gif = "image/gif",
+            jpeg = "image/jpeg",
+            jpg = "image/jpeg",
+            mov = "video/quicktime",
+            mp4 = "video/mp4",
+            png = "image/png",
+            webm = "video/webm",
+            webp = "image/webp",
+        }
+        mime_type = extension and mime_by_extension[extension:lower()] or nil
+    end
+
     local size = tonumber(item.size)
     if not size or size <= 0 or size ~= math.floor(size) then
         return nil, "invalid_import_media"
@@ -149,6 +167,7 @@ local function normalize_media(website, item)
         externalId = item.externalId,
         filename = filename,
         mediaType = media_type,
+        mimeType = mime_type,
         size = size,
         sourceId = website.Id,
         url = item.url,
@@ -274,7 +293,7 @@ local function select_owned_import(owner, source_id, remote_id)
     params[#params + 1] = source_id
     params[#params + 1] = remote_id
     local rows = Bridge.Database.Query(([[
-        SELECT `id`, `url`, `media_type` AS `mediaType`,
+        SELECT `id`, `url`, `media_type` AS `mediaType`, `mime_type` AS `mimeType`,
             UNIX_TIMESTAMP(`created_at`) * 1000 AS `createdAt`
         FROM `sky_phone_media`
         WHERE %s AND `origin` = 'website_import'
@@ -294,11 +313,12 @@ local function store_import(owner, media)
     if existing then
         Bridge.Database.Query([[
             UPDATE `sky_phone_media`
-            SET `url` = ?, `media_type` = ?, `verified_at` = CURRENT_TIMESTAMP
+            SET `url` = ?, `media_type` = ?, `mime_type` = ?, `verified_at` = CURRENT_TIMESTAMP
             WHERE `id` = ?
-        ]], { media.url, media.mediaType, existing.id })
+        ]], { media.url, media.mediaType, media.mimeType, existing.id })
         existing.url = media.url
         existing.mediaType = media.mediaType
+        existing.mimeType = media.mimeType
         return existing
     end
 
@@ -306,15 +326,15 @@ local function store_import(owner, media)
     if owner.account_id then
         result = Bridge.Database.Query([[
             INSERT IGNORE INTO `sky_phone_media`
-                (`account_id`, `device_imei`, `url`, `remote_id`, `media_type`, `origin`, `source_id`, `verified_at`)
-            VALUES (?, NULL, ?, ?, ?, 'website_import', ?, CURRENT_TIMESTAMP)
-        ]], { owner.account_id, media.url, media.externalId, media.mediaType, media.sourceId })
+                (`account_id`, `device_imei`, `url`, `remote_id`, `media_type`, `mime_type`, `origin`, `source_id`, `verified_at`)
+            VALUES (?, NULL, ?, ?, ?, ?, 'website_import', ?, CURRENT_TIMESTAMP)
+        ]], { owner.account_id, media.url, media.externalId, media.mediaType, media.mimeType, media.sourceId })
     else
         result = Bridge.Database.Query([[
             INSERT IGNORE INTO `sky_phone_media`
-                (`account_id`, `device_imei`, `url`, `remote_id`, `media_type`, `origin`, `source_id`, `verified_at`)
-            VALUES (NULL, ?, ?, ?, ?, 'website_import', ?, CURRENT_TIMESTAMP)
-        ]], { owner.imei, media.url, media.externalId, media.mediaType, media.sourceId })
+                (`account_id`, `device_imei`, `url`, `remote_id`, `media_type`, `mime_type`, `origin`, `source_id`, `verified_at`)
+            VALUES (NULL, ?, ?, ?, ?, ?, 'website_import', ?, CURRENT_TIMESTAMP)
+        ]], { owner.imei, media.url, media.externalId, media.mediaType, media.mimeType, media.sourceId })
     end
 
     local media_id = type(result) == "number" and result or (type(result) == "table" and tonumber(result.insertId))
@@ -455,6 +475,7 @@ function SkyPhoneMediaImport.ResolveUrl(source_id, url)
         externalId = external_id,
         filename = url_path:match("/([^/]+)$") or external_id,
         mediaType = media_type,
+        mimeType = content_type,
         size = content_length,
         url = trimmed_url,
     })

@@ -37,6 +37,7 @@ import {
   Plus,
   QrCode,
   Reply,
+  Share2,
   ShieldCheck,
   ShieldOff,
   Trash2,
@@ -45,13 +46,15 @@ import {
   Video,
   X,
 } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import DarkChatVoiceMessage from '@/components/DarkChatVoiceMessage.vue'
 import FullEmojiPicker from '@/components/FullEmojiPicker.vue'
+import SharedContentCard from '@/components/SharedContentCard.vue'
 import { useAccountStore } from '@/stores/account'
 import { useDarkChatStore } from '@/stores/darkchat'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { useMessagesStore } from '@/stores/messages'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
@@ -61,9 +64,11 @@ import type {
   DarkChatNotificationMode,
 } from '@/types/darkchat'
 import type { GifSearchResult } from '@/types/messages'
+import type { EasySharePayload } from '@/types/easyshare'
 import type { MediaType, PhoneMedia } from '@/types/media'
 import { copyText } from '@/utils/clipboard'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
+import { handleEnterAction } from '@/utils/keyboard'
 
 const VOICE_MAX_DURATION_MS = 60_000
 const VOICE_MAX_BYTES = 270_000
@@ -97,6 +102,7 @@ const darkSheetColors = {
 }
 const account = useAccountStore()
 const darkchat = useDarkChatStore()
+const easyShare = useEasyShareStore()
 const sms = useMessagesStore()
 const messageMedia = useMessageMediaStore()
 const phone = usePhoneStore()
@@ -107,6 +113,8 @@ const identifier = ref('')
 const pendingIdentifier = ref('')
 const safetyOpen = ref(false)
 const draft = ref('')
+const queuedSharePayload = ref<EasySharePayload | null>(null)
+const shareDraft = ref<EasySharePayload | null>(null)
 const aliasDraft = ref('')
 const contactAliasDraft = ref('')
 const notificationMode = ref<DarkChatNotificationMode>('private')
@@ -227,6 +235,7 @@ function preview(conversation: DarkChatConversationSummary): string {
   if (conversation.lastMessageType === 'gif') return `GIF · ${t('gif')}`
   if (conversation.lastMessageType === 'image') return `📷 ${t('photo')}`
   if (conversation.lastMessageType === 'video') return `▶ ${t('video')}`
+  if (conversation.lastMessageType === 'share') return `🔗 ${conversation.lastMessage}`
   if (conversation.lastMessageType === 'system') return t('securityUpdate')
   return conversation.lastMessage
 }
@@ -326,6 +335,10 @@ async function openConversation(conversationId: string): Promise<void> {
   }
   screen.value = 'thread'
   resetPanels()
+  if (queuedSharePayload.value) {
+    shareDraft.value = queuedSharePayload.value
+    queuedSharePayload.value = null
+  }
   await scrollBottom(false)
 }
 
@@ -336,6 +349,7 @@ function back(): void {
   }
   if (screen.value === 'thread') darkchat.closeThread()
   screen.value = 'inbox'
+  shareDraft.value = null
   resetPanels()
 }
 
@@ -403,19 +417,26 @@ async function confirmStart(): Promise<void> {
 
 async function sendText(): Promise<void> {
   const body = draft.value.trim()
-  if (!body || sending.value) return
+  if ((!body && !shareDraft.value) || sending.value) return
+  const shared = shareDraft.value
   draft.value = ''
+  shareDraft.value = null
   const outgoingReply = replyTo.value?.id
   replyTo.value = null
   resetPanels()
   sending.value = true
   const response = await darkchat.send({
     body,
-    messageType: 'text',
+    messageType: shared ? 'share' : 'text',
     replyToId: outgoingReply,
+    sharePayload: shared ?? undefined,
   })
   sending.value = false
-  if (!response.success) showToast(errorText(response.error))
+  if (!response.success) {
+    draft.value = body
+    shareDraft.value = shared
+    showToast(errorText(response.error))
+  }
   await scrollBottom()
 }
 
@@ -496,6 +517,46 @@ async function sendAttachment(media: PhoneMedia): Promise<void> {
 function copyMessage(message: DarkChatMessage): void {
   selectedMessage.value = null
   showToast(copyText(message.body) ? t('copied') : errorText())
+}
+
+async function openEasyShareDraft(): Promise<boolean> {
+  const shared = easyShare.consumeChatDraft('darkchat')
+  if (!shared) return false
+  if (!shared.targetId) {
+    darkchat.closeThread()
+    screen.value = 'inbox'
+    resetPanels()
+    queuedSharePayload.value = shared.payload
+    draft.value = ''
+    return true
+  }
+  if (!(await darkchat.openThread(shared.targetId))) {
+    showToast(errorText(darkchat.lastError ?? undefined))
+    return true
+  }
+  screen.value = 'thread'
+  resetPanels()
+  queuedSharePayload.value = null
+  shareDraft.value = shared.payload
+  draft.value = ''
+  await scrollBottom(false)
+  return true
+}
+
+function shareMessage(message: DarkChatMessage): void {
+  selectedMessage.value = null
+  useEasyShareStore().open({
+    appId: 'darkchat',
+    copyText: message.body || message.messageType,
+    id: message.id,
+    imageUrl:
+      message.messageType === 'image' || message.messageType === 'video'
+        ? message.mediaPayload
+        : undefined,
+    kind: 'text',
+    subtitle: active.value?.peer.alias,
+    title: message.body || message.messageType,
+  })
 }
 
 async function react(
@@ -646,6 +707,20 @@ function chooseSelection(value: number | string): void {
     selectNotificationMode(value)
   else if (selectionSheet.value === 'report') selectReportReason(value)
   selectionSheet.value = null
+}
+
+function shareIdentity(): void {
+  const profile = darkchat.profile
+  if (!profile) return
+  easyShare.open({
+    appId: 'darkchat',
+    copyText: `${profile.alias}\n${profile.darkId}\n${profile.inviteCode}`,
+    id: profile.id,
+    kind: 'profile',
+    link: `skyphone://darkchat/invite/${profile.inviteCode}`,
+    subtitle: profile.darkId,
+    title: profile.alias,
+  })
 }
 
 function copyIdentity(value: string): void {
@@ -818,11 +893,19 @@ function recordingTime(): string {
 
 onMounted(async () => {
   if (signedIn.value) await darkchat.bootstrap()
+  if (await openEasyShareDraft()) return
   if (!active.value) return
   screen.value = 'thread'
   const media = messageMedia.consume(`darkchat:${active.value.id}`)
   if (media) await sendAttachment(media)
 })
+
+watch(
+  () => easyShare.chatDraft,
+  (shared) => {
+    if (shared?.appId === 'darkchat') void openEasyShareDraft()
+  },
+)
 
 onBeforeUnmount(() => {
   discardRecording = true
@@ -1706,7 +1789,7 @@ onBeforeUnmount(() => {
   background: rgb(255 255 255 / 8%);
 }
 
-.dc-action-sheet {
+.dc-action-sheet :deep(.k-sheet) {
   max-height: 72%;
   padding: 7px 0 32px;
   overflow-y: auto;
@@ -1715,7 +1798,7 @@ onBeforeUnmount(() => {
   background: #111113;
 }
 
-.dc-selection-sheet {
+.dc-selection-sheet :deep(.k-sheet) {
   z-index: 1300;
   padding-top: 9px;
 }
@@ -2250,7 +2333,7 @@ onBeforeUnmount(() => {
               clear-button
               @input="setIdentifier"
               @clear="identifier = ''"
-              @keydown.enter.prevent="requestStart()"
+              @keydown.enter="handleEnterAction($event, requestStart)"
           /></k-list>
           <k-button
             large
@@ -2296,8 +2379,8 @@ onBeforeUnmount(() => {
             <k-button
               tonal
               rounded
-              @click="copyIdentity(darkchat.profile.inviteCode)"
-              ><Copy :size="16" />{{ darkchat.profile.inviteCode }}</k-button
+              @click="shareIdentity"
+              ><Share2 :size="16" />{{ phone.t('Apps.easyShare.shareProfile') }}</k-button
             >
           </k-card>
         </div>
@@ -2380,6 +2463,11 @@ onBeforeUnmount(() => {
               <DarkChatVoiceMessage
                 v-else-if="message.messageType === 'voice'"
                 :message="message"
+              />
+              <SharedContentCard
+                v-else-if="message.messageType === 'share' && message.sharePayload"
+                :payload="message.sharePayload"
+                variant="darkchat"
               />
               <span v-else class="dc-message-body">{{ message.body }}</span>
               <span
@@ -2473,6 +2561,19 @@ onBeforeUnmount(() => {
           @close="emojiOpen = false"
           @pick="appendEmoji"
         />
+        <div
+          v-if="shareDraft"
+          class="shared-composer-preview shared-composer-preview--dark"
+        >
+          <SharedContentCard compact :payload="shareDraft" variant="darkchat" />
+          <button
+            type="button"
+            :aria-label="phone.t('Common.close')"
+            @click="shareDraft = null"
+          >
+            <X :size="15" />
+          </button>
+        </div>
         <div v-if="recording" class="dc-recorder">
           <k-link
             component="button"
@@ -2501,7 +2602,7 @@ onBeforeUnmount(() => {
           :placeholder="t('message')"
           :colors="darkMessagebarColors"
           @input="setDraft"
-          @keydown.enter.exact.prevent="sendText"
+          @keydown.enter.exact="handleEnterAction($event, sendText)"
         >
           <template #left
             ><k-link
@@ -2514,7 +2615,7 @@ onBeforeUnmount(() => {
           ></template>
           <template #right
             ><k-link
-              v-if="draft.trim()"
+              v-if="draft.trim() || shareDraft"
               component="button"
               type="button"
               icon-only
@@ -2751,12 +2852,12 @@ onBeforeUnmount(() => {
       >
     </k-dialog>
 
-    <k-sheet
-      :opened="Boolean(selectedMessage)"
-      class="dc-action-sheet"
-      :colors="darkSheetColors"
-      @backdropclick="selectedMessage = null"
-    >
+    <div class="dc-action-sheet">
+      <k-sheet
+        :opened="Boolean(selectedMessage)"
+        :colors="darkSheetColors"
+        @backdropclick="selectedMessage = null"
+      >
       <template v-if="selectedMessage">
         <div class="dc-sheet-handle" />
         <div class="dc-reaction-row">
@@ -2770,6 +2871,14 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <k-list inset strong class="dc-action-list">
+          <k-list-item
+            link
+            link-component="button"
+            content-class="w-full"
+            :title="phone.t('Apps.easyShare.name')"
+            @click="shareMessage(selectedMessage)"
+            ><template #media><Share2 :size="20" /></template
+          ></k-list-item>
           <k-list-item
             link
             link-component="button"
@@ -2826,7 +2935,8 @@ onBeforeUnmount(() => {
           >{{ phone.t('Common.cancel') }}</k-button
         >
       </template>
-    </k-sheet>
+      </k-sheet>
+    </div>
 
     <k-dialog
       :opened="reportOpen"
@@ -2873,12 +2983,12 @@ onBeforeUnmount(() => {
       >
     </k-dialog>
 
-    <k-sheet
-      :opened="selectionSheet !== null"
-      class="dc-action-sheet dc-selection-sheet"
-      :colors="darkSheetColors"
-      @backdropclick="selectionSheet = null"
-    >
+    <div class="dc-action-sheet dc-selection-sheet">
+      <k-sheet
+        :opened="selectionSheet !== null"
+        :colors="darkSheetColors"
+        @backdropclick="selectionSheet = null"
+      >
       <div class="dc-sheet-handle" />
       <h3>{{ selectionTitle }}</h3>
       <k-list inset strong class="dc-action-list dc-selection-list">
@@ -2906,7 +3016,8 @@ onBeforeUnmount(() => {
         @click="selectionSheet = null"
         >{{ phone.t('Common.cancel') }}</k-button
       >
-    </k-sheet>
+      </k-sheet>
+    </div>
     <k-toast :opened="Boolean(toast)" position="center" class="dc-toast">{{
       toast
     }}</k-toast>

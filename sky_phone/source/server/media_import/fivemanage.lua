@@ -1,9 +1,9 @@
 local function api_key(website)
-    local value = website.ApiKey or Config.Media.FiveManage.ApiKey
-    if type(value) ~= "string" or value == "" or value == "YOUR_API_TOKEN" then
+    local convar = website.ApiKeyConvar or Config.Media.FiveManage.ApiKeyConvar
+    if type(convar) ~= "string" or convar == "" then
         return ""
     end
-    return value
+    return GetConvar(convar, "")
 end
 
 local function provider_error(response, not_found_error)
@@ -78,6 +78,7 @@ local function normalize_file(file)
         externalId = file.id,
         filename = file.filename,
         mediaType = media_type(file.type or file.mimeType),
+        mimeType = file.mimeType or file.type,
         size = file.size,
         url = file.url,
     }
@@ -152,6 +153,8 @@ local function probe_public_url(website, url)
         externalId = external_id,
         filename = url_path:match("/([^/]+)$") or external_id,
         mediaType = normalized_type,
+        mimeType = type(content_type) == "string"
+            and content_type:lower():match("^%s*([^;%s]+)") or nil,
         size = content_length,
         url = url,
     }

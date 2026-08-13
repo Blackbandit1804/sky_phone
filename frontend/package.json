@@ -11,7 +11,8 @@
     "typecheck": "vue-tsc --build",
     "lint": "eslint .",
     "format": "prettier --write src/ testserver/ build.cjs",
-    "test": "vitest run"
+    "test": "vitest run && pnpm test:browser-mocks",
+    "test:browser-mocks": "node testserver/smoke.cjs"
   },
   "dependencies": {
     "emoji-picker-element-data": "^1.8.0",

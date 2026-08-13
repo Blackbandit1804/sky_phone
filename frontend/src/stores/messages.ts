@@ -8,6 +8,7 @@ import type {
   SmsMessage,
   SmsOutgoingMessage,
 } from '@/types/messages'
+import { sortConversationsByRecency } from '@/utils/messages'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
 
 export const useMessagesStore = defineStore('messages', () => {
@@ -23,10 +24,12 @@ export const useMessagesStore = defineStore('messages', () => {
   async function loadConversations(): Promise<boolean> {
     const response = await nuiCall<SmsConversation[]>('messages:conversations')
     if (response.success && response.data) {
-      conversations.value = response.data.map((conversation) => ({
-        ...conversation,
-        phoneNumber: String(conversation.phoneNumber),
-      }))
+      conversations.value = sortConversationsByRecency(
+        response.data.map((conversation) => ({
+          ...conversation,
+          phoneNumber: String(conversation.phoneNumber),
+        })),
+      )
     }
     else if (!response.success) conversations.value = []
     return response.success
@@ -57,8 +60,12 @@ export const useMessagesStore = defineStore('messages', () => {
     if (!activeNumber.value) return { success: false, error: 'invalid_number' }
     const clientId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const optimistic: SmsMessage = {
-      body: outgoing.messageType === 'text' ? outgoing.body.trim() : '',
+      body:
+        outgoing.messageType === 'text' || outgoing.messageType === 'share'
+          ? outgoing.body?.trim() ?? ''
+          : '',
       client_id: clientId,
+      contact: outgoing.messageType === 'contact' ? outgoing.contact : null,
       created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
       delivery_status: 'sending',
       direction: 'sent',
@@ -78,6 +85,7 @@ export const useMessagesStore = defineStore('messages', () => {
       media_waveform:
         outgoing.messageType === 'voice' ? outgoing.mediaWaveform : null,
       message_type: outgoing.messageType,
+      share: outgoing.messageType === 'share' ? outgoing.sharePayload : null,
       read_at: null,
       recipient_number: activeNumber.value,
       sender_number: '',
@@ -88,10 +96,19 @@ export const useMessagesStore = defineStore('messages', () => {
         `data:${outgoing.mediaMime};base64,${outgoing.mediaPayload}`
     }
 
-    const response = await nuiCall<SmsMessage>('messages:send', {
-      ...outgoing,
-      phoneNumber: activeNumber.value,
-    })
+    const response = await nuiCall<SmsMessage>(
+      'messages:send',
+      outgoing.messageType === 'contact'
+        ? {
+            contactId: outgoing.contactId,
+            messageType: outgoing.messageType,
+            phoneNumber: activeNumber.value,
+          }
+        : {
+            ...outgoing,
+            phoneNumber: activeNumber.value,
+          },
+    )
     const index = messages.value.findIndex(
       (message) => message.client_id === clientId,
     )

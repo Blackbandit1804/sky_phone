@@ -12,6 +12,7 @@ import { nuiCall } from '@/utils/nui'
 import type { NuiResponse } from '@/utils/nui'
 import {
   DEFAULT_PHONE_PREFERENCES,
+  clampPhoneScale,
   ensureAppNotificationPreferences,
   parsePhonePreferences,
   type AppNotificationPreferences,
@@ -38,6 +39,7 @@ export type PhoneOpenPayload = {
 }
 
 const namespaceQueues = new Map<string, Promise<void>>()
+let nextPersistenceSession = 0
 
 const companiesFallbackLocales = {
   name: 'Companies',
@@ -346,6 +348,202 @@ const companiesFallbackLocales = {
 
 const defaultLocales: LocaleTree = {
   Apps: {
+    easyShare: {
+      name: 'EasyShare',
+      incoming: 'Incoming Share',
+      recentChats: 'Contacts and Chats',
+      destinations: 'Share destinations',
+      newMessage: 'New Message',
+      shareProfile: 'Share Profile',
+      share: 'Share',
+      kinds: {
+        contact: 'Contact',
+        document: 'Document',
+        link: 'Link',
+        location: 'Location',
+        note: 'Note',
+        photo: 'Photo',
+        playlist: 'Playlist',
+        post: 'Post',
+        profile: 'Profile',
+        text: 'Message',
+        track: 'Track',
+        video: 'Video',
+      },
+      chooseConversation: 'Choose a conversation',
+      sentToChat: 'Sent to chat.',
+      savedToNotes: 'Saved to Notes.',
+      copy: 'Copy',
+      copyLink: 'Copy Link',
+      nearby: 'People Nearby',
+      history: 'Transfer History',
+      noHistory: 'No transfers yet.',
+      noNearby: 'No visible players are nearby.',
+      visibility: 'Visibility',
+      requestSent: 'Waiting for acceptance...',
+      incomingFrom: '{name} wants to share',
+      distance: '{distance} m away',
+      cancel: 'Cancel',
+      visibilityOptions: {
+        everyone: 'Everyone',
+        contacts: 'Contacts Only',
+        hidden: 'Receiving Off',
+      },
+      status: {
+        pending: 'Waiting for acceptance',
+        transferring: 'Transferring',
+        completed: 'Completed',
+        declined: 'Declined',
+        cancelled: 'Cancelled',
+        expired: 'Expired',
+        failed: 'Failed',
+        accepted: 'Accepted',
+      },
+      errors: {
+        disabled: 'EasyShare is disabled.',
+        invalid_payload: 'This item cannot be shared.',
+        invalid_target: 'Choose a valid recipient.',
+        target_unavailable: 'That player is no longer available.',
+        transfer_not_found: 'That transfer is no longer available.',
+        too_far: 'The recipient is too far away.',
+        not_owned: 'This item no longer belongs to this phone.',
+        unsupported_payload: 'This item is not available for EasyShare.',
+        payload_too_large: 'This item is too large to share.',
+        location_unavailable: 'Your location is unavailable.',
+        rate_limited: 'Too many share requests. Try again shortly.',
+        request_failed: 'EasyShare is temporarily unavailable.',
+      },
+    },
+    weazelNews: {
+      name: 'Weazel News',
+      brand: 'WEAZEL NEWS',
+      navigation: 'Weazel News navigation',
+      tabs: {
+        home: 'Home',
+        categories: 'Categories',
+        search: 'Search',
+        editorial: 'Editorial',
+      },
+      back: 'Back',
+      retry: 'Try Again',
+      loadMore: 'Load More',
+      home: {
+        eyebrow: 'Los Santos, live',
+        latest: 'Latest News',
+      },
+      categories: {
+        title: 'Categories',
+        subtitle: 'Browse every story from the Weazel News desk.',
+        all: 'All Stories',
+        official: 'Official Notices',
+        events: 'Events & Leisure',
+        jobs: 'Jobs',
+        news: 'News & Events',
+        business: 'Business',
+      },
+      search: {
+        placeholder: 'Search articles...',
+        title: 'Search Weazel News',
+        emptyTitle: 'No Articles Found',
+        emptyBody: 'Try another headline, topic, or category.',
+      },
+      states: {
+        loading: 'Loading Weazel News...',
+        emptyTitle: 'No News Yet',
+        emptyBody:
+          'The Weazel News desk has not published any articles here yet.',
+        errorTitle: 'Weazel News Is Unavailable',
+        readOnlyTitle: 'Read-only Access',
+        readOnlyBody:
+          'Your current job can read Weazel News, but cannot manage articles.',
+        noManagedTitle: 'No Editorial Articles',
+        noManagedBody:
+          'Create an article or change the current editorial filter.',
+      },
+      article: {
+        readMore: 'Read Article',
+        byline: 'By {author}',
+        updated: 'Updated {date}',
+        published: 'Published {date}',
+        coverAlt: 'Cover image for {title}',
+      },
+      editorial: {
+        title: 'Editorial Desk',
+        subtitle: 'Create, publish, and maintain Weazel News articles.',
+        newArticle: 'New Article',
+        published: 'Published',
+        drafts: 'Drafts',
+        all: 'All',
+        jobAccess: 'Signed in as {job}',
+        edit: 'Edit Article',
+        delete: 'Delete Article',
+      },
+      composer: {
+        newTitle: 'New Article',
+        editTitle: 'Edit Article',
+        title: 'Headline',
+        titlePlaceholder: 'Write a clear headline',
+        body: 'Article',
+        bodyPlaceholder: 'Write the full story...',
+        category: 'Category',
+        status: 'Publication Status',
+        cover: 'Cover Image',
+        chooseCover: 'Choose from Gallery',
+        changeCover: 'Change Cover',
+        removeCover: 'Remove Cover',
+        coverAlt: 'Selected article cover',
+        publish: 'Publish Article',
+        saveDraft: 'Save Draft',
+        saveChanges: 'Save Changes',
+        statusPublished: 'Published',
+        statusDraft: 'Draft',
+      },
+      delete: {
+        title: 'Delete Article?',
+        body: 'This article will be removed from Weazel News.',
+        cancel: 'Cancel',
+        confirm: 'Delete',
+      },
+      feedback: {
+        created: 'Article created.',
+        updated: 'Article updated.',
+        deleted: 'Article deleted.',
+      },
+      accessibility: {
+        articleList: 'Weazel News articles',
+        categoryList: 'News categories',
+        editorialList: 'Editorial articles',
+        openArticle: 'Open {title}',
+        openCategory: 'Open {category}',
+        openEditorial: 'Open the editorial desk',
+        newArticle: 'Create a new article',
+        editArticle: 'Edit {title}',
+        deleteArticle: 'Delete {title}',
+        search: 'Search Weazel News',
+        clearSearch: 'Clear article search',
+        coverPreview: 'Article cover preview',
+        removeCover: 'Remove the selected cover image',
+        status: 'Article status: {status}',
+      },
+      errors: {
+        feature_disabled: 'Weazel News is currently disabled.',
+        invalid_article: 'Enter a valid headline, article, and category.',
+        invalid_draft:
+          'Enter a headline and article text before saving the draft.',
+        invalid_publish: 'Enter a headline and article text before publishing.',
+        invalid_request: 'Check the article details and try again.',
+        invalid_image: 'Choose a valid photo from this phone.',
+        invalid_attachment: 'Choose a valid photo from this phone.',
+        not_authorized: 'Your current job cannot manage Weazel News articles.',
+        article_not_found: 'This article is no longer available.',
+        not_found: 'This article is no longer available.',
+        revision_conflict:
+          'This article changed on another device. Reload it and try again.',
+        rate_limited: 'Too many requests. Try again shortly.',
+        request_failed: 'Weazel News could not complete the request.',
+        default: 'Weazel News is temporarily unavailable.',
+      },
+    },
     companies: companiesFallbackLocales,
     crewlink: {
       name: 'CrewLink',
@@ -355,6 +553,26 @@ const defaultLocales: LocaleTree = {
       signInBody:
         'CrewLink uses your private iFruit identity to keep groups and roles available across your phones.',
       openSettings: 'Open iFruit Settings',
+      authEyebrow: 'Private crew network',
+      authTitle: 'Welcome to CrewLink',
+      authBody:
+        'Your iFruit email is linked automatically. Use your CrewLink username to continue.',
+      login: 'Log in',
+      register: 'Register',
+      ifruitEmail: 'iFruit address',
+      gallery: 'Gallery',
+      camera: 'Camera',
+      backToLogin: 'Back to CrewLink login',
+      authErrors: {
+        no_ifruit_account: 'Sign in to your iFruit account in Settings first.',
+        invalid_username: 'Use 3–20 letters, numbers, dots, or underscores.',
+        profile_not_found: 'No CrewLink profile exists for this iFruit email.',
+        profile_exists: 'This iFruit email already has a CrewLink profile.',
+        username_taken: 'That CrewLink username is already taken.',
+        invalid_profile_image: 'Choose a valid photo from this phone.',
+        rate_limited: 'Too many attempts. Try again shortly.',
+        request_failed: 'CrewLink could not complete the request.',
+      },
       welcomeEyebrow: 'Your crew. One signal.',
       welcomeTitle: 'Find your people',
       welcomeBody:
@@ -409,6 +627,9 @@ const defaultLocales: LocaleTree = {
       private: 'Private',
       nearby: 'Nearby',
       copyCode: 'Copy code',
+      shareInvite: 'Invite by message',
+      shareInviteTitle: 'Join {group} on CrewLink',
+      shareInviteBody: 'Use invitation code {code} to join {group}.',
       manage: 'Manage',
       refresh: 'Refresh',
       codeCopied: 'Invitation code copied.',
@@ -484,6 +705,9 @@ const defaultLocales: LocaleTree = {
       externalApiBody: 'Approved scripts may add temporary group pings.',
       editUsername: 'Edit Username',
       editUsernameBody: 'Your username is unique across CrewLink.',
+      editProfile: 'Edit CrewLink Profile',
+      editProfileBody: 'Change your username and profile photo.',
+      removeProfilePhoto: 'Remove profile photo',
       profileSaved: 'CrewLink profile saved.',
       deleteGroup: 'Delete Group',
       leaveGroup: 'Leave Group',
@@ -523,6 +747,7 @@ const defaultLocales: LocaleTree = {
         profile_required: 'Create your CrewLink profile first.',
         invalid_username: 'Use 3–20 letters, numbers, dots, or underscores.',
         invalid_profile: 'Check your profile details.',
+        invalid_profile_image: 'Choose a valid photo from this phone.',
         username_taken: 'That CrewLink username is already taken.',
         invalid_group: 'Choose a valid group name and signal colour.',
         group_limit: 'You have reached your group limit.',
@@ -934,14 +1159,16 @@ const defaultLocales: LocaleTree = {
       done: 'Done',
       authEyebrow: 'Feather network',
       authWelcome: 'Welcome to Feather',
-      authBody: 'One iFruit account. Every conversation, wherever you sign in.',
+      authBody:
+        'Your iFruit email is linked automatically. Use your Feather username to continue.',
       login: 'Log in',
       register: 'Register',
       loginTitle: 'Good to see you again',
-      loginBody: 'Log in with your iFruit address to continue to Feather.',
-      registerTitle: 'Create your iFruit account',
+      loginBody:
+        'Use your Feather username. Your iFruit email is linked automatically.',
+      registerTitle: 'Create your Feather profile',
       registerBody:
-        'Choose an address and secure it with a password. Your Feather profile comes next.',
+        'Choose a username and optional profile photo. No password is needed.',
       email: 'iFruit address',
       emailPlaceholder: 'yourname',
       password: 'Password',
@@ -951,23 +1178,25 @@ const defaultLocales: LocaleTree = {
       showPassword: 'Show password',
       hidePassword: 'Hide password',
       loginAction: 'Continue to Feather',
-      registerAction: 'Create account',
+      registerAction: 'Create profile',
       noAccount: 'New to Feather?',
       haveAccount: 'Already registered?',
-      registerNow: 'Create an account',
+      registerNow: 'Create a profile',
       loginNow: 'Log in',
       authTrust:
-        'Your credentials are verified by the server and this phone is linked to your iFruit account.',
+        'This Feather session is separate from your other apps and linked to your iFruit email.',
       profileStep: 'Step 2 of 2',
       accountConnected: 'iFruit account connected',
       authErrors: {
-        invalid_email: 'Enter a valid 3–32 character iFruit address.',
-        invalid_password: 'Password must be 6–64 characters.',
-        password_mismatch: 'The passwords do not match.',
-        invalid_credentials: 'The iFruit address or password is incorrect.',
-        email_taken: 'That iFruit address is already registered.',
+        no_ifruit_account: 'Sign in to your iFruit account in Settings first.',
+        invalid_handle: 'Use 3–30 letters, numbers or underscores.',
+        invalid_username: 'That username does not match your Feather profile.',
+        profile_not_found: 'No Feather profile exists for this iFruit email.',
+        already_registered: 'This iFruit email already has a Feather profile.',
+        handle_taken: 'That Feather username is already taken.',
+        invalid_media: 'Choose a valid photo from this phone.',
         rate_limited: 'Too many attempts. Try again in a minute.',
-        default: 'The account request failed. Please try again.',
+        default: 'Feather could not complete the request. Please try again.',
       },
       welcome: 'Find your voice',
       welcomeBody:
@@ -1379,6 +1608,7 @@ const defaultLocales: LocaleTree = {
       photo: 'Photo',
       gif: 'GIF',
       video: 'Video',
+      contact: 'Contact',
       attachPhoto: 'Attach Photo',
       takePhoto: 'Take Photo',
       attachGif: 'Attach GIF',
@@ -1386,6 +1616,10 @@ const defaultLocales: LocaleTree = {
       photos: 'Photos',
       gifs: 'GIFs',
       videos: 'Videos',
+      contacts: 'Contacts',
+      shareContact: 'Share Contact',
+      noContactsToShare: 'Save a contact first to share it here.',
+      contactSaved: 'Contact Saved',
       noPhotos: 'Take a photo first to attach it here.',
       noVideos: 'Record a video in Camera first.',
       searchGifs: 'Search GIPHY',
@@ -1429,6 +1663,8 @@ const defaultLocales: LocaleTree = {
         invalid_message: 'Enter a message.',
         invalid_voice: 'The audio message is invalid.',
         invalid_attachment: 'The attachment is invalid.',
+        invalid_contact: 'The contact is invalid.',
+        contact_not_found: 'This contact is no longer available.',
         media_provider_unconfigured: 'Photo uploads are not configured.',
         capture_provider_unavailable: 'The screenshot resource is unavailable.',
         capture_failed: 'The photo could not be captured.',
@@ -2461,13 +2697,38 @@ const defaultLocales: LocaleTree = {
       photos: 'photos',
       activeListings: 'active listings',
       signInTitle: 'Sign in to iFruit',
-      signInBody:
-        'Use Settings to sign in before selling, saving or messaging.',
+      signInBody: 'Log in to your CityMarkt profile to sell, save or message.',
+      authEyebrow: 'CityMarkt account',
+      authTitle: 'Welcome to CityMarkt',
+      authBody:
+        'Your iFruit email is linked automatically. Use your CityMarkt username to continue.',
+      login: 'Login',
+      register: 'Register',
+      authUsername: 'Username',
+      authErrors: {
+        no_ifruit_account: 'Connect an iFruit account in Settings first.',
+        invalid_username: 'Enter the username of your CityMarkt profile.',
+        profile_not_found: 'No CityMarkt profile exists for this iFruit email.',
+        profile_exists:
+          'A CityMarkt profile already exists. Use Login instead.',
+      },
       noMessages: 'No conversations',
       noMessagesBody: 'Messages about offers will appear here.',
       myListings: 'My listings',
       favorites: 'Favorites',
+      addFavorite: 'Add to favorites',
+      removeFavorite: 'Remove from favorites',
       noProfileListings: 'Nothing here yet',
+      createProfile: 'Create your CityMarkt profile',
+      editProfile: 'Edit profile',
+      profileIntro: 'Your iFruit email stays linked to this profile.',
+      profileEmail: 'iFruit email',
+      displayName: 'Display name',
+      profileBio: 'About you',
+      saveProfile: 'Save profile',
+      cancel: 'Cancel',
+      profileSaved: 'Your profile was saved.',
+      removeProfilePhoto: 'Remove photo',
       phone: 'Phone',
       contactSeller: 'Contact seller',
       messagePlaceholder: 'Hi, is this still available?',
@@ -2605,7 +2866,43 @@ const defaultLocales: LocaleTree = {
       noPhoto: 'No photo attached',
       signInTitle: 'Your Local Pages profile',
       signInBody: 'Sign in to iFruit in Settings to publish and save posts.',
+      authEyebrow: 'Local Pages account',
+      authWelcome: 'Welcome to Local Pages',
+      authBody:
+        'Your iFruit email is linked automatically. Use your Local Pages username to continue.',
+      login: 'Sign in',
+      register: 'Register',
+      loginTitle: 'Continue with iFruit',
+      loginBody:
+        'Your posts, saved items and profile stay linked to your account.',
+      registerTitle: 'Create an iFruit account',
+      registerBody:
+        'Choose your new iFruit address. Your Local Pages profile comes next.',
+      authEmail: 'iFruit address',
+      authEmailPlaceholder: 'your.name',
+      authPassword: 'Password',
+      authPasswordPlaceholder: 'At least 6 characters',
+      authConfirmPassword: 'Confirm password',
+      authConfirmPlaceholder: 'Enter the password again',
+      showPassword: 'Show password',
+      hidePassword: 'Hide password',
       localCreator: 'Local creator',
+      createProfile: 'Create your profile',
+      editProfile: 'Edit profile',
+      profileSetupBody: 'Your iFruit email is linked automatically.',
+      profileEmail: 'iFruit email',
+      profileHandle: 'Username',
+      profileHandlePlaceholder: 'your.name',
+      profileHandleHint:
+        'Use 3–24 lowercase letters, numbers, dots or underscores.',
+      profileBio: 'Bio',
+      profileBioPlaceholder: 'Tell the city a little about yourself...',
+      profilePhoto: 'Profile photo',
+      profilePhotoHint: 'Choose a photo from your Gallery or take a new one.',
+      removeProfilePhoto: 'Remove photo',
+      profileSave: 'Save profile',
+      profileCancel: 'Cancel',
+      profileSaved: 'Your profile was saved.',
       myPosts: 'My posts',
       saved: 'Saved',
       save: 'Save',
@@ -2631,7 +2928,35 @@ const defaultLocales: LocaleTree = {
       cityMarktShare: 'Share to Local Pages',
       cityMarktShared: 'Shared to Local Pages.',
       cityMarktShareHint: 'One CityMarkt share per day',
+      cityMarktAlreadyShared: 'Already published',
+      cityMarktOpenSharedHint: 'Open the Local Pages post',
+      cityMarktAppMissing: 'Local Pages is not installed',
+      cityMarktInstallHint: 'Install Local Pages to share this listing',
+      cityMarktAccountMissing: 'Local Pages profile required',
+      cityMarktAccountHint: 'Create a Local Pages profile before sharing',
+      cityMarktComposeTitle: 'Share CityMarkt listing',
+      cityMarktComposeNavTitle: 'Share listing',
+      cityMarktComposeHint:
+        'Review the listing and publish it when you are ready.',
+      cityMarktPhotosHint: 'The CityMarkt listing photos will be included.',
+      authErrors: {
+        no_ifruit_account: 'Sign in to your iFruit account in Settings first.',
+        invalid_username:
+          'Use 3–24 lowercase letters, numbers, dots or underscores.',
+        profile_not_found:
+          'No Local Pages profile exists for this iFruit email.',
+        profile_exists: 'This iFruit email already has a Local Pages profile.',
+        invalid_profile: 'Check your Local Pages username.',
+        invalid_profile_image: 'Choose a valid photo from this phone.',
+        profile_handle_taken: 'This Local Pages username is already taken.',
+        rate_limited: 'Too many attempts. Try again shortly.',
+        default: 'Local Pages could not complete the request.',
+      },
       errors: {
+        profile_required: 'Create your Local Pages profile first.',
+        invalid_profile: 'Check your username and bio.',
+        invalid_profile_image: 'Choose a valid photo from this phone.',
+        profile_handle_taken: 'This username is already taken.',
         invalid_post: 'Add a title and a little more detail.',
         invalid_images: 'Choose valid photos from this phone.',
         invalid_request: 'This action is not valid.',
@@ -2789,6 +3114,7 @@ const defaultLocales: LocaleTree = {
       title: 'Title',
       titlePlaceholder: 'What is planned?',
       date: 'Date',
+      allDay: 'All-day',
       starts: 'Starts',
       ends: 'Ends',
       reminder: 'Reminder',
@@ -3331,6 +3657,7 @@ const defaultLocales: LocaleTree = {
     camera: 'Camera',
     cellular: 'Cellular Data',
     close: 'Close Control Center',
+    easyShareContact: 'Share my contact with nearby players',
     flashlight: 'Flashlight',
     focus: 'Focus',
     label: 'Control Center',
@@ -3367,6 +3694,32 @@ const defaultLocales: LocaleTree = {
     send: 'Send',
     start: 'Start',
     stop: 'Stop',
+    signOut: 'Sign Out',
+    signingOut: 'Signing Out...',
+    signOutTitle: 'Sign out of {app}?',
+    signOutBody:
+      'You will only be signed out of {app}. Your other iFruit apps stay signed in.',
+    signOutFailed: 'Could not sign out. Please try again.',
+    appAuth: {
+      eyebrow: 'iFruit account',
+      title: 'Continue to {app}',
+      body: 'Use your iFruit email and password. This login applies only to {app}.',
+      login: 'Login',
+      register: 'Register',
+      email: 'iFruit email',
+      password: 'Password',
+      confirm: 'Confirm password',
+      loginAction: 'Log in',
+      registerAction: 'Create account',
+      errors: {
+        invalid_email: 'Enter a valid iFruit email.',
+        invalid_password: 'Password must be 6–64 characters.',
+        invalid_credentials: 'Email or password is incorrect.',
+        email_taken: 'That iFruit email is already registered.',
+        rate_limited: 'Too many attempts. Try again in a minute.',
+        default: 'The account request failed.',
+      },
+    },
     use: 'Use',
   },
   Notifications: {
@@ -3499,11 +3852,14 @@ export const usePhoneStore = defineStore('phone', {
     currentPage: 1,
     device: null as PhoneDevice | null,
     deviceRevisions: {} as Record<string, number>,
+    deviceSessionToken: null as string | null,
     isOpen: false,
     lang: 'en',
     launchOrigin: null as AppLaunchOrigin | null,
     locales: defaultLocales,
     preferences: cloneJsonData(DEFAULT_PHONE_PREFERENCES),
+    persistenceGeneration: 0,
+    persistenceSession: ++nextPersistenceSession,
     security: {
       enabled: false,
       length: null,
@@ -3524,6 +3880,15 @@ export const usePhoneStore = defineStore('phone', {
       this.isOpen = false
     },
     open(payload: PhoneOpenPayload = {}): void {
+      const nextImei = payload.device?.imei ?? this.device?.imei ?? null
+      const nextToken = payload.token ?? this.deviceSessionToken
+      if (
+        nextImei !== (this.device?.imei ?? null) ||
+        nextToken !== this.deviceSessionToken
+      ) {
+        this.persistenceGeneration += 1
+      }
+      this.deviceSessionToken = nextToken
       this.lang = payload.lang ?? 'en'
       this.locales = payload.locales ?? defaultLocales
       if (payload.device) this.hydrateDevice(payload.device)
@@ -3533,6 +3898,13 @@ export const usePhoneStore = defineStore('phone', {
         lockedUntil: 0,
       }
       this.isOpen = true
+    },
+    endDeviceSession(): void {
+      this.close()
+      if (this.deviceSessionToken !== null) {
+        this.deviceSessionToken = null
+        this.persistenceGeneration += 1
+      }
     },
     hydrateDevice(device: PhoneDevice): void {
       this.device = device
@@ -3547,22 +3919,59 @@ export const usePhoneStore = defineStore('phone', {
       )
     },
     saveDeviceNamespace(namespace: string, payload: unknown): void {
-      const previous = namespaceQueues.get(namespace) ?? Promise.resolve()
+      const imei = this.device?.imei
+      if (!imei) {
+        console.error(
+          `[Phone persistence] Could not save ${namespace} without an active device.`,
+        )
+        return
+      }
+      const generation = this.persistenceGeneration
+      const session = this.persistenceSession
+      const token = this.deviceSessionToken
+      const queuedPayload = cloneJsonData(payload)
+      const queueKey = `${session}:${generation}:${imei}:${namespace}`
+      const isCurrentScope = (): boolean =>
+        this.persistenceSession === session &&
+        this.persistenceGeneration === generation &&
+        this.device?.imei === imei &&
+        this.deviceSessionToken === token
+      const previous = namespaceQueues.get(queueKey) ?? Promise.resolve()
       const queued = previous.then(async () => {
+        if (!isCurrentScope()) return
         const response = await nuiCall<{ revision: number }>('device:save', {
+          imei,
           namespace,
-          payload,
+          payload: queuedPayload,
           revision: this.deviceRevisions[namespace] ?? 0,
+          sessionToken: token,
         })
-        if (response.success && response.data) {
-          this.deviceRevisions[namespace] = response.data.revision
+        if (
+          isCurrentScope() &&
+          response.success &&
+          Number.isInteger(response.data?.revision) &&
+          Number(response.data?.revision) >= 0
+        ) {
+          this.deviceRevisions[namespace] = Number(response.data?.revision)
         }
       })
       const tracked = queued.finally(() => {
-        if (namespaceQueues.get(namespace) === tracked)
-          namespaceQueues.delete(namespace)
+        if (namespaceQueues.get(queueKey) === tracked)
+          namespaceQueues.delete(queueKey)
       })
-      namespaceQueues.set(namespace, tracked)
+      namespaceQueues.set(queueKey, tracked)
+    },
+    async flushDevicePersistence(): Promise<void> {
+      const imei = this.device?.imei
+      if (!imei) return
+      const queuePrefix = `${this.persistenceSession}:${this.persistenceGeneration}:${imei}:`
+      while (true) {
+        const activeQueues = [...namespaceQueues.entries()]
+          .filter(([key]) => key.startsWith(queuePrefix))
+          .map(([, queue]) => queue)
+        if (!activeQueues.length) return
+        await Promise.all(activeQueues)
+      }
     },
     setCurrentPage(page: number, pageCount?: number): void {
       this.currentPage = clampPage(page, pageCount)
@@ -3588,7 +3997,9 @@ export const usePhoneStore = defineStore('phone', {
       key: K,
       value: PhonePreferencesV1['settings'][K],
     ): void {
-      this.preferences.settings[key] = value
+      this.preferences.settings[key] = (
+        key === 'phoneScale' ? clampPhoneScale(Number(value)) : value
+      ) as PhonePreferencesV1['settings'][K]
       this.saveDeviceNamespace('settings', this.preferences)
     },
     setAlertVolumes(value: number): void {

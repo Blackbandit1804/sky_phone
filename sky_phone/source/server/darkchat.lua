@@ -181,6 +181,10 @@ local function message_payload(row, profile_id)
     local deleted_everywhere = row.deleted_for_everyone == 1 or row.deleted_for_everyone == true
     local reactions = decode_array(row.reactions, "reactions")
     local waveform = row.media_waveform and decode_array(row.media_waveform, "media_waveform") or nil
+    local share_payload = row.message_type == "share" and json.decode(row.media_payload or "") or nil
+    if row.message_type == "share" and type(share_payload) ~= "table" then
+        error(("[sky_phone] DarkChat message %s has an invalid share payload."):format(tostring(row.id)))
+    end
     return {
         id = row.id,
         conversationId = row.conversation_id,
@@ -189,12 +193,14 @@ local function message_payload(row, profile_id)
         messageType = deleted_everywhere and "system" or row.message_type,
         body = deleted_everywhere and "message_deleted" or row.body,
         mediaMime = deleted_everywhere and nil or row.media_mime,
-        mediaPayload = not deleted_everywhere and row.message_type ~= "voice" and row.media_payload or nil,
+        mediaPayload = not deleted_everywhere and row.message_type ~= "voice"
+            and row.message_type ~= "share" and row.media_payload or nil,
         mediaDurationMs = deleted_everywhere and nil or tonumber(row.media_duration_ms),
         mediaWaveform = deleted_everywhere and nil or waveform,
         replyToId = row.reply_to_id,
         replyBody = row.reply_body,
         reactions = reactions,
+        sharePayload = not deleted_everywhere and share_payload or nil,
         expiresAt = row.expires_at,
         createdAt = row.created_at,
         readAt = row.peer_last_read_at and row.peer_last_read_at >= row.created_at and row.peer_last_read_at or nil,
@@ -532,12 +538,27 @@ Bridge.Callbacks.Register("sky_phone:darkchat:send", function(source, data)
         media_waveform = voice.waveform
     elseif message_type == "image" or message_type == "video" then
         local media_type = message_type == "image" and "photo" or "video"
-        local media_url, media_error = SkyPhoneMedia.ResolveOwnedMedia(source, data.mediaAssetId, media_type)
+        local media_url, media_error, resolved_mime = SkyPhoneMedia.ResolveOwnedMedia(
+            source,
+            data.mediaAssetId,
+            media_type
+        )
         if not media_url then
             return { success = false, error = media_error }
         end
         media_payload = media_url
-        media_mime = message_type == "image" and "image/jpeg" or "video/mp4"
+        media_mime = resolved_mime
+    elseif message_type == "share" then
+        local share
+        local share_error
+        share, share_error, media_payload = SkyPhoneEasyShare.SanitizeChatPayload(source, data.sharePayload)
+        if not share then
+            return { success = false, error = share_error or "invalid_payload" }
+        end
+        if body ~= "" and #body > Config.DarkChat.BodyMaxLength then
+            return { success = false, error = "invalid_message" }
+        end
+        body = body ~= "" and body or share.title
     else
         return { success = false, error = "invalid_message" }
     end
@@ -579,7 +600,8 @@ Bridge.Callbacks.Register("sky_phone:darkchat:send", function(source, data)
         conversationId = conversation_id,
         sender = profile.alias,
         messageType = message_type,
-        preview = (message_type == "text" or message_type == "emoji") and body or message_type,
+        preview = (message_type == "text" or message_type == "emoji" or message_type == "share")
+            and body or message_type,
     })
     return { success = true, data = message }
 end)

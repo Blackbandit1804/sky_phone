@@ -31,6 +31,8 @@ export interface GameView {
 }
 
 export interface GameViewOptions {
+  onContextLost?: () => void
+  onContextRestored?: () => void
   preserveDrawingBuffer?: boolean
 }
 
@@ -113,80 +115,180 @@ export function createGameView(
 
   let lost = false
   let disposed = false
+  let program: WebGLProgram | null = null
+  let positionBuffer: WebGLBuffer | null = null
+  let texcoordBuffer: WebGLBuffer | null = null
+  let texture: WebGLTexture | null = null
+  let lastSize: {
+    height: number
+    sourceHeight: number
+    sourceWidth: number
+    width: number
+    zoom: number
+  } | null = null
+
+  const releaseResources = (): void => {
+    if (positionBuffer) gl.deleteBuffer(positionBuffer)
+    if (texcoordBuffer) gl.deleteBuffer(texcoordBuffer)
+    if (texture) gl.deleteTexture(texture)
+    if (program) gl.deleteProgram(program)
+    positionBuffer = null
+    texcoordBuffer = null
+    texture = null
+    program = null
+  }
+
+  const initializeResources = (): void => {
+    releaseResources()
+    const nextProgram = gl.createProgram()
+    if (!nextProgram) throw new Error('game_view_program_unavailable')
+    const vertexShader = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER)
+    const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER)
+    gl.attachShader(nextProgram, vertexShader)
+    gl.attachShader(nextProgram, fragmentShader)
+    gl.linkProgram(nextProgram)
+    gl.deleteShader(vertexShader)
+    gl.deleteShader(fragmentShader)
+    if (!gl.getProgramParameter(nextProgram, gl.LINK_STATUS)) {
+      const error = gl.getProgramInfoLog(nextProgram)
+      gl.deleteProgram(nextProgram)
+      throw new Error(error || 'game_view_program_failed')
+    }
+    gl.useProgram(nextProgram)
+
+    const positionLocation = gl.getAttribLocation(nextProgram, 'a_position')
+    const texcoordLocation = gl.getAttribLocation(nextProgram, 'a_texcoord')
+    if (positionLocation < 0 || texcoordLocation < 0) {
+      gl.deleteProgram(nextProgram)
+      throw new Error('game_view_attributes_unavailable')
+    }
+
+    const nextPositionBuffer = gl.createBuffer()
+    const nextTexcoordBuffer = gl.createBuffer()
+    const nextTexture = gl.createTexture()
+    if (!nextPositionBuffer || !nextTexcoordBuffer || !nextTexture) {
+      if (nextPositionBuffer) gl.deleteBuffer(nextPositionBuffer)
+      if (nextTexcoordBuffer) gl.deleteBuffer(nextTexcoordBuffer)
+      if (nextTexture) gl.deleteTexture(nextTexture)
+      gl.deleteProgram(nextProgram)
+      throw new Error('game_view_resources_unavailable')
+    }
+
+    program = nextProgram
+    positionBuffer = nextPositionBuffer
+    texcoordBuffer = nextTexcoordBuffer
+    texture = nextTexture
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+      gl.DYNAMIC_DRAW,
+    )
+    gl.enableVertexAttribArray(positionLocation)
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer)
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]),
+      gl.STATIC_DRAW,
+    )
+    gl.enableVertexAttribArray(texcoordLocation)
+    gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0)
+
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      1,
+      1,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      new Uint8Array([0, 0, 0, 255]),
+    )
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    // CitizenFX watches this exact wrap-mode sequence and replaces the seeded pixel with the live
+    // game backbuffer. These calls are intentionally not redundant.
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT)
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
+    gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.uniform1i(gl.getUniformLocation(program, 'u_texture'), 0)
+    gl.clearColor(0, 0, 0, 1)
+  }
+
+  const applySize = (): void => {
+    if (!lastSize || !positionBuffer || !texcoordBuffer) return
+    const geometry = gameViewGeometry(
+      lastSize.sourceWidth,
+      lastSize.sourceHeight,
+      lastSize.width,
+      lastSize.height,
+      lastSize.zoom,
+    )
+    canvas.width = lastSize.width
+    canvas.height = lastSize.height
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, geometry.positions, gl.DYNAMIC_DRAW)
+    gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer)
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      geometry.textureCoordinates,
+      gl.DYNAMIC_DRAW,
+    )
+    gl.viewport(0, 0, lastSize.width, lastSize.height)
+  }
+
   const onContextLost = (event: Event) => {
     event.preventDefault()
     lost = true
     console.error('[Camera] Game-view WebGL context lost.')
+    options.onContextLost?.()
+  }
+  const onContextRestored = () => {
+    if (disposed) return
+    try {
+      initializeResources()
+      lost = false
+      applySize()
+      console.info('[Camera] Game-view WebGL context restored.')
+      options.onContextRestored?.()
+    } catch (error) {
+      lost = true
+      console.error('[Camera] Could not restore the game-view WebGL context.', error)
+    }
   }
   canvas.addEventListener(
     'webglcontextlost',
     onContextLost as EventListener,
     false,
   )
-
-  const program = gl.createProgram()
-  if (!program) throw new Error('game_view_program_unavailable')
-  gl.attachShader(program, compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER))
-  gl.attachShader(
-    program,
-    compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER),
+  canvas.addEventListener(
+    'webglcontextrestored',
+    onContextRestored as EventListener,
+    false,
   )
-  gl.linkProgram(program)
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    throw new Error(gl.getProgramInfoLog(program) || 'game_view_program_failed')
+  try {
+    initializeResources()
+  } catch (error) {
+    canvas.removeEventListener(
+      'webglcontextlost',
+      onContextLost as EventListener,
+      false,
+    )
+    canvas.removeEventListener(
+      'webglcontextrestored',
+      onContextRestored as EventListener,
+      false,
+    )
+    releaseResources()
+    throw error
   }
-  gl.useProgram(program)
-
-  const positionLocation = gl.getAttribLocation(program, 'a_position')
-  const texcoordLocation = gl.getAttribLocation(program, 'a_texcoord')
-  if (positionLocation < 0 || texcoordLocation < 0) {
-    throw new Error('game_view_attributes_unavailable')
-  }
-
-  const positionBuffer = gl.createBuffer()
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-    gl.DYNAMIC_DRAW,
-  )
-  gl.enableVertexAttribArray(positionLocation)
-  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
-
-  const texcoordBuffer = gl.createBuffer()
-  gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer)
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]),
-    gl.STATIC_DRAW,
-  )
-  gl.enableVertexAttribArray(texcoordLocation)
-  gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0)
-
-  const texture = gl.createTexture()
-  gl.bindTexture(gl.TEXTURE_2D, texture)
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    1,
-    1,
-    0,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    new Uint8Array([0, 0, 0, 255]),
-  )
-  gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-  gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-  gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-  // CitizenFX watches this exact wrap-mode sequence and replaces the seeded pixel with the live
-  // game backbuffer. These calls are intentionally not redundant.
-  gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-  gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT)
-  gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
-  gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-  gl.uniform1i(gl.getUniformLocation(program, 'u_texture'), 0)
-  gl.clearColor(0, 0, 0, 1)
 
   return {
     canvas,
@@ -198,11 +300,18 @@ export function createGameView(
         onContextLost as EventListener,
         false,
       )
+      canvas.removeEventListener(
+        'webglcontextrestored',
+        onContextRestored as EventListener,
+        false,
+      )
+      if (!lost) releaseResources()
       gl.getExtension('WEBGL_lose_context')?.loseContext()
     },
     isLost: () => lost,
     render() {
-      if (disposed || lost) return
+      if (disposed || lost || !program) return
+      gl.useProgram(program)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
       gl.finish()
@@ -214,25 +323,15 @@ export function createGameView(
       sourceHeight = window.innerHeight,
       zoom = 1,
     ) {
-      if (disposed || lost) return
-      canvas.width = width
-      canvas.height = height
-      const geometry = gameViewGeometry(
+      lastSize = {
+        height,
         sourceWidth,
         sourceHeight,
         width,
-        height,
         zoom,
-      )
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
-      gl.bufferData(gl.ARRAY_BUFFER, geometry.positions, gl.DYNAMIC_DRAW)
-      gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer)
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        geometry.textureCoordinates,
-        gl.DYNAMIC_DRAW,
-      )
-      gl.viewport(0, 0, width, height)
+      }
+      if (disposed || lost) return
+      applySize()
     },
   }
 }

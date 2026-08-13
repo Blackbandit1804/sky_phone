@@ -24,6 +24,7 @@ local allowed_device_namespaces = {
     notifications = true,
     wallpaper = true,
     alarms = true,
+    appAuth = true,
     apps = true,
     games = true,
     widgets = true,
@@ -914,15 +915,20 @@ function SkyPhone.OpenDeviceForCall(source, imei)
         return false
     end
     local security = load_device_security(imei)
-    if sessions[source] and sessions[source].imei ~= imei then
+    local existing_session = sessions[source]
+    if existing_session and existing_session.imei ~= imei then
         SkyPhoneCompanies.ClearCallAvailability(source)
     end
-    sessions[source] = {
-        imei = imei,
-        slot = matches[1].slot,
-        token = ("%s:%s:%s"):format(imei, tostring(source), tostring(GetGameTimer())),
-        unlocked = security == nil,
-    }
+    if existing_session and existing_session.imei == imei then
+        existing_session.slot = matches[1].slot
+    else
+        sessions[source] = {
+            imei = imei,
+            slot = matches[1].slot,
+            token = ("%s:%s:%s"):format(imei, tostring(source), tostring(GetGameTimer())),
+            unlocked = security == nil,
+        }
+    end
     TriggerClientEvent("sky_phone:device:open", source, bootstrap(source))
     return true
 end
@@ -1075,7 +1081,13 @@ Bridge.Callbacks.Register("sky_phone:device:save", function(source, data)
     if not session then
         return error_response
     end
-    if type(data) ~= "table" or not allowed_device_namespaces[data.namespace] then
+    if type(data) ~= "table" then
+        return { success = false, error = "invalid_request" }
+    end
+    if data.imei ~= session.imei or data.sessionToken ~= session.token then
+        return { success = false, error = "stale_session" }
+    end
+    if not allowed_device_namespaces[data.namespace] then
         return { success = false, error = "invalid_namespace" }
     end
 

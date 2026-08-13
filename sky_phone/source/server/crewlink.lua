@@ -82,6 +82,8 @@ local function profile_dto(row)
     return {
         id = row.id,
         username = row.username,
+        avatarMediaId = row.avatar_media_id and tonumber(row.avatar_media_id) or nil,
+        avatarUrl = row.avatar_url,
         activeGroupId = row.active_group_id,
         mapVisible = tonumber(row.map_visible) == 1,
         overheadVisible = tonumber(row.overhead_visible) == 1,
@@ -94,9 +96,11 @@ local function require_profile(source)
         return nil, error_response
     end
     local rows = Bridge.Database.Query([[
-        SELECT `id`, `account_id`, `username`, `active_group_id`, `map_visible`, `overhead_visible`
-        FROM `sky_phone_crewlink_profiles`
-        WHERE `account_id` = ?
+        SELECT p.`id`, p.`account_id`, p.`username`, p.`avatar_media_id`, p.`active_group_id`,
+            p.`map_visible`, p.`overhead_visible`, avatar.`url` AS `avatar_url`
+        FROM `sky_phone_crewlink_profiles` p
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = p.`avatar_media_id`
+        WHERE p.`account_id` = ?
         LIMIT 1
     ]], { account.id })
     if not rows[1] then
@@ -131,9 +135,10 @@ end
 local function member_dtos(group_id)
     local rows = Bridge.Database.Query([[
         SELECT p.`id`, p.`account_id`, p.`username`, p.`map_visible`, p.`overhead_visible`,
-            m.`role`, UNIX_TIMESTAMP(m.`joined_at`) AS `joined_at`
+            avatar.`url` AS `avatar_url`, m.`role`, UNIX_TIMESTAMP(m.`joined_at`) AS `joined_at`
         FROM `sky_phone_crewlink_memberships` m
         JOIN `sky_phone_crewlink_profiles` p ON p.`id` = m.`profile_id`
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = p.`avatar_media_id`
         WHERE m.`group_id` = ?
         ORDER BY FIELD(m.`role`, 'owner', 'coordinator', 'moderator', 'member', 'guest'), m.`joined_at`
     ]], { group_id })
@@ -141,8 +146,10 @@ local function member_dtos(group_id)
         row.account_id = tonumber(row.account_id)
         row.mapVisible = tonumber(row.map_visible) == 1
         row.overheadVisible = tonumber(row.overhead_visible) == 1
+        row.avatarUrl = row.avatar_url
         row.map_visible = nil
         row.overhead_visible = nil
+        row.avatar_url = nil
         row.joinedAt = (tonumber(row.joined_at) or 0) * 1000
         row.joined_at = nil
     end
@@ -397,8 +404,11 @@ Bridge.Callbacks.Register("sky_phone:crewlink:bootstrap", function(source)
         return error_response
     end
     local rows = Bridge.Database.Query([[
-        SELECT `id`, `account_id`, `username`, `active_group_id`, `map_visible`, `overhead_visible`
-        FROM `sky_phone_crewlink_profiles` WHERE `account_id` = ? LIMIT 1
+        SELECT p.`id`, p.`account_id`, p.`username`, p.`avatar_media_id`, p.`active_group_id`,
+            p.`map_visible`, p.`overhead_visible`, avatar.`url` AS `avatar_url`
+        FROM `sky_phone_crewlink_profiles` p
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = p.`avatar_media_id`
+        WHERE p.`account_id` = ? LIMIT 1
     ]], { account.id })
     if not rows[1] then
         return { success = true, data = { profile = nil, groups = {}, invitations = {} } }
@@ -415,14 +425,22 @@ Bridge.Callbacks.Register("sky_phone:crewlink:create-profile", function(source, 
     if not account then
         return error_response
     end
-    local username = valid_username(data and data.username)
+    data = type(data) == "table" and data or {}
+    local username = valid_username(data.username)
     if not username then
         return { success = false, error = "invalid_username" }
     end
+    local avatar_media_id = tonumber(data.avatarMediaId) or 0
+    if avatar_media_id < 0 or avatar_media_id ~= math.floor(avatar_media_id) then
+        return { success = false, error = "invalid_profile_image" }
+    end
+    if avatar_media_id > 0 and not SkyPhoneMedia.ResolveOwnedMedia(source, avatar_media_id, "photo") then
+        return { success = false, error = "invalid_profile_image" }
+    end
     local result = Bridge.Database.Query([[
-        INSERT IGNORE INTO `sky_phone_crewlink_profiles` (`id`, `account_id`, `username`)
-        VALUES (?, ?, ?)
-    ]], { new_id(), account.id, username })
+        INSERT IGNORE INTO `sky_phone_crewlink_profiles` (`id`, `account_id`, `username`, `avatar_media_id`)
+        VALUES (?, ?, ?, NULLIF(?, 0))
+    ]], { new_id(), account.id, username, avatar_media_id })
     if affected_rows(result) ~= 1 then
         return { success = false, error = "username_taken" }
     end
@@ -442,11 +460,26 @@ Bridge.Callbacks.Register("sky_phone:crewlink:update-profile", function(source, 
     if not username or type(data.mapVisible) ~= "boolean" or type(data.overheadVisible) ~= "boolean" then
         return { success = false, error = "invalid_profile" }
     end
+    local avatar_media_id = profile.avatar_media_id and tonumber(profile.avatar_media_id) or nil
+    if data.avatarMediaId ~= nil then
+        local submitted_avatar_id = tonumber(data.avatarMediaId)
+        if not submitted_avatar_id or submitted_avatar_id < 0
+            or submitted_avatar_id ~= math.floor(submitted_avatar_id)
+        then
+            return { success = false, error = "invalid_profile_image" }
+        end
+        if submitted_avatar_id > 0
+            and not SkyPhoneMedia.ResolveOwnedMedia(source, submitted_avatar_id, "photo")
+        then
+            return { success = false, error = "invalid_profile_image" }
+        end
+        avatar_media_id = submitted_avatar_id > 0 and submitted_avatar_id or nil
+    end
     local result = Bridge.Database.Query([[
         UPDATE IGNORE `sky_phone_crewlink_profiles`
-        SET `username` = ?, `map_visible` = ?, `overhead_visible` = ?
+        SET `username` = ?, `map_visible` = ?, `overhead_visible` = ?, `avatar_media_id` = ?
         WHERE `id` = ?
-    ]], { username, data.mapVisible and 1 or 0, data.overheadVisible and 1 or 0, profile.id })
+    ]], { username, data.mapVisible and 1 or 0, data.overheadVisible and 1 or 0, avatar_media_id, profile.id })
     if affected_rows(result) ~= 1 and username:lower() ~= tostring(profile.username):lower() then
         return { success = false, error = "username_taken" }
     end

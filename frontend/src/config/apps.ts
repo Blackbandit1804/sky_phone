@@ -33,6 +33,7 @@ import {
   ReceiptText,
   UsersRound,
   Building2,
+  Newspaper,
 } from 'lucide-vue-next'
 import { defineAsyncComponent, markRaw, shallowReactive } from 'vue'
 
@@ -72,6 +73,7 @@ import musicIcon from '@/assets/img/app-icons/music.svg'
 import featherIcon from '@/assets/img/app-icons/feather.svg'
 import crewLinkIcon from '@/assets/img/app-icons/crewlink.svg'
 import companiesIcon from '@/assets/img/app-icons/companies.svg'
+import weazelNewsIcon from '@/assets/img/app-icons/weazel-news.svg'
 import type {
   BuiltinPhoneAppDefinition,
   BuiltinPhoneAppId,
@@ -83,6 +85,20 @@ import type {
 } from '@/types/apps'
 
 export const PHONE_APPS = shallowReactive<PhoneAppDefinition[]>([
+  {
+    category: 'social',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/weazel-news-app.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 29,
+    icon: markRaw(Newspaper),
+    iconClass: 'app-icon--weazel-news',
+    iconImage: weazelNewsIcon,
+    id: 'weazel-news',
+    labelKey: 'Apps.weazelNews.name',
+    route: '/apps/weazel-news',
+  },
   {
     category: 'utilities',
     component: markRaw(

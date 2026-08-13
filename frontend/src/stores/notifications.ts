@@ -43,6 +43,8 @@ type PersistedNotificationsV1 = {
   version: 1
 }
 
+export const MAX_LOCK_SCREEN_NOTIFICATIONS = 50
+
 const timeoutHandles = new Map<string, ReturnType<typeof setTimeout>>()
 const stopToneHandles = new Map<string, () => void>()
 const persistenceQueues = new Map<string, Promise<void>>()
@@ -151,7 +153,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
     for (const notification of stored) merged.set(notification.id, notification)
     for (const notification of lockScreenQueues.value[imei] ?? [])
       merged.set(notification.id, notification)
-    lockScreenQueues.value[imei] = [...merged.values()]
+    lockScreenQueues.value[imei] = [...merged.values()].slice(
+      -MAX_LOCK_SCREEN_NOTIFICATIONS,
+    )
     persist(imei)
   }
 
@@ -166,9 +170,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
   function remember(notification: PhoneNotification): void {
     const imei = notification.device?.imei ?? phone.device?.imei
     if (!imei) return
-    const notifications = lockScreenQueues.value[imei] ?? []
-    notifications.push(notification)
-    lockScreenQueues.value[imei] = notifications
+    lockScreenQueues.value[imei] = [
+      ...(lockScreenQueues.value[imei] ?? []),
+      notification,
+    ].slice(-MAX_LOCK_SCREEN_NOTIFICATIONS)
     persist(imei)
   }
 

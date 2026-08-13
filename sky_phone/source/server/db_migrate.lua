@@ -377,6 +377,7 @@ local schema = {
             { name = "url", type = "TEXT NOT NULL" },
             { name = "remote_id", type = "VARCHAR(128) NOT NULL" },
             { name = "media_type", type = "ENUM('photo', 'video') NOT NULL" },
+            { name = "mime_type", type = "VARCHAR(120) NULL" },
             { name = "origin", type = "ENUM('phone_upload', 'website_import') NOT NULL DEFAULT 'phone_upload'" },
             {
                 name = "source_id",
@@ -579,7 +580,7 @@ local schema = {
             { name = "recipient_sim_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "sender_number", type = "VARCHAR(24) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "recipient_number", type = "VARCHAR(24) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
-            { name = "message_type", type = "ENUM('text', 'voice', 'image', 'gif', 'video') NOT NULL DEFAULT 'text'" },
+            { name = "message_type", type = "ENUM('text', 'voice', 'image', 'gif', 'video', 'contact', 'share') NOT NULL DEFAULT 'text'" },
             { name = "body", type = "VARCHAR(2000) NOT NULL" },
             { name = "media_payload", type = "MEDIUMTEXT NULL" },
             { name = "media_mime", type = "VARCHAR(64) NULL", characterSet = "ascii", collation = "ascii_general_ci" },
@@ -596,6 +597,29 @@ local schema = {
         foreignKeys = {
             { column = "sender_sim_id", references = "`sky_phone_sims` (`id`) ON DELETE SET NULL" },
             { column = "recipient_sim_id", references = "`sky_phone_sims` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_marketplace_profiles",
+        columns = {
+            { name = "account_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "display_name", type = "VARCHAR(40) NOT NULL" },
+            { name = "bio", type = "VARCHAR(160) NOT NULL DEFAULT ''" },
+            { name = "avatar_media_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            {
+                name = "updated_at",
+                type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            },
+        },
+        primaryKey = "account_id",
+        indexes = {
+            { name = "idx_sky_phone_marketplace_profile_avatar", columns = "(`avatar_media_id`)" },
+        },
+        foreignKeys = {
+            { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+            { column = "avatar_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
@@ -780,6 +804,37 @@ local schema = {
         foreignKeys = {
             { column = "reporter_account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
             { column = "listing_id", references = "`sky_phone_marketplace_listings` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_pages_profiles",
+        columns = {
+            { name = "account_id", type = "BIGINT UNSIGNED NOT NULL" },
+            {
+                name = "handle",
+                type = "VARCHAR(24) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_general_ci",
+            },
+            { name = "bio", type = "VARCHAR(160) NOT NULL DEFAULT ''" },
+            { name = "avatar_media_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            {
+                name = "updated_at",
+                type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            },
+        },
+        primaryKey = "account_id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_pages_profile_handle", columns = "(`handle`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_pages_profile_avatar", columns = "(`avatar_media_id`)" },
+        },
+        foreignKeys = {
+            { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+            { column = "avatar_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
@@ -1080,7 +1135,7 @@ local schema = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "conversation_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "sender_profile_id", type = "BIGINT UNSIGNED NULL" },
-            { name = "message_type", type = "ENUM('text', 'emoji', 'gif', 'voice', 'image', 'video', 'system') NOT NULL DEFAULT 'text'" },
+            { name = "message_type", type = "ENUM('text', 'emoji', 'gif', 'voice', 'image', 'video', 'share', 'system') NOT NULL DEFAULT 'text'" },
             { name = "body", type = "TEXT NOT NULL" },
             { name = "media_payload", type = "LONGTEXT NULL" },
             { name = "media_mime", type = "VARCHAR(80) NULL", characterSet = "ascii", collation = "ascii_bin" },
@@ -1738,8 +1793,9 @@ local schema = {
             { name = "match_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "sender_account_id", type = "BIGINT UNSIGNED NOT NULL" },
             { name = "body", type = "VARCHAR(1000) NOT NULL" },
-            { name = "message_type", type = "ENUM('text', 'image', 'gif', 'video') NOT NULL DEFAULT 'text'" },
+            { name = "message_type", type = "ENUM('text', 'image', 'gif', 'video', 'share') NOT NULL DEFAULT 'text'" },
             { name = "media_url", type = "VARCHAR(2048) NULL" },
+            { name = "share_payload", type = "LONGTEXT NULL" },
             { name = "media_duration_ms", type = "INT UNSIGNED NULL" },
             { name = "read_at", type = "DATETIME NULL" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
@@ -2051,6 +2107,7 @@ local schema = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "account_id", type = "BIGINT UNSIGNED NOT NULL" },
             { name = "username", type = "VARCHAR(20) NOT NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "avatar_media_id", type = "BIGINT UNSIGNED NULL" },
             { name = "active_group_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "map_visible", type = "TINYINT(1) NOT NULL DEFAULT 1" },
             { name = "overhead_visible", type = "TINYINT(1) NOT NULL DEFAULT 0" },
@@ -2064,9 +2121,11 @@ local schema = {
         },
         indexes = {
             { name = "idx_sky_phone_crewlink_active", columns = "(`active_group_id`)" },
+            { name = "idx_sky_phone_crewlink_avatar", columns = "(`avatar_media_id`)" },
         },
         foreignKeys = {
             { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+            { column = "avatar_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
@@ -2168,6 +2227,24 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_easyshare_preferences",
+        columns = {
+            {
+                name = "device_imei",
+                type = "CHAR(15) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            { name = "visibility", type = "ENUM('everyone','contacts','hidden') NOT NULL DEFAULT 'everyone'" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "device_imei",
+        foreignKeys = {
+            { column = "device_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_company_profiles",
         columns = {
             { name = "company_id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
@@ -2197,6 +2274,33 @@ local schema = {
         foreignKeys = {
             { column = "logo_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
             { column = "cover_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_easyshare_transfers",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "sender_imei", type = "CHAR(15) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "recipient_imei", type = "CHAR(15) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "sender_name", type = "VARCHAR(160) NOT NULL" },
+            { name = "recipient_name", type = "VARCHAR(160) NOT NULL" },
+            { name = "content_type", type = "VARCHAR(24) NOT NULL", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "payload", type = "LONGTEXT NOT NULL" },
+            { name = "status", type = "ENUM('pending','transferring','completed','declined','cancelled','expired','failed') NOT NULL DEFAULT 'pending'" },
+            { name = "progress", type = "TINYINT UNSIGNED NOT NULL DEFAULT 0" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+            { name = "completed_at", type = "DATETIME NULL" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_easyshare_sender", columns = "(`sender_imei`, `created_at`)" },
+            { name = "idx_sky_phone_easyshare_recipient", columns = "(`recipient_imei`, `created_at`)" },
+        },
+        foreignKeys = {
+            { column = "sender_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
+            { column = "recipient_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
@@ -2403,6 +2507,38 @@ local schema = {
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
+    {
+        name = "sky_phone_weazel_articles",
+        columns = {
+            { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "title", type = "VARCHAR(160) NOT NULL" },
+            { name = "body", type = "LONGTEXT NOT NULL" },
+            { name = "excerpt", type = "VARCHAR(240) NOT NULL" },
+            { name = "category", type = "ENUM('official','events','jobs','news','business') NOT NULL" },
+            { name = "image_media_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "author_identifier", type = "VARCHAR(80) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "author_name", type = "VARCHAR(120) NOT NULL" },
+            { name = "updated_by_identifier", type = "VARCHAR(80) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "status", type = "ENUM('draft','published') NOT NULL DEFAULT 'draft'" },
+            { name = "revision", type = "INT UNSIGNED NOT NULL DEFAULT 1" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+            { name = "published_at", type = "DATETIME NULL" },
+            { name = "deleted_at", type = "DATETIME NULL" },
+            { name = "deleted_by_identifier", type = "VARCHAR(80) NULL", characterSet = "ascii", collation = "ascii_bin" },
+        },
+        primaryKey = "id",
+        indexes = {
+            { name = "idx_sky_phone_weazel_public", columns = "(`status`, `deleted_at`, `published_at`, `id`)" },
+            { name = "idx_sky_phone_weazel_category", columns = "(`category`, `status`, `deleted_at`, `published_at`, `id`)" },
+            { name = "idx_sky_phone_weazel_manage", columns = "(`deleted_at`, `status`, `updated_at`, `id`)" },
+            { name = "idx_sky_phone_weazel_media", columns = "(`image_media_id`)" },
+        },
+        foreignKeys = {
+            { column = "image_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
 }
 
 Bridge.Database.Migrate("sky_phone", schema)
@@ -2422,15 +2558,46 @@ Bridge.Database.Query([[
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_flare_messages`
-    MODIFY COLUMN `message_type` ENUM('text', 'image', 'gif', 'video') NOT NULL DEFAULT 'text'
+    MODIFY COLUMN `message_type` ENUM('text', 'image', 'gif', 'video', 'share') NOT NULL DEFAULT 'text'
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_sms_messages`
-    MODIFY COLUMN `message_type` ENUM('text', 'voice', 'image', 'gif', 'video') NOT NULL DEFAULT 'text'
+    MODIFY COLUMN `message_type` ENUM('text', 'voice', 'image', 'gif', 'video', 'contact', 'share') NOT NULL DEFAULT 'text'
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_darkchat_messages`
-    MODIFY COLUMN `message_type` ENUM('text', 'emoji', 'gif', 'voice', 'image', 'video', 'system') NOT NULL DEFAULT 'text'
+    MODIFY COLUMN `message_type` ENUM('text', 'emoji', 'gif', 'voice', 'image', 'video', 'share', 'system') NOT NULL DEFAULT 'text'
+]], {})
+Bridge.Database.Query([[
+    UPDATE `sky_phone_media`
+    SET `mime_type` = CASE
+        WHEN `media_type` = 'video' AND LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.webm' THEN 'video/webm'
+        WHEN `media_type` = 'video' AND LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.mp4' THEN 'video/mp4'
+        WHEN `media_type` = 'photo' AND LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.png' THEN 'image/png'
+        WHEN `media_type` = 'photo' AND LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.webp' THEN 'image/webp'
+        WHEN `media_type` = 'photo' AND (
+            LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.jpg'
+            OR LOWER(SUBSTRING_INDEX(`url`, '?', 1)) LIKE '%.jpeg'
+        ) THEN 'image/jpeg'
+        ELSE NULL
+    END
+    WHERE `mime_type` IS NULL OR `mime_type` = ''
+]], {})
+Bridge.Database.Query([[
+    UPDATE `sky_phone_sms_messages` message
+    INNER JOIN `sky_phone_media` media ON media.`url` = message.`media_payload`
+    SET message.`media_mime` = media.`mime_type`
+    WHERE message.`message_type` = 'video'
+        AND media.`mime_type` IN ('video/webm', 'video/mp4')
+        AND (message.`media_mime` IS NULL OR message.`media_mime` <> media.`mime_type`)
+]], {})
+Bridge.Database.Query([[
+    UPDATE `sky_phone_darkchat_messages` message
+    INNER JOIN `sky_phone_media` media ON media.`url` = message.`media_payload`
+    SET message.`media_mime` = media.`mime_type`
+    WHERE message.`message_type` = 'video'
+        AND media.`mime_type` IN ('video/webm', 'video/mp4')
+        AND (message.`media_mime` IS NULL OR message.`media_mime` <> media.`mime_type`)
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_marketplace_images`

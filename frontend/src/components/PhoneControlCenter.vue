@@ -10,6 +10,7 @@ import {
   Pause,
   Plane,
   Play,
+  RadioTower,
   Signal,
   SkipBack,
   SkipForward,
@@ -30,6 +31,8 @@ import { useRouter } from 'vue-router'
 
 import { usePhoneStore } from '@/stores/phone'
 import { useMusicStore } from '@/stores/music'
+import { useEasyShareStore } from '@/stores/easyshare'
+import type { EasySharePayload } from '@/types/easyshare'
 import { nuiCall } from '@/utils/nui'
 
 const props = defineProps<{ opened: boolean }>()
@@ -44,6 +47,7 @@ type ConnectivityPreference =
 
 const phone = usePhoneStore()
 const music = useMusicStore()
+const easyShare = useEasyShareStore()
 const router = useRouter()
 const panel = ref<HTMLElement | null>(null)
 const brightness = ref(phone.preferences.settings.screenBrightness)
@@ -56,6 +60,7 @@ const volume = ref(
 )
 const flashlightActive = ref(false)
 const flashlightPending = ref(false)
+const easySharePending = ref(false)
 const previousAlertVolume = ref(volume.value || 75)
 
 const inactiveGlassColors = {
@@ -200,6 +205,23 @@ async function toggleFlashlight(): Promise<void> {
   const response = await nuiCall('camera:setFlash', { enabled })
   if (!response.success) flashlightActive.value = !enabled
   flashlightPending.value = false
+}
+
+async function shareOwnContact(): Promise<void> {
+  if (easySharePending.value) return
+  easySharePending.value = true
+  const response = await nuiCall<EasySharePayload>('easyshare:own-contact')
+  easySharePending.value = false
+  if (!response.success || !response.data) {
+    console.error(
+      '[ControlCenter] Could not load own EasyShare contact.',
+      response.error,
+    )
+    return
+  }
+  emit('close')
+  easyShare.open(response.data)
+  await easyShare.showNearby()
 }
 
 function openApp(path: string): void {
@@ -360,9 +382,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="control-center__middle-grid">
-          <div
-            class="control-center__round-control control-center__round-control--wide"
-          >
+          <div class="control-center__round-control">
             <k-glass
               component="button"
               type="button"
@@ -382,6 +402,20 @@ onBeforeUnmount(() => {
               @click="toggleAlertMute"
             >
               <BellOff aria-hidden="true" />
+            </k-glass>
+          </div>
+
+          <div class="control-center__round-control">
+            <k-glass
+              component="button"
+              type="button"
+              class="control-center__round-button"
+              :colors="inactiveGlassColors"
+              :disabled="easySharePending || !phone.device?.sim"
+              :aria-label="phone.t('ControlCenter.easyShareContact')"
+              @click="shareOwnContact"
+            >
+              <RadioTower aria-hidden="true" />
             </k-glass>
           </div>
 
@@ -710,10 +744,6 @@ onBeforeUnmount(() => {
 
 .control-center__round-control {
   justify-content: center;
-}
-
-.control-center__round-control--wide {
-  grid-column: 1 / span 2;
 }
 
 .control-center__round-control > span,

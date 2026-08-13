@@ -17,13 +17,16 @@ import type { WidgetKind, WidgetSettings, WidgetSize } from '@/types/widgets'
 import {
   deleteHomePage as previewHomePageDelete,
   HOME_GRID_PAGE_SIZE,
+  homeKeyboardTarget,
   MAX_HOME_GRID_PAGES,
   type HomeArea,
 } from '@/utils/homeLayout'
+import type { ReorderDirection } from '@/utils/keyboard'
 import {
   deleteWidgetPage as previewWidgetPageDelete,
   moveWidget as previewWidgetMove,
   WIDGET_GRID_COLUMNS,
+  widgetKeyboardTarget,
   widgetOccupiedCells,
 } from '@/utils/widgetLayout'
 
@@ -515,6 +518,14 @@ function stopWidgetDrag(): void {
   clearWidgetDragPreview()
 }
 
+function reorderWidget(id: string, direction: ReorderDirection): void {
+  const instance = widgets.layout.instances.find((widget) => widget.id === id)
+  if (!instance) return
+  const target = widgetKeyboardTarget(instance, direction)
+  if (!target) return
+  widgets.move(id, instance.page, target.column, target.row)
+}
+
 function removeWidget(id: string): void {
   widgets.remove(id)
   if (widgetActionId.value === id) widgetActionId.value = null
@@ -620,6 +631,21 @@ function stopHomeDrag(): void {
   draggingHomeApp.value = null
 }
 
+function reorderHomeApp(
+  area: HomeArea,
+  sourceIndex: number,
+  direction: ReorderDirection,
+): void {
+  const targetIndex = homeKeyboardTarget(
+    appStore.homeLayout,
+    area,
+    sourceIndex,
+    direction,
+  )
+  if (targetIndex === null) return
+  appStore.moveHomeApp(area, sourceIndex, area, targetIndex)
+}
+
 async function addHomePage(): Promise<void> {
   if (addingHomePage.value) return
   addingHomePage.value = true
@@ -704,6 +730,7 @@ watch(isEditablePage, (visible) => {
             @dragstart="startWidgetDrag"
             @menu="openWidgetMenu"
             @remove="removeWidget"
+            @reorder="reorderWidget"
           />
         </div>
       </section>
@@ -725,6 +752,7 @@ watch(isEditablePage, (visible) => {
           @dragstart="startWidgetDrag"
           @menu="openWidgetMenu"
           @remove="removeWidget"
+          @reorder="reorderWidget"
         />
         <TransitionGroup
           :name="
@@ -750,6 +778,7 @@ watch(isEditablePage, (visible) => {
               @dragstart="startHomeDrag('grid', cell.sourceIndex)"
               @edit="enterEditMode"
               @remove="removeHomeApp(cell.app.id)"
+              @reorder="reorderHomeApp('grid', cell.sourceIndex, $event)"
             />
             <div
               v-else
@@ -946,6 +975,7 @@ watch(isEditablePage, (visible) => {
             @dragstart="startHomeDrag('dock', appIndex)"
             @edit="enterEditMode"
             @remove="removeHomeApp(app.id)"
+            @reorder="reorderHomeApp('dock', appIndex, $event)"
           />
           <div
             v-else
@@ -996,49 +1026,50 @@ watch(isEditablePage, (visible) => {
       </k-button>
     </nav>
 
-    <k-sheet
-      :opened="widgetActionId !== null"
-      class="widget-action-sheet"
-      @backdropclick="widgetActionId = null"
-    >
-      <div class="widget-sheet-handle" />
-      <h3>
-        {{
-          activeWidget
-            ? phone.t(`Home.widgetSystem.${activeWidget.kind}.name`)
-            : phone.t('Home.widgets.label')
-        }}
-      </h3>
-      <k-list inset strong class="widget-action-list">
-        <k-list-item
-          link
-          link-component="button"
-          content-class="w-full"
-          :title="phone.t('Home.widgetSystem.editWidget')"
-          @click="openWidgetConfig"
-        >
-          <template #media><Pencil :size="20" /></template>
-        </k-list-item>
-        <k-list-item
-          link
-          link-component="button"
-          content-class="w-full"
-          class="widget-action-remove"
-          :title="phone.t('Home.widgetSystem.removeWidget')"
-          @click="activeWidget && removeWidget(activeWidget.id)"
-        >
-          <template #media><Trash2 :size="20" /></template>
-        </k-list-item>
-      </k-list>
-      <k-button
-        large
-        rounded
-        class="widget-action-cancel"
-        @click="widgetActionId = null"
+    <div class="widget-action-sheet">
+      <k-sheet
+        :opened="widgetActionId !== null"
+        @backdropclick="widgetActionId = null"
       >
-        {{ phone.t('Common.cancel') }}
-      </k-button>
-    </k-sheet>
+        <div class="widget-sheet-handle" />
+        <h3>
+          {{
+            activeWidget
+              ? phone.t(`Home.widgetSystem.${activeWidget.kind}.name`)
+              : phone.t('Home.widgets.label')
+          }}
+        </h3>
+        <k-list inset strong class="widget-action-list">
+          <k-list-item
+            link
+            link-component="button"
+            content-class="w-full"
+            :title="phone.t('Home.widgetSystem.editWidget')"
+            @click="openWidgetConfig"
+          >
+            <template #media><Pencil :size="20" /></template>
+          </k-list-item>
+          <k-list-item
+            link
+            link-component="button"
+            content-class="w-full"
+            class="widget-action-remove"
+            :title="phone.t('Home.widgetSystem.removeWidget')"
+            @click="activeWidget && removeWidget(activeWidget.id)"
+          >
+            <template #media><Trash2 :size="20" /></template>
+          </k-list-item>
+        </k-list>
+        <k-button
+          large
+          rounded
+          class="widget-action-cancel"
+          @click="widgetActionId = null"
+        >
+          {{ phone.t('Common.cancel') }}
+        </k-button>
+      </k-sheet>
+    </div>
 
     <WidgetPickerSheet
       :opened="widgetPickerOpened"
@@ -1055,7 +1086,11 @@ watch(isEditablePage, (visible) => {
 </template>
 
 <style scoped>
-:global(.widget-action-sheet) {
+.widget-action-sheet {
+  display: contents;
+}
+
+.widget-action-sheet :deep(.k-sheet) {
   z-index: 105;
   padding: 9px 0 30px;
   border-radius: 25px 25px 0 0;

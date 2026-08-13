@@ -1,3 +1,5 @@
+SkyPhoneGarage = {}
+
 Bridge.Database.AfterMigration("sky_phone", function()
 
 local supported_systems = {
@@ -198,6 +200,30 @@ local function owned_vehicle_row(identifier, plate)
         { identifier, plate }
     )
     return rows[1], table_name, owner_column, garage_system
+end
+
+function SkyPhoneGarage.ResolveShare(source, plate_value)
+    local plate = normalized_plate(plate_value)
+    if not plate then
+        return nil
+    end
+    local identifier = Bridge.Framework.GetIdentifier(source)
+    if type(identifier) ~= "string" or identifier == "" then
+        return nil
+    end
+    local row, _, _, garage_system = owned_vehicle_row(identifier, plate)
+    if not row then
+        return nil
+    end
+    local vehicle = vehicle_dto(row, garage_system)
+    local title = vehicle.nickname ~= "" and vehicle.nickname or vehicle.plate
+    return {
+        title = title,
+        subtitle = vehicle.plate,
+        copyText = title .. "\n" .. vehicle.plate .. " · " .. vehicle.status,
+        link = "skyphone://garage/vehicle/" .. vehicle.plate,
+        meta = { kind = vehicle.kind, location = vehicle.location, status = vehicle.status },
+    }
 end
 
 local function status_snapshot(row)

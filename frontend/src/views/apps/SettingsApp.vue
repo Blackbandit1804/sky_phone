@@ -57,6 +57,7 @@ import {
 import { usePhoneStore } from '@/stores/phone'
 import PhonePasscode from '@/components/PhonePasscode.vue'
 import { useAccountStore } from '@/stores/account'
+import { useAppAuthStore } from '@/stores/app-auth'
 import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
@@ -132,6 +133,7 @@ const FRAME_PICKER_GAP = 8
 
 const phone = usePhoneStore()
 const account = useAccountStore()
+const appAuth = useAppAuthStore()
 const query = ref('')
 const activeView = ref<SettingsView>('root')
 const selectedNotificationAppId = ref<LaunchablePhoneAppId>('calculator')
@@ -602,6 +604,7 @@ async function submitAccount(): Promise<void> {
 
 async function logoutAccount(): Promise<void> {
   if (!(await account.logout())) accountToast.value = accountError()
+  else appAuth.clear()
 }
 
 function requestRemoveDevice(imei: string): void {
@@ -650,6 +653,7 @@ async function confirmFactoryReset(): Promise<void> {
   factoryResetProgress.value = 100
   factoryResetting.value = false
   if (!success) accountToast.value = accountError()
+  else appAuth.hydrate(undefined, '')
 }
 
 async function confirmSimEject(): Promise<void> {

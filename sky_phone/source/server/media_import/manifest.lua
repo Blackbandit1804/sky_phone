@@ -88,6 +88,7 @@ local function fetch_manifest(website)
                 externalId = item.id,
                 filename = item.filename,
                 mediaType = item.type,
+                mimeType = item.mimeType,
                 size = item.size,
                 url = item.url,
             }

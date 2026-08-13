@@ -120,7 +120,10 @@ local function join_radio(primary, secondary)
         return approved
     end
 
-    local data = approved.data or {}
+    if type(approved.data) ~= "table" then
+        return { success = false, error = "request_failed" }
+    end
+    local data = approved.data
     local approved_primary = tonumber(data.frequency) or 0
     local approved_secondary = tonumber(data.secondaryFrequency) or 0
     if not Bridge.Radio.Join(approved_primary, approved_secondary) then
@@ -148,27 +151,41 @@ local function leave_radio()
     return request("disconnect")
 end
 
-RegisterNUICallback("radio:get", function(_, cb)
+RegisterNUICallback("radio:get", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     local result = request("get")
-    if result.success then
+    if result.success and type(result.data) == "table" then
         apply_server_state(result.data)
         result.data.volume = current_volume
         result.data.provider = Bridge.Radio.GetProvider()
         result.data.secondarySupported = Bridge.Radio.SupportsSecondary()
+    elseif result.success then
+        result = { success = false, error = "request_failed" }
     end
     cb(result)
 end)
 
 RegisterNUICallback("radio:connect", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     cb(join_radio(data.frequency, data.secondaryFrequency))
 end)
 
-RegisterNUICallback("radio:disconnect", function(_, cb)
+RegisterNUICallback("radio:disconnect", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     cb(leave_radio())
 end)
 
 RegisterNUICallback("radio:set-volume", function(data, cb)
-    local volume = tonumber(data.volume)
+    local volume = type(data) == "table" and tonumber(data.volume) or nil
     if not volume then
         cb({ success = false, error = "invalid_volume" })
         return
@@ -179,6 +196,10 @@ RegisterNUICallback("radio:set-volume", function(data, cb)
 end)
 
 RegisterNUICallback("radio:save-settings", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     local result = request("save-settings", data)
     if result.success then
         apply_server_state({ settings = result.data })
@@ -187,14 +208,25 @@ RegisterNUICallback("radio:save-settings", function(data, cb)
 end)
 
 RegisterNUICallback("radio:save-badge", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     cb(request("save-badge", data))
 end)
 
 RegisterNUICallback("radio:save-display-name", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
     cb(request("save-display-name", data))
 end)
 
 RegisterNetEvent("sky_phone:radio:members", function(data)
+    if type(data) ~= "table" then
+        return
+    end
     local frequency = tonumber(data.frequency)
     local channel_id = frequency == current_primary and 1 or frequency == current_secondary and 2 or nil
     if not channel_id then

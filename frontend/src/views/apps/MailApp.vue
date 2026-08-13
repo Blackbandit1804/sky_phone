@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Search,
   Send,
+  Share2,
   ShieldCheck,
   SquarePen,
   Trash2,
@@ -26,6 +27,7 @@ import MailMarkdownEditor, {
   type MailEditorLabels,
 } from '@/components/MailMarkdownEditor.vue'
 import { useMailStore } from '@/stores/mail'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type {
   MailComposeDraft,
@@ -75,6 +77,7 @@ const MAIL_SWIPE_COMMIT_ANIMATION_MS = 180
 
 const phone = usePhoneStore()
 const mail = useMailStore()
+const easyShare = useEasyShareStore()
 const authMode = ref<AuthMode>('login')
 const authEmail = ref('')
 const authPassword = ref('')
@@ -563,6 +566,19 @@ function composeForward(): void {
     beginCompose(buildForwardDraft(selectedMessage.value))
 }
 
+function shareMessage(): void {
+  if (!selectedMessage.value) return
+  easyShare.open({
+    appId: 'mail',
+    copyText: `${selectedMessage.value.subject}\n${mailPlainText(selectedMessage.value.body)}`,
+    id: selectedMessage.value.id,
+    kind: 'document',
+    link: `skyphone://mail/message/${selectedMessage.value.id}`,
+    subtitle: selectedMessage.value.sender,
+    title: selectedMessage.value.subject || phone.t('Apps.mail.untitled'),
+  })
+}
+
 async function mutateSelected(
   endpoint: string,
   extra: Record<string, unknown> = {},
@@ -1004,6 +1020,13 @@ onBeforeUnmount(() => {
       </article>
 
       <footer class="mail-action-bar">
+        <button
+          type="button"
+          :aria-label="phone.t('Apps.easyShare.share')"
+          @click="shareMessage"
+        >
+          <Share2 :size="20" />
+        </button>
         <button
           type="button"
           :aria-label="phone.t('Apps.mail.reply')"

@@ -1,9 +1,22 @@
 import type { DatabaseDateValue } from '@/utils/date'
+import type { EasySharePayload } from '@/types/easyshare'
 
 export type SmsDirection = 'sent' | 'received'
 export type SmsAttachmentType = 'image' | 'gif' | 'video'
-export type SmsMessageType = 'text' | 'voice' | SmsAttachmentType
+export type SmsMessageType =
+  | 'contact'
+  | 'share'
+  | 'text'
+  | 'voice'
+  | SmsAttachmentType
 export type SmsDeliveryStatus = 'sending' | 'delivered' | 'failed'
+
+export type SmsSharedContact = {
+  avatar_url: string | null
+  name: string
+  organization: string | null
+  phone_number: string
+}
 
 export type SmsConversation = {
   lastMessage: string
@@ -16,6 +29,7 @@ export type SmsConversation = {
 export type SmsMessage = {
   body: string
   client_id?: string
+  contact?: SmsSharedContact | null
   created_at: DatabaseDateValue
   delivery_status?: SmsDeliveryStatus
   direction: SmsDirection
@@ -25,6 +39,7 @@ export type SmsMessage = {
   media_mime: string | null
   media_waveform: number[] | null
   message_type: SmsMessageType
+  share?: EasySharePayload | null
   read_at: string | null
   recipient_number: string
   sender_number: string
@@ -32,6 +47,12 @@ export type SmsMessage = {
 
 export type SmsOutgoingMessage =
   | { body: string; messageType: 'text' }
+  | {
+      contact: SmsSharedContact
+      contactId: string
+      messageType: 'contact'
+    }
+  | { body?: string; messageType: 'share'; sharePayload: EasySharePayload }
   | {
       mediaDurationMs: number
       mediaMime: string

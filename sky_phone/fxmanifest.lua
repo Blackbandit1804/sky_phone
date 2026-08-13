@@ -30,6 +30,7 @@ client_scripts {
     'source/bridge/client/housing.lua',
     'source/bridge/client/housing/*.lua',
     'source/client/animations.lua',
+    'source/client/focus.lua',
     'source/client/camera.lua',
     'source/client/garage.lua',
     'source/client/skyride.lua',
@@ -46,9 +47,11 @@ client_scripts {
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'config/config.lua',
+    'config/payphones.lua',
     'config/companies.lua',
     'config/media.lua',
     'config/music.lua',
+    'config/weazel_news.lua',
     'config/locales/*.lua',
     'source/bridge/server/database.lua',
     'source/bridge/server/migrations.lua',
@@ -66,12 +69,15 @@ server_scripts {
     'source/server/companies.lua',
     'source/server/custom_app_storage.lua',
     'source/server/sim.lua',
+    'source/server/payphones.lua',
     'source/server/calls.lua',
     'source/server/media_import.lua',
     'source/server/media_import/fivemanage.lua',
     'source/server/media_import/manifest.lua',
     'source/server/media.lua',
+    'source/server/weazel_news.lua',
     'source/server/messages.lua',
+    'source/server/easyshare.lua',
     'source/server/darkchat.lua',
     'source/server/flare.lua',
     'source/server/notes.lua',
@@ -91,6 +97,7 @@ server_scripts {
     'source/server/calendar.lua',
     'source/server/music.lua',
     'source/server/radio.lua',
+    'source/server/testdata.lua',
 }
 
 files {

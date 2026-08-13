@@ -1,8 +1,9 @@
 import type { DatabaseDateValue } from '@/utils/date'
+import type { EasySharePayload } from '@/types/easyshare'
 
 export type FlareGender = 'woman' | 'man' | 'nonbinary'
 export type FlareInterest = FlareGender | 'everyone'
-export type FlareMessageType = 'text' | 'image' | 'gif' | 'video'
+export type FlareMessageType = 'text' | 'image' | 'gif' | 'video' | 'share'
 
 export type FlareProfile = {
   age: number
@@ -43,14 +44,16 @@ export type FlareMessage = {
   mediaDurationMs: number | null
   mediaUrl: string | null
   messageType: FlareMessageType
+  sharePayload: EasySharePayload | null
 }
 
 export type FlareOutgoingMessage =
   | { body: string; messageType: 'text' }
+  | { body?: string; messageType: 'share'; sharePayload: EasySharePayload }
   | {
       mediaAssetId: string
       mediaDurationMs?: number
-      messageType: Exclude<FlareMessageType, 'text'>
+      messageType: Exclude<FlareMessageType, 'text' | 'share'>
     }
 
 export type FlareProfileDraft = Omit<

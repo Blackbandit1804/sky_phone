@@ -1,5 +1,22 @@
 # sky_phone
 
+## Payphones
+
+Payphone dialing is validated against server-owned booth positions. Vanilla GTA V positions live
+in `sky_phone/config/payphones.lua`; the server compares its own player coordinates with this list
+and does not trust coordinates or models sent by the NUI or client.
+
+For a custom map or MLO, add each booth to `Config.Payphones.Locations` in that server-only file:
+
+```lua
+{ model = "prop_phonebox_01a", coords = { x = 123.45, y = 678.90, z = 21.0 } },
+```
+
+The model must also be present in `Config.Payphones.Props`. Coordinates must be finite Lua numbers
+inside the supported world bounds. Restart `sky_phone` after changing the list. If payphones are
+enabled but the list is empty or contains invalid entries, the server logs a visible warning and
+rejects calls that cannot be matched to a valid configured location.
+
 ## Custom Apps
 
 `sky_phone` erkennt Registrierungen gestarteter Fremd-App-Ressourcen über integrierte
@@ -91,6 +108,20 @@ included in the NUI bundle.
 
 Standalone FiveM phone built with Vue 3, TypeScript, Pinia, Vue Router, Konsta UI 5, and Tailwind CSS 4. The phone opens through the usable item; `/phone` is disabled unless `Config.Phone.DevelopmentCommand` is enabled explicitly. Phone identity and SIM-card behavior are selected independently through `Config.Phone.Unique` and `Config.Sim.Enabled`.
 
+### Ingame test data
+
+On development servers, enable `Config.TestData.Enabled` and run `/phonetestdata` as the player who
+owns the phone. The command creates or refreshes idempotent, player-scoped fixtures for contacts,
+calls, messages, mail, notes, gallery, banking history, billing, calendar, map markers, music, radio,
+EasyShare, CityMarkt, Local Pages, Picstagram, FlipTok, Feather, Flare, DarkChat, CrewLink, SkyRide,
+and company requests. It also creates a linked iFruit account and a registered SIM when the selected
+phone does not have them yet. Reopen the phone after the command completes.
+
+Garage and Housing intentionally continue to use the real configured provider data. Apps without
+persistent content, such as Calculator, Camera, Clock, Weather, Settings, and Payphone, do not need
+database fixtures. Set `Config.TestData.AdminOnly = true` to restrict the command to the configured
+framework admin groups, and disable the feature outside development environments.
+
 An iFruit account is optional. Unlinked devices retain local settings, alarms, media, apps, notes, contacts, and recent calls. Linking from Mail or Settings moves local data into an empty cloud account; an existing cloud dataset wins over local contacts and recents. Signing out keeps an editable local snapshot without deleting cloud data.
 
 ## Phone identity and SIM modes
@@ -153,28 +184,25 @@ and restart the resource after updating the configuration.
 - When `Config.Sim.Enabled = true`, two unique, non-stackable inventory items named `sky_phone_sim_registered` and `sky_phone_sim_anonymous`. Their metadata is initialized automatically on first use, so shops and crafting recipes add plain items without supplying a number. These item definitions are not required when SIM cards are disabled.
 - `oxmysql` with MySQL/MariaDB.
 - `pma-voice` when `Config.Calls.VoiceProvider` is set to `"pma"`.
-- A FiveManage V3 Media API token for Camera photo/video uploads and Gallery deletion. Set the
-  server-only value in `sky_phone/config/media.lua`:
+- A FiveManage V3 Media API token for Camera photo/video uploads and Gallery deletion. Set it as a
+  server-only convar; the token is never sent to NUI because clients receive temporary presigned
+  upload URLs instead:
 
-  ```lua
-  Config.Media.FiveManage.ApiKey = "replace-with-your-media-token"
-  ```
-
-  The token is never sent to NUI because clients receive temporary presigned upload URLs instead.
+```cfg
+set sky_phone_fivemanage_api_key "replace-with-your-media-token"
+```
 - `yaca-voice`, `pma-voice`, or `saltychat` when the Radio app is enabled. `Config.Radio.VoiceProvider = "auto"` selects the first running provider in that order.
 
 ## Messages GIF provider
 
-Configure GIF search in `sky_phone/config/config.lua`:
+Configure GIF search as a server-only convar:
 
-```lua
-Config.Media.GiphyApiKey = "YOUR_GIPHY_API_KEY"
+```cfg
+set sky_phone_giphy_api_key "replace-with-your-giphy-api-key"
 ```
 
-GIPHY provides trending and searched GIFs through a paginated server-side proxy. The shared
-`config.lua` is loaded by both FiveM runtimes, so its values are available to clients even though
-only the server uses the GIPHY key. Photo and video actions in Messages are intentionally inactive
-until their dedicated implementation is available.
+GIPHY provides trending and searched GIFs through a paginated server-side proxy. Only the server
+reads the key. Photo and video actions in Messages use media captured by the Camera app.
 
 Database migrations run automatically. Existing `sky_phone_mail_accounts` installations are renamed to `sky_phone_accounts` while preserving account IDs and mail foreign keys. The migration also creates `sky_phone_character_devices` for persistent non-unique phone mappings and marks automatic SIMs through `sky_phone_sims.is_virtual`. iFruit passwords are intentional in-character credentials and remain plaintext `VARCHAR(64)` values; registration screens warn players never to reuse a real password.
 
@@ -190,6 +218,26 @@ only when their hostname matches the selected website's `AllowedMediaHosts`.
 For a fresh manual database installation, import `sky_phone/sql/install.sql`. It contains the complete current table, key, index, collation, and foreign-key schema. Runtime migrations remain authoritative for upgrading an existing installation and must stay enabled.
 
 Framework, inventory, callback, notification, and database integrations live under `sky_phone/source/bridge`. The resource has no dependency on any other Sky resource.
+
+## Weazel News app
+
+The built-in Weazel News app publishes articles for every phone user and exposes its editorial
+desk only to server-authorized jobs. Configure the job-to-minimum-grade map in
+`sky_phone/config/weazel_news.lua`; unlisted jobs remain read-only:
+
+```lua
+AllowedJobs = {
+    weazel = 0,
+    reporter = 2,
+}
+```
+
+Every create, update, and delete request rechecks the player's current framework job and grade on
+the server. Authorized editorial jobs share the newsroom and can manage drafts and published
+articles. Cover images must come from the current phone's Gallery, changes use revision checks, and
+deletion is retained as an audit-safe soft delete. Runtime migration creates
+`sky_phone_weazel_articles` automatically; fresh installations receive the same schema through
+`sky_phone/sql/install.sql`.
 
 ## Radio app
 
@@ -237,12 +285,46 @@ The homescreen is an original implementation inspired by the interaction and lay
 
 ## Development
 
-From `frontend/`, run `pnpm dev` for browser development. The phone opens automatically and NUI callbacks are mocked. Feather can be opened directly with the following browser scenarios:
+From `frontend/`, run `pnpm dev` for browser development. The phone opens automatically and NUI callbacks are mocked with stateful data. Every built-in app can be opened directly by appending its id to `http://localhost:5174/?apiPort=3002#/apps/`:
+
+| Area                | App ids                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Communication       | `phone`, `messages`, `mail`, `darkchat`, `radio`                                                              |
+| Social              | `feather`, `fliptok`, `picstagram`, `flare`, `crewlink`                                                       |
+| Services            | `companies`, `citymarkt`, `local-pages`, `banking`, `billing`, `garage`, `house`, `map`, `skyride`, `weather` |
+| Media and utilities | `camera`, `photos`, `music`, `calendar`, `notes`, `calculator`, `clock`, `app-store`, `settings`              |
+| Games               | `snake`, `memory`, `number-merge`, `minesweeper`, `tower-stack`, `sky-flappy`, `neon-drop`                    |
+
+The browser bootstrap includes contacts, calls, messages, mail, invoices, transactions, vehicles, properties, companies, marketplace profiles and listings, social feeds, media, calendar entries, notes, alarms, game high scores, app settings, and persisted notifications. Mutating callbacks update the in-memory mock state until the mock server restarts. Unknown callbacks fail with `mock_endpoint_missing` instead of silently succeeding.
+
+System overlays are available through dedicated preview parameters:
+
+- SIM picker: `http://localhost:5174/?apiPort=3002&simPickerPreview=1`
+- Payphone: `http://localhost:5174/?apiPort=3002&payphonePreview=1` (dial `5551110001` for a connected call or `5550000000` for a busy line)
+
+Feather can be opened directly with the following browser scenarios:
 
 - Full data: `http://localhost:5174/?apiPort=3002#/apps/feather`
 - Login and registration: `http://localhost:5174/?apiPort=3002&testScenario=feather-login#/apps/feather`
 - Profile onboarding: `http://localhost:5174/?apiPort=3002&testScenario=feather-onboarding#/apps/feather`
 - Empty states: `http://localhost:5174/?apiPort=3002&testScenario=feather-empty#/apps/feather`
+
+EasyShare browser data is available from every app that exposes a share action. Open the seeded
+Gallery directly, share an item, and then use the EasyShare and History actions in the sheet:
+
+- Full data, including incoming, transferring, accepted, completed, declined, cancelled, expired,
+  and failed transfers: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-full#/apps/photos`
+- Incoming request only: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-incoming#/apps/photos`
+- Transfer history without active requests: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-history#/apps/photos`
+- Complete content catalog with contact, document, link, location, note, photo, playlist, post,
+  profile, text, track, and video: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-catalog#/apps/photos`
+- Empty nearby and history states: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-empty#/apps/photos`
+
+In the full scenario, sending to Mia or Jamie creates a pending transfer. Sending to Noah creates a
+transfer at 58 percent so the progress and cancel states can be tested. Visibility changes and
+accepting or declining the seeded incoming request are kept in memory until the mock server restarts.
+The catalog also contains source examples from Companies, Mail, Garage, and House; completed history
+rows and rich chat cards can be clicked to verify app/deep-link navigation.
 
 The full-data scenario includes posts, replies, quotes, media grids, profiles, ranked hashtags, network search results, and every notification type. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before packaging.
 

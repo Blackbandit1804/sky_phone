@@ -62,19 +62,28 @@ export const useCrewLinkStore = defineStore('crewlink', {
       }
       return response
     },
-    createProfile(username: string): Promise<NuiResponse<CrewLinkBootstrap>> {
-      return this.request('crewlink:create-profile', { username })
+    createProfile(
+      username: string,
+      avatarMediaId = 0,
+    ): Promise<NuiResponse<CrewLinkBootstrap>> {
+      return this.request('crewlink:create-profile', {
+        avatarMediaId,
+        username,
+      })
     },
     updateProfile(
       username: string,
       mapVisible: boolean,
       overheadVisible: boolean,
+      avatarMediaId?: number | null,
     ): Promise<NuiResponse<CrewLinkBootstrap>> {
-      return this.request('crewlink:update-profile', {
+      const data: Record<string, unknown> = {
         mapVisible,
         overheadVisible,
         username,
-      })
+      }
+      if (avatarMediaId !== undefined) data.avatarMediaId = avatarMediaId
+      return this.request('crewlink:update-profile', data)
     },
     createGroup(
       name: string,
@@ -107,17 +116,15 @@ export const useCrewLinkStore = defineStore('crewlink', {
       return this.request('crewlink:join-code', { code })
     },
     rotateCode(groupId: string): Promise<NuiResponse<{ inviteCode: string }>> {
-      return nuiCall<{ inviteCode: string }>('crewlink:rotate-code', { groupId })
+      return nuiCall<{ inviteCode: string }>('crewlink:rotate-code', {
+        groupId,
+      })
     },
     nearby(): Promise<NuiResponse<CrewLinkNearbyPlayer[]>> {
       return nuiCall<CrewLinkNearbyPlayer[]>('crewlink:nearby')
     },
     inviteNearby(targetSource: number): Promise<NuiResponse> {
-      return this.request(
-        'crewlink:invite-nearby',
-        { targetSource },
-        false,
-      )
+      return this.request('crewlink:invite-nearby', { targetSource }, false)
     },
     respondInvite(
       invitationId: string,

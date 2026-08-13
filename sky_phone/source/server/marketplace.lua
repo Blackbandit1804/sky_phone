@@ -75,6 +75,84 @@ local function require_account(source)
     return SkyPhone.RequireAccount(source)
 end
 
+local function default_display_name(account)
+    return account.email:match("^([^@]+)") or account.email
+end
+
+local function profile_dto(account)
+    local rows = Bridge.Database.Query([[
+        SELECT profile.`display_name`, profile.`bio`, profile.`avatar_media_id`,
+            avatar.`url` AS `avatar_url`,
+            (SELECT COUNT(*) FROM `sky_phone_marketplace_listings` listing
+                WHERE listing.`seller_account_id` = ?) AS `listing_count`
+        FROM `sky_phone_accounts` account
+        LEFT JOIN `sky_phone_marketplace_profiles` profile ON profile.`account_id` = account.`id`
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = profile.`avatar_media_id`
+        WHERE account.`id` = ?
+        LIMIT 1
+    ]], { account.id, account.id })
+    local row = rows[1]
+    if not row then
+        error(("[sky_phone] Could not load CityMarkt profile account %s."):format(account.id))
+    end
+    return {
+        avatar_media_id = tonumber(row.avatar_media_id),
+        avatar_url = row.avatar_url,
+        bio = row.bio or "",
+        display_name = row.display_name or default_display_name(account),
+        email = account.email,
+        exists = row.display_name ~= nil,
+        listing_count = tonumber(row.listing_count) or 0,
+    }
+end
+
+local function require_profile(account_id)
+    local rows = Bridge.Database.Query([[
+        SELECT `account_id` FROM `sky_phone_marketplace_profiles`
+        WHERE `account_id` = ? LIMIT 1
+    ]], { account_id })
+    if not rows[1] then
+        return { success = false, error = "profile_required" }
+    end
+    return nil
+end
+
+Bridge.Callbacks.Register("sky_phone:marketplace:profile", function(source)
+    local account, error_response = require_account(source)
+    if not account then return error_response end
+    return { success = true, data = profile_dto(account) }
+end)
+
+Bridge.Callbacks.Register("sky_phone:marketplace:profile-save", function(source, data)
+    local account, error_response = require_account(source)
+    if not account then return error_response end
+    if not SkyPhone.AllowOperation(source, "marketplace:profile-save", 12, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    if type(data) ~= "table" or type(data.displayName) ~= "string" or type(data.bio) ~= "string" then
+        return { success = false, error = "invalid_profile" }
+    end
+    local display_name = trim(data.displayName)
+    local bio = trim(data.bio)
+    local avatar_media_id = tonumber(data.avatarMediaId)
+    if not valid_text(display_name, 2, 40) or not valid_text(bio, 0, 160)
+        or not avatar_media_id or avatar_media_id < 0 or avatar_media_id ~= math.floor(avatar_media_id)
+    then
+        return { success = false, error = "invalid_profile" }
+    end
+    if avatar_media_id > 0 and not SkyPhoneMedia.ResolveOwnedMedia(source, tostring(avatar_media_id), "photo") then
+        Bridge.Debug("warn", "[sky_phone] Rejected unowned CityMarkt profile image from source %s.", tostring(source))
+        return { success = false, error = "invalid_profile_image" }
+    end
+    Bridge.Database.Query([[
+        INSERT INTO `sky_phone_marketplace_profiles` (`account_id`, `display_name`, `bio`, `avatar_media_id`)
+        VALUES (?, ?, ?, NULLIF(?, 0))
+        ON DUPLICATE KEY UPDATE `display_name` = VALUES(`display_name`), `bio` = VALUES(`bio`),
+            `avatar_media_id` = VALUES(`avatar_media_id`)
+    ]], { account.id, display_name, bio, avatar_media_id })
+    return { success = true, data = profile_dto(account) }
+end)
+
 local function expire_listings()
     Bridge.Database.Query([[
         UPDATE `sky_phone_marketplace_listings`
@@ -186,13 +264,14 @@ local function listing_summary_query(account_id, where_clause, order_clause, val
     return Bridge.Database.Query(([[
         SELECT l.`id`, l.`title`, l.`category`, l.`item_condition`, l.`price_type`, l.`price`,
             l.`district`, l.`status`, l.`created_at`, l.`updated_at`, l.`expires_at`,
-            SUBSTRING_INDEX(a.`email`, '@', 1) AS `seller_name`,
+            COALESCE(profile.`display_name`, SUBSTRING_INDEX(a.`email`, '@', 1)) AS `seller_name`,
             (SELECT i.`gradient` FROM `sky_phone_marketplace_images` i
                 WHERE i.`listing_id` = l.`id` ORDER BY i.`sort_order` LIMIT 1) AS `image`,
             EXISTS(SELECT 1 FROM `sky_phone_marketplace_favorites` f
                 WHERE f.`listing_id` = l.`id` AND f.`account_id` = ?) AS `is_favorite`
         FROM `sky_phone_marketplace_listings` l
         JOIN `sky_phone_accounts` a ON a.`id` = l.`seller_account_id`
+        LEFT JOIN `sky_phone_marketplace_profiles` profile ON profile.`account_id` = l.`seller_account_id`
         WHERE %s
         ORDER BY %s
         LIMIT ? OFFSET ?
@@ -319,13 +398,16 @@ Bridge.Callbacks.Register("sky_phone:marketplace:get", function(source, data)
     expire_listings()
 
     local rows = Bridge.Database.Query([[
-        SELECT l.*, SUBSTRING_INDEX(a.`email`, '@', 1) AS `seller_name`, a.`created_at` AS `seller_since`,
+        SELECT l.*, COALESCE(profile.`display_name`, SUBSTRING_INDEX(a.`email`, '@', 1)) AS `seller_name`,
+            profile_avatar.`url` AS `seller_avatar`, a.`created_at` AS `seller_since`,
             (SELECT COUNT(*) FROM `sky_phone_marketplace_listings` own
                 WHERE own.`seller_account_id` = l.`seller_account_id` AND own.`status` IN ('active', 'reserved')) AS `seller_active`,
             EXISTS(SELECT 1 FROM `sky_phone_marketplace_favorites` f
                 WHERE f.`listing_id` = l.`id` AND f.`account_id` = ?) AS `is_favorite`
         FROM `sky_phone_marketplace_listings` l
         JOIN `sky_phone_accounts` a ON a.`id` = l.`seller_account_id`
+        LEFT JOIN `sky_phone_marketplace_profiles` profile ON profile.`account_id` = l.`seller_account_id`
+        LEFT JOIN `sky_phone_media` profile_avatar ON profile_avatar.`id` = profile.`avatar_media_id`
         WHERE l.`id` = ?
         LIMIT 1
     ]], { account_id or 0, id })
@@ -375,6 +457,8 @@ end)
 Bridge.Callbacks.Register("sky_phone:marketplace:create", function(source, data)
     local account, error_response = require_account(source)
     if not account then return error_response end
+    local profile_error = require_profile(account.id)
+    if profile_error then return profile_error end
     if not SkyPhone.AllowOperation(source, "marketplace:create", 5, 60) then
         return { success = false, error = "rate_limited" }
     end
@@ -566,7 +650,7 @@ Bridge.Callbacks.Register("sky_phone:marketplace:list-inquiries", function(sourc
             l.`title`, l.`price`, l.`price_type`, l.`status`,
             (SELECT image.`gradient` FROM `sky_phone_marketplace_images` image
                 WHERE image.`listing_id` = l.`id` ORDER BY image.`sort_order` LIMIT 1) AS `image`,
-            SUBSTRING_INDEX(other_account.`email`, '@', 1) AS `other_name`,
+            COALESCE(other_profile.`display_name`, SUBSTRING_INDEX(other_account.`email`, '@', 1)) AS `other_name`,
             (SELECT message.`body` FROM `sky_phone_marketplace_messages` message
                 WHERE message.`inquiry_id` = q.`id` ORDER BY message.`id` DESC LIMIT 1) AS `last_message`,
             ((SELECT COUNT(*) FROM `sky_phone_marketplace_messages` unread
@@ -582,6 +666,7 @@ Bridge.Callbacks.Register("sky_phone:marketplace:list-inquiries", function(sourc
         JOIN `sky_phone_marketplace_listings` l ON l.`id` = q.`listing_id`
         JOIN `sky_phone_accounts` other_account ON other_account.`id` =
             CASE WHEN q.`seller_account_id` = ? THEN q.`buyer_account_id` ELSE q.`seller_account_id` END
+        LEFT JOIN `sky_phone_marketplace_profiles` other_profile ON other_profile.`account_id` = other_account.`id`
         WHERE q.`seller_account_id` = ? OR q.`buyer_account_id` = ?
         ORDER BY q.`updated_at` DESC
         LIMIT 100
@@ -598,12 +683,14 @@ Bridge.Callbacks.Register("sky_phone:marketplace:get-inquiry", function(source, 
     end
     local inquiries = Bridge.Database.Query([[
         SELECT q.*, l.`title`, l.`price`, l.`price_type`, l.`status`, l.`reserved_account_id`,
-            SUBSTRING_INDEX(seller.`email`, '@', 1) AS `seller_name`,
-            SUBSTRING_INDEX(buyer.`email`, '@', 1) AS `buyer_name`
+            COALESCE(seller_profile.`display_name`, SUBSTRING_INDEX(seller.`email`, '@', 1)) AS `seller_name`,
+            COALESCE(buyer_profile.`display_name`, SUBSTRING_INDEX(buyer.`email`, '@', 1)) AS `buyer_name`
         FROM `sky_phone_marketplace_inquiries` q
         JOIN `sky_phone_marketplace_listings` l ON l.`id` = q.`listing_id`
         JOIN `sky_phone_accounts` seller ON seller.`id` = q.`seller_account_id`
         JOIN `sky_phone_accounts` buyer ON buyer.`id` = q.`buyer_account_id`
+        LEFT JOIN `sky_phone_marketplace_profiles` seller_profile ON seller_profile.`account_id` = seller.`id`
+        LEFT JOIN `sky_phone_marketplace_profiles` buyer_profile ON buyer_profile.`account_id` = buyer.`id`
         WHERE q.`id` = ? AND (q.`seller_account_id` = ? OR q.`buyer_account_id` = ?)
         LIMIT 1
     ]], { data.id, account.id, account.id })

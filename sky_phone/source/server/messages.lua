@@ -32,7 +32,7 @@ local attachment_assets = {
 local attachment_mimes = {
     gif = "image/gif",
     image = "image/jpeg",
-    video = "video/mp4",
+    video = "video/webm",
 }
 
 local function allowed_media_url(value)
@@ -97,9 +97,59 @@ local function current_device(source)
     return device
 end
 
+local function shared_contact(device, contact_id)
+    if type(contact_id) ~= "string" or contact_id == "" or #contact_id > 36 then
+        return nil, "invalid_contact"
+    end
+    local condition
+    local params
+    if device.account_id then
+        condition = "contact.`account_id` = ?"
+        params = { contact_id, tonumber(device.account_id) }
+    else
+        condition = "contact.`account_id` IS NULL AND contact.`device_imei` = ?"
+        params = { contact_id, device.imei }
+    end
+    local rows = Bridge.Database.Query(([[
+        SELECT contact.`name`, contact.`organization`, contact.`phone_number`, media.`url` AS `avatar_url`
+        FROM `sky_phone_contacts` contact
+        LEFT JOIN `sky_phone_media` media ON media.`id` = contact.`avatar_media_id`
+        WHERE contact.`contact_id` = ? AND %s
+        LIMIT 1
+    ]]):format(condition), params)
+    local contact = rows[1]
+    if not contact then
+        return nil, "contact_not_found"
+    end
+    local name = trim(contact.name)
+    local organization = trim(contact.organization)
+    local number = SkyPhoneSimNumber.Normalize(
+        contact.phone_number,
+        Config.Sim.NumberLength,
+        Config.Sim.NumberPrefix
+    )
+    if not name or name == "" or #name > Config.Calls.ContactNameMaxLength
+        or (organization and #organization > Config.Calls.ContactNameMaxLength) or not number
+    then
+        error(("[sky_phone] Contact %s cannot be shared because its stored data is invalid."):format(contact_id))
+    end
+    local snapshot = {
+        avatar_url = contact.avatar_url,
+        name = name,
+        organization = organization ~= "" and organization or nil,
+        phone_number = number,
+    }
+    return {
+        data = snapshot,
+        payload = json.encode(snapshot),
+    }
+end
+
 local function format_message(row)
     row.media_duration_ms = tonumber(row.media_duration_ms)
     row.media_asset_id = nil
+    row.contact = nil
+    row.share = nil
     if row.message_type == "voice" then
         local waveform = row.media_waveform and json.decode(row.media_waveform) or nil
         if type(waveform) ~= "table" then
@@ -107,6 +157,33 @@ local function format_message(row)
         end
         row.media_waveform = waveform
         row.media_payload = nil
+    elseif row.message_type == "contact" then
+        local contact = row.media_payload and json.decode(row.media_payload) or nil
+        if type(contact) ~= "table" or type(contact.name) ~= "string"
+            or type(contact.phone_number) ~= "string"
+            or (contact.avatar_url ~= nil and type(contact.avatar_url) ~= "string")
+            or (contact.organization ~= nil and type(contact.organization) ~= "string")
+        then
+            error(("[sky_phone] Message %s has an invalid contact payload."):format(tostring(row.id)))
+        end
+        row.contact = contact
+        row.media_payload = nil
+        row.media_duration_ms = nil
+        row.media_mime = nil
+        row.media_waveform = nil
+    elseif row.message_type == "share" then
+        local share = row.media_payload and json.decode(row.media_payload) or nil
+        if type(share) ~= "table" or type(share.appId) ~= "string"
+            or type(share.kind) ~= "string" or type(share.title) ~= "string"
+            or type(share.copyText) ~= "string"
+        then
+            error(("[sky_phone] Message %s has an invalid share payload."):format(tostring(row.id)))
+        end
+        row.share = share
+        row.media_payload = nil
+        row.media_duration_ms = nil
+        row.media_mime = nil
+        row.media_waveform = nil
     elseif attachment_assets[row.message_type] then
         if not valid_stored_attachment(row.message_type, row.media_payload) then
             error(("[sky_phone] Message %s has an invalid attachment asset."):format(tostring(row.id)))
@@ -131,7 +208,9 @@ local function validate_attachment(source, device, message_type, data)
         return nil
     end
     local payload = data.mediaAssetId
-    if not valid_attachment_asset(message_type, payload) then
+    local built_in_asset = valid_attachment_asset(message_type, payload)
+    local mime = built_in_asset and attachment_mimes[message_type] or nil
+    if not built_in_asset then
         if message_type == "gif" then
             return nil
         end
@@ -149,7 +228,7 @@ local function validate_attachment(source, device, message_type, data)
             params = { media_id, device.imei }
         end
         local rows = Bridge.Database.Query(([[
-            SELECT `url`, `media_type` FROM `sky_phone_media`
+            SELECT `url`, `media_type`, `mime_type` FROM `sky_phone_media`
             WHERE `id` = ? AND %s
             LIMIT 1
         ]]):format(condition), params)
@@ -164,6 +243,7 @@ local function validate_attachment(source, device, message_type, data)
             return nil
         end
         payload = media.url
+        mime = type(media.mime_type) == "string" and media.mime_type ~= "" and media.mime_type or nil
     end
     local duration = nil
     if message_type == "video" and data.mediaDurationMs ~= nil then
@@ -175,7 +255,7 @@ local function validate_attachment(source, device, message_type, data)
     end
     return {
         duration = duration,
-        mime = attachment_mimes[message_type],
+        mime = mime,
         payload = payload,
     }
 end
@@ -414,6 +494,8 @@ Bridge.Callbacks.Register("sky_phone:messages:send", function(source, data)
     local body = trim(data.body) or ""
     local voice = nil
     local attachment = nil
+    local contact = nil
+    local share = nil
     if message_type == "text" then
         if body == "" or #body > Config.Messages.BodyMaxLength then
             return { success = false, error = "invalid_message" }
@@ -424,6 +506,25 @@ Bridge.Callbacks.Register("sky_phone:messages:send", function(source, data)
             return { success = false, error = "invalid_voice" }
         end
         body = ""
+    elseif message_type == "contact" then
+        local contact_error
+        contact, contact_error = shared_contact(device, data.contactId)
+        if not contact then
+            return { success = false, error = contact_error }
+        end
+        body = contact.data.name
+    elseif message_type == "share" then
+        local share_error
+        local encoded
+        share, share_error, encoded = SkyPhoneEasyShare.SanitizeChatPayload(source, data.sharePayload)
+        if not share then
+            return { success = false, error = share_error or "invalid_payload" }
+        end
+        if body ~= "" and #body > Config.Messages.BodyMaxLength then
+            return { success = false, error = "invalid_message" }
+        end
+        share = { data = share, payload = encoded }
+        body = body ~= "" and body or share.data.title
     elseif attachment_assets[message_type] then
         attachment = validate_attachment(source, device, message_type, data)
         if not attachment then
@@ -459,7 +560,8 @@ Bridge.Callbacks.Register("sky_phone:messages:send", function(source, data)
         number,
         message_type,
         body,
-        voice and voice.payload or attachment and attachment.payload or nil,
+        voice and voice.payload or attachment and attachment.payload or contact and contact.payload
+            or share and share.payload or nil,
         voice and voice.mime or attachment and attachment.mime or nil,
         voice and voice.duration or attachment and attachment.duration or nil,
         voice and voice.waveform or nil,

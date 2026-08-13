@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { Newspaper } from 'lucide-vue-next'
+
 import { isPhoneAppId, PHONE_APPS } from './apps'
 describe('app registry', () => {
   it('has unique ids and routes with the reference dock order', () => {
@@ -58,6 +60,16 @@ describe('app registry', () => {
       labelKey: 'Apps.companies.name',
       route: '/apps/companies',
     })
+    expect(PHONE_APPS.find((app) => app.id === 'weazel-news')).toMatchObject({
+      category: 'social',
+      dockOrder: null,
+      gridOrder: 29,
+      labelKey: 'Apps.weazelNews.name',
+      route: '/apps/weazel-news',
+    })
+    expect(PHONE_APPS.find((app) => app.id === 'weazel-news')?.icon).toBe(
+      Newspaper,
+    )
     expect(PHONE_APPS.find((app) => app.id === 'music')).toMatchObject({
       category: 'utilities',
       gridOrder: 26,
@@ -135,6 +147,7 @@ describe('app registry', () => {
     expect(isPhoneAppId('skyride')).toBe(true)
     expect(isPhoneAppId('music')).toBe(true)
     expect(isPhoneAppId('companies')).toBe(true)
+    expect(isPhoneAppId('weazel-news')).toBe(true)
     expect(
       PHONE_APPS.filter((app) => app.category === 'games').map((app) => app.id),
     ).toEqual([
@@ -151,6 +164,7 @@ describe('app registry', () => {
         (app) => app.id,
       ),
     ).toEqual([
+      'weazel-news',
       'picstagram',
       'feather',
       'fliptok',

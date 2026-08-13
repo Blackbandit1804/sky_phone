@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS `sky_phone_media` (
     `url` TEXT NOT NULL,
     `remote_id` VARCHAR(128) NOT NULL,
     `media_type` ENUM('photo', 'video') NOT NULL,
+    `mime_type` VARCHAR(120) NULL,
     `origin` ENUM('phone_upload', 'website_import') NOT NULL DEFAULT 'phone_upload',
     `source_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
     `verified_at` DATETIME NULL,
@@ -311,7 +312,7 @@ CREATE TABLE IF NOT EXISTS `sky_phone_sms_messages` (
     `recipient_sim_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
     `sender_number` VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `recipient_number` VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    `message_type` ENUM('text', 'voice', 'image', 'gif', 'video') NOT NULL DEFAULT 'text',
+    `message_type` ENUM('text', 'voice', 'image', 'gif', 'video', 'contact', 'share') NOT NULL DEFAULT 'text',
     `body` VARCHAR(2000) NOT NULL,
     `media_payload` MEDIUMTEXT NULL,
     `media_mime` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
@@ -559,8 +560,9 @@ CREATE TABLE IF NOT EXISTS `sky_phone_flare_messages` (
     `match_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `sender_account_id` BIGINT UNSIGNED NOT NULL,
     `body` VARCHAR(1000) NOT NULL,
-    `message_type` ENUM('text', 'image', 'gif', 'video') NOT NULL DEFAULT 'text',
+    `message_type` ENUM('text', 'image', 'gif', 'video', 'share') NOT NULL DEFAULT 'text',
     `media_url` VARCHAR(2048) NULL,
+    `share_payload` LONGTEXT NULL,
     `media_duration_ms` INT UNSIGNED NULL,
     `read_at` DATETIME NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -901,6 +903,7 @@ CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_profiles` (
     `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `account_id` BIGINT UNSIGNED NOT NULL,
     `username` VARCHAR(20) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    `avatar_media_id` BIGINT UNSIGNED NULL,
     `active_group_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
     `map_visible` TINYINT(1) NOT NULL DEFAULT 1,
     `overhead_visible` TINYINT(1) NOT NULL DEFAULT 0,
@@ -910,7 +913,9 @@ CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_profiles` (
     UNIQUE KEY `uniq_sky_phone_crewlink_account` (`account_id`),
     UNIQUE KEY `uniq_sky_phone_crewlink_username` (`username`),
     KEY `idx_sky_phone_crewlink_active` (`active_group_id`),
-    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
+    KEY `idx_sky_phone_crewlink_avatar` (`avatar_media_id`),
+    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`avatar_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_groups` (
@@ -1138,4 +1143,29 @@ CREATE TABLE IF NOT EXISTS `sky_phone_company_audit` (
     PRIMARY KEY (`id`),
     KEY `idx_sky_phone_company_audit` (`company_id`,`created_at`,`id`),
     FOREIGN KEY (`company_id`) REFERENCES `sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_weazel_articles` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `title` VARCHAR(160) NOT NULL,
+    `body` LONGTEXT NOT NULL,
+    `excerpt` VARCHAR(240) NOT NULL,
+    `category` ENUM('official','events','jobs','news','business') NOT NULL,
+    `image_media_id` BIGINT UNSIGNED NULL,
+    `author_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `author_name` VARCHAR(120) NOT NULL,
+    `updated_by_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `status` ENUM('draft','published') NOT NULL DEFAULT 'draft',
+    `revision` INT UNSIGNED NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `published_at` DATETIME NULL,
+    `deleted_at` DATETIME NULL,
+    `deleted_by_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_weazel_public` (`status`,`deleted_at`,`published_at`,`id`),
+    KEY `idx_sky_phone_weazel_category` (`category`,`status`,`deleted_at`,`published_at`,`id`),
+    KEY `idx_sky_phone_weazel_manage` (`deleted_at`,`status`,`updated_at`,`id`),
+    KEY `idx_sky_phone_weazel_media` (`image_media_id`),
+    FOREIGN KEY (`image_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

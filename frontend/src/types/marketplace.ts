@@ -15,6 +15,22 @@ export type MarketplacePriceType = 'fixed' | 'negotiable' | 'free'
 export type MarketplaceStatus = 'active' | 'reserved' | 'sold' | 'expired' | 'removed'
 export type MarketplaceOfferStatus = 'pending' | 'accepted' | 'rejected' | 'countered'
 
+export type MarketplaceProfile = {
+  avatar_media_id: number | null
+  avatar_url: string | null
+  bio: string
+  display_name: string
+  email: string
+  exists: boolean
+  listing_count: number
+}
+
+export type MarketplaceProfileDraft = {
+  avatarMediaId: number
+  bio: string
+  displayName: string
+}
+
 export type MarketplaceImage = {
   gradient: string
   media_id: string
@@ -46,6 +62,7 @@ export type MarketplaceListing = MarketplaceListingSummary & {
   reserved_account_id: number | null
   revision: number
   seller_active: number
+  seller_avatar: string | null
   seller_since: DatabaseDateValue
   show_phone: boolean | number
 }

@@ -23,7 +23,7 @@ export const PHONE_FRAME_IDS = [
 export const RINGTONE_IDS = ['skyline', 'horizon', 'pulse'] as const
 export const NOTIFICATION_SOUND_IDS = ['chime', 'signal', 'soft'] as const
 export const WALLPAPER_IDS = ['midnight', 'aurora', 'ember'] as const
-export const PHONE_SCALE_MIN = 50
+export const PHONE_SCALE_MIN = 75
 export const PHONE_SCALE_MAX = 150
 export const PHONE_SCALE_STEP = 5
 
@@ -87,6 +87,7 @@ const DEFAULT_APP_NOTIFICATIONS: Record<
   'neon-drop': { enabled: true, sounds: true },
   citymarkt: { enabled: true, sounds: true },
   companies: { enabled: true, sounds: true },
+  'weazel-news': { enabled: true, sounds: true },
   'local-pages': { enabled: true, sounds: true },
   picstagram: { enabled: true, sounds: true },
   fliptok: { enabled: true, sounds: true },
@@ -197,6 +198,10 @@ export function ensureAppNotificationPreferences(
   }
 }
 
+export function clampPhoneScale(value: number): number {
+  return Math.min(PHONE_SCALE_MAX, Math.max(PHONE_SCALE_MIN, value))
+}
+
 export function parsePhonePreferences(raw: string | null): PhonePreferencesV1 {
   if (!raw) return cloneJsonData(DEFAULT_PHONE_PREFERENCES)
 
@@ -249,11 +254,13 @@ export function parsePhonePreferences(raw: string | null): PhonePreferencesV1 {
           100,
         ),
         notifications: readNotifications(settings.notifications),
-        phoneScale: readNumber(
-          settings.phoneScale,
-          defaults.phoneScale,
-          PHONE_SCALE_MIN,
-          PHONE_SCALE_MAX,
+        phoneScale: clampPhoneScale(
+          readNumber(
+            settings.phoneScale,
+            defaults.phoneScale,
+            Number.MIN_SAFE_INTEGER,
+            Number.MAX_SAFE_INTEGER,
+          ),
         ),
         ringtone: readChoice(
           settings.ringtone,
