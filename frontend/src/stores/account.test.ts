@@ -58,6 +58,19 @@ describe('account store', () => {
     expect(account.devices).toEqual(devices)
   })
 
+  it('clears the linked account after logout', async () => {
+    mockNuiCall.mockResolvedValueOnce({ success: true })
+
+    const account = useAccountStore()
+    account.hydrate({ devices, email: 'alex@ifruit.com' })
+    const success = await account.logout()
+
+    expect(success).toBe(true)
+    expect(account.email).toBe('')
+    expect(account.devices).toEqual([])
+    expect(mockNuiCall).toHaveBeenCalledWith('account:logout')
+  })
+
   it('clears account state after a factory reset', async () => {
     mockNuiCall.mockResolvedValueOnce({ success: true })
 

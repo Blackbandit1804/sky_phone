@@ -4,13 +4,20 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 import type { UploadReady } from '@/types/media'
 import { createGameView, type GameView } from '@/utils/gameView'
+import {
+  bindMediaRecorderError,
+  setBoundedMapEntry,
+  stopMediaRecorder,
+} from '@/utils/mediaRecorder'
 import { nuiCall } from '@/utils/nui'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type RecordingChunk = { blob: Blob; durationMs: number }
 type PendingVideo = { blob: Blob; fileName: string }
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const pendingVideos = new Map<string, PendingVideo>()
+const maxPendingVideos = 3
 const captureFps = 30
 const maxCaptureEdge = 720
 const portraitAspect = 3 / 4
@@ -22,12 +29,16 @@ let gameView: GameView | null = null
 let renderFrameId: number | undefined
 let lastRenderAt = 0
 let recorder: MediaRecorder | null = null
+let recordingStarting = false
 let stream: MediaStream | null = null
 let microphoneStream: MediaStream | null = null
 let chunks: RecordingChunk[] = []
 let lastChunkAt = 0
 let lastChunkTimecode: number | null = null
+let recordingStartedAt = 0
+let recordingGeneration = 0
 let flushTimer: number | undefined
+let removeRecorderErrorListener: (() => void) | null = null
 
 function captureDimensions(): { height: number; width: number } {
   return landscape
@@ -53,7 +64,11 @@ function ensureGameView(): GameView {
   if (gameView && !gameView.isLost()) return gameView
   gameView?.dispose()
   const dimensions = captureDimensions()
-  gameView = createGameView(canvasRef.value)
+  gameView = createGameView(canvasRef.value, {
+    onContextRestored: () => {
+      if (recorder?.state === 'recording') startRenderLoop()
+    },
+  })
   gameView.resize(
     dimensions.width,
     dimensions.height,
@@ -92,6 +107,7 @@ function resetRecording(): void {
   chunks = []
   lastChunkAt = 0
   lastChunkTimecode = null
+  recordingStartedAt = 0
 }
 
 function stopTracks(): void {
@@ -102,8 +118,22 @@ function stopTracks(): void {
 }
 
 function cleanupRecording(): void {
-  if (recorder && recorder.state !== 'inactive') recorder.stop()
+  recordingGeneration += 1
+  recordingStarting = false
+  const activeRecorder = recorder
   recorder = null
+  removeRecorderErrorListener?.()
+  removeRecorderErrorListener = null
+  if (activeRecorder) {
+    activeRecorder.ondataavailable = null
+    if (activeRecorder.state !== 'inactive') {
+      try {
+        activeRecorder.stop()
+      } catch (error) {
+        console.error('[Camera] Could not stop the failed media recorder.', error)
+      }
+    }
+  }
   stopTracks()
   if (flushTimer !== undefined) window.clearInterval(flushTimer)
   flushTimer = undefined
@@ -113,7 +143,7 @@ function cleanupRecording(): void {
 }
 
 async function startRecording(data: Record<string, unknown>): Promise<void> {
-  if (recorder) return
+  if (recorder || recordingStarting) return
   if (typeof MediaRecorder === 'undefined') {
     window.postMessage(
       {
@@ -128,7 +158,22 @@ async function startRecording(data: Record<string, unknown>): Promise<void> {
   if (Number.isFinite(configuredBitrate) && configuredBitrate > 0) {
     bitrateBps = Math.round(configuredBitrate * 1000)
   }
-  startRenderLoop()
+  try {
+    startRenderLoop()
+  } catch (error) {
+    console.error('[Camera] Could not start game-view recording.', error)
+    cleanupRecording()
+    window.postMessage(
+      {
+        data: { error: 'capture_failed', success: false },
+        type: 'camera:recordError',
+      },
+      '*',
+    )
+    return
+  }
+  recordingStarting = true
+  const generation = ++recordingGeneration
   resetRecording()
   const videoStream = canvasRef.value?.captureStream(captureFps) ?? null
   if (!videoStream) {
@@ -137,15 +182,23 @@ async function startRecording(data: Record<string, unknown>): Promise<void> {
   }
   if (data.microphoneEnabled === true) {
     try {
-      microphoneStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          autoGainControl: true,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      })
+      const acquiredMicrophoneStream =
+        await navigator.mediaDevices.getUserMedia({
+          audio: {
+            autoGainControl: true,
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        })
+      if (generation !== recordingGeneration) {
+        acquiredMicrophoneStream.getTracks().forEach((track) => track.stop())
+        videoStream.getTracks().forEach((track) => track.stop())
+        return
+      }
+      microphoneStream = acquiredMicrophoneStream
     } catch {
       videoStream.getTracks().forEach((track) => track.stop())
+      if (generation !== recordingGeneration) return
       cleanupRecording()
       window.postMessage(
         {
@@ -161,16 +214,51 @@ async function startRecording(data: Record<string, unknown>): Promise<void> {
     ...videoStream.getVideoTracks(),
     ...(microphoneStream?.getAudioTracks() ?? []),
   ])
+  if (generation !== recordingGeneration) {
+    stopTracks()
+    stopRenderLoop()
+    return
+  }
   const mimeType = [
     'video/webm;codecs=vp8,opus',
     'video/webm;codecs=vp8',
     'video/webm',
   ].find((type) => MediaRecorder.isTypeSupported(type))
-  recorder = new MediaRecorder(stream, {
-    ...(mimeType ? { mimeType } : {}),
-    audioBitsPerSecond: 128_000,
-    videoBitsPerSecond: bitrateBps,
-  })
+  try {
+    recorder = new MediaRecorder(stream, {
+      ...(mimeType ? { mimeType } : {}),
+      audioBitsPerSecond: 128_000,
+      videoBitsPerSecond: bitrateBps,
+    })
+  } catch (error) {
+    console.error('[Camera] Could not create the media recorder.', error)
+    cleanupRecording()
+    window.postMessage(
+      {
+        data: { error: 'unsupported', success: false },
+        type: 'camera:recordError',
+      },
+      '*',
+    )
+    return
+  }
+  const activeRecorder = recorder
+  removeRecorderErrorListener = bindMediaRecorderError(
+    activeRecorder,
+    () =>
+      generation === recordingGeneration && recorder === activeRecorder,
+    (event) => {
+      console.error('[Camera] Media recorder failed while recording.', event)
+      cleanupRecording()
+      window.postMessage(
+        {
+          data: { error: 'capture_failed', success: false },
+          type: 'camera:recordError',
+        },
+        '*',
+      )
+    },
+  )
   recorder.ondataavailable = (event) => {
     if (!event.data.size) return
     const now = Date.now()
@@ -185,7 +273,22 @@ async function startRecording(data: Record<string, unknown>): Promise<void> {
     lastChunkAt = now
     chunks.push({ blob: event.data, durationMs })
   }
-  recorder.start()
+  try {
+    recorder.start()
+  } catch (error) {
+    console.error('[Camera] Could not start the media recorder.', error)
+    cleanupRecording()
+    window.postMessage(
+      {
+        data: { error: 'capture_failed', success: false },
+        type: 'camera:recordError',
+      },
+      '*',
+    )
+    return
+  }
+  recordingStartedAt = Date.now()
+  recordingStarting = false
   flushTimer = window.setInterval(() => {
     if (recorder?.state === 'recording') recorder.requestData()
   }, 1000)
@@ -195,37 +298,78 @@ async function startRecording(data: Record<string, unknown>): Promise<void> {
 async function stopRecording(data: Record<string, unknown>): Promise<void> {
   const correlationId = String(data.correlationId ?? '')
   if (!recorder || recorder.state === 'inactive' || !correlationId) return
+  const generation = recordingGeneration
+  const activeRecorder = recorder
   postRecordState(false, true)
-  recorder.requestData()
-  await new Promise((resolve) => window.setTimeout(resolve, 120))
-  recorder.stop()
-  await new Promise((resolve) => window.setTimeout(resolve, 120))
   if (flushTimer !== undefined) window.clearInterval(flushTimer)
   flushTimer = undefined
-  stopTracks()
-  recorder = null
-  stopRenderLoop()
-  const durationMs = chunks.reduce((sum, entry) => sum + entry.durationMs, 0)
-  let blob = new Blob(
-    chunks.map((entry) => entry.blob),
-    { type: 'video/webm' },
-  )
-  blob = await (
-    fixWebmDuration as unknown as (
-      source: Blob,
-      duration: number,
-      options: { logger: boolean },
-    ) => Promise<Blob>
-  )(blob, durationMs, { logger: false })
-  resetRecording()
-  pendingVideos.set(correlationId, {
-    blob,
-    fileName: `camera-${correlationId}.webm`,
-  })
-  await nuiCall('media:requestUpload', {
-    correlationId,
-    mediaType: 'video',
-  })
+  const stopErrorListener = removeRecorderErrorListener
+  stopErrorListener?.()
+  if (removeRecorderErrorListener === stopErrorListener) {
+    removeRecorderErrorListener = null
+  }
+  try {
+    await stopMediaRecorder(activeRecorder)
+    if (generation !== recordingGeneration) return
+    const durationMs = Math.max(
+      chunks.reduce((sum, entry) => sum + entry.durationMs, 0),
+      recordingStartedAt ? Date.now() - recordingStartedAt : 0,
+    )
+    let blob = new Blob(
+      chunks.map((entry) => entry.blob),
+      { type: 'video/webm' },
+    )
+    blob = await (
+      fixWebmDuration as unknown as (
+        source: Blob,
+        duration: number,
+        options: { logger: boolean },
+      ) => Promise<Blob>
+    )(blob, durationMs, { logger: false })
+    if (generation !== recordingGeneration) return
+    setBoundedMapEntry(
+      pendingVideos,
+      correlationId,
+      { blob, fileName: `camera-${correlationId}.webm` },
+      maxPendingVideos,
+    )
+    const response = await nuiCall('media:requestUpload', {
+      correlationId,
+      mediaType: 'video',
+    })
+    if (generation !== recordingGeneration) return
+    if (!response.success) {
+      pendingVideos.delete(correlationId)
+      window.postMessage(
+        {
+          data: { correlationId, error: 'request_failed', success: false },
+          type: 'media:uploadResult',
+        },
+        '*',
+      )
+    }
+  } catch (error) {
+    if (generation === recordingGeneration) {
+      console.error('[Camera] Could not finalize the video recording.', error)
+      pendingVideos.delete(correlationId)
+      window.postMessage(
+        {
+          data: { correlationId, error: 'capture_failed', success: false },
+          type: 'media:uploadResult',
+        },
+        '*',
+      )
+    }
+  } finally {
+    if (generation === recordingGeneration || recorder === activeRecorder) {
+      if (recorder === activeRecorder) {
+        recorder = null
+      }
+      stopTracks()
+      stopRenderLoop()
+      resetRecording()
+    }
+  }
 }
 
 async function renderFrames(view: GameView, count: number): Promise<void> {
@@ -341,6 +485,7 @@ async function uploadReady(ready: UploadReady): Promise<void> {
 }
 
 function onMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   const message = event.data as {
     data?: Record<string, unknown>
     type?: string
@@ -379,6 +524,9 @@ function onMessage(event: MessageEvent): void {
     }
   } else if (message.type === 'media:uploadReady') {
     void uploadReady(message.data as UploadReady)
+  } else if (message.type === 'media:uploadResult') {
+    const correlationId = String(message.data?.correlationId ?? '')
+    if (correlationId) pendingVideos.delete(correlationId)
   }
 }
 

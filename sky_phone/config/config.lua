@@ -15,8 +15,33 @@ Config.Command = "phone"
 
 Config.Phone = {
     Item = "phone",
+    Unique = true, -- true: data follows each phone item; false: one persistent phone per character
     DevelopmentCommand = true,
     DeviceName = "iFruit Phone",
+}
+
+Config.TestData = {
+    Enabled = true,
+    Command = "phonetestdata",
+    AdminOnly = false, -- enable only on development servers; every run is scoped to the executing player's phone
+    AdminGroups = { "admin", "superadmin" },
+}
+
+Config.CustomApps = {
+    Enabled = true,
+    BundledApps = true,
+    ExternalApps = true,
+    ReadyTimeoutMs = 8000,
+    MaximumMessageBytes = 65536,
+    MaximumStorageBytesPerApp = 262144,
+    MaximumStorageValueBytes = 65536, -- Bridge v1 ceiling; lower values tighten the server policy.
+    MaximumStorageKeyLength = 64, -- Bridge v1 ceiling; lower values tighten the server policy.
+    MaximumStorageKeysPerApp = 128,
+    StorageRequestsPerMinute = 120,
+    AllowRemoteOrigins = {
+        -- ["https://apps.example.com"] = true,
+    },
+    TrustedAdapters = {},
 }
 
 Config.Security = {
@@ -27,6 +52,7 @@ Config.Security = {
 }
 
 Config.Sim = {
+    Enabled = true, -- false: devices without a SIM receive a persistent random number automatically
     RegisteredItem = "sky_phone_sim_registered",
     AnonymousItem = "sky_phone_sim_anonymous",
     NumberLength = 10,
@@ -38,6 +64,7 @@ Config.Calls = {
     VoiceProvider = "pma",
     RingSeconds = 30,
     ContactNameMaxLength = 80,
+    ContactNotesMaxLength = 500,
     RecentPageSize = 100,
 }
 
@@ -166,6 +193,20 @@ Config.Messages = {
     DeleteBatchSize = 20,
 }
 
+Config.EasyShare = {
+    Enabled = true,
+    DefaultVisibility = "everyone", -- everyone, contacts or hidden
+    MaximumDistance = 15.0,
+    HistoryLimit = 50,
+    PendingSeconds = 30,
+    TransferDurationMs = 3000,
+    RequestsPerMinute = 12,
+    BootstrapRequestsPerMinute = 30,
+    VisibilityUpdatesPerMinute = 10,
+    ActionsPerMinute = 30,
+    PayloadMaxBytes = 24000,
+}
+
 Config.DarkChat = {
     AliasMaxLength = 32,
     BodyMaxLength = 2000,
@@ -199,6 +240,8 @@ Config.Mail = {
     MaxRecipients = 10,
     PageSize = 50,
     AuthAttemptsPerMinute = 5,
+    DeleteBatchSize = 50,
+    DeleteRequestsPerMinute = 12,
 }
 
 Config.Banking = {
@@ -326,6 +369,9 @@ Config.Marketplace = {
 Config.LocalPages = {
     PageSize = 20,
     MaxImages = 6,
+    ProfileHandleMinLength = 3,
+    ProfileHandleMaxLength = 24,
+    ProfileBioMaxLength = 160,
     TitleMinLength = 5,
     TitleMaxLength = 80,
     BodyMinLength = 10,

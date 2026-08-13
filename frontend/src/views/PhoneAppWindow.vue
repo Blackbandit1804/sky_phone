@@ -2,8 +2,10 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
-import { getPhoneApp } from '@/config/apps'
+import CustomAppFrame from '@/components/CustomAppFrame.vue'
+import { getPhoneApp, isExternalPhoneApp } from '@/config/apps'
 import { usePhoneStore } from '@/stores/phone'
+import { getCustomAppFrameKey } from '@/utils/customAppLifecycle'
 
 const route = useRoute()
 const phone = usePhoneStore()
@@ -21,8 +23,13 @@ const launchStyle = computed(() => {
 </script>
 
 <template>
-  <div v-if="app?.component" class="app-window" :style="launchStyle">
-    <Suspense>
+  <div v-if="app" class="app-window" :style="launchStyle">
+    <CustomAppFrame
+      v-if="isExternalPhoneApp(app)"
+      :key="getCustomAppFrameKey(app)"
+      :app="app"
+    />
+    <Suspense v-else>
       <component :is="app.component" />
       <template #fallback>
         <div class="app-loading">{{ phone.t('Common.loading') }}</div>

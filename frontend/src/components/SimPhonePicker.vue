@@ -42,7 +42,6 @@ async function insert(
 }
 
 function close(): void {
-  void nuiCall('sim:picker-close')
   emit('close')
 }
 </script>

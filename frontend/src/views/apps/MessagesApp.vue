@@ -35,27 +35,36 @@ import {
   Search,
   SquarePen,
   Trash2,
+  ContactRound,
   UserPlus,
   Video,
   X,
 } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import MessageAttachmentBubble from '@/components/MessageAttachmentBubble.vue'
+import MessageContactBubble from '@/components/MessageContactBubble.vue'
+import SharedContentCard from '@/components/SharedContentCard.vue'
 import FullEmojiPicker from '@/components/FullEmojiPicker.vue'
 import VoiceMessageBubble from '@/components/VoiceMessageBubble.vue'
 import { useCallsStore } from '@/stores/calls'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { useMessagesStore } from '@/stores/messages'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
+import { handleEnterAction } from '@/utils/keyboard'
+import { sortContactsByMessageRecency } from '@/utils/messages'
 import type {
   GifSearchResult,
   SmsAttachmentType,
   SmsConversation,
   SmsMessage,
+  SmsSharedContact,
 } from '@/types/messages'
+import type { PhoneContact } from '@/types/phone'
+import type { EasySharePayload } from '@/types/easyshare'
 
 const VOICE_MAX_DURATION_MS = 30_000
 const VOICE_MAX_BYTES = 135_000
@@ -63,6 +72,7 @@ const WAVEFORM_SAMPLES = 48
 
 const phone = usePhoneStore()
 const calls = useCallsStore()
+const easyShare = useEasyShareStore()
 const messages = useMessagesStore()
 const messageMedia = useMessageMediaStore()
 const router = useRouter()
@@ -72,13 +82,15 @@ const editingList = ref(false)
 const selectedNumbers = ref<string[]>([])
 const composerNumber = ref('')
 const draft = ref('')
+const queuedSharePayload = ref<EasySharePayload | null>(null)
+const shareDraft = ref<EasySharePayload | null>(null)
 const composing = ref(false)
 const sending = ref(false)
 const toastOpened = ref(false)
 const toastText = ref('')
 const emojiOpen = ref(false)
 const attachmentMenuOpen = ref(false)
-const attachmentPicker = ref<'gifs' | null>(null)
+const attachmentPicker = ref<'contacts' | 'gifs' | null>(null)
 const contactDetailsOpen = ref(false)
 const contactEditing = ref(false)
 const contactNameDraft = ref('')
@@ -92,6 +104,7 @@ const gifNextOffset = ref(0)
 const recording = ref(false)
 const recordingElapsedMs = ref(0)
 const recordingLevels = ref<number[]>(Array(32).fill(0.16))
+const threadBottom = ref<HTMLElement | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let gifSearchTimer: ReturnType<typeof setTimeout> | undefined
 let recordingTimer: ReturnType<typeof setInterval> | undefined
@@ -119,10 +132,22 @@ const filteredConversations = computed(() => {
 const knownContactNumbers = computed(
   () => new Set(calls.contacts.map((contact) => contact.phone_number)),
 )
+const contactAvatarUrls = computed(
+  () =>
+    new Map(
+      calls.contacts
+        .filter((contact) => Boolean(contact.avatar_url))
+        .map((contact) => [contact.phone_number, contact.avatar_url as string]),
+    ),
+)
 const contactSuggestions = computed(() => {
   const query = composerNumber.value.trim().toLocaleLowerCase(phone.lang)
-  if (!query) return calls.contacts.slice(0, 8)
-  return calls.contacts
+  const contacts = sortContactsByMessageRecency(
+    calls.contacts.filter((contact) => contact.canMessage !== false),
+    messages.conversations,
+  )
+  if (!query) return contacts.slice(0, 8)
+  return contacts
     .filter((contact) =>
       `${contact.name} ${contact.phone_number}`
         .toLocaleLowerCase(phone.lang)
@@ -137,6 +162,9 @@ const activeContact = computed(() =>
   calls.contacts.find(
     (contact) => contact.phone_number === messages.activeNumber,
   ),
+)
+const activeCanMessage = computed(
+  () => activeContact.value?.canMessage !== false,
 )
 const attachmentPanelOpen = computed(
   () => emojiOpen.value || attachmentPicker.value !== null,
@@ -158,26 +186,28 @@ function conversationPreview(conversation: SmsConversation): string {
   if (conversation.lastMessageType === 'video') {
     return `▶️ ${phone.t('Apps.messages.video')}`
   }
+  if (conversation.lastMessageType === 'contact') {
+    return `\u{1F464} ${phone.t('Apps.messages.contact')}`
+  }
+  if (conversation.lastMessageType === 'share') {
+    return `\u{1F517} ${conversation.lastMessage}`
+  }
   return conversation.lastMessageType === 'voice'
     ? `🎙️ ${phone.t('Apps.messages.voiceMessage')}`
     : conversation.lastMessage
 }
 
-function avatarStyle(number: string): { background: string } {
-  let hash = 0
-  for (const character of number) {
-    hash = (hash * 31 + character.charCodeAt(0)) % 360
-  }
-  return {
-    background: `linear-gradient(145deg, hsl(${hash} 72% 62%), hsl(${(hash + 35) % 360} 68% 48%))`,
-  }
-}
-
-function avatarGlyph(number: string): string {
-  const glyphs = ['👩🏻', '🧔🏻', '👩🏽', '👨🏼', '👩🏼', '🧑🏾', '👨🏽', '👩🏾']
-  let hash = 0
-  for (const character of number) hash += character.charCodeAt(0)
-  return glyphs[hash % glyphs.length]
+function contactInitials(number: string): string {
+  const contact = calls.contacts.find(
+    (entry) => entry.phone_number === number,
+  )
+  if (!contact) return ''
+  return contact.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
 }
 
 function formatConversationDate(value: DatabaseDateValue): string {
@@ -279,6 +309,8 @@ function errorText(error?: string): string {
     'invalid_message',
     'invalid_voice',
     'invalid_attachment',
+    'invalid_contact',
+    'contact_not_found',
     'media_provider_unconfigured',
     'capture_provider_unavailable',
     'capture_failed',
@@ -299,11 +331,12 @@ function errorText(error?: string): string {
 
 async function scrollToBottom(animate = true): Promise<void> {
   await nextTick()
-  const page = document.querySelector<HTMLElement>('.messages-thread-page')
-  if (!page) return
-  page.scrollTo({
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve())
+  })
+  threadBottom.value?.scrollIntoView({
+    block: 'end',
     behavior: animate ? 'smooth' : 'auto',
-    top: page.scrollHeight,
   })
 }
 
@@ -319,6 +352,28 @@ async function openConversation(conversation: SmsConversation): Promise<void> {
     return
   }
   composing.value = false
+  shareDraft.value = queuedSharePayload.value
+  queuedSharePayload.value = null
+  await scrollToBottom(false)
+}
+
+async function openEasyShareDraft(): Promise<void> {
+  const shared = easyShare.consumeChatDraft('messages')
+  if (!shared) return
+  if (!shared.targetId) {
+    messages.closeThread()
+    composing.value = false
+    queuedSharePayload.value = shared.payload
+    draft.value = ''
+    return
+  }
+  if (!(await messages.openThread(shared.targetId))) {
+    showToast(errorText('invalid_number'))
+    return
+  }
+  composing.value = false
+  queuedSharePayload.value = null
+  shareDraft.value = shared.payload
   draft.value = ''
   await scrollToBottom(false)
 }
@@ -348,12 +403,21 @@ function beginCompose(): void {
 }
 
 async function chooseRecipient(number: string): Promise<void> {
+  const contact = calls.contacts.find(
+    (candidate) => candidate.phone_number === number,
+  )
+  if (contact?.canMessage === false) {
+    showToast(phone.t('Apps.messages.messagingUnavailable'))
+    return
+  }
   composerNumber.value = number
   if (!(await messages.openThread(number))) {
     showToast(errorText('invalid_number'))
     return
   }
   composing.value = false
+  shareDraft.value = queuedSharePayload.value
+  queuedSharePayload.value = null
   await scrollToBottom(false)
 }
 
@@ -368,6 +432,7 @@ function goBack(): void {
   composing.value = false
   composerNumber.value = ''
   draft.value = ''
+  shareDraft.value = null
   emojiOpen.value = false
   attachmentMenuOpen.value = false
   attachmentPicker.value = null
@@ -386,10 +451,16 @@ function openContactDetails(): void {
 }
 
 async function saveContactDetails(): Promise<void> {
+  if (activeContact.value?.readonly) {
+    showToast(phone.t('Apps.phone.errors.readonly_contact'))
+    return
+  }
   if (!contactNameDraft.value.trim() || !contactNumberDraft.value.trim()) return
   const response = await calls.saveContact({
     id: activeContact.value?.id,
     name: contactNameDraft.value.trim(),
+    notes: activeContact.value?.notes ?? '',
+    organization: activeContact.value?.organization ?? '',
     phoneNumber: contactNumberDraft.value,
   })
   if (!response.success) {
@@ -403,6 +474,10 @@ async function saveContactDetails(): Promise<void> {
 
 async function deleteActiveContact(): Promise<void> {
   if (!activeContact.value) return
+  if (activeContact.value.readonly) {
+    showToast(phone.t('Apps.phone.errors.readonly_contact'))
+    return
+  }
   if (!(await calls.deleteContact(activeContact.value.id))) {
     showToast(phone.t('Apps.messages.contactDeleteFailed'))
     return
@@ -412,7 +487,7 @@ async function deleteActiveContact(): Promise<void> {
 }
 
 async function callActiveContact(): Promise<void> {
-  if (!messages.activeNumber) return
+  if (!messages.activeNumber || activeContact.value?.canCall === false) return
   const response = await calls.dial(messages.activeNumber)
   if (!response.success) showToast(phone.t('Apps.messages.callFailed'))
 }
@@ -428,6 +503,12 @@ function openGifPicker(): void {
   attachmentPicker.value = 'gifs'
   emojiOpen.value = false
   if (!gifResults.value.length) void loadGifs(true)
+}
+
+function openContactPicker(): void {
+  attachmentMenuOpen.value = false
+  attachmentPicker.value = 'contacts'
+  emojiOpen.value = false
 }
 
 function openEmojiPicker(): void {
@@ -454,7 +535,7 @@ async function sendAttachment(
   mediaAssetId: string,
   mediaDurationMs?: number,
 ): Promise<void> {
-  if (!messages.activeNumber || sending.value) return
+  if (!messages.activeNumber || !activeCanMessage.value || sending.value) return
   attachmentMenuOpen.value = false
   attachmentPicker.value = null
   sending.value = true
@@ -466,6 +547,51 @@ async function sendAttachment(
   sending.value = false
   if (!response.success) showToast(errorText(response.error))
   await scrollToBottom()
+}
+
+async function sendContact(contact: PhoneContact): Promise<void> {
+  if (!messages.activeNumber || sending.value) return
+  attachmentMenuOpen.value = false
+  attachmentPicker.value = null
+  sending.value = true
+  const response = await messages.send({
+    contact: {
+      avatar_url: contact.avatar_url ?? null,
+      name: contact.name,
+      organization: contact.organization ?? null,
+      phone_number: contact.phone_number,
+    },
+    contactId: contact.id,
+    messageType: 'contact',
+  })
+  sending.value = false
+  if (!response.success) showToast(errorText(response.error))
+  await scrollToBottom()
+}
+
+async function messageSharedContact(contact: SmsSharedContact): Promise<void> {
+  if (!(await messages.openThread(contact.phone_number))) {
+    showToast(errorText('invalid_number'))
+    return
+  }
+  attachmentMenuOpen.value = false
+  attachmentPicker.value = null
+  emojiOpen.value = false
+  await scrollToBottom(false)
+}
+
+async function saveSharedContact(contact: SmsSharedContact): Promise<void> {
+  if (knownContactNumbers.value.has(contact.phone_number)) return
+  const response = await calls.saveContact({
+    name: contact.name,
+    organization: contact.organization ?? '',
+    phoneNumber: contact.phone_number,
+  })
+  showToast(
+    response.success
+      ? phone.t('Apps.messages.contactSaved')
+      : phone.t('Apps.messages.contactSaveFailed'),
+  )
 }
 
 async function loadGifs(reset = false): Promise<void> {
@@ -504,17 +630,34 @@ function queueGifSearch(): void {
 }
 
 async function sendTextMessage(): Promise<void> {
-  if (!messages.activeNumber || !draft.value.trim() || sending.value) return
+  if (
+    !messages.activeNumber ||
+    !activeCanMessage.value ||
+    (!draft.value.trim() && !shareDraft.value) ||
+    sending.value
+  ) {
+    return
+  }
   const body = draft.value
+  const shared = shareDraft.value
   draft.value = ''
+  shareDraft.value = null
   emojiOpen.value = false
   attachmentMenuOpen.value = false
   attachmentPicker.value = null
   sending.value = true
   await scrollToBottom()
-  const response = await messages.send({ body, messageType: 'text' })
+  const response = await messages.send(
+    shared
+      ? { body, messageType: 'share', sharePayload: shared }
+      : { body, messageType: 'text' },
+  )
   sending.value = false
-  if (!response.success) showToast(errorText(response.error))
+  if (!response.success) {
+    draft.value = body
+    shareDraft.value = shared
+    showToast(errorText(response.error))
+  }
   await scrollToBottom()
 }
 
@@ -542,6 +685,7 @@ function sampleMicrophone(): void {
 }
 
 async function startVoiceRecording(): Promise<void> {
+  if (!activeCanMessage.value) return
   emojiOpen.value = false
   if (
     !navigator.mediaDevices?.getUserMedia ||
@@ -660,7 +804,7 @@ async function finishVoiceRecording(): Promise<void> {
   const waveform = compressedWaveform()
   const shouldDiscard = discardRecording
   cleanupRecorder()
-  if (shouldDiscard) return
+  if (shouldDiscard || !activeCanMessage.value) return
   const blob = new Blob(chunks, { type: mime })
   if (!blob.size || blob.size > VOICE_MAX_BYTES) {
     showToast(phone.t('Apps.messages.recordingTooLarge'))
@@ -680,19 +824,27 @@ async function finishVoiceRecording(): Promise<void> {
   await scrollToBottom()
 }
 
-onMounted(() => {
-  void messages.loadConversations()
-  void calls.loadContacts()
+onMounted(async () => {
+  await Promise.all([messages.loadConversations(), calls.loadContacts()])
+  await openEasyShareDraft()
   if (messages.activeNumber) {
     const media = messageMedia.consume(messages.activeNumber)
     if (media) {
-      void sendAttachment(
+      await sendAttachment(
         media.mediaType === 'photo' ? 'image' : 'video',
         import.meta.env.DEV ? media.url : String(media.id),
       )
     }
+    await scrollToBottom(false)
   }
 })
+
+watch(
+  () => easyShare.chatDraft,
+  (shared) => {
+    if (shared?.appId === 'messages') void openEasyShareDraft()
+  },
+)
 
 onBeforeUnmount(() => {
   discardRecording = true
@@ -795,14 +947,19 @@ onBeforeUnmount(() => {
               conversation.phoneNumber,
             ),
           }"
-          :style="avatarStyle(conversation.phoneNumber)"
           aria-hidden="true"
         >
+          <img
+            v-if="contactAvatarUrls.get(conversation.phoneNumber)"
+            class="messages-avatar__image"
+            :src="contactAvatarUrls.get(conversation.phoneNumber)"
+            alt=""
+          />
           <span
-            v-if="knownContactNumbers.has(conversation.phoneNumber)"
-            class="messages-avatar__glyph"
+            v-else-if="knownContactNumbers.has(conversation.phoneNumber)"
+            class="messages-avatar__initials"
           >
-            {{ avatarGlyph(conversation.phoneNumber) }}
+            {{ contactInitials(conversation.phoneNumber) }}
           </span>
           <span v-else class="messages-avatar__placeholder">
             <i />
@@ -935,10 +1092,15 @@ onBeforeUnmount(() => {
         <template #media>
           <span
             class="messages-avatar messages-avatar--small"
-            :style="avatarStyle(contact.phone_number)"
           >
-            <span class="messages-avatar__glyph">{{
-              avatarGlyph(contact.phone_number)
+            <img
+              v-if="contact.avatar_url"
+              class="messages-avatar__image"
+              :src="contact.avatar_url"
+              alt=""
+            />
+            <span v-else class="messages-avatar__initials">{{
+              contactInitials(contact.phone_number)
             }}</span>
           </span>
         </template>
@@ -959,7 +1121,10 @@ onBeforeUnmount(() => {
   <k-page
     v-else
     class="messages-page messages-thread-page"
-    :class="{ 'messages-thread-page--emoji': attachmentPanelOpen }"
+    :class="{
+      'messages-thread-page--emoji': attachmentPanelOpen,
+      'messages-thread-page--share': Boolean(shareDraft),
+    }"
     :aria-label="activeTitle"
   >
     <header class="messages-chat-header">
@@ -977,10 +1142,15 @@ onBeforeUnmount(() => {
         <span
           class="messages-avatar messages-avatar--header"
           :class="{ 'messages-avatar--unknown': !activeContact }"
-          :style="avatarStyle(messages.activeNumber ?? '')"
         >
-          <span v-if="activeContact" class="messages-avatar__glyph">{{
-            avatarGlyph(messages.activeNumber ?? '')
+          <img
+            v-if="activeContact?.avatar_url"
+            class="messages-avatar__image"
+            :src="activeContact.avatar_url"
+            alt=""
+          />
+          <span v-else-if="activeContact" class="messages-avatar__initials">{{
+            contactInitials(messages.activeNumber ?? '')
           }}</span>
           <span v-else class="messages-avatar__placeholder" aria-hidden="true">
             <i />
@@ -1011,6 +1181,7 @@ onBeforeUnmount(() => {
         </button>
         <strong>{{ phone.t('Apps.messages.contactDetails') }}</strong>
         <button
+          v-if="!activeContact?.readonly"
           type="button"
           @click="
             contactEditing ? saveContactDetails() : (contactEditing = true)
@@ -1024,10 +1195,15 @@ onBeforeUnmount(() => {
         <span
           class="messages-avatar messages-avatar--contact"
           :class="{ 'messages-avatar--unknown': !activeContact }"
-          :style="avatarStyle(messages.activeNumber ?? '')"
         >
-          <span v-if="activeContact" class="messages-avatar__glyph">{{
-            avatarGlyph(messages.activeNumber ?? '')
+          <img
+            v-if="activeContact?.avatar_url"
+            class="messages-avatar__image"
+            :src="activeContact.avatar_url"
+            alt=""
+          />
+          <span v-else-if="activeContact" class="messages-avatar__initials">{{
+            contactInitials(messages.activeNumber ?? '')
           }}</span>
           <span v-else class="messages-avatar__placeholder" aria-hidden="true">
             <i />
@@ -1035,14 +1211,27 @@ onBeforeUnmount(() => {
           </span>
         </span>
         <h2>{{ activeTitle }}</h2>
-        <small>{{ messages.activeNumber }}</small>
+        <small>
+          {{ messages.activeNumber }}
+          <template v-if="activeContact?.readonly">
+            · {{ phone.t('Apps.phone.officialContact') }}
+          </template>
+        </small>
       </div>
       <div class="messages-contact-details__actions">
-        <button type="button" @click="callActiveContact">
+        <button
+          v-if="activeContact?.canCall !== false"
+          type="button"
+          @click="callActiveContact"
+        >
           <PhoneIcon :size="20" />
           <span>{{ phone.t('Apps.messages.call') }}</span>
         </button>
-        <button type="button" @click="contactDetailsOpen = false">
+        <button
+          v-if="activeCanMessage"
+          type="button"
+          @click="contactDetailsOpen = false"
+        >
           <MessageCircle :size="20" />
           <span>{{ phone.t('Apps.messages.messageAction') }}</span>
         </button>
@@ -1052,7 +1241,7 @@ onBeforeUnmount(() => {
           <span>{{ phone.t('Apps.messages.contactName') }}</span>
           <input
             v-model="contactNameDraft"
-            :readonly="!contactEditing"
+            :readonly="!contactEditing || activeContact?.readonly"
             :placeholder="phone.t('Apps.messages.contactName')"
           />
         </label>
@@ -1060,7 +1249,7 @@ onBeforeUnmount(() => {
           <span>{{ phone.t('Apps.messages.phoneNumber') }}</span>
           <input
             v-model="contactNumberDraft"
-            :readonly="!contactEditing"
+            :readonly="!contactEditing || activeContact?.readonly"
             inputmode="tel"
           />
         </label>
@@ -1075,7 +1264,7 @@ onBeforeUnmount(() => {
         {{ phone.t('Apps.messages.addContact') }}
       </button>
       <button
-        v-else
+        v-else-if="!activeContact.readonly"
         type="button"
         class="messages-contact-details__delete"
         @click="deleteActiveContact"
@@ -1113,13 +1302,32 @@ onBeforeUnmount(() => {
               v-if="message.message_type === 'voice'"
               :message="message"
             />
+            <MessageContactBubble
+              v-else-if="message.message_type === 'contact' && message.contact"
+              :add-label="phone.t('Apps.messages.addContact')"
+              :contact="message.contact"
+              :message-label="phone.t('Apps.messages.messageAction')"
+              :saved="knownContactNumbers.has(message.contact.phone_number)"
+              :saved-label="phone.t('Apps.messages.contactSaved')"
+              @message="messageSharedContact(message.contact)"
+              @save="saveSharedContact(message.contact)"
+            />
+            <SharedContentCard
+              v-else-if="message.message_type === 'share' && message.share"
+              :payload="message.share"
+              variant="messages"
+            />
             <MessageAttachmentBubble v-else :message="message" />
           </template>
         </k-message>
       </template>
     </k-messages>
+    <span ref="threadBottom" class="messages-thread-bottom" aria-hidden="true" />
 
-    <section v-if="attachmentMenuOpen" class="messages-attachment-menu">
+    <section
+      v-if="activeCanMessage && attachmentMenuOpen"
+      class="messages-attachment-menu"
+    >
       <button type="button" @click="openMediaApp('photos', 'photo')">
         <span><Images :size="20" /></span>
         {{ phone.t('Apps.messages.attachPhoto') }}
@@ -1132,6 +1340,10 @@ onBeforeUnmount(() => {
         <span class="messages-action-emoji">😀</span>
         {{ phone.t('Apps.messages.emoji') }}
       </button>
+      <button type="button" @click="openContactPicker">
+        <span><ContactRound :size="20" /></span>
+        {{ phone.t('Apps.messages.shareContact') }}
+      </button>
       <button type="button" @click="openGifPicker">
         <span><ImagePlay :size="20" /></span>
         {{ phone.t('Apps.messages.attachGif') }}
@@ -1142,16 +1354,57 @@ onBeforeUnmount(() => {
       </button>
     </section>
 
-    <section v-if="attachmentPicker" class="messages-media-picker">
+    <section
+      v-if="activeCanMessage && attachmentPicker"
+      class="messages-media-picker"
+    >
       <header>
         <strong>
-          {{ phone.t('Apps.messages.gifs') }}
+          {{
+            phone.t(
+              attachmentPicker === 'contacts'
+                ? 'Apps.messages.contacts'
+                : 'Apps.messages.gifs',
+            )
+          }}
         </strong>
         <button type="button" @click="attachmentPicker = null">
           {{ phone.t('Common.done') }}
         </button>
       </header>
-      <div class="messages-media-picker__gifs">
+      <k-list
+        v-if="attachmentPicker === 'contacts'"
+        inset
+        strong
+        class="messages-media-picker__contacts"
+      >
+        <k-list-item
+          v-for="contact in calls.contacts"
+          :key="contact.id"
+          link
+          :title="contact.name"
+          :subtitle="contact.organization || contact.phone_number"
+          @click="sendContact(contact)"
+        >
+          <template #media>
+            <span class="messages-avatar messages-avatar--small">
+              <img
+                v-if="contact.avatar_url"
+                class="messages-avatar__image"
+                :src="contact.avatar_url"
+                alt=""
+              />
+              <span v-else class="messages-avatar__initials">{{
+                contactInitials(contact.phone_number)
+              }}</span>
+            </span>
+          </template>
+        </k-list-item>
+        <p v-if="!calls.contacts.length" class="messages-media-picker__empty">
+          {{ phone.t('Apps.messages.noContactsToShare') }}
+        </p>
+      </k-list>
+      <div v-else class="messages-media-picker__gifs">
         <label class="messages-gif-search">
           <Search :size="15" />
           <input
@@ -1190,12 +1443,26 @@ onBeforeUnmount(() => {
     </section>
 
     <FullEmojiPicker
-      v-if="emojiOpen"
+      v-if="activeCanMessage && emojiOpen"
       @close="emojiOpen = false"
       @pick="appendEmoji"
     />
 
-    <section v-if="recording" class="messages-recorder">
+    <div
+      v-if="activeCanMessage && shareDraft && !recording"
+      class="shared-composer-preview"
+    >
+      <SharedContentCard compact :payload="shareDraft" variant="messages" />
+      <button
+        type="button"
+        :aria-label="phone.t('Common.close')"
+        @click="shareDraft = null"
+      >
+        <X :size="15" />
+      </button>
+    </div>
+
+    <section v-if="activeCanMessage && recording" class="messages-recorder">
       <button
         type="button"
         class="messages-recorder__cancel"
@@ -1224,13 +1491,13 @@ onBeforeUnmount(() => {
     </section>
 
     <k-messagebar
-      v-else
+      v-else-if="activeCanMessage"
       class="messages-messagebar"
       :placeholder="phone.t('Apps.messages.message')"
       :value="draft"
       :disabled="sending"
       @input="draft = eventValue($event)"
-      @keydown.enter.exact.prevent="sendTextMessage"
+      @keydown.enter.exact="handleEnterAction($event, sendTextMessage)"
     >
       <template #left>
         <k-toolbar-pane class="ios:h-10 messages-messagebar__tools">
@@ -1248,7 +1515,7 @@ onBeforeUnmount(() => {
       <template #right>
         <k-toolbar-pane class="ios:h-10">
           <k-link
-            v-if="draft.trim()"
+            v-if="draft.trim() || shareDraft"
             component="button"
             icon-only
             :disabled="sending"
@@ -1270,6 +1537,9 @@ onBeforeUnmount(() => {
         </k-toolbar-pane>
       </template>
     </k-messagebar>
+    <k-block v-else class="text-center text-sm text-[#8e8e93]">
+      {{ phone.t('Apps.messages.messagingUnavailable') }}
+    </k-block>
   </k-page>
 
   <k-toast :opened="toastOpened" position="center" @click="toastOpened = false">

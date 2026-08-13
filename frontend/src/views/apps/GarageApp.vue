@@ -27,6 +27,7 @@ import {
   Navigation,
   Plane,
   Route,
+  Share2,
   Sparkles,
   Sailboat,
   ShieldAlert,
@@ -37,6 +38,7 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { useGarageStore } from '@/stores/garage'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type {
   GarageVehicle,
@@ -44,11 +46,13 @@ import type {
   GarageVehicleStatus,
   GarageValetState,
 } from '@/types/garage'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type GarageFilter = 'all' | GarageVehicleStatus
 
 const phone = usePhoneStore()
 const garage = useGarageStore()
+const easyShare = useEasyShareStore()
 const activeFilter = ref<GarageFilter>('all')
 const query = ref('')
 const selectedVehicle = ref<GarageVehicle | null>(null)
@@ -107,6 +111,18 @@ function displayName(vehicle: GarageVehicle): string {
   if (vehicle.name) return vehicle.name
   if (typeof vehicle.model === 'string' && vehicle.model) return vehicle.model
   return phone.t('Apps.garage.unknownVehicle')
+}
+
+function shareVehicle(vehicle: GarageVehicle): void {
+  easyShare.open({
+    appId: 'garage',
+    copyText: `${displayName(vehicle)}\n${vehicle.plate}`,
+    id: vehicle.plate,
+    kind: 'document',
+    link: `skyphone://garage/vehicle/${vehicle.plate}`,
+    subtitle: vehicle.plate,
+    title: displayName(vehicle),
+  })
 }
 
 function modelName(vehicle: GarageVehicle): string {
@@ -208,6 +224,7 @@ async function cancelValet(): Promise<void> {
 }
 
 function handleValetStatus(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (event.data?.type !== 'garage:valet-status') return
   garage.setValetState((event.data.data as GarageValetState | null) ?? null)
 }
@@ -378,11 +395,11 @@ onBeforeUnmount(() => {
       </p>
     </div>
 
-    <k-sheet
-      :opened="Boolean(selectedVehicle)"
-      class="garage-sheet"
-      @backdropclick="selectedVehicle = null"
-    >
+    <div class="garage-sheet">
+      <k-sheet
+        :opened="Boolean(selectedVehicle)"
+        @backdropclick="selectedVehicle = null"
+      >
       <section v-if="selectedVehicle" class="garage-detail">
         <k-link
           component="button"
@@ -478,8 +495,12 @@ onBeforeUnmount(() => {
           <small>{{ phone.t('Apps.garage.vin') }}</small>
           <strong>{{ selectedVehicle.vin }}</strong>
         </div>
+        <k-button large rounded outline @click="shareVehicle(selectedVehicle)">
+          <Share2 :size="18" />{{ phone.t('Apps.easyShare.share') }}
+        </k-button>
       </section>
-    </k-sheet>
+      </k-sheet>
+    </div>
     <k-dialog
       :opened="Boolean(valetCandidate)"
       class="garage-valet-confirm"

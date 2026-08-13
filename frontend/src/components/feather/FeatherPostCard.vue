@@ -367,4 +367,15 @@ function relativeTime(timestamp: number): string {
 .feather-actions .is-bookmarked {
   color: #438cf5;
 }
+@supports not (color: color-mix(in srgb, white, black)) {
+  .feather-post:active {
+    background: rgb(127 127 127 / 4%);
+  }
+  .feather-follow {
+    border-color: var(--feather-blue, #1d9bf0);
+  }
+  .feather-media {
+    border-color: rgb(127 127 127 / 18%);
+  }
+}
 </style>

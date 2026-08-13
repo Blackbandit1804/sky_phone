@@ -1,0 +1,1481 @@
+local COMPATIBILITY_MAX_BYTES = 8192
+local JSON_MAX_DEPTH = 12
+local JSON_MAX_VALUES = 4096
+local MAX_QUEUED_MESSAGES = 64
+local NOTIFICATION_TEXT_MAX_LENGTH = 2000
+local NOTIFICATION_TITLE_MAX_LENGTH = 160
+
+local NOTIFICATION_SOUNDS = {
+    chime = true,
+    signal = true,
+    soft = true,
+}
+
+local HOOK_NAMES = {
+    onClose = true,
+    onInstall = true,
+    onOpen = true,
+    onReady = true,
+}
+
+local apps_by_id = {}
+local app_ids_by_adapter = {}
+local app_ids_by_owner = {}
+local current_resource = GetCurrentResourceName()
+local active_app_id = nil
+local active_app_ready = false
+local phone_open = false
+local queued_messages = {}
+local default_icon_url = ("https://cfx-nui-%s/img/custom-app.svg"):format(current_resource)
+
+local function trim(value)
+    return value:match("^%s*(.-)%s*$")
+end
+
+local function is_callable(value)
+    if type(value) == "function" then
+        return true
+    end
+    if type(value) ~= "table" then
+        return false
+    end
+
+    local value_metatable = getmetatable(value)
+    return type(value_metatable) == "table" and type(value_metatable.__call) == "function"
+end
+
+local function validate_owner_resource(owner_resource, allow_stopping)
+    if type(owner_resource) ~= "string"
+        or #owner_resource == 0
+        or #owner_resource > 64
+        or not owner_resource:match("^[%w][%w._-]*$")
+    then
+        return false, "invalid_owner_resource"
+    end
+
+    local state = GetResourceState(owner_resource)
+    if state == "started" or state == "starting" or (allow_stopping and state == "stopping") then
+        return true
+    end
+
+    return false, "owner_resource_not_running"
+end
+
+local function resolve_localized_text(value)
+    if type(value) == "string" then
+        return value
+    end
+
+    local locale = Config.Bridge.Locale:lower():gsub("_", "-")
+    if value[locale] then
+        return value[locale]
+    end
+
+    local base_locale = locale:match("^([a-z]+)-")
+    if base_locale and value[base_locale] then
+        return value[base_locale]
+    end
+    if value.en then
+        return value.en
+    end
+    if value.de then
+        return value.de
+    end
+
+    local locales = {}
+    for available_locale in pairs(value) do
+        locales[#locales + 1] = available_locale
+    end
+    table.sort(locales)
+    return value[locales[1]]
+end
+
+local function is_allowed_remote_origin(url)
+    local origin = url:match("^(https://[^/%?#]+)")
+    if not origin then
+        return false
+    end
+
+    local allowed_origins = Config.CustomApps.AllowRemoteOrigins
+    if allowed_origins[origin] then
+        return true
+    end
+
+    for index = 1, #allowed_origins do
+        if allowed_origins[index] == origin then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function validate_asset_path(path)
+    if #path == 0
+        or #path > 1024
+        or path:find("\\", 1, true)
+        or path:find("[%c]")
+        or path:lower():find("%2e", 1, true)
+    then
+        return false
+    end
+
+    local path_only = path:match("^[^?#]+") or path
+    for segment in path_only:gmatch("[^/]+") do
+        if segment == "." or segment == ".." then
+            return false
+        end
+    end
+
+    return true
+end
+
+local function normalize_asset_url(value, original_owner, adapter_resource, asset_resource, required)
+    if value == nil and not required then
+        return nil
+    end
+    if type(value) ~= "string" then
+        return nil, "invalid_asset_url"
+    end
+
+    local url = trim(value)
+    if not validate_asset_path(url) then
+        return nil, "invalid_asset_url"
+    end
+
+    local allowed_owners = {
+        [original_owner] = true,
+    }
+    if adapter_resource then
+        allowed_owners[adapter_resource] = true
+    end
+    if asset_resource then
+        allowed_owners[asset_resource] = true
+    end
+
+    local cfx_owner = url:match("^https://cfx%-nui%-([^/]+)/")
+    if cfx_owner then
+        if not allowed_owners[cfx_owner] then
+            return nil, "asset_owner_mismatch"
+        end
+        return url
+    end
+
+    local nui_owner, nui_path = url:match("^nui://([^/]+)/(.+)$")
+    if nui_owner then
+        if not allowed_owners[nui_owner] then
+            return nil, "asset_owner_mismatch"
+        end
+        return ("https://cfx-nui-%s/%s"):format(nui_owner, nui_path)
+    end
+
+    if url:sub(1, 8) == "https://" then
+        if not is_allowed_remote_origin(url) then
+            return nil, "remote_origin_not_allowed"
+        end
+        return url
+    end
+
+    if url:match("^[%a][%w+.-]*:") or url:sub(1, 2) == "//" or url:sub(1, 1) == "/" then
+        return nil, "invalid_asset_url"
+    end
+
+    local asset_owner = original_owner
+    local asset_path = url
+    local original_prefix = original_owner .. "/"
+    if url:sub(1, #original_prefix) == original_prefix then
+        asset_path = url:sub(#original_prefix + 1)
+    elseif adapter_resource then
+        local adapter_prefix = adapter_resource .. "/"
+        if url:sub(1, #adapter_prefix) == adapter_prefix then
+            asset_owner = adapter_resource
+            asset_path = url:sub(#adapter_prefix + 1)
+        end
+    end
+    if asset_resource then
+        local asset_prefix = asset_resource .. "/"
+        if url:sub(1, #asset_prefix) == asset_prefix then
+            asset_owner = asset_resource
+            asset_path = url:sub(#asset_prefix + 1)
+        end
+    end
+
+    if not validate_asset_path(asset_path) then
+        return nil, "invalid_asset_url"
+    end
+
+    return ("https://cfx-nui-%s/%s"):format(asset_owner, asset_path)
+end
+
+local function validate_json_value(value, depth, seen, counter)
+    local value_type = type(value)
+    if value_type == "nil" or value_type == "boolean" then
+        return true
+    end
+    if value_type == "number" then
+        return value == value and value ~= math.huge and value ~= -math.huge
+    end
+    if value_type == "string" then
+        return #value <= Config.CustomApps.MaximumMessageBytes
+    end
+    if value_type ~= "table" or depth >= JSON_MAX_DEPTH or seen[value] then
+        return false
+    end
+
+    seen[value] = true
+    local key_type = nil
+    local numeric_keys = 0
+    local value_count = 0
+    for key, nested_value in pairs(value) do
+        counter.count = counter.count + 1
+        value_count = value_count + 1
+        if counter.count > JSON_MAX_VALUES then
+            seen[value] = nil
+            return false
+        end
+
+        local current_key_type = type(key)
+        if current_key_type == "number" then
+            if key < 1 or key % 1 ~= 0 then
+                seen[value] = nil
+                return false
+            end
+            numeric_keys = numeric_keys + 1
+        elseif current_key_type ~= "string" or #key > 128 then
+            seen[value] = nil
+            return false
+        end
+
+        if key_type and key_type ~= current_key_type then
+            seen[value] = nil
+            return false
+        end
+        key_type = current_key_type
+
+        if not validate_json_value(nested_value, depth + 1, seen, counter) then
+            seen[value] = nil
+            return false
+        end
+    end
+
+    if key_type == "number" and (numeric_keys ~= value_count or #value ~= value_count) then
+        seen[value] = nil
+        return false
+    end
+
+    seen[value] = nil
+    return true
+end
+
+local function normalize_json_payload(payload, maximum_bytes)
+    if not validate_json_value(payload, 0, {}, { count = 0 }) then
+        return nil, "invalid_payload"
+    end
+
+    local encoded_success, encoded = pcall(json.encode, payload)
+    if not encoded_success or type(encoded) ~= "string" then
+        return nil, "invalid_payload"
+    end
+    if #encoded > maximum_bytes then
+        return nil, "payload_too_large"
+    end
+
+    local decoded = json.decode(encoded)
+    return decoded
+end
+
+local function validate_optional_text(value, error_code, maximum_length)
+    if value == nil then
+        return nil
+    end
+    if type(value) ~= "string" then
+        return nil, error_code
+    end
+
+    local normalized = trim(value)
+    if #normalized == 0 or #normalized > maximum_length then
+        return nil, error_code
+    end
+
+    return normalized
+end
+
+local function normalize_external_definition(owner_resource, adapter_resource, definition)
+    if type(definition) ~= "table" then
+        return nil, "invalid_definition"
+    end
+    if definition.schemaVersion ~= nil and definition.schemaVersion ~= SkyPhoneApps.ProtocolVersion then
+        return nil, "unsupported_schema_version"
+    end
+    if definition.onDelete ~= nil then
+        return nil, "unsupported_on_delete"
+    end
+
+    local valid_id, id_error = SkyPhoneApps.ValidateAppId(definition.id)
+    if not valid_id then
+        return nil, id_error
+    end
+    if SkyPhoneApps.ReservedAppIds[definition.id] then
+        return nil, "reserved_app_id"
+    end
+
+    local name, name_error = SkyPhoneApps.ValidateLocalizedText(
+        definition.name,
+        "invalid_name",
+        64,
+        true
+    )
+    if not name then
+        return nil, name_error
+    end
+
+    local description, description_error = SkyPhoneApps.ValidateLocalizedText(
+        definition.description,
+        "invalid_description",
+        320,
+        false
+    )
+    if definition.description ~= nil and not description then
+        return nil, description_error
+    end
+
+    local developer, developer_error = validate_optional_text(definition.developer, "invalid_developer", 96)
+    if definition.developer ~= nil and not developer then
+        return nil, developer_error
+    end
+
+    local category = definition.category or "utilities"
+    if not SkyPhoneApps.AllowedCategories[category] then
+        return nil, "invalid_category"
+    end
+
+    local asset_resource = definition.assetResource
+    if asset_resource ~= nil then
+        if definition.compatibility == nil then
+            return nil, "asset_resource_not_allowed"
+        end
+        local valid_asset_resource, asset_resource_error = validate_owner_resource(asset_resource, false)
+        if not valid_asset_resource then
+            return nil, asset_resource_error
+        end
+    end
+
+    local ui, ui_error = normalize_asset_url(
+        definition.ui,
+        owner_resource,
+        adapter_resource,
+        asset_resource,
+        true
+    )
+    if not ui then
+        return nil, ui_error
+    end
+
+    local icon, icon_error = normalize_asset_url(
+        definition.icon,
+        owner_resource,
+        adapter_resource,
+        asset_resource,
+        false
+    )
+    if definition.icon ~= nil and not icon then
+        if definition.compatibility == nil then
+            return nil, icon_error
+        end
+        print((
+            "[sky_phone] Custom app '%s' from '%s' uses an unavailable icon (%s); using the default icon."
+        ):format(definition.id, owner_resource, icon_error))
+    end
+
+    local permissions, permissions_error = SkyPhoneApps.ValidatePermissions(definition.permissions)
+    if not permissions then
+        return nil, permissions_error
+    end
+
+    local orientation = definition.orientation or "portrait"
+    if not SkyPhoneApps.AllowedOrientations[orientation] then
+        return nil, "invalid_orientation"
+    end
+
+    if definition.defaultInstalled ~= nil and type(definition.defaultInstalled) ~= "boolean" then
+        return nil, "invalid_default_installed"
+    end
+    if definition.removable ~= nil and type(definition.removable) ~= "boolean" then
+        return nil, "invalid_removable"
+    end
+
+    local grid_order = definition.gridOrder
+    if grid_order ~= nil
+        and (type(grid_order) ~= "number" or grid_order ~= math.floor(grid_order) or grid_order < 0 or grid_order > 9999)
+    then
+        return nil, "invalid_grid_order"
+    end
+
+    local icon_background = validate_optional_text(definition.iconBackground, "invalid_icon_background", 64)
+    if definition.iconBackground ~= nil and not icon_background then
+        return nil, "invalid_icon_background"
+    end
+    if icon_background and icon_background:find("[\r\n;{}]") then
+        return nil, "invalid_icon_background"
+    end
+
+    local bridge_mode = definition.bridgeMode or "legacy"
+    if bridge_mode ~= "sky" and bridge_mode ~= "legacy" then
+        return nil, "invalid_bridge_mode"
+    end
+
+    local compatibility = nil
+    if definition.compatibility ~= nil then
+        if type(definition.compatibility) ~= "table" or next(definition.compatibility) == nil then
+            return nil, "invalid_compatibility"
+        end
+        compatibility, permissions_error = normalize_json_payload(definition.compatibility, COMPATIBILITY_MAX_BYTES)
+        if not compatibility then
+            return nil, permissions_error
+        end
+    end
+
+    local hooks = {}
+    for hook_name in pairs(HOOK_NAMES) do
+        local hook = definition[hook_name]
+        if hook ~= nil and not is_callable(hook) then
+            return nil, "invalid_" .. hook_name
+        end
+        hooks[hook_name] = hook
+    end
+
+    return {
+        adapterResource = adapter_resource,
+        catalog = {
+            bridgeMode = bridge_mode,
+            bundled = false,
+            category = category,
+            compatibility = compatibility,
+            defaultInstalled = definition.defaultInstalled == true,
+            description = description and resolve_localized_text(description) or nil,
+            developer = developer,
+            gridOrder = grid_order,
+            icon = icon or default_icon_url,
+            iconBackground = icon_background,
+            id = definition.id,
+            kind = "external",
+            name = resolve_localized_text(name),
+            orientation = orientation,
+            ownerResource = owner_resource,
+            permissions = permissions,
+            readyTimeoutMs = Config.CustomApps.ReadyTimeoutMs,
+            removable = definition.removable ~= false,
+            ui = ui,
+        },
+        hooks = hooks,
+        ownerResource = owner_resource,
+    }
+end
+
+local function normalize_bundled_manifest(manifest)
+    local resource_base_path = ("custom_apps/%s/"):format(manifest.folder)
+    local base_url = ("https://cfx-nui-%s/%s"):format(current_resource, resource_base_path)
+    if LoadResourceFile(current_resource, resource_base_path .. manifest.entry) == nil then
+        error(("[sky_phone] Bundled custom app '%s' entry file is missing: %s"):format(
+            manifest.id,
+            manifest.entry
+        ))
+    end
+    if manifest.icon and LoadResourceFile(current_resource, resource_base_path .. manifest.icon) == nil then
+        error(("[sky_phone] Bundled custom app '%s' icon file is missing: %s"):format(
+            manifest.id,
+            manifest.icon
+        ))
+    end
+    for index = 1, #manifest.screenshots do
+        if LoadResourceFile(current_resource, resource_base_path .. manifest.screenshots[index]) == nil then
+            error(("[sky_phone] Bundled custom app '%s' screenshot file is missing: %s"):format(
+                manifest.id,
+                manifest.screenshots[index]
+            ))
+        end
+    end
+
+    return {
+        adapterResource = nil,
+        catalog = {
+            bridgeMode = manifest.bridgeMode,
+            bundled = true,
+            category = manifest.category,
+            defaultInstalled = manifest.defaultInstalled,
+            description = resolve_localized_text(manifest.description),
+            developer = manifest.developer,
+            gridOrder = manifest.gridOrder,
+            icon = manifest.icon and (base_url .. manifest.icon) or default_icon_url,
+            iconBackground = manifest.iconBackground,
+            id = manifest.id,
+            kind = "external",
+            name = resolve_localized_text(manifest.name),
+            orientation = manifest.orientation,
+            ownerResource = current_resource,
+            permissions = manifest.permissions,
+            readyTimeoutMs = Config.CustomApps.ReadyTimeoutMs,
+            removable = manifest.removable,
+            ui = base_url .. manifest.entry,
+        },
+        hooks = {},
+        ownerResource = current_resource,
+    }
+end
+
+local function get_catalog()
+    local catalog = {}
+    for _, app in pairs(apps_by_id) do
+        catalog[#catalog + 1] = app.catalog
+    end
+    table.sort(catalog, function(left, right)
+        return left.id < right.id
+    end)
+    return catalog
+end
+
+local function send_catalog()
+    SendNUIMessage({
+        type = "custom-apps:catalog",
+        data = {
+            apps = get_catalog(),
+        },
+    })
+end
+
+local function sync_catalog_if_open()
+    if phone_open then
+        send_catalog()
+    end
+end
+
+local function add_owner_index(index, resource_name, app_id)
+    local app_ids = index[resource_name]
+    if not app_ids then
+        app_ids = {}
+        index[resource_name] = app_ids
+    end
+    app_ids[app_id] = true
+end
+
+local function remove_owner_index(index, resource_name, app_id)
+    local app_ids = index[resource_name]
+    if not app_ids then
+        return
+    end
+
+    app_ids[app_id] = nil
+    if not next(app_ids) then
+        index[resource_name] = nil
+    end
+end
+
+local function register_app(app)
+    local app_id = app.catalog.id
+    local existing = apps_by_id[app_id]
+    if existing then
+        print((
+            "[sky_phone] Rejected duplicate custom app '%s' from '%s'; it is already owned by '%s'."
+        ):format(app_id, app.ownerResource, existing.ownerResource))
+        return false, "duplicate_app_id"
+    end
+
+    apps_by_id[app_id] = app
+    add_owner_index(app_ids_by_owner, app.ownerResource, app_id)
+    if app.adapterResource then
+        add_owner_index(app_ids_by_adapter, app.adapterResource, app_id)
+    end
+    sync_catalog_if_open()
+    return true
+end
+
+local function invoke_hook(app, hook_name, payload)
+    local hook = app.hooks[hook_name]
+    if not hook then
+        return true
+    end
+
+    local success, hook_error = xpcall(function()
+        hook(payload)
+    end, debug.traceback)
+    if success then
+        return true
+    end
+
+    print(("[sky_phone] Custom app '%s' hook '%s' failed: %s"):format(
+        app.catalog.id,
+        hook_name,
+        tostring(hook_error)
+    ))
+    return false
+end
+
+local function invoke_or_defer_hook(app, hook_name, payload, deferred_hooks)
+    if not app.catalog.compatibility then
+        return invoke_hook(app, hook_name, payload)
+    end
+
+    deferred_hooks[#deferred_hooks + 1] = {
+        app = app,
+        hookName = hook_name,
+        payload = payload,
+    }
+    return true
+end
+
+local function invoke_deferred_hooks(deferred_hooks)
+    for index = 1, #deferred_hooks do
+        local deferred_hook = deferred_hooks[index]
+        CreateThread(function()
+            invoke_hook(deferred_hook.app, deferred_hook.hookName, deferred_hook.payload)
+        end)
+    end
+end
+
+local function clear_active_app(invoke_close_hook, deferred_hooks)
+    if not active_app_id then
+        return
+    end
+
+    local app = apps_by_id[active_app_id]
+    if app and invoke_close_hook then
+        if deferred_hooks then
+            invoke_or_defer_hook(app, "onClose", nil, deferred_hooks)
+        else
+            invoke_hook(app, "onClose")
+        end
+    end
+    queued_messages[active_app_id] = nil
+    active_app_id = nil
+    active_app_ready = false
+end
+
+local function remove_registered_app(app_id, invoke_close_hook, synchronize)
+    local app = apps_by_id[app_id]
+    if not app then
+        return false, "app_not_found"
+    end
+
+    if active_app_id == app_id then
+        SendNUIMessage({ type = "custom-app:close", data = { appId = app_id } })
+        clear_active_app(invoke_close_hook)
+    end
+
+    apps_by_id[app_id] = nil
+    remove_owner_index(app_ids_by_owner, app.ownerResource, app_id)
+    if app.adapterResource then
+        remove_owner_index(app_ids_by_adapter, app.adapterResource, app_id)
+    end
+    if SkyPhoneApps.OnCompatibilityAppRemoved then
+        SkyPhoneApps.OnCompatibilityAppRemoved(app.ownerResource, app_id)
+    end
+    if synchronize then
+        sync_catalog_if_open()
+    end
+    return true
+end
+
+local function get_direct_owner()
+    local owner_resource = GetInvokingResource()
+    if not owner_resource then
+        return nil, "missing_invoking_resource"
+    end
+
+    local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
+    if not valid_owner then
+        return nil, owner_error
+    end
+
+    return owner_resource
+end
+
+local function get_trusted_adapter()
+    local adapter_resource = GetInvokingResource()
+    if not adapter_resource or not Config.CustomApps.TrustedAdapters[adapter_resource] then
+        return nil, "untrusted_adapter"
+    end
+
+    local valid_adapter, adapter_error = validate_owner_resource(adapter_resource, false)
+    if not valid_adapter then
+        return nil, adapter_error
+    end
+
+    return adapter_resource
+end
+
+local function verify_owned_app(owner_resource, app_id, adapter_resource)
+    local valid_id, id_error = SkyPhoneApps.ValidateAppId(app_id)
+    if not valid_id then
+        return nil, id_error
+    end
+
+    local app = apps_by_id[app_id]
+    if not app then
+        return nil, "app_not_found"
+    end
+    if app.ownerResource ~= owner_resource then
+        return nil, "app_owner_mismatch"
+    end
+    if adapter_resource and app.adapterResource ~= adapter_resource then
+        return nil, "app_adapter_mismatch"
+    end
+
+    return app
+end
+
+local function add_custom_app(definition)
+    if not Config.CustomApps.Enabled or not Config.CustomApps.ExternalApps then
+        return false, "external_apps_disabled"
+    end
+
+    local owner_resource, owner_error = get_direct_owner()
+    if not owner_resource then
+        return false, owner_error
+    end
+
+    local app, definition_error = normalize_external_definition(owner_resource, nil, definition)
+    if not app then
+        return false, definition_error
+    end
+
+    return register_app(app)
+end
+
+local function add_custom_app_from_adapter(owner_resource, definition)
+    if not Config.CustomApps.Enabled or not Config.CustomApps.ExternalApps then
+        return false, "external_apps_disabled"
+    end
+
+    local adapter_resource, adapter_error = get_trusted_adapter()
+    if not adapter_resource then
+        return false, adapter_error
+    end
+    local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
+    if not valid_owner then
+        return false, owner_error
+    end
+
+    local app, definition_error = normalize_external_definition(owner_resource, adapter_resource, definition)
+    if not app then
+        return false, definition_error
+    end
+
+    return register_app(app)
+end
+
+local function add_compatibility_app(owner_resource, definition)
+    if not Config.CustomApps.Enabled or not Config.CustomApps.ExternalApps then
+        return false, "external_apps_disabled"
+    end
+
+    local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
+    if not valid_owner then
+        return false, owner_error
+    end
+
+    local app, definition_error = normalize_external_definition(owner_resource, nil, definition)
+    if not app then
+        return false, definition_error
+    end
+
+    return register_app(app)
+end
+
+local function replace_registered_app(app, adapter_resource)
+    local app_id = app.catalog.id
+    local existing = apps_by_id[app_id]
+    if not existing then
+        return false, "app_not_found"
+    end
+    if existing.catalog.bundled then
+        return false, "bundled_app"
+    end
+    if existing.ownerResource ~= app.ownerResource then
+        return false, "app_owner_mismatch"
+    end
+    if existing.adapterResource ~= adapter_resource then
+        return false, "app_adapter_mismatch"
+    end
+
+    apps_by_id[app_id] = app
+    sync_catalog_if_open()
+    return true
+end
+
+local function update_custom_app(definition)
+    if not Config.CustomApps.Enabled or not Config.CustomApps.ExternalApps then
+        return false, "external_apps_disabled"
+    end
+
+    local owner_resource, owner_error = get_direct_owner()
+    if not owner_resource then
+        return false, owner_error
+    end
+
+    local app, definition_error = normalize_external_definition(owner_resource, nil, definition)
+    if not app then
+        return false, definition_error
+    end
+    return replace_registered_app(app, nil)
+end
+
+local function update_custom_app_from_adapter(owner_resource, definition)
+    if not Config.CustomApps.Enabled or not Config.CustomApps.ExternalApps then
+        return false, "external_apps_disabled"
+    end
+
+    local adapter_resource, adapter_error = get_trusted_adapter()
+    if not adapter_resource then
+        return false, adapter_error
+    end
+    local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
+    if not valid_owner then
+        return false, owner_error
+    end
+
+    local app, definition_error = normalize_external_definition(owner_resource, adapter_resource, definition)
+    if not app then
+        return false, definition_error
+    end
+    return replace_registered_app(app, adapter_resource)
+end
+
+local function update_compatibility_app(owner_resource, definition)
+    if not Config.CustomApps.Enabled or not Config.CustomApps.ExternalApps then
+        return false, "external_apps_disabled"
+    end
+
+    local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
+    if not valid_owner then
+        return false, owner_error
+    end
+
+    local app, definition_error = normalize_external_definition(owner_resource, nil, definition)
+    if not app then
+        return false, definition_error
+    end
+    return replace_registered_app(app, nil)
+end
+
+local function remove_custom_app(app_id)
+    local owner_resource, owner_error = get_direct_owner()
+    if not owner_resource then
+        return false, owner_error
+    end
+
+    local app, app_error = verify_owned_app(owner_resource, app_id)
+    if not app then
+        return false, app_error
+    end
+    if app.catalog.bundled then
+        return false, "bundled_app"
+    end
+
+    return remove_registered_app(app_id, true, true)
+end
+
+local function remove_custom_app_from_adapter(owner_resource, app_id)
+    local adapter_resource, adapter_error = get_trusted_adapter()
+    if not adapter_resource then
+        return false, adapter_error
+    end
+
+    local app, app_error = verify_owned_app(owner_resource, app_id, adapter_resource)
+    if not app then
+        return false, app_error
+    end
+
+    return remove_registered_app(app_id, true, true)
+end
+
+local function remove_compatibility_app(owner_resource, app_id)
+    local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
+    if not valid_owner then
+        return false, owner_error
+    end
+
+    local app, app_error = verify_owned_app(owner_resource, app_id)
+    if not app then
+        return false, app_error
+    end
+    if app.catalog.bundled then
+        return false, "bundled_app"
+    end
+
+    return remove_registered_app(app_id, true, true)
+end
+
+local function deliver_custom_app_message(app_id, payload)
+    SendNUIMessage({
+        type = "custom-app:message",
+        data = {
+            appId = app_id,
+            payload = payload,
+        },
+    })
+end
+
+local function send_owned_custom_app_message(owner_resource, app_id, payload, adapter_resource)
+    local app, app_error = verify_owned_app(owner_resource, app_id, adapter_resource)
+    if not app then
+        return false, app_error
+    end
+    if not phone_open or active_app_id ~= app_id then
+        return false, "app_not_active"
+    end
+
+    local normalized_payload, payload_error = normalize_json_payload(
+        payload,
+        Config.CustomApps.MaximumMessageBytes
+    )
+    if payload_error then
+        return false, payload_error
+    end
+
+    if active_app_ready then
+        deliver_custom_app_message(app_id, normalized_payload)
+        return true
+    end
+
+    local pending = queued_messages[app_id] or {}
+    if #pending >= MAX_QUEUED_MESSAGES then
+        return false, "message_queue_full"
+    end
+    pending[#pending + 1] = { payload = normalized_payload }
+    queued_messages[app_id] = pending
+    return true
+end
+
+local function send_custom_app_message(app_id, payload)
+    local owner_resource, owner_error = get_direct_owner()
+    if not owner_resource then
+        return false, owner_error
+    end
+    return send_owned_custom_app_message(owner_resource, app_id, payload)
+end
+
+local function send_custom_app_message_from_adapter(owner_resource, app_id, payload)
+    local adapter_resource, adapter_error = get_trusted_adapter()
+    if not adapter_resource then
+        return false, adapter_error
+    end
+    return send_owned_custom_app_message(owner_resource, app_id, payload, adapter_resource)
+end
+
+local function send_compatibility_app_message(owner_resource, app_id, payload)
+    local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
+    if not valid_owner then
+        return false, owner_error
+    end
+    return send_owned_custom_app_message(owner_resource, app_id, payload)
+end
+
+local function open_owned_custom_app(owner_resource, app_id, payload, adapter_resource)
+    local app, app_error = verify_owned_app(owner_resource, app_id, adapter_resource)
+    if not app then
+        return false, app_error
+    end
+    if not phone_open then
+        return false, "phone_closed"
+    end
+
+    local normalized_payload, payload_error = normalize_json_payload(
+        payload,
+        Config.CustomApps.MaximumMessageBytes
+    )
+    if payload_error then
+        return false, payload_error
+    end
+
+    SendNUIMessage({
+        type = "custom-app:open",
+        data = {
+            appId = app_id,
+            data = normalized_payload,
+        },
+    })
+    return true
+end
+
+local function open_custom_app(app_id, payload)
+    local owner_resource, owner_error = get_direct_owner()
+    if not owner_resource then
+        return false, owner_error
+    end
+    return open_owned_custom_app(owner_resource, app_id, payload)
+end
+
+local function open_custom_app_from_adapter(owner_resource, app_id, payload)
+    local adapter_resource, adapter_error = get_trusted_adapter()
+    if not adapter_resource then
+        return false, adapter_error
+    end
+    return open_owned_custom_app(owner_resource, app_id, payload, adapter_resource)
+end
+
+local function open_compatibility_app(owner_resource, app_id, payload)
+    local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
+    if not valid_owner then
+        return false, owner_error
+    end
+    return open_owned_custom_app(owner_resource, app_id, payload)
+end
+
+local function close_owned_custom_app(owner_resource, app_id, adapter_resource)
+    local app, app_error = verify_owned_app(owner_resource, app_id, adapter_resource)
+    if not app then
+        return false, app_error
+    end
+    if active_app_id ~= app_id then
+        return false, "app_not_active"
+    end
+
+    SendNUIMessage({ type = "custom-app:close", data = { appId = app_id } })
+    return true
+end
+
+local function close_custom_app(app_id)
+    local owner_resource, owner_error = get_direct_owner()
+    if not owner_resource then
+        return false, owner_error
+    end
+    return close_owned_custom_app(owner_resource, app_id)
+end
+
+local function close_custom_app_from_adapter(owner_resource, app_id)
+    local adapter_resource, adapter_error = get_trusted_adapter()
+    if not adapter_resource then
+        return false, adapter_error
+    end
+    return close_owned_custom_app(owner_resource, app_id, adapter_resource)
+end
+
+local function close_active_custom_app_from_adapter(owner_resource)
+    local adapter_resource, adapter_error = get_trusted_adapter()
+    if not adapter_resource then
+        return false, adapter_error
+    end
+    if not active_app_id then
+        return false, "app_not_active"
+    end
+
+    local app, app_error = verify_owned_app(owner_resource, active_app_id, adapter_resource)
+    if not app then
+        return false, app_error
+    end
+
+    SendNUIMessage({ type = "custom-app:close", data = { appId = active_app_id } })
+    return true
+end
+
+local function close_compatibility_app(owner_resource, app_id)
+    local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
+    if not valid_owner then
+        return false, owner_error
+    end
+    return close_owned_custom_app(owner_resource, app_id)
+end
+
+local function close_active_compatibility_app(owner_resource)
+    local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
+    if not valid_owner then
+        return false, owner_error
+    end
+    if not active_app_id then
+        return false, "app_not_active"
+    end
+
+    local app, app_error = verify_owned_app(owner_resource, active_app_id)
+    if not app then
+        return false, app_error
+    end
+
+    SendNUIMessage({ type = "custom-app:close", data = { appId = active_app_id } })
+    return true
+end
+
+local function has_permission(app, permission)
+    local permissions = app.catalog.permissions
+    for index = 1, #permissions do
+        if permissions[index] == permission then
+            return true
+        end
+    end
+    return false
+end
+
+local function normalize_notification(app, notification)
+    if type(notification) ~= "table" then
+        return nil, "invalid_notification"
+    end
+    if not has_permission(app, "notifications") then
+        return nil, "permission_denied"
+    end
+
+    local title = notification.title
+    if title == nil then
+        title = app.catalog.name
+    end
+    title = validate_optional_text(title, "invalid_notification_title", NOTIFICATION_TITLE_MAX_LENGTH)
+    if not title then
+        return nil, "invalid_notification_title"
+    end
+
+    local text = validate_optional_text(
+        notification.text or notification.content,
+        "invalid_notification_text",
+        NOTIFICATION_TEXT_MAX_LENGTH
+    )
+    if not text then
+        return nil, "invalid_notification_text"
+    end
+
+    local subtitle = validate_optional_text(notification.subtitle, "invalid_notification_subtitle", 160)
+    if notification.subtitle ~= nil and not subtitle then
+        return nil, "invalid_notification_subtitle"
+    end
+
+    if notification.critical ~= nil and type(notification.critical) ~= "boolean" then
+        return nil, "invalid_notification_critical"
+    end
+    if notification.critical and not has_permission(app, "notifications.critical") then
+        return nil, "permission_denied"
+    end
+    if notification.persistent ~= nil and type(notification.persistent) ~= "boolean" then
+        return nil, "invalid_notification_persistent"
+    end
+    if notification.sound ~= nil and not NOTIFICATION_SOUNDS[notification.sound] then
+        return nil, "invalid_notification_sound"
+    end
+
+    local app_route = "/apps/" .. app.catalog.id
+    local route = notification.route or app_route
+    if type(route) ~= "string"
+        or route ~= app_route
+        or route:find("[\r\n]")
+        or #route > 512
+    then
+        return nil, "invalid_notification_route"
+    end
+
+    return {
+        appId = app.catalog.id,
+        critical = notification.critical == true,
+        persistent = notification.persistent == true,
+        route = route,
+        sound = notification.sound,
+        subtitle = subtitle,
+        text = text,
+        title = title,
+    }
+end
+
+local function send_owned_custom_app_notification(owner_resource, app_id, notification, adapter_resource)
+    local app, app_error = verify_owned_app(owner_resource, app_id, adapter_resource)
+    if not app then
+        return false, app_error
+    end
+
+    local normalized_notification, notification_error = normalize_notification(app, notification)
+    if not normalized_notification then
+        return false, notification_error
+    end
+
+    send_catalog()
+    SendNUIMessage({ type = "notification:show", data = normalized_notification })
+    return true
+end
+
+local function send_custom_app_notification(app_id, notification)
+    local owner_resource, owner_error = get_direct_owner()
+    if not owner_resource then
+        return false, owner_error
+    end
+    return send_owned_custom_app_notification(owner_resource, app_id, notification)
+end
+
+local function send_custom_app_notification_from_adapter(owner_resource, app_id, notification)
+    local adapter_resource, adapter_error = get_trusted_adapter()
+    if not adapter_resource then
+        return false, adapter_error
+    end
+    return send_owned_custom_app_notification(owner_resource, app_id, notification, adapter_resource)
+end
+
+local function get_custom_app_capabilities()
+    return {
+        abiVersion = 1,
+        enabled = Config.CustomApps.Enabled,
+        bridgeMethods = {
+            "app.close",
+            "app.open",
+            "device.storage.get",
+            "device.storage.set",
+            "notification.create",
+        },
+        contextCapabilities = {
+            "locale.read",
+            "theme.read",
+        },
+        exports = {
+            "AddCustomApp",
+            "AddCustomAppFromAdapter",
+            "CloseActiveCustomAppFromAdapter",
+            "CloseCustomApp",
+            "CloseCustomAppFromAdapter",
+            "OpenCustomApp",
+            "OpenCustomAppFromAdapter",
+            "RemoveCustomApp",
+            "RemoveCustomAppFromAdapter",
+            "SendCustomAppMessage",
+            "SendCustomAppMessageFromAdapter",
+            "SendCustomAppNotification",
+            "SendCustomAppNotificationFromAdapter",
+            "UpdateCustomApp",
+            "UpdateCustomAppFromAdapter",
+        },
+        maximumMessageBytes = Config.CustomApps.MaximumMessageBytes,
+        maximumStorageBytesPerApp = Config.CustomApps.MaximumStorageBytesPerApp,
+        maximumStorageKeyLength = math.min(Config.CustomApps.MaximumStorageKeyLength, 64),
+        maximumStorageValueBytes = math.min(Config.CustomApps.MaximumStorageValueBytes, 65536),
+        protocolVersion = SkyPhoneApps.ProtocolVersion,
+    }
+end
+
+local function set_phone_open(is_open)
+    phone_open = is_open
+    if phone_open then
+        send_catalog()
+        return
+    end
+
+    clear_active_app(true)
+end
+
+local function register_bundled_client_hooks(app_id, hooks)
+    local valid_id, id_error = SkyPhoneApps.ValidateAppId(app_id)
+    if not valid_id then
+        return false, id_error
+    end
+
+    local app = apps_by_id[app_id]
+    if not app then
+        return false, "app_not_found"
+    end
+    if not app.catalog.bundled then
+        return false, "external_app"
+    end
+    if type(hooks) ~= "table" then
+        return false, "invalid_hooks"
+    end
+
+    local normalized_hooks = {}
+    for hook_name, hook in pairs(hooks) do
+        if not HOOK_NAMES[hook_name] or type(hook) ~= "function" then
+            return false, "invalid_hook"
+        end
+        normalized_hooks[hook_name] = hook
+    end
+
+    app.hooks = normalized_hooks
+    return true
+end
+
+SkyPhoneApps.SendCatalog = send_catalog
+SkyPhoneApps.SetPhoneOpen = set_phone_open
+SkyPhoneApps.RegisterClientHooks = register_bundled_client_hooks
+
+if Config.CustomApps.Enabled and Config.CustomApps.BundledApps then
+    local bundled = SkyPhoneApps.GetBundledManifests()
+    for index = 1, #bundled do
+        local registered, register_error = register_app(normalize_bundled_manifest(bundled[index]))
+        if not registered then
+            error(("[sky_phone] Could not register bundled custom app '%s': %s"):format(
+                bundled[index].id,
+                register_error
+            ))
+        end
+    end
+end
+
+local function add_custom_app_export(definition)
+    if type(definition) ~= "table" then
+        return add_custom_app(definition)
+    end
+
+    local provider_markers = 0
+    if definition.id ~= nil then
+        provider_markers = provider_markers + 1
+    end
+    if definition.identifier ~= nil then
+        provider_markers = provider_markers + 1
+    end
+    if definition.key ~= nil then
+        provider_markers = provider_markers + 1
+    end
+    if provider_markers > 1 then
+        return false, "ambiguous_app_provider"
+    end
+    if definition.identifier == nil and definition.key == nil then
+        return add_custom_app(definition)
+    end
+
+    local owner_resource, owner_error = get_direct_owner()
+    if not owner_resource then
+        return false, owner_error
+    end
+    if not SkyPhoneApps.RegisterCompatibilityExport then
+        return false, "compatibility_not_ready"
+    end
+    return SkyPhoneApps.RegisterCompatibilityExport(owner_resource, definition)
+end
+
+SkyPhoneApps.CompatibilityCore = {
+    Add = add_compatibility_app,
+    Close = close_compatibility_app,
+    CloseActive = close_active_compatibility_app,
+    Open = open_compatibility_app,
+    Remove = remove_compatibility_app,
+    SendMessage = send_compatibility_app_message,
+    Update = update_compatibility_app,
+}
+
+exports("AddCustomApp", add_custom_app_export)
+exports("AddCustomAppFromAdapter", add_custom_app_from_adapter)
+exports("CloseActiveCustomAppFromAdapter", close_active_custom_app_from_adapter)
+exports("CloseCustomApp", close_custom_app)
+exports("CloseCustomAppFromAdapter", close_custom_app_from_adapter)
+exports("GetCustomAppCapabilities", get_custom_app_capabilities)
+exports("OpenCustomApp", open_custom_app)
+exports("OpenCustomAppFromAdapter", open_custom_app_from_adapter)
+exports("RemoveCustomApp", remove_custom_app)
+exports("RemoveCustomAppFromAdapter", remove_custom_app_from_adapter)
+exports("SendCustomAppMessage", send_custom_app_message)
+exports("SendCustomAppMessageFromAdapter", send_custom_app_message_from_adapter)
+exports("SendCustomAppNotification", send_custom_app_notification)
+exports("SendCustomAppNotificationFromAdapter", send_custom_app_notification_from_adapter)
+exports("UpdateCustomApp", update_custom_app)
+exports("UpdateCustomAppFromAdapter", update_custom_app_from_adapter)
+
+SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "AddCustomApp", add_custom_app_export)
+SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "RemoveCustomApp", remove_custom_app)
+SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "SendCustomAppMessage", send_custom_app_message)
+SkyPhoneCompatibility.RegisterExportAlias("yseries", "AddCustomApp", add_custom_app_export)
+SkyPhoneCompatibility.RegisterExportAlias("yseries", "RemoveCustomApp", remove_custom_app)
+
+RegisterNUICallback("custom-app:lifecycle", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_lifecycle_request" })
+        return
+    end
+
+    local valid_id, id_error = SkyPhoneApps.ValidateAppId(data.appId)
+    if not valid_id then
+        cb({ success = false, error = id_error })
+        return
+    end
+
+    local lifecycle_event = data.event
+    if lifecycle_event ~= "install"
+        and lifecycle_event ~= "open"
+        and lifecycle_event ~= "ready"
+        and lifecycle_event ~= "close"
+    then
+        cb({ success = false, error = "invalid_lifecycle_event" })
+        return
+    end
+
+    local app = apps_by_id[data.appId]
+    if lifecycle_event == "close"
+        and (not phone_open or not app or active_app_id ~= data.appId)
+    then
+        cb({ success = true })
+        return
+    end
+    if not phone_open then
+        cb({ success = false, error = "phone_closed" })
+        return
+    end
+    if not app then
+        cb({ success = false, error = "app_not_found" })
+        return
+    end
+
+    local lifecycle_payload, payload_error = normalize_json_payload(
+        data.data,
+        Config.CustomApps.MaximumMessageBytes
+    )
+    if payload_error then
+        cb({ success = false, error = payload_error })
+        return
+    end
+
+    local deferred_hooks = {}
+    local hook_success = true
+    if lifecycle_event == "install" then
+        hook_success = invoke_or_defer_hook(app, "onInstall", lifecycle_payload, deferred_hooks)
+    elseif lifecycle_event == "open" then
+        if active_app_id and active_app_id ~= data.appId then
+            clear_active_app(true, deferred_hooks)
+        end
+        active_app_id = data.appId
+        active_app_ready = false
+        queued_messages[data.appId] = {}
+        hook_success = invoke_or_defer_hook(app, "onOpen", lifecycle_payload, deferred_hooks)
+    elseif active_app_id ~= data.appId then
+        cb({ success = false, error = "app_not_active" })
+        return
+    elseif lifecycle_event == "ready" then
+        if active_app_ready then
+            cb({ success = true })
+            return
+        end
+        active_app_ready = true
+        local pending = queued_messages[data.appId] or {}
+        queued_messages[data.appId] = {}
+        for index = 1, #pending do
+            deliver_custom_app_message(data.appId, pending[index].payload)
+        end
+        hook_success = invoke_or_defer_hook(app, "onReady", lifecycle_payload, deferred_hooks)
+    else
+        hook_success = invoke_or_defer_hook(app, "onClose", lifecycle_payload, deferred_hooks)
+        clear_active_app(false)
+    end
+
+    if not hook_success then
+        cb({ success = false, error = "hook_failed" })
+        return
+    end
+    cb({ success = true })
+    invoke_deferred_hooks(deferred_hooks)
+end)
+
+AddEventHandler("onClientResourceStop", function(resource_name)
+    if resource_name == current_resource then
+        return
+    end
+
+    local app_ids = {}
+    local owner_apps = app_ids_by_owner[resource_name]
+    if owner_apps then
+        for app_id in pairs(owner_apps) do
+            app_ids[app_id] = true
+        end
+    end
+
+    local adapter_apps = app_ids_by_adapter[resource_name]
+    if adapter_apps then
+        for app_id in pairs(adapter_apps) do
+            app_ids[app_id] = true
+        end
+    end
+
+    local removed = false
+    for app_id in pairs(app_ids) do
+        local success = remove_registered_app(app_id, false, false)
+        removed = success or removed
+    end
+    if removed then
+        sync_catalog_if_open()
+    end
+end)

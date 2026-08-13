@@ -14,9 +14,13 @@
 .sim-picker {
   position: relative;
   width: min(58vh, 90vw);
-  max-height: 46vh;
-  overflow: clip;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  min-height: 0;
+  overflow: hidden;
   padding: 2.2vh;
+  display: flex;
+  flex-direction: column;
   border: 0.1vh solid rgb(255 255 255 / 12%);
   border-radius: 0.9vh;
   background: #050505;
@@ -56,9 +60,14 @@
 
 .sim-picker__header {
   display: flex;
+  flex: 0 0 auto;
   justify-content: space-between;
   gap: 2vh;
   margin-bottom: 1.6vh;
+}
+
+.sim-picker__header > div {
+  min-width: 0;
 }
 
 .sim-picker__header h1,
@@ -73,6 +82,7 @@
   margin: 0.45vh 0 0;
   color: #9ca3af;
   font-size: 1.15vh;
+  overflow-wrap: anywhere;
 }
 
 .sim-picker__close {
@@ -80,6 +90,8 @@
   place-items: center;
   width: 2.8vh;
   height: 2.8vh;
+  min-width: 32px;
+  min-height: 32px;
   border: 0;
   border-radius: 0.35vh;
   background: #1dd1ce;
@@ -96,10 +108,12 @@
   position: relative;
   z-index: 1;
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1vh;
-  max-height: 34vh;
-  overflow: auto;
+  min-height: 0;
+  max-height: 54vh;
+  overflow-y: auto;
 }
 
 .sim-picker__card {
@@ -140,30 +154,34 @@
 }
 
 .sim-picker__details strong {
-  overflow: hidden;
   font-size: 1.2vh;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .sim-picker__details small {
   color: #9ca3af;
   font-size: 0.95vh;
+  overflow-wrap: anywhere;
 }
 
 .sim-picker__confirmation {
+  min-height: 0;
+  overflow-y: auto;
   padding: 2vh 0 0;
   text-align: center;
 }
 
 .sim-picker__confirmation > div {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 1vh;
   margin-top: 2vh;
 }
 
 .sim-picker__confirmation button {
+  min-height: 40px;
+  overflow-wrap: anywhere;
   padding: 0.8vh 1.6vh;
   border: 0.1vh solid rgb(255 255 255 / 18%);
   border-radius: 0.45vh;
@@ -184,6 +202,13 @@
   color: #ff453a;
   font-size: 1vh;
   text-align: center;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .sim-picker__cards {
+    grid-template-columns: 1fr;
+  }
 }
 :root {
   font-family:
@@ -205,6 +230,7 @@ body,
   margin: 0;
   overflow: hidden;
   background: transparent !important;
+  pointer-events: none;
   user-select: none;
 }
 button,
@@ -467,6 +493,47 @@ button {
   cursor: pointer;
   pointer-events: auto;
 }
+.phone-status-bar__time-button--active-call {
+  isolation: isolate;
+  text-shadow: none;
+}
+.phone-status-bar__time-button--active-call::before {
+  position: absolute;
+  z-index: -1;
+  top: 19px;
+  left: calc(50% - 3px);
+  width: 90px;
+  height: 30px;
+  border-radius: 15px;
+  background: #34c759;
+  box-shadow: 0 2px 8px #0b6f2b66;
+  animation: phone-active-call-pill-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  content: '';
+  transform-origin: center;
+  transform: translateX(-50%);
+  transition: transform 140ms ease;
+}
+.phone-status-bar__time-button--active-call:active::before {
+  transform: translateX(-50%) scale(0.94);
+}
+.phone-status-bar__active-call-icon {
+  position: absolute;
+  top: 27px;
+  left: calc(50% - 39px);
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.5;
+}
+@keyframes phone-active-call-pill-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
 .phone-status-bar__indicators {
   position: absolute;
   top: 0;
@@ -667,17 +734,75 @@ button {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
+.lock-screen__notification-row {
+  position: relative;
+  overflow: hidden;
+  min-height: 76px;
+  border-radius: 18px;
+  background: transparent;
+  isolation: isolate;
+}
+.lock-screen__notification-clear {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: 76px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  padding: 0;
+  color: #fff;
+  background: #ff3b30;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+}
+.lock-screen__notification-row.is-action-visible {
+  background: #ff3b30;
+}
+.lock-screen__notification-row.is-action-visible
+  .lock-screen__notification-clear {
+  opacity: 1;
+}
 .lock-screen__notification {
   position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
   gap: 10px;
-  min-height: 72px;
+  width: 100%;
+  min-height: 76px;
   border-radius: 18px;
-  padding: 11px 38px 11px 11px;
+  padding: 11px;
   color: #fff;
-  background-color: rgb(28 28 32 / 72%);
+  background-color: rgb(38 36 40 / 76%);
   text-shadow: 0 1px 3px #0009;
+  touch-action: pan-y;
+  transform: translate3d(var(--notification-swipe), 0, 0);
+  transition: transform 0.28s cubic-bezier(0.22, 0.78, 0.24, 1);
+  will-change: transform;
+  backdrop-filter: blur(22px) saturate(1.18);
+  -webkit-backdrop-filter: blur(22px) saturate(1.18);
+}
+.lock-screen__notification-row.is-swiping .lock-screen__notification {
+  transition: none;
+}
+.phone-notification.is-actionable {
+  cursor: pointer;
+}
+.lock-screen__notification.is-actionable {
+  cursor: pointer;
+}
+.lock-screen__notification.is-actionable:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 .lock-screen__notification-icon {
   width: 42px;
@@ -722,21 +847,6 @@ button {
   line-height: 15px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-}
-.lock-screen__notification-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  padding: 0;
-  color: #fff;
-  background: #0007;
-  cursor: pointer;
 }
 .lock-screen__footer {
   position: absolute;
@@ -834,13 +944,13 @@ button {
 }
 
 /* DarkChat is intentionally independent from the phone appearance setting. */
-.phone-app:has(.darkchat-page),
-.phone-app:has(.darkchat-page) .phone-app-window,
-.phone-app:has(.darkchat-page) .phone-app-window__content {
+.phone-app--darkchat,
+.phone-app--darkchat .phone-app-window,
+.phone-app--darkchat .phone-app-window__content {
   background: #000 !important;
   color-scheme: dark;
 }
-.phone-app:has(.darkchat-page) .phone-status-bar {
+.phone-app--darkchat .phone-status-bar {
   color: #fff !important;
   --status-bar-color: #fff;
 }
@@ -1541,7 +1651,7 @@ button {
   font-size: 9px;
   white-space: nowrap;
 }
-.darkchat-message:has(.darkchat-reactions) {
+.darkchat-message {
   margin-bottom: 12px;
 }
 .darkchat-replying {
@@ -2359,7 +2469,7 @@ button {
 .app-dock {
   position: absolute;
   z-index: 8;
-  bottom: 43px;
+  bottom: 30px;
   left: 15px;
   right: 15px;
   height: 82px;
@@ -2410,7 +2520,7 @@ button {
 }
 .page-indicator {
   position: absolute;
-  bottom: 132px;
+  bottom: 122px;
   left: 0;
   right: 0;
   height: 14px;
@@ -3711,7 +3821,7 @@ button {
 .clock-world-time {
   margin-top: 8px;
   font-variant-numeric: tabular-nums;
-  font-size: min(76px, 20cqw);
+  font-size: 74px;
   font-weight: 200;
   letter-spacing: -4px;
 }
@@ -3858,7 +3968,7 @@ button {
 .clock-digits {
   margin: 70px 0 54px;
   font-variant-numeric: tabular-nums;
-  font-size: min(52px, 14cqw);
+  font-size: 52px;
   font-weight: 200;
 }
 .clock-sound-menu {
@@ -4239,11 +4349,11 @@ button {
   background: #fff !important;
   color: #111;
 }
-.phone-app:has(.messages-page) .phone-status-bar {
+.phone-app--messages .phone-status-bar {
   color: #080808;
   text-shadow: none;
 }
-.phone-app:has(.messages-page)::before {
+.phone-app--messages::before {
   content: '';
   position: absolute;
   z-index: 60;
@@ -4496,22 +4606,28 @@ button {
     inset 0 1px 0 rgb(255 255 255 / 30%),
     0 3px 12px rgb(0 0 0 / 12%);
   overflow: hidden;
+  background: linear-gradient(145deg, #5b91c2, #22527d);
   color: #fff;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
 }
-.messages-avatar__glyph {
-  padding-top: 6px;
-  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
-  font-size: 34px;
+.messages-avatar__initials {
   line-height: 1;
-  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 15%));
+}
+.messages-avatar__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  object-fit: cover;
 }
 .messages-avatar--small {
   width: 38px;
   height: 38px;
 }
-.messages-avatar--small .messages-avatar__glyph {
-  padding-top: 5px;
-  font-size: 27px;
+.messages-avatar--small .messages-avatar__initials {
+  font-size: 15px;
 }
 .messages-empty-state {
   min-height: 72%;
@@ -4579,6 +4695,9 @@ button {
 .messages-thread-page--emoji {
   padding-bottom: 288px !important;
 }
+.messages-thread-page--share {
+  padding-bottom: 260px !important;
+}
 .messages-chat-header {
   position: fixed;
   z-index: 35;
@@ -4625,9 +4744,8 @@ button {
     0 0 0 1px rgb(0 0 0 / 5%),
     0 8px 22px rgb(0 0 0 / 12%);
 }
-.messages-avatar--header .messages-avatar__glyph {
-  padding-top: 7px;
-  font-size: 42px;
+.messages-avatar--header .messages-avatar__initials {
+  font-size: 23px;
 }
 .messages-chat-header__name {
   max-width: 205px;
@@ -4657,6 +4775,11 @@ button {
 .messages-bubbles {
   min-height: calc(100% - 12px);
   padding: 10px 12px 20px;
+}
+.messages-thread-bottom {
+  display: block;
+  width: 100%;
+  height: 1px;
 }
 .messages-bubbles [class*='message-bubble'] {
   max-width: 248px;
@@ -4895,6 +5018,53 @@ button {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 7px;
+  overflow-y: auto;
+}
+.shared-composer-preview {
+  position: fixed;
+  z-index: 43;
+  right: 12px;
+  bottom: 89px;
+  left: 12px;
+  padding: 7px;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 19px;
+  background: rgb(242 242 247 / 90%);
+  box-shadow: 0 10px 28px rgb(20 44 76 / 18%);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+}
+.shared-composer-preview > button {
+  position: absolute;
+  z-index: 2;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: rgb(60 60 67 / 78%);
+}
+.shared-composer-preview--dark {
+  position: relative;
+  inset: auto;
+  z-index: 2;
+  margin: 0 8px 7px;
+  flex: 0 0 auto;
+  border-color: rgb(255 255 255 / 10%);
+  background: rgb(20 18 27 / 94%);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 28%);
+}
+.phone-app.dark .shared-composer-preview {
+  border-color: rgb(255 255 255 / 10%);
+  background: rgb(36 36 40 / 92%);
+}
+.messages-media-picker__contacts {
+  height: 270px;
+  margin: 0;
+  padding: 8px 0 18px;
   overflow-y: auto;
 }
 .messages-media-picker__gifs button {
@@ -5273,9 +5443,8 @@ button {
   width: 78px;
   height: 78px;
 }
-.messages-avatar--contact .messages-avatar__glyph {
-  padding-top: 10px;
-  font-size: 57px;
+.messages-avatar--contact .messages-avatar__initials {
+  font-size: 32px;
 }
 .messages-contact-details__hero h2 {
   margin: 10px 0 2px;
@@ -5396,7 +5565,7 @@ button {
   }
 }
 /* iOS 26-style Liquid Glass refinements and complete media pickers. */
-.phone-app:has(.messages-page) {
+.messages-page {
   --ios-glass: rgb(252 252 255 / 70%);
   --ios-glass-strong: rgb(255 255 255 / 86%);
   --ios-glass-border: rgb(255 255 255 / 72%);
@@ -5717,21 +5886,21 @@ button {
 .messages-attachment--video small {
   z-index: 2;
 }
-.messages-attachment--gif:has(img) {
+.messages-attachment--gif {
   background: #e9e9ed;
 }
 
 /* Konsta's k-app dark state drives the complete iOS Messages palette. */
-.phone-app.dark:has(.messages-page) {
+.phone-app.dark .messages-page {
   --ios-glass: rgb(28 28 30 / 76%);
   --ios-glass-strong: rgb(36 36 38 / 90%);
   --ios-glass-border: rgb(255 255 255 / 12%);
   color-scheme: dark;
 }
-.phone-app.dark:has(.messages-page)::before {
+.phone-app--messages.dark::before {
   background: #000;
 }
-.phone-app.dark:has(.messages-page) .phone-status-bar {
+.phone-app--messages.dark .phone-status-bar {
   color: #fff;
   text-shadow: none;
 }
@@ -6109,6 +6278,18 @@ button {
   display: block;
   margin: 0;
 }
+.messages-thread-page .messages-attachment-menu > button:nth-child(4) > span {
+  background: #e9f9ed;
+  color: #28a745;
+}
+.messages-thread-page .messages-attachment-menu > button:nth-child(5) > span {
+  background: #f6eefe;
+  color: #af52de;
+}
+.messages-thread-page .messages-attachment-menu > button:nth-child(6) > span {
+  background: #fff0ef;
+  color: #ff3b30;
+}
 .messages-thread-page
   .messages-messagebar
   > .k-toolbar
@@ -6268,9 +6449,8 @@ button {
   width: 50px;
   height: 50px;
 }
-.messages-inbox-page .messages-avatar__glyph {
-  padding-top: 6px;
-  font-size: 34px;
+.messages-inbox-page .messages-avatar__initials {
+  font-size: 19px;
 }
 .messages-inbox-page .messages-conversation__body {
   gap: 3px;

@@ -4,6 +4,9 @@ import {
   kButton,
   kDialog,
   kLink,
+  kList,
+  kListInput,
+  kListItem,
   kNavbar,
   kNavbarBackLink,
   kPage,
@@ -12,13 +15,30 @@ import {
   kSegmentedButton,
   kToast,
 } from 'konsta/vue'
-import { Play, RotateCcw, Trash2, ZoomIn, ZoomOut } from 'lucide-vue-next'
+import {
+  ChevronRight,
+  Globe2,
+  Link2,
+  Play,
+  RotateCcw,
+  Share2,
+  Trash2,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
-import type { DeleteResult, GalleryFilter, PhoneMedia } from '@/types/media'
+import { useEasyShareStore } from '@/stores/easyshare'
+import type {
+  DeleteResult,
+  GalleryFilter,
+  MediaImportSource,
+  MediaImportSources,
+  PhoneMedia,
+} from '@/types/media'
 import {
   hasNextMediaPage,
   MEDIA_PAGE_SIZE,
@@ -26,6 +46,7 @@ import {
   mergeMedia,
 } from '@/utils/media'
 import { nuiCall } from '@/utils/nui'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 const isDevelopment = import.meta.env.DEV
 const developmentGalleryState = isDevelopment
@@ -37,6 +58,7 @@ const filterItems = [
   { id: 'video', label: 'videos' },
 ] as const
 const phone = usePhoneStore()
+const easyShare = useEasyShareStore()
 const messageMedia = useMessageMediaStore()
 const route = useRoute()
 const router = useRouter()
@@ -57,6 +79,12 @@ const fetching = ref(false)
 const hasMore = ref(true)
 const loadError = ref('')
 const selected = ref<PhoneMedia | null>(null)
+const importMode = ref<'form' | 'gallery' | 'sources'>('gallery')
+const importSources = ref<MediaImportSource[]>([])
+const importSource = ref<MediaImportSource | null>(null)
+const importUrl = ref('')
+const importError = ref('')
+const importing = ref(false)
 const deleteDialogOpened = ref(false)
 const cancelButtonColors = {
   fillBgIos: 'bg-[#8e8e93] active:bg-[#7a7a7f]',
@@ -81,10 +109,13 @@ const imageZoom = ref(1)
 const imagePan = ref({ x: 0, y: 0 })
 const landscapeViewer = ref(false)
 const dragging = ref(false)
+const videoPlaybackError = ref(false)
 const dragStart = ref({ panX: 0, panY: 0, x: 0, y: 0 })
 let observer: IntersectionObserver | null = null
 let toastTimer: number | undefined
 let pendingDeleteCorrelation = ''
+let dragTarget: HTMLElement | null = null
+let dragPointerId: number | null = null
 
 const imageStyle = computed(() => ({
   cursor:
@@ -140,6 +171,71 @@ function showToast(text: string): void {
   toastTimer = window.setTimeout(() => {
     toastOpened.value = false
   }, 3000)
+}
+
+async function loadImportSources(): Promise<void> {
+  const response = await nuiCall<MediaImportSources>('media:import:sources')
+  if (!response.success || !response.data) return
+  importSources.value = response.data.sources
+}
+
+function selectImportSource(source: MediaImportSource): void {
+  importSource.value = source
+  importMode.value = 'form'
+  importUrl.value = ''
+  importError.value = ''
+}
+
+function openImport(): void {
+  if (importSources.value.length === 1) {
+    selectImportSource(importSources.value[0])
+    return
+  }
+  importMode.value = 'sources'
+}
+
+function closeImport(): void {
+  importMode.value = 'gallery'
+  importSource.value = null
+  importUrl.value = ''
+  importError.value = ''
+}
+
+function backFromImportForm(): void {
+  if (importSources.value.length > 1) {
+    importMode.value = 'sources'
+    importSource.value = null
+    importUrl.value = ''
+    importError.value = ''
+    return
+  }
+  closeImport()
+}
+
+function updateImportUrl(event: Event): void {
+  importUrl.value = (event.target as HTMLInputElement).value
+  importError.value = ''
+}
+
+async function commitUrlImport(): Promise<void> {
+  const url = importUrl.value.trim()
+  if (!importSource.value || !url || importing.value) return
+  importing.value = true
+  importError.value = ''
+  const response = await nuiCall<PhoneMedia>('media:import:url', {
+    sourceId: importSource.value.id,
+    url,
+  })
+  importing.value = false
+  if (!response.success || !response.data) {
+    importError.value = phone.t(
+      `Apps.photos.errors.${mediaErrorKey(response.error)}`,
+    )
+    return
+  }
+  media.value = mergeMedia(media.value, [response.data])
+  closeImport()
+  showToast(phone.t('Apps.photos.import.linkCompleted'))
 }
 
 function formatDate(timestamp: number): string {
@@ -224,6 +320,7 @@ function openMedia(entry: PhoneMedia): void {
   landscapeViewer.value = false
   phone.setCameraLandscape(false)
   selected.value = entry
+  videoPlaybackError.value = false
   imageZoom.value = 1
   imagePan.value = { x: 0, y: 0 }
 }
@@ -251,8 +348,24 @@ function closeMedia(): void {
   landscapeViewer.value = false
   phone.setCameraLandscape(false)
   selected.value = null
+  videoPlaybackError.value = false
   deleteDialogOpened.value = false
   stopDragging()
+}
+
+function shareSelected(): void {
+  if (!selected.value) return
+  const mediaKind = selected.value.mediaType
+  easyShare.open({
+    appId: 'photos',
+    copyText: selected.value.url,
+    id: selected.value.id,
+    imageUrl: selected.value.url,
+    kind: mediaKind,
+    link: `skyphone://media/${selected.value.id}`,
+    subtitle: formatDate(selected.value.createdAt),
+    title: phone.t(mediaKind === 'video' ? 'Apps.photos.video' : 'Apps.photos.photo'),
+  })
 }
 
 function orientToMedia(event: Event): void {
@@ -277,6 +390,9 @@ function startDragging(event: PointerEvent): void {
     setZoom(2)
     return
   }
+  dragTarget = event.currentTarget as HTMLElement
+  dragPointerId = event.pointerId
+  dragTarget.setPointerCapture(event.pointerId)
   dragging.value = true
   dragStart.value = {
     panX: imagePan.value.x,
@@ -284,8 +400,6 @@ function startDragging(event: PointerEvent): void {
     x: event.clientX,
     y: event.clientY,
   }
-  window.addEventListener('pointermove', moveImage)
-  window.addEventListener('pointerup', stopDragging)
 }
 
 function moveImage(event: PointerEvent): void {
@@ -298,8 +412,44 @@ function moveImage(event: PointerEvent): void {
 
 function stopDragging(): void {
   dragging.value = false
-  window.removeEventListener('pointermove', moveImage)
-  window.removeEventListener('pointerup', stopDragging)
+  if (
+    dragTarget &&
+    dragPointerId !== null &&
+    dragTarget.hasPointerCapture(dragPointerId)
+  ) {
+    dragTarget.releasePointerCapture(dragPointerId)
+  }
+  dragTarget = null
+  dragPointerId = null
+}
+
+function moveImageWithKeyboard(event: KeyboardEvent): void {
+  if (imageZoom.value <= 1) return
+  const step = event.shiftKey ? 48 : 24
+  const offsets: Partial<Record<string, { x: number; y: number }>> = {
+    ArrowDown: { x: 0, y: -step },
+    ArrowLeft: { x: step, y: 0 },
+    ArrowRight: { x: -step, y: 0 },
+    ArrowUp: { x: 0, y: step },
+  }
+  const offset = offsets[event.key]
+  if (!offset) return
+  event.preventDefault()
+  event.stopPropagation()
+  imagePan.value = {
+    x: imagePan.value.x + offset.x,
+    y: imagePan.value.y + offset.y,
+  }
+}
+
+async function initializeVideo(event: Event): Promise<void> {
+  orientToMedia(event)
+  videoPlaybackError.value = false
+  try {
+    await (event.currentTarget as HTMLVideoElement).play()
+  } catch {
+    // The native controls remain visible when embedded CEF blocks autoplay.
+  }
 }
 
 async function deleteSelected(): Promise<void> {
@@ -331,7 +481,12 @@ async function deleteSelected(): Promise<void> {
 }
 
 function onMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   const message = event.data as { data?: DeleteResult; type?: string }
+  if (message.type === 'gallery:changed') {
+    void loadGallery()
+    return
+  }
   if (
     message.type !== 'media:deleteResult' ||
     message.data?.correlationId !== pendingDeleteCorrelation
@@ -356,6 +511,7 @@ watch(hasMore, () => void nextTick().then(observeMore))
 onMounted(() => {
   window.addEventListener('message', onMessage)
   void loadGallery()
+  void loadImportSources()
 })
 
 onBeforeUnmount(() => {
@@ -369,12 +525,105 @@ onBeforeUnmount(() => {
 
 <template>
   <k-page
-    v-if="!selected"
+    v-if="importMode === 'sources'"
+    class="gallery-import-page !pt-[44px]"
+    :aria-label="phone.t('Apps.photos.import.chooseSource')"
+  >
+    <k-navbar :title="phone.t('Apps.photos.import.title')">
+      <template #left>
+        <k-navbar-back-link
+          component="button"
+          :text="phone.t('Common.back')"
+          @click="closeImport"
+        />
+      </template>
+    </k-navbar>
+    <k-block class="gallery-import-intro">
+      {{ phone.t('Apps.photos.import.chooseSource') }}
+    </k-block>
+    <k-list inset strong>
+      <k-list-item
+        v-for="source in importSources"
+        :key="source.id"
+        link
+        :chevron="false"
+        :title="source.label"
+        :subtitle="
+          source.mediaTypes
+            .map((type) =>
+              phone.t(
+                type === 'photo'
+                  ? 'Apps.photos.filters.photos'
+                  : 'Apps.photos.filters.videos',
+              ),
+            )
+            .join(' · ')
+        "
+        @click="selectImportSource(source)"
+      >
+        <template #media><Globe2 :size="22" /></template>
+        <template #after><ChevronRight :size="18" /></template>
+      </k-list-item>
+    </k-list>
+  </k-page>
+
+  <k-page
+    v-else-if="importMode === 'form' && importSource"
+    class="gallery-import-page !pt-[44px]"
+    :aria-label="phone.t('Apps.photos.import.title')"
+  >
+    <k-navbar :title="importSource.label">
+      <template #left>
+        <k-navbar-back-link
+          component="button"
+          :text="phone.t('Common.back')"
+          @click="backFromImportForm"
+        />
+      </template>
+    </k-navbar>
+
+    <div class="gallery-import-form">
+      <div class="gallery-import-form-icon"><Link2 :size="34" /></div>
+      <h2>{{ phone.t('Apps.photos.import.linkTitle') }}</h2>
+      <p>{{ phone.t('Apps.photos.import.linkBody') }}</p>
+      <k-list inset strong class="gallery-import-url-list">
+        <k-list-input
+          outline
+          input-id="gallery-import-url"
+          inputmode="url"
+          maxlength="2048"
+          :error="importError || undefined"
+          :label="phone.t('Apps.photos.import.linkLabel')"
+          :placeholder="phone.t('Apps.photos.import.linkPlaceholder')"
+          type="url"
+          :value="importUrl"
+          @input="updateImportUrl"
+          @keyup.enter="commitUrlImport"
+        />
+      </k-list>
+      <k-button
+        class="gallery-import-submit"
+        large
+        rounded
+        :disabled="!importUrl.trim() || importing"
+        @click="commitUrlImport"
+      >
+        <k-preloader v-if="importing" class="mr-2" />
+        {{ phone.t('Apps.photos.import.action') }}
+      </k-button>
+    </div>
+  </k-page>
+
+  <k-page
+    v-else-if="!selected"
     class="gallery-page !pt-[44px]"
     :aria-label="phone.t('Apps.photos.name')"
   >
-    <k-navbar :title="phone.t('Apps.photos.name')">
-      <template v-if="requestedMessageMedia" #left>
+    <k-navbar
+      v-if="requestedMessageMedia"
+      :title="phone.t('Apps.photos.name')"
+    >
+      <template #left>
         <k-navbar-back-link
           component="button"
           :text="phone.t('Common.back')"
@@ -388,6 +637,17 @@ onBeforeUnmount(() => {
           @click="completeMultipleSelection"
         >
           {{ phone.t('Common.done') }}
+        </k-link>
+      </template>
+    </k-navbar>
+    <k-navbar
+      v-else
+      :title="phone.t('Apps.photos.name')"
+      right-class="!ms-auto"
+    >
+      <template v-if="importSources.length" #right>
+        <k-link component="button" @click="openImport">
+          {{ phone.t('Apps.photos.import.action') }}
         </k-link>
       </template>
     </k-navbar>
@@ -519,6 +779,15 @@ onBeforeUnmount(() => {
           v-else
           component="button"
           icon-only
+          :aria-label="phone.t('Apps.easyShare.name')"
+          @click="shareSelected"
+        >
+          <Share2 :size="20" />
+        </k-link>
+        <k-link
+          v-if="!requestedMessageMedia"
+          component="button"
+          icon-only
           class="text-red-500"
           :aria-label="phone.t('Apps.photos.delete')"
           :disabled="deleting"
@@ -537,18 +806,33 @@ onBeforeUnmount(() => {
           :alt="phone.t('Apps.photos.photoAlt')"
           :style="imageStyle"
           draggable="false"
+          tabindex="0"
           @load="orientToMedia"
           @pointerdown="startDragging"
+          @pointermove="moveImage"
+          @pointerup="stopDragging"
+          @pointercancel="stopDragging"
+          @lostpointercapture="stopDragging"
+          @keydown="moveImageWithKeyboard"
           @dblclick="setZoom(imageZoom === 1 ? 2 : 1)"
         />
         <video
           v-else
           :src="selected.url"
           controls
-          autoplay
           playsinline
-          @loadedmetadata="orientToMedia"
+          @loadedmetadata="initializeVideo"
+          @error="videoPlaybackError = true"
         ></video>
+        <k-block
+          v-if="selected.mediaType === 'video' && videoPlaybackError"
+          strong
+          inset
+          class="gallery-error"
+          role="alert"
+        >
+          {{ phone.t('Apps.photos.errors.unsupported') }}
+        </k-block>
       </div>
     </div>
 
@@ -618,6 +902,54 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+.gallery-import-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.gallery-import-intro {
+  margin-bottom: 0;
+  color: #8e8e93;
+}
+.gallery-import-form {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 16px 24px;
+  text-align: center;
+}
+.gallery-import-form-icon {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: #0a84ff;
+  color: #fff;
+  box-shadow: 0 10px 28px #0a84ff4d;
+}
+.gallery-import-form h2 {
+  margin: 20px 0 7px;
+  font-size: 21px;
+  font-weight: 700;
+}
+.gallery-import-form p {
+  max-width: 280px;
+  margin: 0;
+  color: #8e8e93;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.gallery-import-url-list {
+  width: 100%;
+  margin-top: 26px;
+}
+.gallery-import-submit {
+  width: calc(100% - 32px);
+  margin-top: 14px;
 }
 .gallery-content {
   min-height: 0;
@@ -744,6 +1076,8 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 50%;
   left: 50%;
+  width: 720px;
+  height: 368px;
   width: 100cqh;
   height: 100cqw;
   transform: translate(-50%, -50%) rotate(90deg);

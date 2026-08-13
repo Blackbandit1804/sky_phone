@@ -1,5 +1,33 @@
 # sky_phone
 
+## Payphones
+
+Payphone dialing is validated against server-owned booth positions. Vanilla GTA V positions live
+in `sky_phone/config/payphones.lua`; the server compares its own player coordinates with this list
+and does not trust coordinates or models sent by the NUI or client.
+
+For a custom map or MLO, add each booth to `Config.Payphones.Locations` in that server-only file:
+
+```lua
+{ model = "prop_phonebox_01a", coords = { x = 123.45, y = 678.90, z = 21.0 } },
+```
+
+The model must also be present in `Config.Payphones.Props`. Coordinates must be finite Lua numbers
+inside the supported world bounds. Restart `sky_phone` after changing the list. If payphones are
+enabled but the list is empty or contains invalid entries, the server logs a visible warning and
+rejects calls that cannot be matched to a valid configured location.
+
+## Custom Apps
+
+`sky_phone` erkennt Registrierungen gestarteter Fremd-App-Ressourcen über integrierte
+Hersteller-Aliase und übernimmt unterstützte Apps automatisch in Springboard und App Store. In
+App-Ressourcen müssen dafür keine Sky-Vorlagen abgelegt werden. Unterstützt werden die
+dokumentierten Basisverträge von LB Phone, 17Movement, High Phone, Quasar Smartphone V3 und
+YSeries; die Resource- und Cfx-Export-Aliase `lb-phone`, `17mov_Phone`, `high-phone`,
+`qs-smartphone` und `yseries` werden direkt von `sky_phone` bereitgestellt. Einrichtung und
+ehrliche Kompatibilitätsgrenzen stehen in der
+[deutschen Custom-App-Anleitung](docs/custom-apps.md).
+
 ## FlipTok verification
 
 FlipTok verification is server-authoritative and limited to the framework groups configured in
@@ -57,13 +85,13 @@ existing playlist entries can no longer resolve the track.
 
 Players can add public YouTube video links to their own library. Metadata is requested through
 YouTube's oEmbed endpoint on the server, while playback uses the embedded YouTube player only on
-that player's NUI. Personal songs and playlists are stored per linked iFruit account, or per phone
+that player's NUI. Personal songs and playlists are stored per linked Sky Cloud account, or per phone
 IMEI while signed out, in the `sky_phone_music_*` tables. Limits and rate controls are configured in
 `config/music.lua`.
 
 ## FlipTok accounts
 
-FlipTok profiles use their own username and password login. Registration requires a linked iFruit
+FlipTok profiles use their own username and password login. Registration requires a linked Sky Cloud
 account once so an existing creator profile, videos, followers, and verification can be claimed
 without data loss. Login sessions are stored per phone IMEI and survive resource or server restarts;
 signing out removes only that device session.
@@ -78,46 +106,139 @@ set sky_phone_fliptok_password_pepper "replace-with-a-long-random-secret"
 Passwords are stored as salted hashes. The pepper is read server-side from the convar and is never
 included in the NUI bundle.
 
-Standalone FiveM phone built with Vue 3, TypeScript, Pinia, Vue Router, Konsta UI 5, and Tailwind CSS 4. Each non-stackable `phone` item receives a unique 15-digit IMEI and owns its server-persisted device state. The phone opens through the usable item; `/phone` is disabled unless `Config.Phone.DevelopmentCommand` is enabled explicitly.
+Standalone FiveM phone built with Vue 3, TypeScript, Pinia, Vue Router, the Sky-owned FiveM UI system, and Tailwind CSS 4. Konsta UI remains only for screens that have not yet completed their migration. The phone opens through the usable item; `/phone` is disabled unless `Config.Phone.DevelopmentCommand` is enabled explicitly. Phone identity and SIM-card behavior are selected independently through `Config.Phone.Unique` and `Config.Sim.Enabled`.
 
-An iFruit account is optional. Unlinked devices retain local settings, alarms, media, apps, notes, contacts, and recent calls. Linking from Mail or Settings moves local data into an empty cloud account; an existing cloud dataset wins over local contacts and recents. Signing out keeps an editable local snapshot without deleting cloud data.
+### Ingame test data
+
+On development servers, enable `Config.TestData.Enabled` and run `/phonetestdata` as the player who
+owns the phone. The command creates or refreshes idempotent, player-scoped fixtures for contacts,
+calls, messages, mail, notes, gallery, banking history, billing, calendar, map markers, music, radio,
+EasyShare, CityMarkt, Local Pages, Picstagram, FlipTok, Feather, Flare, DarkChat, CrewLink, SkyRide,
+and company requests. It also creates a linked Sky Cloud account and a registered SIM when the selected
+phone does not have them yet. Reopen the phone after the command completes.
+
+Garage and Housing intentionally continue to use the real configured provider data. Apps without
+persistent content, such as Calculator, Camera, Clock, Weather, Settings, and Payphone, do not need
+database fixtures. Set `Config.TestData.AdminOnly = true` to restrict the command to the configured
+framework admin groups, and disable the feature outside development environments.
+
+A Sky Cloud account is optional. Unlinked devices retain local settings, alarms, media, apps, notes, contacts, and recent calls. Linking from Mail or Settings moves local data into an empty Sky Cloud account; an existing Sky Cloud dataset wins over local contacts and recents. Signing out keeps an editable local snapshot without deleting Sky Cloud data.
+
+## Phone identity and SIM modes
+
+Both compatibility switches default to the physical, unique-item behavior:
+
+```lua
+Config.Phone.Unique = true
+Config.Sim.Enabled = true
+```
+
+For backwards compatibility, an omitted switch is also treated as `true`.
+
+With `Config.Phone.Unique = true`, every phone item is one transferable physical Device. Its unique
+15-digit IMEI is stored in item metadata, so its settings, PIN, local app data, linked Sky Cloud
+account, and installed SIM travel with that item. The item must be non-stackable.
+
+With `Config.Phone.Unique = false`, the server assigns each framework character one persistent
+virtual Device. Possessing any configured phone item grants access to that Device, but the item does
+not own its IMEI or data. Losing a handset therefore removes access only until the character obtains
+another one; the replacement opens the same data, PIN, account session, and number. Phone items may
+be stackable in this mode, although at least one phone item is still required to use or receive the
+phone. The character mapping is server-authoritative and uses the framework character identifier,
+never a client-supplied owner value.
+
+With `Config.Sim.Enabled = true`, a physical registered or anonymous SIM item must be inserted before
+the Device has cellular service. SIM items remain unique and non-stackable. With
+`Config.Sim.Enabled = false`, SIM inventory items are not required. The first time a Device without
+an attached SIM is resolved, the server creates an anonymous virtual SIM with a random unique phone
+number using `Config.Sim.NumberPrefix` and `NumberLength`; `NumberGroups` controls its display
+format. Physical SIM insertion and ejection are disabled in this mode. An already attached physical
+SIM and its number are preserved when SIM requirements are disabled.
+
+The switches are independent. An automatic number follows a physical handset when unique phones are
+enabled and follows the character's persistent virtual Device when unique phones are disabled.
+Likewise, a physical SIM inserted while unique phones are disabled belongs to the character's
+virtual Device and remains available after replacing the handset.
+
+### Existing installations and first use
+
+After changing an existing installation to `Config.Phone.Unique = false`, the first phone item a
+character uses establishes the persistent mapping. If that item has a valid legacy IMEI which is not
+already mapped to another character, the complete existing Device is adopted. This preserves its
+local content, PIN, linked account, and attached SIM. If the legacy IMEI cannot be adopted, the
+server creates a fresh virtual Device instead. Historic unique Devices did not record an owner, so
+the character carrying a handset on its first use after the change is the character that claims it.
+
+When `Config.Sim.Enabled = false`, an existing attached physical SIM is kept; only Devices without a
+SIM receive a random virtual one. If SIM cards are enabled again, automatically created virtual SIMs
+are detached during resource startup so those Devices once again require a physical SIM. Stored
+character-to-Device mappings remain available, but changing back to unique phones does not copy a
+virtual Device's data onto an arbitrary inventory item. Treat production mode changes as migrations
+and restart the resource after updating the configuration.
 
 ## Requirements
 
 - ESX Legacy (`es_extended`), Qbox (`qbx_core`), or QBCore (`qb-core`). The bridge selects a running supported framework when `Config.Bridge.Framework` is set to `"auto"`.
 - A supported inventory: `ox_inventory`, `qb-inventory`, `lj-inventory`, `qs-inventory`, `codem-inventory`, `core_inventory`, `mf-inventory`, or `smx-inventory`. The bridge auto-detects a running provider and normalizes metadata, slots, counts, item mutations, and usable-item callbacks. `mf-inventory` and `smx-inventory` require ESX. Because SMX stores standard ESX items as stacks, its adapter persists one active Phone/SIM metadata record per player and item type in ESX player metadata.
-- A non-stackable inventory item named `phone`.
-- Two unique, non-stackable inventory items named `sky_phone_sim_registered` and `sky_phone_sim_anonymous`. Their metadata is initialized automatically on first use, so shops and crafting recipes add plain items without supplying a number.
+- An inventory item named `phone`. It must be non-stackable when `Config.Phone.Unique = true` and may be stackable when it is `false`.
+- When `Config.Sim.Enabled = true`, two unique, non-stackable inventory items named `sky_phone_sim_registered` and `sky_phone_sim_anonymous`. Their metadata is initialized automatically on first use, so shops and crafting recipes add plain items without supplying a number. These item definitions are not required when SIM cards are disabled.
 - `oxmysql` with MySQL/MariaDB.
 - `pma-voice` when `Config.Calls.VoiceProvider` is set to `"pma"`.
-- A FiveManage V3 Media API token for Camera photo/video uploads and Gallery deletion. Set the
-  server-only `Config.Media.FiveManage.ApiKey` in `sky_phone/config/media.lua`; the token is never
-  sent to NUI because clients receive temporary presigned upload URLs instead.
+- A FiveManage V3 Media API token for Camera photo/video uploads and Gallery deletion. Set it as a
+  server-only convar; the token is never sent to NUI because clients receive temporary presigned
+  upload URLs instead:
+
+```cfg
+set sky_phone_fivemanage_api_key "replace-with-your-media-token"
+```
 - `yaca-voice`, `pma-voice`, or `saltychat` when the Radio app is enabled. `Config.Radio.VoiceProvider = "auto"` selects the first running provider in that order.
 
 ## Messages GIF provider
 
-Configure GIF search in `sky_phone/config/config.lua`:
+Configure GIF search as a server-only convar:
 
-```lua
-Config.Media.GiphyApiKey = "YOUR_GIPHY_API_KEY"
+```cfg
+set sky_phone_giphy_api_key "replace-with-your-giphy-api-key"
 ```
 
-GIPHY provides trending and searched GIFs through a paginated server-side proxy. The shared
-`config.lua` is loaded by both FiveM runtimes, so its values are available to clients even though
-only the server uses the GIPHY key. Photo and video actions in Messages are intentionally inactive
-until their dedicated implementation is available.
+GIPHY provides trending and searched GIFs through a paginated server-side proxy. Only the server
+reads the key. Photo and video actions in Messages use media captured by the Camera app.
 
-Database migrations run automatically. Existing `sky_phone_mail_accounts` installations are renamed to `sky_phone_accounts` while preserving account IDs and mail foreign keys. iFruit passwords are intentional in-character credentials and remain plaintext `VARCHAR(64)` values; registration screens warn players never to reuse a real password.
+Database migrations run automatically. Existing `sky_phone_mail_accounts` installations are renamed to `sky_phone_accounts` while preserving account IDs and mail foreign keys. The migration also creates `sky_phone_character_devices` for persistent non-unique phone mappings and marks automatic SIMs through `sky_phone_sims.is_virtual`. Sky Cloud passwords are intentional in-character credentials and remain plaintext `VARCHAR(64)` values; registration screens warn players never to reuse a real password.
 
 Camera and Gallery media is stored in `sky_phone_media`. Signed-out captures belong to the current
-IMEI; linking an iFruit account moves those rows into the account gallery so every linked phone sees
-them. Signing out hides cloud media without deleting it. Factory reset removes device-local media
-and attempts to delete its remote FiveManage files, while account-owned media remains in the cloud.
+IMEI; linking a Sky Cloud account moves those rows into the account gallery so every linked phone sees
+them. Signing out hides Sky Cloud media without deleting it. Factory reset removes device-local media
+and attempts to delete only remote FiveManage files created by `sky_phone`; account-owned media
+remains in Sky Cloud. Media imported from a website is removed locally but never deleted at its
+source. Register import websites under `Config.Media.Import.Websites` in
+`sky_phone/config/media.lua`; built-in adapters support FiveManage files and version-1 JSON
+manifests. The Gallery import form accepts direct HTTPS image/video links only when their hostname
+matches the selected website's `AllowedMediaHosts`.
 
 For a fresh manual database installation, import `sky_phone/sql/install.sql`. It contains the complete current table, key, index, collation, and foreign-key schema. Runtime migrations remain authoritative for upgrading an existing installation and must stay enabled.
 
 Framework, inventory, callback, notification, and database integrations live under `sky_phone/source/bridge`. The resource has no dependency on any other Sky resource.
+
+## Weazel News app
+
+The built-in Weazel News app publishes articles for every phone user and exposes its editorial
+desk only to server-authorized jobs. Configure the job-to-minimum-grade map in
+`sky_phone/config/weazel_news.lua`; unlisted jobs remain read-only:
+
+```lua
+AllowedJobs = {
+    weazel = 0,
+    reporter = 2,
+}
+```
+
+Every create, update, and delete request rechecks the player's current framework job and grade on
+the server. Authorized editorial jobs share the newsroom and can manage drafts and published
+articles. Cover images must come from the current phone's Gallery, changes use revision checks, and
+deletion is retained as an audit-safe soft delete. Runtime migration creates
+`sky_phone_weazel_articles` automatically; fresh installations receive the same schema through
+`sky_phone/sql/install.sql`.
 
 ## Radio app
 
@@ -127,13 +248,13 @@ Configure frequency bounds and precision, restricted channel ranges and allowed 
 
 Radio profiles are stored in `sky_phone_radio_profiles`. Runtime migration creates the table automatically; fresh installations receive it through `sky_phone/sql/install.sql`.
 
-Inventory metadata has no framework-wide standard: providers differ in export names, callback payloads, slot handling, and whether metadata is called `metadata` or `info`. For that reason, `sky_phone` uses explicit provider adapters instead of guessing exports at runtime. Every supported adapter implements slot lookup, item lookup, metadata replacement, capacity handling, add/remove operations, and usable-item registration. Providers without a separate capacity export use their authoritative add operation as the final capacity gate.
+Inventory metadata has no framework-wide standard: providers differ in export names, callback payloads, slot handling, and whether metadata is called `metadata` or `info`. For that reason, `sky_phone` uses explicit provider adapters instead of guessing exports at runtime. Every supported adapter implements slot lookup, item lookup, metadata replacement, capacity handling, add/remove operations, and usable-item registration. Providers without a separate capacity export use their authoritative add operation as the final capacity gate. Phone item metadata is authoritative only when `Config.Phone.Unique = true`; in non-unique mode the persistent character mapping is authoritative instead.
 
-When a SIM is ejected or replaced, the returned inventory item is rebuilt from the authoritative `sky_phone_sims` row. Its metadata contains `sim_metadata_version`, `sim_id`, `phone_number`, `formatted_number`, and `sim_type`. Registered SIMs additionally contain `firstname`, `lastname`, `birthdate`, and `registered_at`. The internal framework owner identifier remains database-only. Inserting the item again resolves the SIM by `sim_id`; contacts and device/cloud data remain attached to their existing phone-owned persistence instead of being copied into inventory metadata.
+When physical SIMs are enabled and a SIM is ejected or replaced, the returned inventory item is rebuilt from the authoritative `sky_phone_sims` row. Its metadata contains `sim_metadata_version`, `sim_id`, `phone_number`, `formatted_number`, and `sim_type`. Registered SIMs additionally contain `firstname`, `lastname`, `birthdate`, and `registered_at`. The internal framework owner identifier remains database-only. Inserting the item again resolves the SIM by `sim_id`; contacts and device/Sky Cloud data remain attached to their existing Device or Sky Cloud persistence instead of being copied into inventory metadata. Automatically created virtual SIMs remain database-only and never become inventory items.
 
-For `ox_inventory`, configure all three items with `stack = false` and `consume = 0`. Do not configure a client event or export. Ox then completes its normal server-authoritative use flow and emits `ox_inventory:usedItem`; the bridge resolves the authoritative slot again and only opens the matching device or SIM. A client export would return before Ox calls `useItem` and therefore prevent `ox_inventory:usedItem` from being emitted.
+For `ox_inventory`, configure the phone with `stack = false` when `Config.Phone.Unique = true`; it may use `stack = true` in non-unique mode. Physical SIM items always use `stack = false` and are only needed when `Config.Sim.Enabled = true`. Every usable item should use `consume = 0`. Do not configure a client event or export. Ox then completes its normal server-authoritative use flow and emits `ox_inventory:usedItem`; the bridge resolves the authoritative slot again and only opens the matching Device or SIM. A client export would return before Ox calls `useItem` and therefore prevent `ox_inventory:usedItem` from being emitted.
 
-Example `ox_inventory/data/items.lua` entries:
+Example `ox_inventory/data/items.lua` entries for the default unique-phone, physical-SIM modes:
 
 ```lua
 ["phone"] = {
@@ -159,18 +280,52 @@ Example `ox_inventory/data/items.lua` entries:
 },
 ```
 
-For QBCore-style item tables, define the same names with `unique = true`, `useable = true`, and `shouldClose = true`. The provider adapter registers the server-side usable callbacks; no `lb-phone` event or export is used.
+For QBCore-style item tables, set the phone's `unique` value to match `Config.Phone.Unique`, and use `useable = true` and `shouldClose = true`. When physical SIMs are enabled, define both SIM items with `unique = true`, `useable = true`, and `shouldClose = true`; omit them when SIMs are disabled. The provider adapter registers the server-side usable callbacks; no `lb-phone` event or export is used.
 
 The homescreen is an original implementation inspired by the interaction and layout concepts in [lukejacksonn/homescreen](https://github.com/lukejacksonn/homescreen), inspected at commit [`98a812f`](https://github.com/lukejacksonn/homescreen/tree/98a812f4f7c33594e791d65092f73b8f54b3c598). No source code or image assets from that project are included.
 
 ## Development
 
-From `frontend/`, run `pnpm dev` for browser development. The phone opens automatically and NUI callbacks are mocked. Feather can be opened directly with the following browser scenarios:
+From `frontend/`, run `pnpm dev` for browser development. The phone opens automatically and NUI callbacks are mocked with stateful data. Every built-in app can be opened directly by appending its id to `http://localhost:5174/?apiPort=3002#/apps/`:
+
+| Area                | App ids                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Communication       | `phone`, `messages`, `mail`, `darkchat`, `radio`                                                              |
+| Social              | `feather`, `fliptok`, `picstagram`, `flare`, `crewlink`                                                       |
+| Services            | `companies`, `citymarkt`, `local-pages`, `banking`, `billing`, `garage`, `house`, `map`, `skyride`, `weather` |
+| Media and utilities | `camera`, `photos`, `music`, `calendar`, `notes`, `calculator`, `clock`, `app-store`, `settings`              |
+| Games               | `snake`, `memory`, `number-merge`, `minesweeper`, `tower-stack`, `sky-flappy`, `neon-drop`                    |
+
+The browser bootstrap includes contacts, calls, messages, mail, invoices, transactions, vehicles, properties, companies, marketplace profiles and listings, social feeds, media, calendar entries, notes, alarms, game high scores, app settings, and persisted notifications. Mutating callbacks update the in-memory mock state until the mock server restarts. Unknown callbacks fail with `mock_endpoint_missing` instead of silently succeeding.
+
+System overlays are available through dedicated preview parameters:
+
+- SIM picker: `http://localhost:5174/?apiPort=3002&simPickerPreview=1`
+- Payphone: `http://localhost:5174/?apiPort=3002&payphonePreview=1` (dial `5551110001` for a connected call or `5550000000` for a busy line)
+
+Feather can be opened directly with the following browser scenarios:
 
 - Full data: `http://localhost:5174/?apiPort=3002#/apps/feather`
 - Login and registration: `http://localhost:5174/?apiPort=3002&testScenario=feather-login#/apps/feather`
 - Profile onboarding: `http://localhost:5174/?apiPort=3002&testScenario=feather-onboarding#/apps/feather`
 - Empty states: `http://localhost:5174/?apiPort=3002&testScenario=feather-empty#/apps/feather`
+
+EasyShare browser data is available from every app that exposes a share action. Open the seeded
+Gallery directly, share an item, and then use the EasyShare and History actions in the sheet:
+
+- Full data, including incoming, transferring, accepted, completed, declined, cancelled, expired,
+  and failed transfers: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-full#/apps/photos`
+- Incoming request only: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-incoming#/apps/photos`
+- Transfer history without active requests: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-history#/apps/photos`
+- Complete content catalog with contact, document, link, location, note, photo, playlist, post,
+  profile, text, track, and video: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-catalog#/apps/photos`
+- Empty nearby and history states: `http://localhost:5174/?apiPort=3002&testScenario=easyshare-empty#/apps/photos`
+
+In the full scenario, sending to Mia or Jamie creates a pending transfer. Sending to Noah creates a
+transfer at 58 percent so the progress and cancel states can be tested. Visibility changes and
+accepting or declining the seeded incoming request are kept in memory until the mock server restarts.
+The catalog also contains source examples from Companies, Mail, Garage, and House; completed history
+rows and rich chat cards can be clicked to verify app/deep-link navigation.
 
 The full-data scenario includes posts, replies, quotes, media grids, profiles, ranked hashtags, network search results, and every notification type. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before packaging.
 

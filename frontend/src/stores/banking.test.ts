@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useBankingStore } from '@/stores/banking'
 import type { BankingOverview } from '@/types/banking'
-import { nuiCall } from '@/utils/nui'
+import { nuiCall, type NuiResponse } from '@/utils/nui'
 
 vi.mock('@/utils/nui', () => ({ nuiCall: vi.fn() }))
 
@@ -59,5 +59,27 @@ describe('banking store', () => {
 
     expect(banking.overview).toEqual(overview)
     expect(banking.error).toBe('insufficient_funds')
+  })
+
+  it('does not let an older response overwrite the newest overview', async () => {
+    let resolveOlder!: (response: NuiResponse<BankingOverview>) => void
+    const olderResponse = new Promise<NuiResponse<BankingOverview>>(
+      (resolve) => {
+        resolveOlder = resolve
+      },
+    )
+    const newest = { ...overview, bank: 23000 }
+    mockNuiCall
+      .mockReturnValueOnce(olderResponse)
+      .mockResolvedValueOnce({ data: newest, success: true })
+    const banking = useBankingStore()
+
+    const olderRequest = banking.load()
+    await banking.load()
+    resolveOlder({ data: { ...overview, bank: 1 }, success: true })
+    await olderRequest
+
+    expect(banking.overview).toEqual(newest)
+    expect(banking.isLoading).toBe(false)
   })
 })

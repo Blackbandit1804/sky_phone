@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS `sky_phone_sims` (
     `contact_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
     `phone_number` VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `sim_type` ENUM('registered', 'anonymous') NOT NULL,
+    `is_virtual` TINYINT(1) NOT NULL DEFAULT 0,
     `owner_identifier` VARCHAR(80) NULL,
     `owner_firstname` VARCHAR(80) NULL,
     `owner_lastname` VARCHAR(80) NULL,
@@ -80,6 +81,16 @@ CREATE TABLE IF NOT EXISTS `sky_phone_devices` (
     FOREIGN KEY (`sim_id`) REFERENCES `sky_phone_sims` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `sky_phone_character_devices` (
+    `owner_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `device_imei` CHAR(15) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`owner_identifier`),
+    UNIQUE KEY `uniq_sky_phone_character_devices_device` (`device_imei`),
+    FOREIGN KEY (`device_imei`) REFERENCES `sky_phone_devices` (`imei`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `sky_phone_device_data` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `device_imei` CHAR(15) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -89,6 +100,20 @@ CREATE TABLE IF NOT EXISTS `sky_phone_device_data` (
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uniq_sky_phone_device_namespace` (`device_imei`, `namespace`),
+    FOREIGN KEY (`device_imei`) REFERENCES `sky_phone_devices` (`imei`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_custom_app_data` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `device_imei` CHAR(15) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `app_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `data_key` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `payload` LONGTEXT NOT NULL,
+    `revision` INT UNSIGNED NOT NULL DEFAULT 1,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_custom_app_data` (`device_imei`, `app_id`, `data_key`),
+    KEY `idx_sky_phone_custom_app_storage` (`device_imei`, `app_id`, `updated_at`),
     FOREIGN KEY (`device_imei`) REFERENCES `sky_phone_devices` (`imei`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -128,8 +153,14 @@ CREATE TABLE IF NOT EXISTS `sky_phone_media` (
     `url` TEXT NOT NULL,
     `remote_id` VARCHAR(128) NOT NULL,
     `media_type` ENUM('photo', 'video') NOT NULL,
+    `mime_type` VARCHAR(120) NULL,
+    `origin` ENUM('phone_upload', 'website_import') NOT NULL DEFAULT 'phone_upload',
+    `source_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `verified_at` DATETIME NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_media_account_source` (`account_id`, `source_id`, `remote_id`, `origin`),
+    UNIQUE KEY `uniq_sky_phone_media_device_source` (`device_imei`, `source_id`, `remote_id`, `origin`),
     KEY `idx_sky_phone_media_account` (`account_id`, `created_at`, `id`),
     KEY `idx_sky_phone_media_device` (`device_imei`, `created_at`, `id`),
     FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
@@ -142,7 +173,11 @@ CREATE TABLE IF NOT EXISTS `sky_phone_contacts` (
     `account_id` BIGINT UNSIGNED NULL,
     `device_imei` CHAR(15) CHARACTER SET ascii COLLATE ascii_bin NULL,
     `name` VARCHAR(80) NOT NULL,
+    `notes` VARCHAR(500) NULL,
+    `organization` VARCHAR(80) NULL,
     `phone_number` VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `avatar_media_id` BIGINT UNSIGNED NULL,
+    `favorite` TINYINT(1) NOT NULL DEFAULT 0,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
@@ -150,8 +185,10 @@ CREATE TABLE IF NOT EXISTS `sky_phone_contacts` (
     UNIQUE KEY `uniq_sky_phone_contacts_device_contact` (`device_imei`, `contact_id`),
     KEY `idx_sky_phone_contacts_account` (`account_id`, `name`),
     KEY `idx_sky_phone_contacts_device` (`device_imei`, `name`),
+    KEY `idx_sky_phone_contacts_avatar` (`avatar_media_id`),
     FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
-    FOREIGN KEY (`device_imei`) REFERENCES `sky_phone_devices` (`imei`) ON DELETE CASCADE
+    FOREIGN KEY (`device_imei`) REFERENCES `sky_phone_devices` (`imei`) ON DELETE CASCADE,
+    FOREIGN KEY (`avatar_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `sky_phone_calls` (
@@ -170,6 +207,16 @@ CREATE TABLE IF NOT EXISTS `sky_phone_calls` (
     KEY `idx_sky_phone_calls_callee` (`callee_sim_id`, `started_at`),
     FOREIGN KEY (`caller_sim_id`) REFERENCES `sky_phone_sims` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`callee_sim_id`) REFERENCES `sky_phone_sims` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_call_blocks` (
+    `blocker_sim_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `blocked_sim_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`blocker_sim_id`, `blocked_sim_id`),
+    KEY `idx_sky_phone_call_blocks_blocked` (`blocked_sim_id`),
+    FOREIGN KEY (`blocker_sim_id`) REFERENCES `sky_phone_sims` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`blocked_sim_id`) REFERENCES `sky_phone_sims` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `sky_phone_call_entries` (
@@ -265,7 +312,7 @@ CREATE TABLE IF NOT EXISTS `sky_phone_sms_messages` (
     `recipient_sim_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
     `sender_number` VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `recipient_number` VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    `message_type` ENUM('text', 'voice', 'image', 'gif', 'video') NOT NULL DEFAULT 'text',
+    `message_type` ENUM('text', 'voice', 'image', 'gif', 'video', 'contact', 'share') NOT NULL DEFAULT 'text',
     `body` VARCHAR(2000) NOT NULL,
     `media_payload` MEDIUMTEXT NULL,
     `media_mime` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
@@ -513,8 +560,9 @@ CREATE TABLE IF NOT EXISTS `sky_phone_flare_messages` (
     `match_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `sender_account_id` BIGINT UNSIGNED NOT NULL,
     `body` VARCHAR(1000) NOT NULL,
-    `message_type` ENUM('text', 'image', 'gif', 'video') NOT NULL DEFAULT 'text',
+    `message_type` ENUM('text', 'image', 'gif', 'video', 'share') NOT NULL DEFAULT 'text',
     `media_url` VARCHAR(2048) NULL,
+    `share_payload` LONGTEXT NULL,
     `media_duration_ms` INT UNSIGNED NULL,
     `read_at` DATETIME NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -855,6 +903,7 @@ CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_profiles` (
     `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `account_id` BIGINT UNSIGNED NOT NULL,
     `username` VARCHAR(20) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    `avatar_media_id` BIGINT UNSIGNED NULL,
     `active_group_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
     `map_visible` TINYINT(1) NOT NULL DEFAULT 1,
     `overhead_visible` TINYINT(1) NOT NULL DEFAULT 0,
@@ -864,7 +913,9 @@ CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_profiles` (
     UNIQUE KEY `uniq_sky_phone_crewlink_account` (`account_id`),
     UNIQUE KEY `uniq_sky_phone_crewlink_username` (`username`),
     KEY `idx_sky_phone_crewlink_active` (`active_group_id`),
-    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
+    KEY `idx_sky_phone_crewlink_avatar` (`avatar_media_id`),
+    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`avatar_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_groups` (
@@ -928,4 +979,193 @@ CREATE TABLE IF NOT EXISTS `sky_phone_crewlink_pings` (
     KEY `idx_sky_phone_crewlink_pings` (`group_id`,`expires_at`),
     FOREIGN KEY (`group_id`) REFERENCES `sky_phone_crewlink_groups` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`creator_profile_id`) REFERENCES `sky_phone_crewlink_profiles` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_company_profiles` (
+    `company_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `description` VARCHAR(1000) NOT NULL DEFAULT '',
+    `district` VARCHAR(80) NOT NULL DEFAULT '',
+    `location_label` VARCHAR(80) NOT NULL DEFAULT '',
+    `address` VARCHAR(160) NOT NULL DEFAULT '',
+    `location_x` DECIMAL(10,3) NULL,
+    `location_y` DECIMAL(10,3) NULL,
+    `location_z` DECIMAL(10,3) NULL,
+    `logo_media_id` BIGINT UNSIGNED NULL,
+    `cover_media_id` BIGINT UNSIGNED NULL,
+    `availability` ENUM('available','busy','closed') NOT NULL DEFAULT 'closed',
+    `availability_updated_by` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `availability_updated_at` DATETIME NULL,
+    `availability_expires_at` DATETIME NULL,
+    `accepts_requests` TINYINT(1) NOT NULL DEFAULT 1,
+    `revision` INT UNSIGNED NOT NULL DEFAULT 1,
+    `mutation_token` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`company_id`),
+    KEY `idx_sky_phone_company_profiles_public` (`availability`,`updated_at`),
+    FOREIGN KEY (`logo_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`cover_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_company_hours` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `company_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `weekday` TINYINT UNSIGNED NOT NULL,
+    `is_closed` TINYINT(1) NOT NULL DEFAULT 0,
+    `opens_at` CHAR(5) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `closes_at` CHAR(5) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_company_hours_day` (`company_id`,`weekday`),
+    FOREIGN KEY (`company_id`) REFERENCES `sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_company_services` (
+    `id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `company_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `title` VARCHAR(80) NOT NULL,
+    `description` VARCHAR(500) NOT NULL DEFAULT '',
+    `price_text` VARCHAR(80) NOT NULL DEFAULT '',
+    `requests_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+    `active` TINYINT(1) NOT NULL DEFAULT 1,
+    `archived` TINYINT(1) NOT NULL DEFAULT 0,
+    `sort_order` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_company_services_list` (`company_id`,`archived`,`active`,`sort_order`),
+    FOREIGN KEY (`company_id`) REFERENCES `sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_company_announcements` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `company_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `title` VARCHAR(120) NOT NULL,
+    `body` VARCHAR(1000) NOT NULL,
+    `created_by` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `active` TINYINT(1) NOT NULL DEFAULT 1,
+    `expires_at` DATETIME NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_company_announcements_active` (`company_id`,`active`,`expires_at`,`created_at`),
+    FOREIGN KEY (`company_id`) REFERENCES `sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_company_requests` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `company_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `service_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `customer_sim_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `subject` VARCHAR(120) NOT NULL,
+    `description` VARCHAR(2000) NOT NULL,
+    `status` ENUM('new','assigned','in_progress','waiting_customer','completed','cancelled') NOT NULL DEFAULT 'new',
+    `assigned_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `customer_unread` INT UNSIGNED NOT NULL DEFAULT 0,
+    `company_activity_revision` INT UNSIGNED NOT NULL DEFAULT 1,
+    `revision` INT UNSIGNED NOT NULL DEFAULT 1,
+    `mutation_token` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `completed_at` DATETIME NULL,
+    `cancelled_at` DATETIME NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_company_requests_customer` (`customer_sim_id`,`updated_at`,`id`),
+    KEY `idx_sky_phone_company_requests_queue` (`company_id`,`status`,`updated_at`,`id`),
+    KEY `idx_sky_phone_company_requests_assignee` (`company_id`,`assigned_identifier`,`status`),
+    FOREIGN KEY (`company_id`) REFERENCES `sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE,
+    FOREIGN KEY (`service_id`) REFERENCES `sky_phone_company_services` (`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`customer_sim_id`) REFERENCES `sky_phone_sims` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_company_request_reads` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `request_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `reader_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `read_revision` INT UNSIGNED NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_company_request_reads_reader` (`request_id`,`reader_identifier`),
+    KEY `idx_sky_phone_company_request_reads_identifier` (`reader_identifier`,`updated_at`),
+    FOREIGN KEY (`request_id`) REFERENCES `sky_phone_company_requests` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_company_request_media` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `request_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `media_id` BIGINT UNSIGNED NOT NULL,
+    `sort_order` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_company_request_media` (`request_id`,`media_id`),
+    UNIQUE KEY `uniq_sky_phone_company_request_media_order` (`request_id`,`sort_order`),
+    FOREIGN KEY (`request_id`) REFERENCES `sky_phone_company_requests` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_company_request_messages` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `request_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `sender_type` ENUM('customer','company') NOT NULL,
+    `sender_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `sender_sim_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `body` VARCHAR(2000) NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_company_request_messages` (`request_id`,`created_at`,`id`),
+    FOREIGN KEY (`request_id`) REFERENCES `sky_phone_company_requests` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`sender_sim_id`) REFERENCES `sky_phone_sims` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_company_request_events` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `request_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `event_type` ENUM('created','assigned','status','cancelled') NOT NULL,
+    `actor_type` ENUM('customer','company','system') NOT NULL,
+    `actor_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `from_status` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `to_status` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `detail` VARCHAR(255) NOT NULL DEFAULT '',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_company_request_events` (`request_id`,`created_at`,`id`),
+    FOREIGN KEY (`request_id`) REFERENCES `sky_phone_company_requests` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_company_audit` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `company_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `actor_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `action` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `target_type` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `target_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `metadata` LONGTEXT NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_company_audit` (`company_id`,`created_at`,`id`),
+    FOREIGN KEY (`company_id`) REFERENCES `sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_weazel_articles` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `title` VARCHAR(160) NOT NULL,
+    `body` LONGTEXT NOT NULL,
+    `excerpt` VARCHAR(240) NOT NULL,
+    `category` ENUM('official','events','jobs','news','business') NOT NULL,
+    `image_media_id` BIGINT UNSIGNED NULL,
+    `author_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `author_name` VARCHAR(120) NOT NULL,
+    `updated_by_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `status` ENUM('draft','published') NOT NULL DEFAULT 'draft',
+    `revision` INT UNSIGNED NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `published_at` DATETIME NULL,
+    `deleted_at` DATETIME NULL,
+    `deleted_by_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_weazel_public` (`status`,`deleted_at`,`published_at`,`id`),
+    KEY `idx_sky_phone_weazel_category` (`category`,`status`,`deleted_at`,`published_at`,`id`),
+    KEY `idx_sky_phone_weazel_manage` (`deleted_at`,`status`,`updated_at`,`id`),
+    KEY `idx_sky_phone_weazel_media` (`image_media_id`),
+    FOREIGN KEY (`image_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

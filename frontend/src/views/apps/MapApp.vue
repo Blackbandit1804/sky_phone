@@ -17,6 +17,7 @@ import {
   MapPinPlus,
   Route,
   Satellite,
+  Share2,
   Trash2,
   X,
 } from 'lucide-vue-next'
@@ -32,14 +33,17 @@ import {
   type MapPoint,
 } from '@/features/map/defaultMapGeometry'
 import { useMapStore } from '@/stores/map'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type { MapMarker, MapMarkerColor } from '@/types/map'
+import { handleEnterAction } from '@/utils/keyboard'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
 
 type MapStyle = 'default' | 'satellite' | 'atlas' | 'roads'
 
 const phone = usePhoneStore()
 const mapStore = useMapStore()
+const easyShare = useEasyShareStore()
 const mapStyle = ref<MapStyle>('default')
 const zoom = ref(1.1)
 const pan = ref<MapPoint>({ x: 0, y: 0 })
@@ -462,6 +466,16 @@ async function loadCurrentLocation(center: boolean): Promise<void> {
   }
 }
 
+function shareCurrentLocation(): void {
+  easyShare.open({
+    appId: 'map',
+    copyText: phone.t('Apps.map.currentLocation'),
+    kind: 'location',
+    link: 'skyphone://location/current',
+    title: phone.t('Apps.map.currentLocation'),
+  })
+}
+
 onMounted(() => {
   void loadCurrentLocation(false)
   void mapStore.load()
@@ -555,6 +569,18 @@ onBeforeUnmount(() => {
       <k-fab
         component="button"
         type="button"
+        class="map-control map-control--share"
+        :colors="locationControlColors"
+        :aria-label="phone.t('Apps.easyShare.name')"
+        @click="shareCurrentLocation"
+      >
+        <template #icon>
+          <Share2 aria-hidden="true" />
+        </template>
+      </k-fab>
+      <k-fab
+        component="button"
+        type="button"
         class="map-control"
         :colors="mapControlColors"
         :aria-label="`${phone.t('Apps.map.switchStyle')}: ${phone.t(`Apps.map.styles.${mapStyle}`)}`"
@@ -607,11 +633,11 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <k-sheet
-      :opened="Boolean(draftCoords || selectedMarker)"
-      class="map-marker-sheet"
-      @backdropclick="closeMarkerSheet"
-    >
+    <div class="map-marker-sheet">
+      <k-sheet
+        :opened="Boolean(draftCoords || selectedMarker)"
+        @backdropclick="closeMarkerSheet"
+      >
       <section
         v-if="draftCoords"
         class="map-marker-sheet__content"
@@ -631,7 +657,7 @@ onBeforeUnmount(() => {
             maxlength="40"
             outline
             @input="updateMarkerLabel"
-            @keydown.enter="saveMarker"
+            @keydown.enter="handleEnterAction($event, saveMarker)"
           />
         </k-list>
         <span class="map-marker-sheet__label">{{
@@ -714,7 +740,8 @@ onBeforeUnmount(() => {
           </template>
         </k-button>
       </section>
-    </k-sheet>
+      </k-sheet>
+    </div>
 
     <k-toast :opened="Boolean(toastText)" position="center">
       {{ toastText }}

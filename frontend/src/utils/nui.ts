@@ -1,4 +1,5 @@
-const resourceName = window.GetParentResourceName?.() ?? 'sky_phone'
+const resourceName = globalThis.window?.GetParentResourceName?.() ?? 'sky_phone'
+const requestTimeoutMs = 20_000
 
 export type NuiResponse<T = unknown> = {
   success: boolean
@@ -24,12 +25,15 @@ export async function nuiCall<T = unknown>(
           undefined,
       }
     : data
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), requestTimeoutMs)
 
   try {
     const response = await fetch(`${baseUrl}/${endpoint}`, {
       body: JSON.stringify(requestData),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
+      signal: controller.signal,
     })
 
     if (!response.ok) {
@@ -41,8 +45,14 @@ export async function nuiCall<T = unknown>(
     const body = await response.text()
     return body ? (JSON.parse(body) as NuiResponse<T>) : { success: true }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
+    const message = controller.signal.aborted
+      ? 'request_timeout'
+      : error instanceof Error
+        ? error.message
+        : 'Unknown error'
     console.error(`[NUI] ${endpoint} failed:`, error)
     return { error: message, success: false }
+  } finally {
+    window.clearTimeout(timeoutId)
   }
 }

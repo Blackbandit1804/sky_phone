@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import payphoneFrame from '@/assets/img/payphone/american-payphone-frame.png'
 import { nuiCall } from '@/utils/nui'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type PayphoneState =
   | 'idle'
@@ -214,6 +215,7 @@ async function close(): Promise<void> {
 }
 
 function onMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (event.data?.type === 'payphone:open' && event.data.data) {
     const payload = event.data.data as PayphoneOpenPayload
     currency.value = payload.currency
@@ -237,6 +239,7 @@ function onKeydown(event: KeyboardEvent): void {
   if (!visible.value) return
   if (event.key === 'Escape') {
     event.preventDefault()
+    event.stopImmediatePropagation()
     void close()
     return
   }
@@ -254,7 +257,7 @@ function onKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   prepareButtonSounds()
   window.addEventListener('message', onMessage)
-  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('keydown', onKeydown, true)
   ticker = window.setInterval(() => {
     now.value = Date.now()
   }, 250)
@@ -262,7 +265,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('message', onMessage)
-  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('keydown', onKeydown, true)
   if (ticker !== undefined) window.clearInterval(ticker)
   for (const sound of buttonSounds) {
     sound.pause()
@@ -397,6 +400,7 @@ onBeforeUnmount(() => {
     rgb(0 0 0 / 84%) 72%
   );
   font-family: 'Segoe UI', Arial, sans-serif;
+  pointer-events: auto;
   user-select: none;
 }
 

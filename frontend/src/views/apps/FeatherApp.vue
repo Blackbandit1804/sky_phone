@@ -9,20 +9,16 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Eye,
-  EyeOff,
   Feather,
   Home,
   ImagePlus,
   Images,
-  KeyRound,
-  Mail,
+  LogOut,
   MessageCircle,
   PencilLine,
   Plus,
   Search,
   Share2,
-  ShieldCheck,
   Trash2,
   UserPlus,
   UserMinus,
@@ -59,17 +55,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import FeatherPostCard from '@/components/feather/FeatherPostCard.vue'
+import AccountLogoutDialog from '@/components/account/AccountLogoutDialog.vue'
+import AppProfileAuth from '@/components/account/AppProfileAuth.vue'
 import { useAccountStore } from '@/stores/account'
+import { useAppAuthStore } from '@/stores/app-auth'
 import { useFeatherStore } from '@/stores/feather'
+import { useEasyShareStore } from '@/stores/easyshare'
 import type { FeatherConnectionMode } from '@/stores/feather'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import type { FeatherMedia, FeatherPost, FeatherProfile } from '@/types/feather'
-import {
-  filterMailAddressInput,
-  MAIL_ADDRESS_INPUT_MAX_LENGTH,
-  normalizeMailAddress,
-} from '@/utils/mail'
 
 type Tab = 'home' | 'explore' | 'network' | 'activity' | 'profile'
 type Screen =
@@ -88,9 +83,19 @@ type ComposerContext = {
   photos: SelectedPhoto[]
   replyTo?: FeatherPost
 }
+type ProfileMediaContext = {
+  editing: { bio: string; displayName: string }
+  selectedPhoto: SelectedPhoto | null
+}
+type AuthMediaContext = {
+  mode: 'login' | 'register'
+  selectedPhoto: SelectedPhoto | null
+  username: string
+}
 
 const phone = usePhoneStore()
 const account = useAccountStore()
+const appAuth = useAppAuthStore()
 const feather = useFeatherStore()
 const messageMedia = useMessageMediaStore()
 const route = useRoute()
@@ -102,6 +107,7 @@ const activityView = ref<ActivityView>('all')
 const profileView = ref<ProfileView>('posts')
 const connectionMode = ref<FeatherConnectionMode>('followers')
 const settingsOpen = ref(false)
+const logoutDialogOpen = ref(false)
 const compactMode = ref(false)
 const showSuggestions = ref(true)
 const search = ref('')
@@ -121,12 +127,17 @@ const reportDetails = ref('')
 const mediaPreview = ref<{ index: number; items: FeatherMedia[] } | null>(null)
 const onboarding = ref({ bio: '', displayName: '', handle: '' })
 const editing = ref({ bio: '', displayName: '' })
+const selectedProfilePhoto = ref<SelectedPhoto | null>(null)
 const authMode = ref<'login' | 'register'>('login')
-const authForm = ref({ confirm: '', email: '', password: '' })
+const authUsername = ref('')
+const authProfilePhoto = ref<SelectedPhoto | null>(null)
 const authBusy = ref(false)
-const authAttempted = ref(false)
 const authError = ref('')
-const authPasswordVisible = ref(false)
+const composeFabColors = {
+  activeBgIos: 'active:!bg-[#2778dc] dark:active:!bg-[#2778dc]',
+  bgIos: '!bg-[#58a6ff] dark:!bg-[#58a6ff]',
+  textIos: '!text-white dark:!text-white',
+}
 let exploreSearchTimer: number | undefined
 let networkSearchTimer: number | undefined
 
@@ -203,6 +214,9 @@ const canSaveProfile = computed(
     editing.value.displayName.length <= 50 &&
     editing.value.bio.length <= 160,
 )
+const editProfileAvatarUrl = computed(
+  () => selectedProfilePhoto.value?.url ?? feather.profile?.avatar_url,
+)
 const canCreateProfile = computed(
   () =>
     !busy.value &&
@@ -230,18 +244,9 @@ const navbarTitle = computed(() => {
 const unreadActivities = computed(
   () => feather.activities.filter((item) => !item.read).length,
 )
-const authEmailValid = computed(
-  () => normalizeMailAddress(authForm.value.email) !== null,
-)
-const authPasswordValid = computed(() => {
-  const length = authForm.value.password.length
-  return length >= 6 && length <= 64
-})
-const authConfirmValid = computed(
-  () =>
-    authMode.value === 'login' ||
-    (authForm.value.confirm.length > 0 &&
-      authForm.value.confirm === authForm.value.password),
+const isAuthenticated = computed(() => appAuth.isSignedIn('feather'))
+const authUsernameValid = computed(() =>
+  /^[a-z0-9][a-z0-9_]{1,28}[a-z0-9]$/i.test(authUsername.value.trim()),
 )
 
 function t(path: string, params?: Record<string, string>): string {
@@ -265,9 +270,17 @@ function moveMediaPreview(direction: number): void {
 
 function handleMediaPreviewKeydown(event: KeyboardEvent): void {
   if (!mediaPreview.value) return
-  if (event.key === 'Escape') closeMediaPreview()
-  if (event.key === 'ArrowLeft') moveMediaPreview(-1)
-  if (event.key === 'ArrowRight') moveMediaPreview(1)
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    closeMediaPreview()
+  } else if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    moveMediaPreview(-1)
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    moveMediaPreview(1)
+  }
 }
 
 function toast(path: string): void {
@@ -289,13 +302,6 @@ function errorToast(error?: string): void {
   toast(key)
 }
 
-function updateAuthEmail(event: Event): void {
-  const input = event.target as HTMLInputElement
-  const filtered = filterMailAddressInput(input.value)
-  if (input.value !== filtered) input.value = filtered
-  authForm.value.email = filtered
-}
-
 function inputValue(event: Event): string {
   const target = event.target
   if (
@@ -310,55 +316,101 @@ function inputValue(event: Event): string {
 
 function switchAuthMode(mode: 'login' | 'register'): void {
   authMode.value = mode
-  authForm.value.confirm = ''
+  authProfilePhoto.value = null
+  if (mode === 'register') {
+    authUsername.value = (account.email.split('@')[0] ?? '')
+      .replace(/[^a-z0-9_]/gi, '_')
+      .slice(0, 30)
+  } else {
+    authUsername.value = ''
+  }
   authError.value = ''
-  authAttempted.value = false
 }
 
 function authErrorMessage(error?: string): string {
   const known = [
-    'invalid_email',
-    'invalid_password',
-    'invalid_credentials',
-    'email_taken',
+    'already_registered',
+    'handle_taken',
+    'invalid_handle',
+    'invalid_media',
+    'invalid_username',
+    'no_ifruit_account',
+    'profile_not_found',
     'rate_limited',
   ]
   return t(`authErrors.${error && known.includes(error) ? error : 'default'}`)
 }
 
 async function submitAuth(): Promise<void> {
-  authAttempted.value = true
   authError.value = ''
-  if (!authEmailValid.value) {
-    authError.value = t('authErrors.invalid_email')
+  if (!account.email) {
+    authError.value = t('authErrors.no_ifruit_account')
     return
   }
-  if (!authPasswordValid.value) {
-    authError.value = t('authErrors.invalid_password')
-    return
-  }
-  if (!authConfirmValid.value) {
-    authError.value = t('authErrors.password_mismatch')
+  if (!authUsernameValid.value) {
+    authError.value = t('authErrors.invalid_handle')
     return
   }
 
-  const email = normalizeMailAddress(authForm.value.email)
-  if (!email) return
+  const username = authUsername.value.trim().toLowerCase()
   authBusy.value = true
-  const response =
-    authMode.value === 'login'
-      ? await account.login(email, authForm.value.password)
-      : await account.register(email, authForm.value.password)
-  authBusy.value = false
-  if (!response.success) {
-    authError.value = authErrorMessage(response.error)
+  const bootstrapped = await feather.bootstrap()
+  if (!bootstrapped) {
+    authBusy.value = false
+    authError.value = authErrorMessage()
     return
   }
+  if (authMode.value === 'login') {
+    authBusy.value = false
+    if (!feather.onboarded || !feather.profile) {
+      authError.value = t('authErrors.profile_not_found')
+      return
+    }
+    if (feather.profile.handle.toLowerCase() !== username) {
+      authError.value = t('authErrors.invalid_username')
+      return
+    }
+  } else {
+    if (feather.onboarded || feather.profile) {
+      authBusy.value = false
+      authError.value = t('authErrors.already_registered')
+      return
+    }
+    const response = await feather.createProfile({
+      avatarId: authProfilePhoto.value?.id,
+      bio: '',
+      displayName: authUsername.value.trim(),
+      handle: username,
+    })
+    authBusy.value = false
+    if (!response.success) {
+      authError.value = authErrorMessage(response.error)
+      return
+    }
+  }
 
-  authForm.value = { confirm: '', email: '', password: '' }
-  authAttempted.value = false
-  authPasswordVisible.value = false
-  await feather.bootstrap()
+  appAuth.signIn('feather', account.email)
+  authUsername.value = ''
+  authProfilePhoto.value = null
+  if (authMode.value === 'login') await feather.bootstrap()
+}
+
+function openAuthMedia(app: 'camera' | 'photos'): void {
+  messageMedia.begin(
+    'feather:auth-avatar',
+    'photo',
+    '/apps/feather?auth=register',
+    1,
+    {
+      mode: authMode.value,
+      selectedPhoto: authProfilePhoto.value,
+      username: authUsername.value,
+    } satisfies AuthMediaContext,
+  )
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
 }
 
 async function createProfile(): Promise<void> {
@@ -417,25 +469,32 @@ async function selectTopic(topic: string): Promise<void> {
   await runSearch()
 }
 
-async function shareProfile(): Promise<void> {
-  if (!activeProfile.value) return
-  try {
-    await navigator.clipboard.writeText(`@${activeProfile.value.handle}`)
-    toast('profileCopied')
-  } catch (error) {
-    console.error('[Feather] Could not copy the profile handle.', error)
-    toast('errors.generic')
-  }
+function shareProfile(): void {
+  const profile = activeProfile.value
+  if (!profile) return
+  useEasyShareStore().open({
+    appId: 'feather',
+    copyText: `@${profile.handle}`,
+    id: profile.id,
+    imageUrl: profile.avatar_url,
+    kind: 'profile',
+    link: `skyphone://feather/profile/${profile.id}`,
+    subtitle: `@${profile.handle}`,
+    title: profile.display_name,
+  })
 }
 
-async function sharePost(post: FeatherPost): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(`@${post.handle}: ${post.body}`)
-    toast('postCopied')
-  } catch (error) {
-    console.error('[Feather] Could not copy the post.', error)
-    toast('errors.generic')
-  }
+function sharePost(post: FeatherPost): void {
+  useEasyShareStore().open({
+    appId: 'feather',
+    copyText: `@${post.handle}: ${post.body}`,
+    id: post.id,
+    imageUrl: post.media[0]?.url,
+    kind: 'post',
+    link: `skyphone://feather/post/${post.id}`,
+    subtitle: `@${post.handle}`,
+    title: post.body,
+  })
 }
 
 function openComposer(post?: FeatherPost): void {
@@ -587,19 +646,49 @@ function openEdit(): void {
     bio: feather.profile.bio,
     displayName: feather.profile.display_name,
   }
+  selectedProfilePhoto.value = null
   screen.value = 'edit'
+}
+
+function openProfileMedia(app: 'camera' | 'photos'): void {
+  messageMedia.begin(
+    'feather:profile-avatar',
+    'photo',
+    '/apps/feather?profileEdit=1',
+    1,
+    {
+      editing: { ...editing.value },
+      selectedPhoto: selectedProfilePhoto.value,
+    } satisfies ProfileMediaContext,
+  )
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
+}
+
+function closeProfileEdit(): void {
+  tab.value = 'profile'
+  screen.value = 'main'
+  feather.viewedProfile = null
+  selectedProfilePhoto.value = null
+  if (route.query.profileEdit === '1')
+    void router.replace({ path: '/apps/feather' })
 }
 
 async function saveProfile(): Promise<void> {
   busy.value = true
-  const response = await feather.updateProfile(editing.value)
+  const response = await feather.updateProfile({
+    ...editing.value,
+    avatarId: selectedProfilePhoto.value?.id,
+  })
   busy.value = false
   if (!response.success) {
     errorToast(response.error)
     return
   }
   if (feather.profile) await feather.loadProfile(feather.profile.id)
-  screen.value = 'profile'
+  closeProfileEdit()
 }
 
 async function deletePost(): Promise<void> {
@@ -638,7 +727,7 @@ function goBack(): void {
     return
   }
   if (screen.value === 'edit') {
-    screen.value = 'profile'
+    closeProfileEdit()
     return
   }
   if (screen.value === 'thread' || screen.value === 'profile') {
@@ -680,13 +769,19 @@ watch(
 onBeforeUnmount(() => {
   if (exploreSearchTimer !== undefined) window.clearTimeout(exploreSearchTimer)
   if (networkSearchTimer !== undefined) window.clearTimeout(networkSearchTimer)
-  window.removeEventListener('keydown', handleMediaPreviewKeydown)
+  window.removeEventListener('keydown', handleMediaPreviewKeydown, true)
 })
 
 onMounted(async () => {
-  window.addEventListener('keydown', handleMediaPreviewKeydown)
+  window.addEventListener('keydown', handleMediaPreviewKeydown, true)
   const selection =
     messageMedia.consumeMany<ComposerContext>('feather:composer')
+  const profileSelection = messageMedia.consumeMany<ProfileMediaContext>(
+    'feather:profile-avatar',
+  )
+  const authSelection = messageMedia.consumeMany<AuthMediaContext>(
+    'feather:auth-avatar',
+  )
   if (selection) {
     if (selection.context) {
       composerBody.value = selection.context.body
@@ -698,9 +793,46 @@ onMounted(async () => {
       photos.value.push({ id: media.id, url: media.url })
     }
   }
+  if (profileSelection) {
+    if (profileSelection.context) {
+      editing.value = profileSelection.context.editing
+      selectedProfilePhoto.value = profileSelection.context.selectedPhoto
+    }
+    if (profileSelection.media[0]) {
+      selectedProfilePhoto.value = {
+        id: profileSelection.media[0].id,
+        url: profileSelection.media[0].url,
+      }
+    }
+  }
+  if (authSelection) {
+    if (authSelection.context) {
+      authMode.value = authSelection.context.mode
+      authUsername.value = authSelection.context.username
+      authProfilePhoto.value = authSelection.context.selectedPhoto
+    }
+    if (authSelection.media[0]) {
+      authProfilePhoto.value = {
+        id: authSelection.media[0].id,
+        url: authSelection.media[0].url,
+      }
+    }
+  }
   if (route.query.compose === '1') screen.value = 'composer'
   await feather.bootstrap()
+  if (route.query.profileEdit === '1' && feather.profile) screen.value = 'edit'
   if (feather.onboarded) {
+    const easyShareId = String(route.query.easyShareId ?? '')
+    if (easyShareId && route.query.easyShareKind === 'profile') {
+      const profileId = Number(easyShareId)
+      if (Number.isInteger(profileId) && profileId > 0)
+        await openProfile(profileId)
+    } else if (easyShareId && route.query.easyShareKind === 'post') {
+      if (await feather.loadThread(easyShareId)) {
+        threadReplyTarget.value = feather.thread?.post ?? null
+        screen.value = 'thread'
+      }
+    }
     await feather.loadActivities()
     if (tab.value === 'profile' && feather.profile)
       await feather.loadProfile(feather.profile.id)
@@ -713,18 +845,24 @@ onMounted(async () => {
     component="main"
     class="feather-app"
     :class="{
-      'feather-app--active': feather.onboarded,
+      'feather-app--active': feather.onboarded && isAuthenticated,
       'feather-app--home':
-        feather.onboarded && screen === 'main' && tab === 'home',
-      'feather-app--light': feather.onboarded && !phone.isDarkMode,
+        feather.onboarded &&
+        isAuthenticated &&
+        screen === 'main' &&
+        tab === 'home',
+      'feather-app--light': !phone.isDarkMode,
       'feather-app--section':
-        feather.onboarded && screen === 'main' && tab !== 'home',
-      'native-app': feather.onboarded,
+        feather.onboarded &&
+        isAuthenticated &&
+        screen === 'main' &&
+        tab !== 'home',
+      'native-app': feather.onboarded && isAuthenticated,
       'feather-app--compact': compactMode,
     }"
   >
     <kNavbar
-      v-if="feather.onboarded"
+      v-if="feather.onboarded && isAuthenticated"
       class="feather-navbar"
       :left-class="
         screen === 'composer' ? 'feather-navbar__plain-action' : undefined
@@ -797,150 +935,31 @@ onMounted(async () => {
       <span>{{ t('loading') }}</span>
     </div>
 
-    <section v-else-if="!account.email" class="feather-auth">
-      <header class="feather-auth__hero">
-        <div class="feather-welcome__mark"><Feather :size="43" /></div>
-        <div>
-          <span>{{ t('authEyebrow') }}</span>
-          <h1>{{ t('authWelcome') }}</h1>
-          <p>{{ t('authBody') }}</p>
-        </div>
-      </header>
-
-      <form class="feather-auth__card" @submit.prevent="submitAuth">
-        <kSegmented raised class="feather-auth__modes">
-          <kSegmentedButton
-            type="button"
-            :active="authMode === 'login'"
-            @click="switchAuthMode('login')"
-          >
-            {{ t('login') }}
-          </kSegmentedButton>
-          <kSegmentedButton
-            type="button"
-            :active="authMode === 'register'"
-            @click="switchAuthMode('register')"
-          >
-            {{ t('register') }}
-          </kSegmentedButton>
-        </kSegmented>
-
-        <div class="feather-auth__copy">
-          <h2>
-            {{ t(authMode === 'login' ? 'loginTitle' : 'registerTitle') }}
-          </h2>
-          <p>{{ t(authMode === 'login' ? 'loginBody' : 'registerBody') }}</p>
-        </div>
-
-        <kList strong inset class="feather-auth__fields">
-          <kListInput
-            class="relative"
-            :value="authForm.email"
-            :label="t('email')"
-            :placeholder="t('emailPlaceholder')"
-            :maxlength="MAIL_ADDRESS_INPUT_MAX_LENGTH"
-            autocomplete="username"
-            autocapitalize="none"
-            autocorrect="off"
-            inputmode="email"
-            spellcheck="false"
-            :input-class="!authForm.email.includes('@') ? 'pr-20' : undefined"
-            :error="
-              authAttempted && !authEmailValid
-                ? t('authErrors.invalid_email')
-                : ''
-            "
-            @input="updateAuthEmail"
-          >
-            <template #media><Mail :size="19" /></template>
-            <span
-              v-if="!authForm.email.includes('@')"
-              class="feather-auth__domain"
-              >@ifruit.com</span
-            >
-          </kListInput>
-          <kListInput
-            :value="authForm.password"
-            class="relative"
-            :type="authPasswordVisible ? 'text' : 'password'"
-            :label="t('password')"
-            :placeholder="t('passwordPlaceholder')"
-            :maxlength="64"
-            :autocomplete="
-              authMode === 'login' ? 'current-password' : 'new-password'
-            "
-            :error="
-              authAttempted && !authPasswordValid
-                ? t('authErrors.invalid_password')
-                : ''
-            "
-            @input="authForm.password = inputValue($event)"
-          >
-            <template #media><KeyRound :size="19" /></template>
-            <button
-              class="feather-auth__reveal"
-              type="button"
-              :aria-label="
-                t(authPasswordVisible ? 'hidePassword' : 'showPassword')
-              "
-              @click="authPasswordVisible = !authPasswordVisible"
-            >
-              <EyeOff v-if="authPasswordVisible" :size="18" />
-              <Eye v-else :size="18" />
-            </button>
-          </kListInput>
-          <kListInput
-            v-if="authMode === 'register'"
-            :value="authForm.confirm"
-            :type="authPasswordVisible ? 'text' : 'password'"
-            :label="t('confirmPassword')"
-            :placeholder="t('confirmPasswordPlaceholder')"
-            :maxlength="64"
-            autocomplete="new-password"
-            :error="
-              authAttempted && !authConfirmValid
-                ? t('authErrors.password_mismatch')
-                : ''
-            "
-            @input="authForm.confirm = inputValue($event)"
-          >
-            <template #media><ShieldCheck :size="19" /></template>
-          </kListInput>
-        </kList>
-
-        <div v-if="authError" class="feather-auth__error" role="alert">
-          {{ authError }}
-        </div>
-
-        <kButton
-          component="button"
-          type="submit"
-          large
-          rounded
-          :disabled="authBusy"
-          class="feather-primary feather-auth__submit"
-        >
-          <kPreloader v-if="authBusy" />
-          <template v-else>
-            {{ t(authMode === 'login' ? 'loginAction' : 'registerAction') }}
-          </template>
-        </kButton>
-
-        <p class="feather-auth__switch">
-          {{ t(authMode === 'login' ? 'noAccount' : 'haveAccount') }}
-          <button
-            type="button"
-            @click="switchAuthMode(authMode === 'login' ? 'register' : 'login')"
-          >
-            {{ t(authMode === 'login' ? 'registerNow' : 'loginNow') }}
-          </button>
-        </p>
-      </form>
-
-      <div class="feather-auth__trust">
-        <ShieldCheck :size="16" />
-        <span>{{ t('authTrust') }}</span>
-      </div>
+    <section v-else-if="!isAuthenticated" class="feather-auth">
+      <AppProfileAuth
+        :mode="authMode"
+        v-model:username="authUsername"
+        :avatar-url="authProfilePhoto?.url ?? null"
+        :body="t('authBody')"
+        :camera-label="t('takePhoto')"
+        :email="account.email"
+        :email-label="t('email')"
+        :error="authError"
+        :eyebrow="t('authEyebrow')"
+        :gallery-label="t('chooseGallery')"
+        :login-label="t('login')"
+        :max-username-length="30"
+        :min-username-length="3"
+        :pending="authBusy"
+        :register-label="t('register')"
+        :title="t('authWelcome')"
+        :username-label="t('handle')"
+        :username-placeholder="t('handlePlaceholder')"
+        @camera="openAuthMedia('camera')"
+        @gallery="openAuthMedia('photos')"
+        @submit="submitAuth"
+        @update:mode="switchAuthMode"
+      />
     </section>
 
     <section v-else-if="!feather.onboarded" class="feather-onboarding">
@@ -1002,6 +1021,16 @@ onMounted(async () => {
         @click="createProfile"
       >
         {{ t('start') }}
+      </kButton>
+      <kButton
+        large
+        rounded
+        outline
+        class="feather-onboarding__logout"
+        @click="logoutDialogOpen = true"
+      >
+        <LogOut :size="16" />
+        {{ phone.t('Common.signOut') }}
       </kButton>
     </section>
 
@@ -1107,8 +1136,8 @@ onMounted(async () => {
         <div class="feather-edit__identity">
           <div class="feather-edit__avatar">
             <img
-              v-if="feather.profile?.avatar_url"
-              :src="feather.profile.avatar_url"
+              v-if="editProfileAvatarUrl"
+              :src="editProfileAvatarUrl"
               alt=""
             />
             <UserRound v-else :size="28" />
@@ -1118,6 +1147,20 @@ onMounted(async () => {
             <span>@{{ feather.profile?.handle }}</span>
           </div>
           <span class="feather-edit__badge"><PencilLine :size="14" /></span>
+        </div>
+
+        <div class="feather-edit__photo">
+          <strong>{{ t('chooseAvatar') }}</strong>
+          <div class="feather-edit__photo-actions">
+            <kButton tonal rounded @click="openProfileMedia('photos')">
+              <Images :size="16" />
+              <span>{{ t('chooseGallery') }}</span>
+            </kButton>
+            <kButton tonal rounded @click="openProfileMedia('camera')">
+              <Camera :size="16" />
+              <span>{{ t('takePhoto') }}</span>
+            </kButton>
+          </div>
         </div>
 
         <kList strong inset class="feather-edit__fields">
@@ -1143,17 +1186,6 @@ onMounted(async () => {
             <template #media><AlignLeft :size="18" /></template>
           </kListInput>
         </kList>
-
-        <kButton
-          large
-          rounded
-          :disabled="!canSaveProfile"
-          class="feather-primary feather-edit__save"
-          @click="saveProfile"
-        >
-          <PencilLine :size="16" />
-          <span>{{ busy ? t('loading') : t('saveProfile') }}</span>
-        </kButton>
       </section>
 
       <section
@@ -1434,6 +1466,15 @@ onMounted(async () => {
               >
                 <PencilLine :size="15" />
                 <span>{{ t('editProfile') }}</span>
+              </kButton>
+              <kButton
+                rounded
+                outline
+                class="feather-profile-action feather-profile-action--logout"
+                @click="logoutDialogOpen = true"
+              >
+                <LogOut :size="15" />
+                <span>{{ phone.t('Common.signOut') }}</span>
               </kButton>
             </div>
           </div>
@@ -1995,12 +2036,19 @@ onMounted(async () => {
         component="button"
         type="button"
         class="feather-compose-fab"
+        :colors="composeFabColors"
         :aria-label="t('newPost')"
         @click="openComposer()"
       >
         <template #icon><Plus :size="20" /></template>
       </kFab>
     </template>
+
+    <AccountLogoutDialog
+      v-model:opened="logoutDialogOpen"
+      app-id="feather"
+      :app-name="t('name')"
+    />
 
     <kSheet :opened="settingsOpen" @backdropclick="settingsOpen = false">
       <kBlock strong inset class="feather-settings-sheet">
@@ -2137,6 +2185,7 @@ onMounted(async () => {
 .feather-app {
   --feather-blue: #438cf5;
   --feather-blue-dark: #2867d8;
+  --color-primary: var(--feather-blue);
   background: #fff;
   color: #111923;
 }
@@ -2264,12 +2313,16 @@ onMounted(async () => {
   box-shadow: 0 15px 35px rgb(45 111 224 / 25%);
 }
 .feather-auth {
+  --auth-accent: var(--feather-blue);
+  --panel: #18212b;
   min-height: 100%;
   overflow-y: auto;
-  padding: 25px 15px 30px;
+  padding: 68px 15px 34px;
+  color: #f4f7fa;
   background:
-    radial-gradient(circle at 85% 2%, rgb(90 183 255 / 19%), transparent 34%),
-    radial-gradient(circle at 0 37%, rgb(67 140 245 / 9%), transparent 38%);
+    radial-gradient(circle at 85% 5%, rgb(90 183 255 / 18%), transparent 31%),
+    radial-gradient(circle at 0 42%, rgb(67 140 245 / 8%), transparent 36%),
+    #0f151b;
 }
 .feather-auth__hero {
   display: flex;
@@ -2341,30 +2394,40 @@ onMounted(async () => {
 .feather-auth__fields :deep(.k-list-item-media) {
   color: var(--feather-blue);
 }
-.feather-auth__domain,
-.feather-auth__reveal {
-  position: absolute;
-  top: 50%;
-  right: 16px;
-  transform: translateY(-50%);
+.feather-auth__photo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 5px 10px;
+  text-align: left;
 }
-.feather-auth__domain {
-  pointer-events: none;
-  color: #7b8796;
-  font-size: 11px;
-}
-.feather-auth__reveal {
+.feather-auth__photo > span {
   display: grid;
+  width: 62px;
+  height: 62px;
+  flex: none;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border: 0;
+  overflow: hidden;
   border-radius: 50%;
-  color: #788493;
-  background: transparent;
-}
-.feather-auth__reveal:active {
+  color: var(--feather-blue);
   background: rgb(67 140 245 / 10%);
+}
+.feather-auth__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.feather-auth__photo > div {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 6px;
+}
+.feather-auth__photo :deep(.k-button) {
+  min-height: 34px;
+  justify-content: flex-start;
+  gap: 6px;
+  font-size: 11px;
 }
 .feather-auth__error {
   margin: 0 4px 10px;
@@ -3742,7 +3805,7 @@ onMounted(async () => {
 }
 .feather-network-person :deep(.feather-network-person__inner) {
   min-width: 0;
-  padding-block: 0;
+  padding-block: 0 7px;
 }
 .feather-network-person :deep(.feather-network-person__title-wrap) {
   align-items: center;
@@ -3784,9 +3847,12 @@ onMounted(async () => {
 }
 .feather-network-person__name {
   display: flex;
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
   align-items: center;
   gap: 4px;
+  overflow: hidden;
   border: 0;
   padding: 0;
   color: inherit;
@@ -3797,6 +3863,10 @@ onMounted(async () => {
   text-align: left;
 }
 .feather-network-person__name span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4122,22 +4192,26 @@ onMounted(async () => {
   z-index: 12;
   right: 14px;
   bottom: 91px;
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  border: 1px solid color-mix(in srgb, var(--feather-blue) 72%, #fff);
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  border: 1px solid color-mix(in srgb, var(--feather-blue) 55%, #fff);
   color: #fff;
-  background: var(--feather-blue);
   box-shadow:
-    0 7px 20px rgb(29 155 240 / 32%),
-    0 2px 7px rgb(0 0 0 / 18%);
+    0 9px 24px rgb(29 155 240 / 38%),
+    0 3px 8px rgb(0 0 0 / 22%),
+    inset 0 1px 0 rgb(255 255 255 / 32%);
   transition:
     transform 150ms ease,
-    box-shadow 150ms ease;
+    box-shadow 150ms ease,
+    filter 150ms ease;
 }
 .feather-compose-fab:active {
-  transform: scale(0.93);
-  box-shadow: 0 3px 10px rgb(29 155 240 / 25%);
+  filter: brightness(0.94);
+  transform: scale(0.94);
+  box-shadow:
+    0 4px 12px rgb(29 155 240 / 28%),
+    inset 0 1px 0 rgb(255 255 255 / 22%);
 }
 .feather-tab-icon b {
   position: absolute;
@@ -4257,6 +4331,19 @@ onMounted(async () => {
   padding-inline: 7px;
   font-size: 10.5px;
   font-weight: 750;
+}
+.feather-app--active
+  .feather-profile__actions
+  :deep(.feather-profile-action--logout) {
+  grid-column: 1 / -1;
+  border-color: color-mix(in srgb, #f04f65 62%, transparent);
+  color: #f04f65;
+}
+.feather-onboarding__logout {
+  width: 100%;
+  margin-top: 8px;
+  border-color: color-mix(in srgb, #f04f65 62%, transparent);
+  color: #f04f65;
 }
 .feather-app--active .feather-profile-action span {
   min-width: 0;
@@ -4686,6 +4773,34 @@ onMounted(async () => {
   background: var(--feather-blue);
   box-shadow: 0 5px 14px rgb(29 155 240 / 25%);
 }
+.feather-edit__photo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--feather-border);
+  border-radius: 18px;
+  padding: 11px 12px 12px;
+  background: color-mix(in srgb, var(--feather-panel) 96%, transparent);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 7%);
+}
+.feather-edit__photo > strong {
+  font-size: 11px;
+  font-weight: 800;
+}
+.feather-edit__photo-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.feather-edit__photo-actions :deep(.k-button) {
+  min-width: 0;
+  min-height: 35px;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--feather-blue) 24%, transparent);
+  color: var(--feather-blue);
+  font-size: 10px;
+  font-weight: 800;
+}
 .feather-edit__fields {
   overflow: hidden;
   margin: 0 !important;
@@ -4712,17 +4827,6 @@ onMounted(async () => {
   color: var(--feather-muted);
   font-size: 9px;
 }
-.feather-edit__save {
-  width: 100%;
-  min-height: 43px;
-  margin-top: 1px;
-  font-size: 12px;
-  font-weight: 800;
-  box-shadow: 0 8px 20px rgb(29 155 240 / 22%);
-}
-.feather-edit__save :deep(.k-icon) {
-  margin-right: 7px;
-}
 .feather-connections {
   padding-top: 10px !important;
 }
@@ -4736,6 +4840,7 @@ onMounted(async () => {
 }
 .feather-connections__tabs :deep(button) {
   min-height: 31px;
+  border-radius: 11px !important;
   font-size: 10px;
   font-weight: 800;
 }
@@ -4817,5 +4922,88 @@ onMounted(async () => {
 .feather-app--active .feather-report {
   color: inherit;
   background: var(--feather-panel);
+}
+@supports not (color: color-mix(in srgb, white, black)) {
+  .feather-navbar {
+    --k-navbar-bg-color: rgb(255 255 255 / 91%);
+    border-bottom-color: rgb(127 127 127 / 18%);
+  }
+  :global(.dark) .feather-navbar {
+    --k-navbar-bg-color: rgb(9 13 18 / 91%);
+  }
+  .dark.feather-app .feather-navbar {
+    --k-navbar-bg-color: rgb(0 0 0 / 90%);
+    background: rgb(0 0 0 / 88%);
+  }
+  .feather-app--active .feather-navbar {
+    --k-navbar-bg-color: rgb(18 23 27 / 91%);
+    background: rgb(18 23 27 / 88%);
+  }
+  .feather-app--active.feather-app--light .feather-navbar {
+    --k-navbar-bg-color: rgb(251 251 246 / 91%);
+    background: rgb(251 251 246 / 88%);
+  }
+  .feather-feed-tabs,
+  .feather-explore-head,
+  .feather-activity-head,
+  .feather-trend,
+  .feather-composer__tools,
+  .feather-section-title,
+  .feather-profile,
+  .feather-profile-tabs,
+  .feather-activity,
+  .feather-person {
+    border-color: rgb(127 127 127 / 18%);
+  }
+  .feather-trend:active,
+  .feather-profile__stats button,
+  .feather-report select,
+  .feather-report textarea,
+  .feather-app--active .feather-explore-search :deep(form) {
+    background: rgb(127 127 127 / 7%);
+  }
+  .feather-profile__stats button:active,
+  .feather-thread-reply__comment-target,
+  .feather-thread-title span,
+  .feather-app--active .feather-profile__stats span,
+  .feather-composer-media > header > span,
+  .feather-composer-media > header > b,
+  .feather-app--active .feather-follow-button--pending:hover,
+  .feather-app--active :deep(.feather-follow:hover),
+  .feather-composer-media__actions button:not(:disabled):hover {
+    background: rgb(29 155 240 / 13%);
+  }
+  .feather-report select,
+  .feather-report textarea,
+  .feather-app--active .feather-follow-button--following {
+    border-color: rgb(127 127 127 / 24%);
+  }
+  .feather-app--active :deep(.feather-post-glass),
+  .feather-network-list,
+  .feather-app--active .feather-thread-reply,
+  .feather-profile-suggestion,
+  .feather-edit__identity,
+  .feather-edit__photo,
+  .feather-edit__fields,
+  .feather-connections__tabs,
+  .feather-connections__list {
+    background: var(--feather-panel);
+  }
+  .feather-network-person__bio {
+    color: var(--feather-muted);
+  }
+  .feather-network-person__avatar .feather-avatar,
+  .feather-app--active .feather-follow-button--pending,
+  .feather-app--active .feather-profile__actions :deep(.k-button),
+  .feather-edit__photo-actions :deep(.k-button) {
+    border-color: var(--feather-blue);
+  }
+  .feather-compose-fab,
+  .feather-edit__avatar {
+    border-color: #70c5fa;
+  }
+  .feather-connections__remove {
+    border-color: #f04f65;
+  }
 }
 </style>

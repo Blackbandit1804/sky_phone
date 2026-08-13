@@ -71,12 +71,12 @@ watch(
 </script>
 
 <template>
-  <k-sheet
-    :opened="opened"
-    class="widget-config-sheet"
-    :colors="sheetColors"
-    @backdropclick="emit('close')"
-  >
+  <div class="widget-config-sheet">
+    <k-sheet
+      :opened="opened"
+      :colors="sheetColors"
+      @backdropclick="emit('close')"
+    >
     <k-page
       v-if="instance"
       class="widget-config-page"
@@ -185,11 +185,12 @@ watch(
         </section>
       </div>
     </k-page>
-  </k-sheet>
+    </k-sheet>
+  </div>
 </template>
 
 <style scoped>
-:global(.widget-config-sheet) {
+.widget-config-sheet :deep(.k-sheet) {
   z-index: 115;
   height: calc(100% - 22px);
   overflow: hidden;

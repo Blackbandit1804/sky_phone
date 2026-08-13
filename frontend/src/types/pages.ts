@@ -14,6 +14,7 @@ export type PagesImage = {
 }
 
 export type PagesPost = {
+  author_avatar: string | null
   author_name: string
   body: string
   category: PagesCategory
@@ -38,6 +39,22 @@ export type PagesPostDraft = {
   district: string
   images: Array<{ id: string }>
   title: string
+}
+
+export type PagesProfile = {
+  avatar_media_id: number | null
+  avatar_url: string | null
+  bio: string
+  email: string
+  exists: boolean
+  handle: string
+  post_count: number
+}
+
+export type PagesProfileDraft = {
+  avatarMediaId: number
+  bio: string
+  handle: string
 }
 
 export type PagesPage = {

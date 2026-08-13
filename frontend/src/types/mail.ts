@@ -1,3 +1,5 @@
+import type { DatabaseDateValue } from '@/utils/date'
+
 export type MailFolder = 'inbox' | 'sent' | 'drafts' | 'trash'
 
 export type MailCounts = {
@@ -10,7 +12,7 @@ export type MailCounts = {
 
 export type MailListItem = {
   body?: string
-  created_at: string
+  created_at: DatabaseDateValue
   folder?: 'inbox' | 'sent'
   id: number | string
   is_read?: boolean
@@ -33,7 +35,7 @@ export type MailMessage = MailListItem & {
 
 export type MailDraft = {
   body: string
-  created_at: string
+  created_at: DatabaseDateValue
   id: string
   recipients: string[]
   subject: string

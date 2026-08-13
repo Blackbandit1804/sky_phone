@@ -13,15 +13,17 @@ import {
   Plus,
   Rows3,
   Search,
+  Share2,
   Trash2,
   UserRound,
   X,
 } from 'lucide-vue-next'
-import { kFab } from 'konsta/vue'
+import { kGlass, kSearchbar, kToggle } from 'konsta/vue'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 
 import { useAccountStore } from '@/stores/account'
 import { useCalendarStore } from '@/stores/calendar'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type { CalendarEvent, CalendarEventDraft } from '@/types/calendar'
 
@@ -42,6 +44,7 @@ type YearOverview = {
 const phone = usePhoneStore()
 const account = useAccountStore()
 const calendar = useCalendarStore()
+const easyShare = useEasyShareStore()
 const today = new Date()
 const visibleYear = ref(today.getFullYear())
 const selectedDate = ref(dateKey(today))
@@ -56,6 +59,11 @@ const searchQuery = ref('')
 const reminderOpen = ref(false)
 const saving = ref(false)
 const formError = ref('')
+const datePickerOpen = ref(false)
+const pickerDate = ref(selectedDate.value)
+const pickerMonth = ref(
+  new Date(today.getFullYear(), today.getMonth(), 1),
+)
 const timePickerField = ref<TimeField | null>(null)
 const pickerHour = ref('09')
 const pickerMinute = ref('00')
@@ -63,7 +71,9 @@ const hourColumn = ref<HTMLElement | null>(null)
 const minuteColumn = ref<HTMLElement | null>(null)
 const calendarScroll = ref<HTMLElement | null>(null)
 const yearOverviewScroll = ref<HTMLElement | null>(null)
+const searchToolbar = ref<HTMLElement | null>(null)
 const draft = reactive({
+  allDay: false,
   date: selectedDate.value,
   endTime: '10:00',
   note: '',
@@ -78,10 +88,8 @@ const hourOptions = Array.from({ length: 24 }, (_, index) =>
 const minuteOptions = Array.from({ length: 12 }, (_, index) =>
   String(index * 5).padStart(2, '0'),
 )
-const cornerButtonColors = {
-  bgIos: 'bg-ios-light-glass/75 dark:bg-ios-dark-glass/75',
-  activeBgIos: 'active:bg-white/90 dark:active:bg-white/20',
-  textIos: 'text-black/80 dark:text-white/80',
+const calendarToggleColors = {
+  checkedBgIos: 'bg-[#ff3b30]',
 }
 const viewModes: Array<{
   icon: typeof LayoutGrid
@@ -116,6 +124,20 @@ const timePickerTitle = computed(() =>
     ? phone.t('Apps.calendar.starts')
     : phone.t('Apps.calendar.ends'),
 )
+const draftDateLabel = computed(() =>
+  new Intl.DateTimeFormat(phone.lang, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(`${draft.date}T12:00:00`)),
+)
+const pickerMonthLabel = computed(() =>
+  new Intl.DateTimeFormat(phone.lang, {
+    month: 'long',
+    year: 'numeric',
+  }).format(pickerMonth.value),
+)
+const pickerMonthCells = computed(() => monthCells(pickerMonth.value))
 const weekdayLabels = computed(() => {
   const monday = new Date(2026, 0, 5)
   return Array.from({ length: 7 }, (_, index) =>
@@ -325,19 +347,40 @@ function scrollToMonth(date: Date, behavior: ScrollBehavior = 'smooth'): void {
     ?.scrollIntoView({ behavior, block: 'start' })
 }
 
-function toggleSearch(): void {
+async function toggleSearch(): Promise<void> {
   searchOpen.value = !searchOpen.value
-  if (!searchOpen.value) searchQuery.value = ''
+  viewMenuOpen.value = false
+  if (!searchOpen.value) {
+    searchQuery.value = ''
+    return
+  }
+  await nextTick()
+  searchToolbar.value?.querySelector('input')?.focus()
+}
+
+function isAllDayEvent(event: CalendarEvent): boolean {
+  return timeValue(event.startsAt) === '00:00' && timeValue(event.endsAt) === '23:59'
+}
+
+function eventTimeLabel(event: CalendarEvent): string {
+  if (isAllDayEvent(event)) return phone.t('Apps.calendar.allDay')
+  return `${formatTime(event.startsAt)} – ${formatTime(event.endsAt)}`
+}
+
+function updateSearch(event: Event): void {
+  searchQuery.value = (event.target as HTMLInputElement).value
 }
 
 function resetDraft(event?: CalendarEvent): void {
   editingEvent.value = event ?? null
+  draft.allDay = event ? isAllDayEvent(event) : false
   draft.title = event?.title ?? ''
   draft.note = event?.note ?? ''
   draft.date = event ? dateKey(event.startsAt) : selectedDate.value
   draft.startTime = event ? timeValue(event.startsAt) : '09:00'
   draft.endTime = event ? timeValue(event.endsAt) : '10:00'
   draft.reminderMinutes = event?.reminderMinutes ?? 60
+  datePickerOpen.value = false
   reminderOpen.value = false
   formError.value = ''
 }
@@ -358,9 +401,57 @@ function openEdit(): void {
   screen.value = 'form'
 }
 
+function shareEvent(): void {
+  if (!selectedEvent.value) return
+  easyShare.open({
+    appId: 'calendar',
+    copyText: `${selectedEvent.value.title}\n${selectedEvent.value.note}`,
+    id: selectedEvent.value.id,
+    kind: 'document',
+    link: `skyphone://calendar/event/${selectedEvent.value.id}`,
+    subtitle: formatLongDate(selectedEvent.value.startsAt),
+    title: selectedEvent.value.title,
+  })
+}
+
 function closeForm(): void {
+  datePickerOpen.value = false
   timePickerField.value = null
   screen.value = editingEvent.value ? 'detail' : 'main'
+}
+
+function toggleAllDay(): void {
+  draft.allDay = !draft.allDay
+  timePickerField.value = null
+  if (
+    !draft.allDay &&
+    draft.startTime === '00:00' &&
+    draft.endTime === '23:59'
+  ) {
+    draft.startTime = '09:00'
+    draft.endTime = '10:00'
+  }
+}
+
+function openDatePicker(): void {
+  const date = new Date(`${draft.date}T12:00:00`)
+  pickerDate.value = draft.date
+  pickerMonth.value = new Date(date.getFullYear(), date.getMonth(), 1)
+  timePickerField.value = null
+  datePickerOpen.value = true
+}
+
+function movePickerMonth(amount: number): void {
+  pickerMonth.value = new Date(
+    pickerMonth.value.getFullYear(),
+    pickerMonth.value.getMonth() + amount,
+    1,
+  )
+}
+
+function confirmDatePicker(): void {
+  draft.date = pickerDate.value
+  datePickerOpen.value = false
 }
 
 async function openTimePicker(field: TimeField): Promise<void> {
@@ -368,6 +459,7 @@ async function openTimePicker(field: TimeField): Promise<void> {
   timePickerField.value = field
   pickerHour.value = hour ?? '09'
   pickerMinute.value = minute ?? '00'
+  datePickerOpen.value = false
   await nextTick()
   hourColumn.value
     ?.querySelector(`[data-value="${pickerHour.value}"]`)
@@ -396,8 +488,14 @@ function selectPickerValue(
 }
 
 async function saveEvent(): Promise<void> {
-  const startsAt = combineDateAndTime(draft.date, draft.startTime)
-  const endsAt = combineDateAndTime(draft.date, draft.endTime)
+  const startsAt = combineDateAndTime(
+    draft.date,
+    draft.allDay ? '00:00' : draft.startTime,
+  )
+  const endsAt = combineDateAndTime(
+    draft.date,
+    draft.allDay ? '23:59' : draft.endTime,
+  )
   if (!draft.title.trim() || endsAt <= startsAt) {
     formError.value = phone.t('Apps.calendar.errors.invalid_event')
     return
@@ -451,90 +549,90 @@ onMounted(async () => {
         class="calendar__toolbar"
         :class="{ 'calendar__toolbar--year': yearOverviewOpen }"
       >
-        <k-fab
-          v-if="!yearOverviewOpen"
-          component="button"
-          type="button"
-          :text="String(visibleYear)"
-          text-position="after"
-          :colors="cornerButtonColors"
-          :aria-label="String(visibleYear)"
-          @click="openYearOverview"
-        >
-          <template #icon>
-            <ChevronLeft :size="22" />
-          </template>
-        </k-fab>
-        <div class="calendar__toolbar-actions">
-          <k-fab
+        <Transition name="calendar-search" mode="out-in">
+          <div v-if="searchOpen" ref="searchToolbar" class="calendar__search-toolbar">
+            <k-searchbar
+              class="calendar__searchbar"
+              :placeholder="phone.t('Apps.calendar.searchPlaceholder')"
+              :value="searchQuery"
+              @clear="searchQuery = ''"
+              @input="updateSearch"
+            />
+            <k-glass
+              component="button"
+              type="button"
+              class="calendar__control calendar__control--close"
+              :aria-label="phone.t('Common.close')"
+              @click="toggleSearch"
+            >
+              <X :size="20" />
+            </k-glass>
+          </div>
+          <div v-else class="calendar__toolbar-default">
+          <k-glass
             v-if="!yearOverviewOpen"
             component="button"
-            :colors="cornerButtonColors"
-            :aria-label="phone.t(`Apps.calendar.views.${viewMode}`)"
             type="button"
-            @click="viewMenuOpen = !viewMenuOpen"
+            class="calendar__control calendar__control--year"
+            :aria-label="String(visibleYear)"
+            @click="openYearOverview"
           >
-            <template #icon>
-              <component
-                :is="viewModes.find((mode) => mode.id === viewMode)?.icon"
-                :size="19"
-              />
-            </template>
-          </k-fab>
-          <k-fab
-            component="button"
-            :colors="cornerButtonColors"
-            :aria-label="phone.t('Common.search')"
-            type="button"
-            @click="toggleSearch"
-          >
-            <template #icon>
-              <X v-if="searchOpen" :size="19" />
-              <Search v-else :size="19" />
-            </template>
-          </k-fab>
-          <k-fab
-            v-if="isAuthenticated"
-            component="button"
-            :colors="cornerButtonColors"
-            :aria-label="phone.t('Apps.calendar.newEvent')"
-            type="button"
-            @click="openCreate"
-          >
-            <template #icon>
-              <Plus :size="22" />
-            </template>
-          </k-fab>
-        </div>
+            <ChevronLeft :size="20" />
+            <span>{{ visibleYear }}</span>
+          </k-glass>
+            <div class="calendar__toolbar-actions">
+              <k-glass
+                v-if="!yearOverviewOpen"
+                component="button"
+                class="calendar__control"
+                :aria-label="phone.t(`Apps.calendar.views.${viewMode}`)"
+                type="button"
+                @click="viewMenuOpen = !viewMenuOpen"
+              >
+                <component
+                  :is="viewModes.find((mode) => mode.id === viewMode)?.icon"
+                  :size="19"
+                />
+              </k-glass>
+              <k-glass
+                component="button"
+                class="calendar__control"
+                :aria-label="phone.t('Common.search')"
+                type="button"
+                @click="toggleSearch"
+              >
+                <Search :size="19" />
+              </k-glass>
+              <k-glass
+                v-if="isAuthenticated"
+                component="button"
+                class="calendar__control"
+                :aria-label="phone.t('Apps.calendar.newEvent')"
+                type="button"
+                @click="openCreate"
+              >
+                <Plus :size="21" />
+              </k-glass>
+            </div>
 
-        <Transition name="calendar-popover">
-          <div v-if="viewMenuOpen" class="calendar__view-menu">
-            <button
-              v-for="mode in viewModes"
-              :key="mode.id"
-              :class="{ active: viewMode === mode.id }"
-              type="button"
-              @click="selectView(mode.id)"
-            >
-              <component :is="mode.icon" :size="19" />
-              <span>{{ phone.t(mode.labelKey) }}</span>
-              <Check v-if="viewMode === mode.id" :size="17" />
-            </button>
+            <Transition name="calendar-popover">
+              <div v-if="viewMenuOpen" class="calendar__view-menu">
+                <button
+                  v-for="mode in viewModes"
+                  :key="mode.id"
+                  :class="{ active: viewMode === mode.id }"
+                  type="button"
+                  @click="selectView(mode.id)"
+                >
+                  <component :is="mode.icon" :size="19" />
+                  <span>{{ phone.t(mode.labelKey) }}</span>
+                  <Check v-if="viewMode === mode.id" :size="17" />
+                </button>
+              </div>
+            </Transition>
           </div>
         </Transition>
       </header>
-
-      <Transition name="calendar-search">
-        <div v-if="searchOpen" class="calendar__search">
-          <Search :size="17" />
-          <input
-            v-model="searchQuery"
-            autofocus
-            type="search"
-            :placeholder="phone.t('Apps.calendar.searchPlaceholder')"
-          />
-        </div>
-      </Transition>
 
       <section v-if="!isAuthenticated" class="calendar__auth">
         <span><UserRound :size="33" /></span>
@@ -713,10 +811,7 @@ onMounted(async () => {
               <i />
               <span>
                 <strong>{{ event.title }}</strong>
-                <small>
-                  {{ formatTime(event.startsAt) }} –
-                  {{ formatTime(event.endsAt) }}
-                </small>
+                <small>{{ eventTimeLabel(event) }}</small>
               </span>
               <ChevronRight :size="17" />
             </button>
@@ -725,13 +820,14 @@ onMounted(async () => {
       </div>
 
       <footer v-if="isAuthenticated" class="calendar__footer">
-        <k-fab
+        <k-glass
           component="button"
           type="button"
-          :colors="cornerButtonColors"
-          :text="phone.t('Apps.calendar.today')"
+          class="calendar__control calendar__control--today"
           @click="goToday"
-        />
+        >
+          {{ phone.t('Apps.calendar.today') }}
+        </k-glass>
       </footer>
     </template>
 
@@ -763,10 +859,7 @@ onMounted(async () => {
             <div>
               <small>{{ phone.t('Apps.calendar.date') }}</small>
               <strong>{{ formatLongDate(selectedEvent.startsAt) }}</strong>
-              <span>
-                {{ formatTime(selectedEvent.startsAt) }} –
-                {{ formatTime(selectedEvent.endsAt) }}
-              </span>
+              <span>{{ eventTimeLabel(selectedEvent) }}</span>
             </div>
           </div>
           <div class="calendar__group-row">
@@ -781,6 +874,10 @@ onMounted(async () => {
             <p>{{ selectedEvent.note }}</p>
           </div>
         </section>
+        <button class="calendar__delete calendar__share" type="button" @click="shareEvent">
+          <Share2 :size="18" />
+          {{ phone.t('Apps.easyShare.share') }}
+        </button>
         <button class="calendar__delete" type="button" @click="deleteEvent">
           <Trash2 :size="18" />
           {{ phone.t('Apps.calendar.deleteEvent') }}
@@ -790,9 +887,14 @@ onMounted(async () => {
 
     <section v-else class="calendar__form">
       <header class="calendar__sheet-header">
-        <button type="button" @click="closeForm">
+        <k-glass
+          component="button"
+          type="button"
+          class="calendar__control calendar__sheet-action"
+          @click="closeForm"
+        >
           {{ phone.t('Common.cancel') }}
-        </button>
+        </k-glass>
         <strong>
           {{
             editingEvent
@@ -800,9 +902,15 @@ onMounted(async () => {
               : phone.t('Apps.calendar.newEvent')
           }}
         </strong>
-        <button :disabled="saving" type="button" @click="saveEvent">
+        <k-glass
+          component="button"
+          type="button"
+          class="calendar__control calendar__sheet-action"
+          :disabled="saving"
+          @click="saveEvent"
+        >
           {{ editingEvent ? phone.t('Common.save') : phone.t('Common.add') }}
-        </button>
+        </k-glass>
       </header>
       <form class="calendar__sheet-scroll" @submit.prevent="saveEvent">
         <section class="calendar__group calendar__group--fields">
@@ -819,11 +927,26 @@ onMounted(async () => {
         </section>
 
         <section class="calendar__group calendar__group--fields">
-          <label>
-            <span>{{ phone.t('Apps.calendar.date') }}</span>
-            <input v-model="draft.date" type="date" />
-          </label>
           <button
+            class="calendar__date-time-row"
+            type="button"
+            @click="openDatePicker"
+          >
+            <span>{{ phone.t('Apps.calendar.date') }}</span>
+            <strong>{{ draftDateLabel }}</strong>
+            <ChevronRight :size="17" />
+          </button>
+          <div class="calendar__all-day-row">
+            <span>{{ phone.t('Apps.calendar.allDay') }}</span>
+            <k-toggle
+              :checked="draft.allDay"
+              :colors="calendarToggleColors"
+              :aria-label="phone.t('Apps.calendar.allDay')"
+              @change="toggleAllDay"
+            />
+          </div>
+          <button
+            v-if="!draft.allDay"
             class="calendar__date-time-row"
             type="button"
             @click="openTimePicker('startTime')"
@@ -833,6 +956,7 @@ onMounted(async () => {
             <ChevronRight :size="17" />
           </button>
           <button
+            v-if="!draft.allDay"
             class="calendar__date-time-row"
             type="button"
             @click="openTimePicker('endTime')"
@@ -876,6 +1000,75 @@ onMounted(async () => {
         <p v-if="formError" class="calendar__error">{{ formError }}</p>
       </form>
     </section>
+
+    <Transition name="calendar-picker">
+      <div
+        v-if="datePickerOpen"
+        class="calendar__picker-backdrop"
+        role="presentation"
+        @click.self="datePickerOpen = false"
+      >
+        <section
+          class="calendar__time-picker calendar__date-picker"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="phone.t('Apps.calendar.date')"
+        >
+          <header>
+            <button type="button" @click="datePickerOpen = false">
+              {{ phone.t('Common.cancel') }}
+            </button>
+            <strong>{{ phone.t('Apps.calendar.date') }}</strong>
+            <button type="button" @click="confirmDatePicker">
+              {{ phone.t('Common.done') }}
+            </button>
+          </header>
+
+          <div class="calendar__date-picker-month">
+            <k-glass
+              component="button"
+              type="button"
+              :aria-label="phone.t('Apps.calendar.previousMonth')"
+              @click="movePickerMonth(-1)"
+            >
+              <ChevronLeft :size="20" />
+            </k-glass>
+            <strong>{{ pickerMonthLabel }}</strong>
+            <k-glass
+              component="button"
+              type="button"
+              :aria-label="phone.t('Apps.calendar.nextMonth')"
+              @click="movePickerMonth(1)"
+            >
+              <ChevronRight :size="20" />
+            </k-glass>
+          </div>
+
+          <div class="calendar__date-picker-weekdays" aria-hidden="true">
+            <span v-for="weekday in weekdayLabels" :key="weekday">
+              {{ weekday }}
+            </span>
+          </div>
+          <div class="calendar__date-picker-grid">
+            <template v-for="(day, index) in pickerMonthCells" :key="index">
+              <button
+                v-if="day"
+                type="button"
+                :class="{
+                  selected: pickerDate === dateKey(day),
+                  today: dateKey(day) === dateKey(today),
+                }"
+                :aria-label="formatLongDate(day.getTime())"
+                @click="pickerDate = dateKey(day)"
+              >
+                {{ day.getDate() }}
+              </button>
+              <span v-else />
+            </template>
+          </div>
+        </section>
+      </div>
+    </Transition>
 
     <Transition name="calendar-picker">
       <div
@@ -976,7 +1169,7 @@ onMounted(async () => {
   --muted: #6e6e73;
 }
 
-.calendar button:not(.k-fab),
+.calendar button,
 .calendar input,
 .calendar textarea {
   border: 0;
@@ -984,7 +1177,7 @@ onMounted(async () => {
   font: inherit;
 }
 
-.calendar button:not(.k-fab) {
+.calendar button {
   cursor: pointer;
 }
 
@@ -1006,6 +1199,92 @@ onMounted(async () => {
   gap: 8px;
 }
 
+.calendar__toolbar-default,
+.calendar__search-toolbar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.calendar__toolbar-default {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.calendar__search-toolbar {
+  gap: 8px;
+}
+
+.calendar__searchbar {
+  min-width: 0;
+  flex: 1;
+}
+
+.calendar__searchbar :deep(> div:first-child) {
+  height: 44px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: var(--color-ios-dark-glass);
+  box-shadow: var(--shadow-ios-dark-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.calendar--light .calendar__searchbar :deep(> div:first-child) {
+  background: var(--color-ios-light-glass);
+  box-shadow: var(--shadow-ios-light-glass);
+}
+
+.calendar__searchbar :deep(input) {
+  color: var(--label);
+  font-size: 14px;
+}
+
+.calendar__control {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: var(--color-ios-dark-glass);
+  color: var(--label);
+  box-shadow: var(--shadow-ios-dark-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.calendar--light .calendar__control {
+  background: var(--color-ios-light-glass);
+  box-shadow: var(--shadow-ios-light-glass);
+}
+
+.calendar__control--year {
+  width: auto;
+  min-width: 86px;
+  padding: 0 11px 0 7px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.calendar__control--today {
+  width: auto;
+  min-width: 74px;
+  padding: 0 14px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.calendar__control--close {
+  flex: none;
+  color: var(--accent);
+}
+
 .calendar__view-menu {
   position: absolute;
   z-index: 12;
@@ -1015,7 +1294,7 @@ onMounted(async () => {
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: var(--glass);
+  background: var(--elevated);
   box-shadow: 0 16px 44px rgb(0 0 0 / 38%);
   backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
@@ -1040,27 +1319,6 @@ onMounted(async () => {
   color: var(--accent);
 }
 
-.calendar__search {
-  height: 46px;
-  margin: 0 14px 7px;
-  padding: 0 10px;
-  border-radius: 13px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--elevated);
-  color: var(--muted);
-}
-
-.calendar__search input {
-  min-width: 0;
-  flex: 1;
-  outline: 0;
-  background: transparent;
-  color: var(--label);
-  font-size: 15px;
-}
-
 .calendar__content {
   height: calc(100% - 68px);
   padding: 4px 0 100px;
@@ -1070,10 +1328,6 @@ onMounted(async () => {
   scrollbar-width: none;
 }
 
-.calendar__search + .calendar__content {
-  height: calc(100% - 121px);
-}
-
 .calendar__year-overview {
   height: calc(100% - 68px);
   padding: 4px 14px 100px;
@@ -1081,10 +1335,6 @@ onMounted(async () => {
   overscroll-behavior: contain;
   scroll-behavior: smooth;
   scrollbar-width: none;
-}
-
-.calendar__search + .calendar__year-overview {
-  height: calc(100% - 121px);
 }
 
 .calendar__year-overview::-webkit-scrollbar {
@@ -1109,8 +1359,8 @@ onMounted(async () => {
 
 .calendar__overview-months {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px 11px;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 28px 18px;
 }
 
 .calendar__overview-month {
@@ -1141,7 +1391,7 @@ onMounted(async () => {
 .calendar__overview-month button,
 .calendar__overview-month > div > span {
   min-width: 0;
-  height: 17px;
+  height: 22px;
 }
 
 .calendar__overview-month button {
@@ -1151,7 +1401,8 @@ onMounted(async () => {
   place-items: center;
   background: transparent;
   color: var(--label);
-  font-size: 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   font-weight: 540;
 }
 
@@ -1609,6 +1860,16 @@ onMounted(async () => {
   opacity: 0.4;
 }
 
+.calendar__sheet-action {
+  width: 68px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .calendar__sheet-header > strong {
   font-size: 15px;
 }
@@ -1739,6 +2000,10 @@ onMounted(async () => {
   font-size: 14px !important;
 }
 
+.calendar__share {
+  color: #0a84ff !important;
+}
+
 .calendar__group--fields input,
 .calendar__group--fields textarea {
   width: 100%;
@@ -1762,19 +2027,6 @@ onMounted(async () => {
   line-height: 1.4;
 }
 
-.calendar__group--fields label {
-  min-height: 58px;
-  padding: 0 15px;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--line);
-  font-size: 13px;
-}
-
-.calendar__group--fields label:last-child {
-  border-bottom: 0;
-}
-
 .calendar__date-time-row {
   width: 100%;
   min-height: 58px;
@@ -1789,6 +2041,18 @@ onMounted(async () => {
   text-align: left;
 }
 
+.calendar__all-day-row {
+  min-height: 58px;
+  padding: 0 15px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--label);
+  font-size: 13px;
+}
+
 .calendar__date-time-row span {
   min-width: 0;
 }
@@ -1801,22 +2065,6 @@ onMounted(async () => {
 
 .calendar__date-time-row svg {
   color: var(--muted);
-}
-
-.calendar__group--fields label span {
-  flex: 1;
-}
-
-.calendar__group--fields label input {
-  width: auto;
-  min-width: 112px;
-  color-scheme: dark;
-  font-size: 13px;
-  text-align: right;
-}
-
-.calendar--light .calendar__group--fields label input {
-  color-scheme: light;
 }
 
 .calendar__form-row {
@@ -1935,6 +2183,89 @@ onMounted(async () => {
   justify-self: end;
 }
 
+.calendar__date-picker-month {
+  height: 58px;
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  gap: 10px;
+}
+
+.calendar__date-picker-month > strong {
+  color: var(--label);
+  font-size: 18px;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.calendar__date-picker-month > button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: var(--color-ios-dark-glass);
+  color: var(--accent);
+  box-shadow: var(--shadow-ios-dark-glass);
+}
+
+.calendar--light .calendar__date-picker-month > button {
+  background: var(--color-ios-light-glass);
+  box-shadow: var(--shadow-ios-light-glass);
+}
+
+.calendar__date-picker-weekdays,
+.calendar__date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: center;
+}
+
+.calendar__date-picker-weekdays {
+  height: 28px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.calendar__date-picker-grid {
+  gap: 4px 0;
+}
+
+.calendar__date-picker-grid button,
+.calendar__date-picker-grid > span {
+  width: 38px;
+  height: 38px;
+  justify-self: center;
+}
+
+.calendar__date-picker-grid button {
+  padding: 0;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--label);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.calendar__date-picker-grid button.today {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--accent);
+}
+
+.calendar__date-picker-grid button.selected {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+  font-weight: 800;
+}
+
 .calendar__time-preview {
   height: 64px;
   display: flex;
@@ -2048,7 +2379,7 @@ onMounted(async () => {
 .calendar-search-enter-from,
 .calendar-search-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translateY(-58px);
 }
 
 .calendar-picker-enter-active,

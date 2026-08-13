@@ -1,16 +1,35 @@
 Bridge.Database.AfterMigration("sky_phone", function()
 SkyPhoneMedia = {}
+SkyPhoneMediaImport.Initialize()
 
 local pending_uploads = {}
 local pending_deletes = {}
+local allowed_remote_mimes = {
+    photo = {
+        ["image/jpeg"] = true,
+        ["image/png"] = true,
+        ["image/webp"] = true,
+    },
+    video = {
+        ["video/mp4"] = true,
+        ["video/webm"] = true,
+    },
+}
 
 local function media_config()
     return Config.Media.FiveManage
 end
 
+local function media_api_key()
+    local convar = media_config().ApiKeyConvar
+    if type(convar) ~= "string" or convar == "" then
+        return ""
+    end
+    return GetConvar(convar, "")
+end
+
 local function api_configured()
-    local api_key = media_config().ApiKey
-    return type(api_key) == "string" and api_key ~= "" and api_key ~= "YOUR_API_TOKEN"
+    return media_api_key() ~= ""
 end
 
 local function http_request(url, method, body, headers, timeout_ms)
@@ -58,12 +77,12 @@ local function request_presigned_url()
     if not api_configured() then
         return nil, "missing_config"
     end
-    local config = media_config()
+    local config = Config.Media.FiveManage
     local response = http_request(
         tostring(config.BaseUrl):gsub("/+$", "") .. "/presigned-url",
         "GET",
         "",
-        { ["Authorization"] = config.ApiKey },
+        { ["Authorization"] = media_api_key() },
         tonumber(config.RequestTimeoutMs) or 10000
     )
     local data, response_error = decode_response(response)
@@ -81,12 +100,15 @@ local function get_remote_file(remote_id)
     if not api_configured() then
         return nil, "missing_config"
     end
-    local config = media_config()
+    local config = Config.Media.FiveManage
     local response = http_request(
-        ("%s/%s"):format(tostring(config.BaseUrl):gsub("/+$", ""), remote_id),
+        ("%s/%s"):format(
+            tostring(config.BaseUrl):gsub("/+$", ""),
+            SkyPhoneMediaImport.UrlEncode(remote_id)
+        ),
         "GET",
         "",
-        { ["Authorization"] = config.ApiKey },
+        { ["Authorization"] = media_api_key() },
         tonumber(config.RequestTimeoutMs) or 10000
     )
     return decode_response(response)
@@ -96,12 +118,15 @@ local function delete_remote_file(remote_id)
     if not api_configured() then
         return false, "missing_config"
     end
-    local config = media_config()
+    local config = Config.Media.FiveManage
     local response = http_request(
-        ("%s/%s"):format(tostring(config.BaseUrl):gsub("/+$", ""), remote_id),
+        ("%s/%s"):format(
+            tostring(config.BaseUrl):gsub("/+$", ""),
+            SkyPhoneMediaImport.UrlEncode(remote_id)
+        ),
         "DELETE",
         "",
-        { ["Authorization"] = config.ApiKey },
+        { ["Authorization"] = media_api_key() },
         tonumber(config.RequestTimeoutMs) or 10000
     )
     if response.status < 200 or response.status >= 300 then
@@ -153,7 +178,9 @@ function SkyPhoneMedia.ResolveOwnedMedia(source, media_id, media_type)
         params[#params + 1] = value
     end
     local rows = Bridge.Database.Query(([[
-        SELECT `url`, `media_type` FROM `sky_phone_media`
+        SELECT `url`, `media_type`, `mime_type`, `origin`, `source_id`, `remote_id`,
+            UNIX_TIMESTAMP(`verified_at`) AS `verified_at`
+        FROM `sky_phone_media`
         WHERE `id` = ? AND %s
         LIMIT 1
     ]]):format(condition), params)
@@ -172,7 +199,35 @@ function SkyPhoneMedia.ResolveOwnedMedia(source, media_id, media_type)
         )
         return nil, "invalid_attachment"
     end
-    return media.url
+    if media.origin == "website_import" then
+        local verified_at = tonumber(media.verified_at) or 0
+        local revalidate_after = math.max(
+            1,
+            math.floor(tonumber(Config.Media.Import.RevalidateAfterSeconds) or 3600)
+        )
+        if os.time() - verified_at >= revalidate_after then
+            local refreshed, refresh_error
+            if type(media.remote_id) == "string" and media.remote_id:sub(1, 4) == "url:" then
+                refreshed, refresh_error = SkyPhoneMediaImport.ResolveUrl(media.source_id, media.url)
+            else
+                refreshed, refresh_error = SkyPhoneMediaImport.Resolve(media.source_id, media.remote_id)
+            end
+            if not refreshed then
+                return nil, refresh_error
+            end
+            if refreshed.mediaType ~= media_type then
+                return nil, "import_media_not_allowed"
+            end
+            Bridge.Database.Query([[
+                UPDATE `sky_phone_media`
+                SET `url` = ?, `mime_type` = ?, `verified_at` = CURRENT_TIMESTAMP
+                WHERE `id` = ? AND `origin` = 'website_import'
+            ]], { refreshed.url, refreshed.mimeType, id })
+            media.url = refreshed.url
+            media.mime_type = refreshed.mimeType
+        end
+    end
+    return media.url, nil, media.mime_type
 end
 
 local function upload_result(source, correlation_id, success, error_code, media)
@@ -224,11 +279,21 @@ local function verify_remote_upload(state, remote_id, uploaded_url)
     if remote.url ~= uploaded_url and remote.originalUrl ~= uploaded_url then
         return nil, "invalid_upload"
     end
-    local remote_type = tostring(remote.type or remote.mimeType or ""):lower()
+    local remote_mime = tostring(remote.mimeType or ""):lower():match("^%s*([^;%s]+)") or ""
+    local remote_type = tostring(remote.type or ""):lower():match("^%s*([^;%s]+)") or ""
+    if remote_mime == "" and allowed_remote_mimes[state.media_type][remote_type] then
+        remote_mime = remote_type
+    end
+    if remote_type == "" then
+        remote_type = remote_mime
+    end
     if state.media_type == "photo" and remote_type ~= "" and not remote_type:find("image", 1, true) then
         return nil, "invalid_media_type"
     end
     if state.media_type == "video" and remote_type ~= "" and not remote_type:find("video", 1, true) then
+        return nil, "invalid_media_type"
+    end
+    if remote_mime ~= "" and not allowed_remote_mimes[state.media_type][remote_mime] then
         return nil, "invalid_media_type"
     end
     local metadata = parse_metadata(remote.metadata)
@@ -236,6 +301,7 @@ local function verify_remote_upload(state, remote_id, uploaded_url)
         return nil, "invalid_upload_token"
     end
     return {
+        mime_type = allowed_remote_mimes[state.media_type][remote_mime] and remote_mime or state.mime_type,
         remote_id = remote_id,
         url = remote.url or uploaded_url,
     }
@@ -255,7 +321,7 @@ Bridge.Callbacks.Register("sky_phone:gallery:list", function(source, data)
     if not owner then
         return error_response
     end
-    data = data or {}
+    data = type(data) == "table" and data or {}
     local limit = math.max(1, math.min(math.floor(tonumber(data.limit) or Config.Media.PageSize), 100))
     local offset = math.max(0, math.floor(tonumber(data.offset) or 0))
     local media_type = data.mediaType
@@ -342,7 +408,7 @@ Bridge.Callbacks.Register("sky_phone:messages:gifs", function(source, data)
     if #query > 60 or offset < 0 or offset > 500 then
         return { success = false, error = "invalid_request" }
     end
-    local api_key = Config.Media.GiphyApiKey
+    local api_key = GetConvar(Config.Media.GiphyApiKeyConvar, "")
     if api_key == "" then
         return { success = false, error = "gif_provider_unconfigured" }
     end
@@ -420,7 +486,7 @@ end)
 
 RegisterNetEvent("sky_phone:media:request-upload", function(data)
     local src = source
-    data = data or {}
+    data = type(data) == "table" and data or {}
     local correlation_id = data.correlationId
     local media_type = data.mediaType
     if type(correlation_id) ~= "string" or #correlation_id > 80
@@ -454,6 +520,9 @@ RegisterNetEvent("sky_phone:media:request-upload", function(data)
         capture_token = capture_token,
         correlation_id = correlation_id,
         media_type = media_type,
+        mime_type = media_type == "video" and "video/webm"
+            or ({ png = "image/png", webp = "image/webp" })[tostring(Config.Media.Photo.Encoding):lower()]
+            or "image/jpeg",
         owner = owner,
         source = src,
     }
@@ -467,14 +536,14 @@ RegisterNetEvent("sky_phone:media:request-upload", function(data)
         photo = Config.Media.Photo,
         presignedUrl = presigned_url,
         requestId = request_id,
-        uploadTimeoutMs = media_config().UploadTimeoutMs,
+        uploadTimeoutMs = Config.Media.FiveManage.UploadTimeoutMs,
         video = Config.Media.Video,
     })
 end)
 
 RegisterNetEvent("sky_phone:media:complete-upload", function(data)
     local src = source
-    data = data or {}
+    data = type(data) == "table" and data or {}
     local request_id = data.requestId
     local state = type(request_id) == "string" and pending_uploads[request_id] or nil
     if not state or state.source ~= src or state.completing then
@@ -496,14 +565,14 @@ RegisterNetEvent("sky_phone:media:complete-upload", function(data)
     local result
     if owner.account_id then
         result = Bridge.Database.Query([[
-            INSERT INTO `sky_phone_media` (`account_id`, `device_imei`, `url`, `remote_id`, `media_type`)
-            VALUES (?, NULL, ?, ?, ?)
-        ]], { owner.account_id, verified.url, verified.remote_id, state.media_type })
+            INSERT INTO `sky_phone_media` (`account_id`, `device_imei`, `url`, `remote_id`, `media_type`, `mime_type`)
+            VALUES (?, NULL, ?, ?, ?, ?)
+        ]], { owner.account_id, verified.url, verified.remote_id, state.media_type, verified.mime_type })
     else
         result = Bridge.Database.Query([[
-            INSERT INTO `sky_phone_media` (`account_id`, `device_imei`, `url`, `remote_id`, `media_type`)
-            VALUES (NULL, ?, ?, ?, ?)
-        ]], { owner.imei, verified.url, verified.remote_id, state.media_type })
+            INSERT INTO `sky_phone_media` (`account_id`, `device_imei`, `url`, `remote_id`, `media_type`, `mime_type`)
+            VALUES (NULL, ?, ?, ?, ?, ?)
+        ]], { owner.imei, verified.url, verified.remote_id, state.media_type, verified.mime_type })
     end
     pending_uploads[request_id] = nil
     local media_id = type(result) == "number" and result or (type(result) == "table" and tonumber(result.insertId))
@@ -522,7 +591,7 @@ end)
 
 RegisterNetEvent("sky_phone:media:cancel-upload", function(data)
     local src = source
-    local request_id = data and data.requestId
+    local request_id = type(data) == "table" and data.requestId or nil
     local state = type(request_id) == "string" and pending_uploads[request_id] or nil
     if state and state.source == src and not state.completing then
         pending_uploads[request_id] = nil
@@ -532,7 +601,7 @@ end)
 
 RegisterNetEvent("sky_phone:media:fail-upload", function(data)
     local src = source
-    local request_id = data and data.requestId
+    local request_id = type(data) == "table" and data.requestId or nil
     local state = type(request_id) == "string" and pending_uploads[request_id] or nil
     if not state or state.source ~= src or state.completing then
         return
@@ -550,7 +619,7 @@ end)
 
 RegisterNetEvent("sky_phone:media:delete", function(data)
     local src = source
-    data = data or {}
+    data = type(data) == "table" and data or {}
     local correlation_id = data.correlationId
     local media_id = tonumber(data.id)
     if type(correlation_id) ~= "string" or #correlation_id > 80 or not media_id then
@@ -572,7 +641,7 @@ RegisterNetEvent("sky_phone:media:delete", function(data)
         query_params[#query_params + 1] = value
     end
     local rows = Bridge.Database.Query(([[
-        SELECT `id`, `remote_id` FROM `sky_phone_media`
+        SELECT `id`, `remote_id`, `origin` FROM `sky_phone_media`
         WHERE `id` = ? AND %s LIMIT 1
     ]]):format(condition), query_params)
     local row = rows[1]
@@ -580,34 +649,53 @@ RegisterNetEvent("sky_phone:media:delete", function(data)
         delete_result(src, correlation_id, false, "not_found", media_id)
         return
     end
-    if pending_deletes[media_id] then
+    local delete_key = row.origin == "phone_upload" and row.remote_id or ("import:%s"):format(media_id)
+    if pending_deletes[delete_key] then
         delete_result(src, correlation_id, false, "operation_in_progress", media_id)
         return
     end
-    pending_deletes[media_id] = src
-    local deleted, delete_error = delete_remote_file(row.remote_id)
-    if not deleted then
-        pending_deletes[media_id] = nil
-        delete_result(src, correlation_id, false, delete_error, media_id)
-        return
+    pending_deletes[delete_key] = src
+    if row.origin == "phone_upload" then
+        local references = Bridge.Database.Query(
+            "SELECT COUNT(*) AS `count` FROM `sky_phone_media` WHERE `remote_id` = ?",
+            { row.remote_id }
+        )
+        if (tonumber(references[1] and references[1].count) or 0) <= 1 then
+            local deleted, delete_error = delete_remote_file(row.remote_id)
+            if not deleted then
+                pending_deletes[delete_key] = nil
+                delete_result(src, correlation_id, false, delete_error, media_id)
+                return
+            end
+        end
     end
     Bridge.Database.Query(("DELETE FROM `sky_phone_media` WHERE `id` = ? AND %s"):format(condition), query_params)
-    pending_deletes[media_id] = nil
+    pending_deletes[delete_key] = nil
     delete_result(src, correlation_id, true, nil, media_id)
 end)
 
 function SkyPhoneMedia.GetDeviceRemoteIds(imei)
     local rows = Bridge.Database.Query([[
         SELECT `id`, `remote_id` FROM `sky_phone_media`
-        WHERE `account_id` IS NULL AND `device_imei` = ?
+        WHERE `account_id` IS NULL AND `device_imei` = ? AND `origin` = 'phone_upload'
     ]], { imei })
     return rows
 end
 
 function SkyPhoneMedia.CleanupRemoteFiles(rows)
     CreateThread(function()
+        local checked = {}
         for _, row in ipairs(rows) do
-            local deleted, delete_error = delete_remote_file(row.remote_id)
+            local references = checked[row.remote_id] and { { count = 1 } } or Bridge.Database.Query(
+                "SELECT COUNT(*) AS `count` FROM `sky_phone_media` WHERE `remote_id` = ?",
+                { row.remote_id }
+            )
+            checked[row.remote_id] = true
+            local in_use = (tonumber(references[1] and references[1].count) or 0) > 0
+            local deleted, delete_error = true, nil
+            if not in_use then
+                deleted, delete_error = delete_remote_file(row.remote_id)
+            end
             if not deleted then
                 Bridge.Debug(
                     "warn",
@@ -630,6 +718,7 @@ AddEventHandler("playerDropped", function()
 end)
 
 if not api_configured() then
-    print("^3[sky_phone] Camera and Gallery uploads are disabled until Config.Media.FiveManage.ApiKey is set in config/media.lua.^7")
+    print(("^3[sky_phone] Camera uploads and FiveManage imports are disabled until the %s server convar is set.^7")
+        :format(tostring(media_config().ApiKeyConvar)))
 end
 end)

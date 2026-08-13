@@ -7,6 +7,22 @@ const port = Number(process.argv[2]) || 3001
 app.use(cors())
 app.use(express.json())
 
+const lifecycleEndpoints = new Set([
+  'camera:setActive',
+  'camera:setFacing',
+  'camera:setFlash',
+  'camera:setFocus',
+  'camera:setOrientation',
+  'camera:setZoom',
+  'close',
+  'custom-app:lifecycle',
+  'device:notification-open',
+  'notification:focus',
+  'sim:picker-close',
+  'ui:opened',
+  'ui:ready',
+])
+
 function calendarTime(dayOffset, hour, minute = 0) {
   const value = new Date()
   value.setDate(value.getDate() + dayOffset)
@@ -144,6 +160,8 @@ let mockMapMarkers = [
 ]
 let crewLinkProfile = {
   activeGroupId: 'crewlink-group-night-shift',
+  avatarMediaId: 1,
+  avatarUrl: 'https://picsum.photos/seed/crewlink-skyline/240/240',
   id: 'crewlink-profile-skyline',
   mapVisible: true,
   overheadVisible: false,
@@ -176,6 +194,7 @@ const crewLinkMembers = {
   'crewlink-group-night-shift': [
     {
       coords: { x: -155.2, y: -1005.8, z: 28.4 },
+      avatarUrl: 'https://picsum.photos/seed/crewlink-skyline/240/240',
       id: 'crewlink-profile-skyline',
       joinedAt: Date.now() - 36 * 86400000,
       mapVisible: true,
@@ -350,7 +369,10 @@ const crewLinkLimits = {
 }
 
 function crewLinkBootstrap(testScenario = '') {
-  if (testScenario === 'crewlink-onboarding') {
+  if (
+    testScenario === 'crewlink-onboarding' ||
+    (testScenario === 'crewlink-register' && !crewLinkProfile)
+  ) {
     return { groups: [], invitations: [], profile: null }
   }
   if (testScenario === 'crewlink-empty') {
@@ -1045,14 +1067,281 @@ const mockHousingOverview = {
   ],
 }
 
-let contactSequence = 2
+let contactSequence = 40
 const contacts = [
+  {
+    avatar_media_id: 1,
+    avatar_url: 'https://picsum.photos/seed/sky-phone-1/600/800',
+    created_at: isoTime(-42 * 86_400_000),
+    favorite: true,
+    id: 'contact-alex',
+    name: 'Alex Rivera',
+    notes: 'Meeting on Friday at 18:00 near the bank.',
+    organization: 'Maze Bank',
+    phone_number: '5551110001',
+    updated_at: isoTime(-6 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-38 * 86_400_000),
+    id: 'contact-alexander',
+    name: 'Alexander Stone',
+    phone_number: '5551110002',
+    updated_at: isoTime(-8 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-21 * 86_400_000),
+    id: 'contact-andre',
+    name: 'Andre Heinicke',
+    phone_number: '5551110003',
+    updated_at: isoTime(-4 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-34 * 86_400_000),
+    favorite: true,
+    id: 'contact-benni',
+    name: 'Benni Parker',
+    notes: 'Call about the Sultan RS repair estimate.',
+    organization: "Benny's Motor Works",
+    phone_number: '5551110004',
+    updated_at: isoTime(-12 * 86_400_000),
+  },
+  {
+    avatar_media_id: 3,
+    avatar_url: 'https://picsum.photos/seed/sky-phone-3/800/600',
+    created_at: isoTime(-18 * 86_400_000),
+    id: 'contact-bryce',
+    name: 'Bryce Walker',
+    phone_number: '5551110005',
+    updated_at: isoTime(-7 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-27 * 86_400_000),
+    id: 'contact-charlie',
+    name: 'Charlie Davis',
+    phone_number: '5551110006',
+    updated_at: isoTime(-11 * 86_400_000),
+  },
   {
     created_at: '2026-08-04 12:00:00',
     id: 'contact-1',
     name: 'Jenica Chong',
     phone_number: '5558675309',
     updated_at: '2026-08-04 12:00:00',
+  },
+  {
+    canCall: true,
+    canMessage: false,
+    companyId: 'police',
+    icon: 'https://picsum.photos/seed/companies-police-logo/180/180',
+    id: 'company:police',
+    name: 'Los Santos Police',
+    phone_number: '911',
+    readonly: true,
+    source: 'company',
+    verified: true,
+  },
+  {
+    canCall: true,
+    canMessage: false,
+    companyId: 'ambulance',
+    icon: 'https://picsum.photos/seed/companies-ems-logo/180/180',
+    id: 'company:ambulance',
+    name: 'Los Santos Medical',
+    phone_number: '912',
+    readonly: true,
+    source: 'company',
+    verified: true,
+  },
+  {
+    canCall: true,
+    canMessage: true,
+    companyId: 'bennys',
+    icon: 'https://picsum.photos/seed/companies-bennys-logo/180/180',
+    id: 'company:bennys',
+    name: "Benny's Motor Works",
+    phone_number: '5550102',
+    readonly: true,
+    source: 'company',
+    verified: true,
+  },
+  {
+    created_at: isoTime(-14 * 86_400_000),
+    id: 'contact-morgan',
+    name: 'Morgan Reed',
+    phone_number: '5550192847',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-30 * 86_400_000),
+    id: 'contact-jamie',
+    name: 'Jamie Chen',
+    phone_number: '5559876543',
+    updated_at: isoTime(-30 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-5 * 86_400_000),
+    id: 'contact-mechanic',
+    name: 'Downtown Customs',
+    phone_number: '5550100101',
+    updated_at: isoTime(-5 * 86_400_000),
+  },
+  {
+    avatar_media_id: 4,
+    avatar_url: 'https://picsum.photos/seed/sky-phone-4/800/600',
+    created_at: isoTime(-3 * 86_400_000),
+    favorite: true,
+    id: 'contact-taxi',
+    name: 'Los Santos Taxi',
+    organization: 'Los Santos Taxi Co.',
+    phone_number: '5552222222',
+    updated_at: isoTime(-3 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-22 * 86_400_000),
+    id: 'contact-daniel',
+    name: 'Daniel Price',
+    phone_number: '5551110007',
+    updated_at: isoTime(-3 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-20 * 86_400_000),
+    id: 'contact-emily',
+    name: 'Emily Hart',
+    phone_number: '5551110008',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-31 * 86_400_000),
+    id: 'contact-franklin',
+    name: 'Franklin Miles',
+    phone_number: '5551110009',
+    updated_at: isoTime(-9 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-25 * 86_400_000),
+    id: 'contact-grace',
+    name: 'Grace Carter',
+    phone_number: '5551110010',
+    updated_at: isoTime(-4 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-19 * 86_400_000),
+    id: 'contact-hannah',
+    name: 'Hannah Brooks',
+    phone_number: '5551110011',
+    updated_at: isoTime(-5 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-17 * 86_400_000),
+    id: 'contact-ivan',
+    name: 'Ivan Petrov',
+    phone_number: '5551110012',
+    updated_at: isoTime(-6 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-16 * 86_400_000),
+    id: 'contact-kevin',
+    name: 'Kevin Adams',
+    phone_number: '5551110013',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-15 * 86_400_000),
+    id: 'contact-naomi',
+    name: 'Naomi King',
+    phone_number: '5551110014',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-13 * 86_400_000),
+    id: 'contact-olivia',
+    name: 'Olivia Moore',
+    phone_number: '5551110015',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-12 * 86_400_000),
+    id: 'contact-paul',
+    name: 'Paul Walker',
+    phone_number: '5551110016',
+    updated_at: isoTime(-4 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-11 * 86_400_000),
+    id: 'contact-quinn',
+    name: 'Quinn Bailey',
+    phone_number: '5551110017',
+    updated_at: isoTime(-3 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-10 * 86_400_000),
+    id: 'contact-riley',
+    name: 'Riley Cooper',
+    phone_number: '5551110018',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-9 * 86_400_000),
+    id: 'contact-sofia',
+    name: 'Sofia Bennett',
+    phone_number: '5551110019',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-8 * 86_400_000),
+    id: 'contact-thomas',
+    name: 'Thomas Reed',
+    phone_number: '5551110020',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-7 * 86_400_000),
+    id: 'contact-ursula',
+    name: 'Ursula Grant',
+    phone_number: '5551110021',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-6 * 86_400_000),
+    id: 'contact-victor',
+    name: 'Victor Young',
+    phone_number: '5551110022',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-5 * 86_400_000),
+    id: 'contact-wendy',
+    name: 'Wendy Clark',
+    phone_number: '5551110023',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-4 * 86_400_000),
+    id: 'contact-xavier',
+    name: 'Xavier Cole',
+    phone_number: '5551110024',
+    updated_at: isoTime(-2 * 86_400_000),
+  },
+  {
+    created_at: isoTime(-3 * 86_400_000),
+    id: 'contact-yakup',
+    name: 'Yakup Broooooo',
+    phone_number: '5551110025',
+    updated_at: isoTime(-86_400_000),
+  },
+  {
+    created_at: isoTime(-2 * 86_400_000),
+    id: 'contact-zoe',
+    name: 'Zoe Martinez',
+    phone_number: '5551110026',
+    updated_at: isoTime(-86_400_000),
+  },
+  {
+    created_at: isoTime(-86_400_000),
+    id: 'contact-market',
+    name: '24/7 Supermarket',
+    phone_number: '5552470000',
+    updated_at: isoTime(-3_600_000),
   },
 ]
 const attachmentAssets = {
@@ -1100,7 +1389,9 @@ const accountDevices = [
 const messages = [
   {
     body: '## Welcome to iFruit Mail\n\nYour shared mailbox is **ready to use**.\n\n- Send formatted messages\n- Keep drafts on every linked device\n- Reply without losing the conversation\n\n> Tip: use the small formatting bar while composing.',
-    created_at: '2026-08-04 11:30:00',
+    // Database dates may cross the NUI boundary as Unix timestamps.
+    // Keep one received message numeric so the browser preview covers that contract.
+    created_at: Date.parse('2026-08-04T11:30:00'),
     folder: 'inbox',
     id: 1,
     is_read: false,
@@ -1183,6 +1474,176 @@ const smsMessages = [
     recipient_number: '5558675309',
     sender_number: '5551234567',
   },
+  {
+    body: 'Das Fahrzeug ist fertig. Du kannst es jederzeit abholen.',
+    created_at: isoTime(-26 * 60 * 60_000),
+    direction: 'received',
+    id: 'sms-customs-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: isoTime(-25 * 60 * 60_000),
+    recipient_number: '5551234567',
+    sender_number: '5550100101',
+  },
+  {
+    body: 'Perfekt, ich komme heute Abend vorbei.',
+    created_at: isoTime(-25 * 60 * 60_000),
+    direction: 'sent',
+    id: 'sms-customs-2',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: isoTime(-25 * 60 * 60_000),
+    recipient_number: '5550100101',
+    sender_number: '5551234567',
+  },
+  {
+    body: 'Treffen wir uns um 20 Uhr am Casino?',
+    created_at: isoTime(-7 * 60 * 60_000),
+    direction: 'received',
+    id: 'sms-morgan-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: isoTime(-6 * 60 * 60_000),
+    recipient_number: '5551234567',
+    sender_number: '5550192847',
+  },
+  {
+    body: 'Ja, passt. Ich bin puenktlich da.',
+    created_at: isoTime(-6 * 60 * 60_000),
+    direction: 'sent',
+    id: 'sms-morgan-2',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: isoTime(-6 * 60 * 60_000),
+    recipient_number: '5550192847',
+    sender_number: '5551234567',
+  },
+  {
+    body: 'Bin in zehn Minuten bei dir.',
+    created_at: isoTime(-95 * 60_000),
+    direction: 'received',
+    id: 'sms-jamie-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: null,
+    recipient_number: '5551234567',
+    sender_number: '5559876543',
+  },
+  {
+    body: 'Dein Taxi wartet vor dem Haupteingang.',
+    created_at: isoTime(-38 * 60_000),
+    direction: 'received',
+    id: 'sms-taxi-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: null,
+    recipient_number: '5551234567',
+    sender_number: '5552222222',
+  },
+  {
+    body: 'Danke, ich komme sofort raus.',
+    created_at: isoTime(-36 * 60_000),
+    direction: 'sent',
+    id: 'sms-taxi-2',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: isoTime(-35 * 60_000),
+    recipient_number: '5552222222',
+    sender_number: '5551234567',
+  },
+  {
+    body: 'Denk bitte an die Unterlagen fuer morgen.',
+    created_at: isoTime(-12 * 60_000),
+    direction: 'received',
+    id: 'sms-alex-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: null,
+    media_waveform: null,
+    message_type: 'text',
+    media_asset_id: null,
+    read_at: null,
+    recipient_number: '5551234567',
+    sender_number: '5551110001',
+  },
+  {
+    body: 'Samantha Cole',
+    contact: {
+      avatar_url: 'https://picsum.photos/seed/shared-samantha/240/240',
+      name: 'Samantha Cole',
+      organization: 'Downtown Cab Co.',
+      phone_number: '5553330044',
+    },
+    created_at: isoTime(-8 * 60_000),
+    direction: 'received',
+    id: 'sms-contact-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: {
+      avatar_url: 'https://picsum.photos/seed/shared-samantha/240/240',
+      name: 'Samantha Cole',
+      organization: 'Downtown Cab Co.',
+      phone_number: '5553330044',
+    },
+    media_waveform: null,
+    message_type: 'contact',
+    media_asset_id: null,
+    read_at: null,
+    recipient_number: '5551234567',
+    sender_number: '5551110001',
+  },
+  {
+    body: 'Neon nights in Vinewood',
+    created_at: isoTime(-4 * 60_000),
+    direction: 'received',
+    id: 'sms-share-1',
+    media_duration_ms: null,
+    media_mime: null,
+    media_payload: {
+      appId: 'picstagram',
+      copyText: 'Die besten Lichter der Stadt – direkt aus Vinewood.',
+      id: 'picstagram-post-neon-nights',
+      imageUrl: 'https://picsum.photos/seed/easyshare-neon/720/720',
+      kind: 'post',
+      link: 'skyphone://picstagram/post/picstagram-post-neon-nights',
+      subtitle: '@morgan',
+      title: 'Neon nights in Vinewood',
+    },
+    media_waveform: null,
+    message_type: 'share',
+    media_asset_id: null,
+    read_at: null,
+    recipient_number: '5551234567',
+    sender_number: '5551110001',
+  },
 ]
 const darkChatProfile = {
   id: 1,
@@ -1260,6 +1721,27 @@ const darkChatMessages = [
     mediaPayload: 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif',
     reactions: {},
     createdAt: '2026-08-06 22:44:00',
+    readAt: null,
+  },
+  {
+    id: 'dc-message-00000000-0000-000000000004',
+    conversationId: darkChatConversations[0].id,
+    direction: 'received',
+    senderProfileId: 2,
+    messageType: 'share',
+    body: 'Downtown is awake',
+    reactions: {},
+    sharePayload: {
+      appId: 'feather',
+      copyText: 'Vinewood after midnight. No filters, just city light.',
+      id: 'feather-post-downtown-awake',
+      imageUrl: 'https://picsum.photos/seed/easyshare-downtown/900/600',
+      kind: 'post',
+      link: 'skyphone://feather/post/feather-post-downtown-awake',
+      subtitle: '@nightowl',
+      title: 'Downtown is awake',
+    },
+    createdAt: isoTime(-3 * 60_000),
     readAt: null,
   },
 ]
@@ -1420,6 +1902,17 @@ const marketplaceListings = [
     ],
   },
 ]
+let marketplaceProfile = {
+  avatar_media_id: 1,
+  avatar_url: 'https://picsum.photos/seed/citymarkt-demo-avatar/240/240',
+  bio: 'Fair prices, quick replies, and meetups anywhere in Los Santos.',
+  display_name: 'Skyline Deals',
+  email: 'demo@ifruit.com',
+  exists: true,
+  listing_count: marketplaceListings.filter(
+    (listing) => listing.seller_account_id === 1,
+  ).length,
+}
 let linkedAccount = {
   devices: accountDevices,
   email: 'demo@ifruit.com',
@@ -1516,6 +2009,14 @@ let calendarEvents = [
   },
 ]
 const deviceData = {
+  appAuth: {
+    payload: {
+      accountEmail: 'demo@ifruit.com',
+      signedIn: ['citymarkt', 'local-pages', 'feather', 'crewlink'],
+      version: 1,
+    },
+    revision: 1,
+  },
   alarms: {
     payload: [
       {
@@ -1605,6 +2106,38 @@ const deviceData = {
     },
     revision: 2,
   },
+  notifications: {
+    payload: {
+      items: [
+        {
+          appId: 'messages',
+          id: 'demo-notification-message',
+          route: '/apps/messages?phoneNumber=5551110001',
+          subtitle: 'Alex Rivera',
+          text: 'Meet us at the observatory after sunset.',
+          title: 'Messages',
+        },
+        {
+          appId: 'companies',
+          id: 'demo-notification-company',
+          route: '/apps/companies?area=requests',
+          subtitle: 'Los Santos Customs',
+          text: 'Your repair request has been accepted.',
+          title: 'Companies',
+        },
+        {
+          appId: 'billing',
+          id: 'demo-notification-billing',
+          route: '/apps/billing',
+          subtitle: 'Los Santos Customs',
+          text: 'A new invoice for $1,850 is ready.',
+          title: 'Billing',
+        },
+      ],
+      version: 1,
+    },
+    revision: 1,
+  },
   settings: {
     payload: {
       settings: {
@@ -1627,44 +2160,41 @@ const deviceData = {
 }
 let mockPasscode = ''
 let mockSecurity = { enabled: false, length: null, lockedUntil: 0 }
-let mockContacts = [
-  {
-    created_at: isoTime(-14 * 86_400_000),
-    id: 'contact-morgan',
-    name: 'Morgan Reed',
-    phone_number: '5550192847',
-    updated_at: isoTime(-2 * 86_400_000),
-  },
-  {
-    created_at: isoTime(-30 * 86_400_000),
-    id: 'contact-jamie',
-    name: 'Jamie Chen',
-    phone_number: '5559876543',
-    updated_at: isoTime(-30 * 86_400_000),
-  },
-  {
-    created_at: isoTime(-5 * 86_400_000),
-    id: 'contact-mechanic',
-    name: 'Downtown Customs',
-    phone_number: '5550100101',
-    updated_at: isoTime(-5 * 86_400_000),
-  },
-  {
-    created_at: isoTime(-3 * 86_400_000),
-    id: 'contact-taxi',
-    name: 'Los Santos Taxi',
-    phone_number: '5552222222',
-    updated_at: isoTime(-3 * 86_400_000),
-  },
-]
+let mockSim = {
+  id: 'development-sim',
+  number: '5551234567',
+  removable: true,
+  registered: true,
+  type: 'registered',
+}
+let mockPayphoneCall = null
+const blockedCallNumbers = new Set()
 let recentCalls = [
+  {
+    call_id: 'call-alex-incoming',
+    created_at: isoTime(-8 * 60_000),
+    direction: 'incoming',
+    duration_seconds: 184,
+    id: 1,
+    other_number: '5551110001',
+    status: 'completed',
+  },
   {
     call_id: 'call-morgan-incoming',
     created_at: isoTime(-18 * 60_000),
     direction: 'incoming',
     duration_seconds: 246,
-    id: 1,
+    id: 2,
     other_number: '5550192847',
+    status: 'completed',
+  },
+  {
+    call_id: 'call-taxi-outgoing',
+    created_at: isoTime(-42 * 60_000),
+    direction: 'outgoing',
+    duration_seconds: 39,
+    id: 3,
+    other_number: '5552222222',
     status: 'completed',
   },
   {
@@ -1672,27 +2202,108 @@ let recentCalls = [
     created_at: isoTime(-95 * 60_000),
     direction: 'incoming',
     duration_seconds: 0,
-    id: 2,
+    id: 4,
     other_number: '5559876543',
     status: 'missed',
+  },
+  {
+    call_id: 'call-emily-no-answer',
+    created_at: isoTime(-4 * 60 * 60_000),
+    direction: 'outgoing',
+    duration_seconds: 0,
+    id: 5,
+    other_number: '5551110008',
+    status: 'no_answer',
+  },
+  {
+    call_id: 'call-yakup-incoming',
+    created_at: isoTime(-8 * 60 * 60_000),
+    direction: 'incoming',
+    duration_seconds: 521,
+    id: 6,
+    other_number: '5551110025',
+    status: 'completed',
   },
   {
     call_id: 'call-customs-outgoing',
     created_at: isoTime(-25 * 60 * 60_000),
     direction: 'outgoing',
     duration_seconds: 83,
-    id: 3,
+    id: 7,
     other_number: '5550100101',
     status: 'completed',
   },
   {
     call_id: 'call-unknown-declined',
-    created_at: isoTime(-2 * 86_400_000),
+    created_at: isoTime(-27 * 60 * 60_000),
     direction: 'incoming',
     duration_seconds: 0,
-    id: 4,
+    id: 8,
     other_number: '5554040404',
     status: 'declined',
+  },
+  {
+    call_id: 'call-morgan-outgoing',
+    created_at: isoTime(-2 * 86_400_000),
+    direction: 'outgoing',
+    duration_seconds: 72,
+    id: 9,
+    other_number: '5550192847',
+    status: 'completed',
+  },
+  {
+    call_id: 'call-alex-missed',
+    created_at: isoTime(-3 * 86_400_000),
+    direction: 'incoming',
+    duration_seconds: 0,
+    id: 10,
+    other_number: '5551110001',
+    status: 'missed',
+  },
+  {
+    call_id: 'call-benni-busy',
+    created_at: isoTime(-4 * 86_400_000),
+    direction: 'outgoing',
+    duration_seconds: 0,
+    id: 11,
+    other_number: '5551110004',
+    status: 'busy',
+  },
+  {
+    call_id: 'call-sofia-incoming',
+    created_at: isoTime(-5 * 86_400_000),
+    direction: 'incoming',
+    duration_seconds: 116,
+    id: 12,
+    other_number: '5551110019',
+    status: 'completed',
+  },
+  {
+    call_id: 'call-xavier-unavailable',
+    created_at: isoTime(-6 * 86_400_000),
+    direction: 'outgoing',
+    duration_seconds: 0,
+    id: 13,
+    other_number: '5551110024',
+    status: 'unavailable',
+  },
+  {
+    call_id: 'call-market-outgoing',
+    created_at: isoTime(-7 * 86_400_000),
+    direction: 'outgoing',
+    duration_seconds: 51,
+    id: 14,
+    other_number: '5552470000',
+    status: 'completed',
+  },
+  {
+    call_id: 'call-unknown-missed',
+    created_at: isoTime(-8 * 86_400_000),
+    direction: 'incoming',
+    duration_seconds: 0,
+    id: 15,
+    other_number: '5559090909',
+    status: 'missed',
   },
 ]
 let mockMedia = [
@@ -1725,6 +2336,239 @@ let mockMedia = [
     id: 5,
     mediaType: 'photo',
     url: 'https://picsum.photos/seed/sky-phone-5/800/600',
+  },
+]
+const weazelNewsCategoryIds = ['official', 'events', 'jobs', 'news', 'business']
+let weazelNewsSequence = 8
+let weazelNewsArticles = [
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000001',
+    title: 'Port Authority announces temporary harbor restrictions',
+    body: 'The Port Authority has announced temporary navigation restrictions around the southern harbor while maintenance crews inspect the main shipping channel. Commercial operators should follow marked diversion routes and expect short delays through the afternoon. Emergency traffic will continue without interruption.',
+    excerpt:
+      'Temporary navigation restrictions are in effect around the southern harbor while crews inspect the main shipping channel.',
+    category: 'official',
+    imageUrl: 'https://picsum.photos/seed/weazel-harbor/1200/760',
+    imageMediaId: null,
+    authorName: 'Avery Brooks',
+    createdAt: Date.now() - 35 * 60 * 1000,
+    updatedAt: Date.now() - 28 * 60 * 1000,
+    publishedAt: Date.now() - 30 * 60 * 1000,
+    status: 'published',
+    revision: 2,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000002',
+    title: 'Vinewood summer festival opens this weekend',
+    body: "Vinewood Boulevard will welcome food stands, live performers, and classic cars during this weekend's summer festival. Organizers recommend using public parking near the eastern entrance and arriving early for the evening concert. The event is free and runs from noon until late.",
+    excerpt:
+      'Food stands, live performers, and classic cars are coming to Vinewood Boulevard this weekend.',
+    category: 'events',
+    imageUrl: 'https://picsum.photos/seed/weazel-vinewood/1200/760',
+    imageMediaId: null,
+    authorName: 'Maya Chen',
+    createdAt: Date.now() - 2 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 2 * 60 * 60 * 1000,
+    publishedAt: Date.now() - 2 * 60 * 60 * 1000,
+    status: 'published',
+    revision: 1,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000003',
+    title: 'City services expand recruitment drive',
+    body: 'Several city departments have opened a coordinated recruitment drive for new staff. Positions are available across emergency response, transport, and public administration. Applicants should review individual department requirements before attending the recruitment office at City Hall.',
+    excerpt:
+      'City departments are recruiting new staff across emergency response, transport, and public administration.',
+    category: 'jobs',
+    imageUrl: null,
+    imageMediaId: null,
+    authorName: 'Jordan Hayes',
+    createdAt: Date.now() - 4 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 3 * 60 * 60 * 1000,
+    publishedAt: Date.now() - 3 * 60 * 60 * 1000,
+    status: 'published',
+    revision: 2,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000004',
+    title: 'Traffic returns to normal after Del Perro closure',
+    body: 'Traffic is moving normally again through Del Perro after crews cleared an earlier road obstruction. Police have reopened every lane and removed the temporary diversion signs. Drivers may still encounter brief congestion while the remaining queue disperses.',
+    excerpt:
+      'Every lane through Del Perro has reopened after crews cleared an earlier road obstruction.',
+    category: 'news',
+    imageUrl: 'https://picsum.photos/seed/weazel-del-perro/1200/760',
+    imageMediaId: null,
+    authorName: 'Avery Brooks',
+    createdAt: Date.now() - 7 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 6 * 60 * 60 * 1000,
+    publishedAt: Date.now() - 6 * 60 * 60 * 1000,
+    status: 'published',
+    revision: 3,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000005',
+    title: 'Downtown retailers report strong evening trade',
+    body: 'Independent retailers across downtown Los Santos reported stronger evening trade following the launch of extended opening hours. Business owners credited increased foot traffic and a busy restaurant district. The trial will continue through the end of the month before a permanent schedule is considered.',
+    excerpt:
+      'Independent downtown retailers are seeing stronger evening trade during a trial of extended opening hours.',
+    category: 'business',
+    imageUrl: 'https://picsum.photos/seed/weazel-downtown/1200/760',
+    imageMediaId: null,
+    authorName: 'Maya Chen',
+    createdAt: Date.now() - 26 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 25 * 60 * 60 * 1000,
+    publishedAt: Date.now() - 25 * 60 * 60 * 1000,
+    status: 'published',
+    revision: 2,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000006',
+    title: 'Interview: preparing for the next racing season',
+    body: 'Local racing teams are preparing new vehicles and reviewing safety procedures before the next sanctioned season begins. Weazel News spoke with organizers about the revised technical checks, route planning, and what spectators can expect at the opening round.',
+    excerpt:
+      'Local racing teams are preparing vehicles and reviewing safety procedures for the next sanctioned season.',
+    category: 'events',
+    imageUrl: 'https://picsum.photos/seed/sky-phone-3/800/600',
+    imageMediaId: 3,
+    authorName: 'Jordan Hayes',
+    createdAt: Date.now() - 55 * 60 * 1000,
+    updatedAt: Date.now() - 12 * 60 * 1000,
+    publishedAt: null,
+    status: 'draft',
+    revision: 4,
+  },
+  {
+    id: '34c0ec54-bfb1-4ad7-81da-000000000007',
+    title: 'Draft briefing for Monday morning',
+    body: 'The editorial desk is collecting confirmed service notices and transport updates for Monday morning. This working draft will be expanded when the final statements arrive from the relevant city departments.',
+    excerpt:
+      'The editorial desk is collecting confirmed service notices and transport updates for Monday morning.',
+    category: 'official',
+    imageUrl: null,
+    imageMediaId: null,
+    authorName: 'Jordan Hayes',
+    createdAt: Date.now() - 18 * 60 * 1000,
+    updatedAt: Date.now() - 8 * 60 * 1000,
+    publishedAt: null,
+    status: 'draft',
+    revision: 2,
+  },
+]
+
+function weazelNewsExcerpt(body) {
+  const normalized = body.replace(/\s+/g, ' ').trim()
+  return normalized.length <= 240
+    ? normalized
+    : `${normalized.slice(0, 237).trimEnd()}...`
+}
+
+function weazelNewsImageUrl(imageMediaId) {
+  if (imageMediaId === null) return null
+  const media = mockMedia.find(
+    (item) => item.id === imageMediaId && item.mediaType === 'photo',
+  )
+  return media?.url ?? null
+}
+
+function validateWeazelNewsDraft(data) {
+  const title = typeof data.title === 'string' ? data.title.trim() : ''
+  const body = typeof data.body === 'string' ? data.body.trim() : ''
+  const status = data.status
+  const minimumTitleLength = 1
+  const minimumBodyLength = 1
+  if (
+    Array.from(title).length < minimumTitleLength ||
+    Array.from(title).length > 160 ||
+    Array.from(body).length < minimumBodyLength ||
+    Array.from(body).length > 12000 ||
+    !weazelNewsCategoryIds.includes(data.category) ||
+    !['draft', 'published'].includes(status)
+  ) {
+    return { error: status === 'draft' ? 'invalid_draft' : 'invalid_publish' }
+  }
+
+  let imageMediaId = null
+  if (data.imageMediaId !== null && data.imageMediaId !== undefined) {
+    imageMediaId = Number(data.imageMediaId)
+    if (
+      !Number.isSafeInteger(imageMediaId) ||
+      !weazelNewsImageUrl(imageMediaId)
+    ) {
+      return { error: 'invalid_attachment' }
+    }
+  }
+
+  return {
+    article: {
+      body,
+      category: data.category,
+      excerpt: weazelNewsExcerpt(body),
+      imageMediaId,
+      imageUrl: weazelNewsImageUrl(imageMediaId),
+      status,
+      title,
+    },
+  }
+}
+
+function pageWeazelNewsArticles(items, data) {
+  const offset = Math.max(0, Math.floor(Number(data.offset) || 0))
+  const requestedLimit = Math.floor(Number(data.limit) || 20)
+  const limit = Math.min(50, Math.max(1, requestedLimit))
+  return {
+    hasMore: offset + limit < items.length,
+    items: items.slice(offset, offset + limit).map((article) => {
+      const summary = { ...article }
+      delete summary.body
+      return summary
+    }),
+  }
+}
+
+const mockImportSources = [
+  {
+    id: 'media_archive',
+    label: 'Media Archive',
+    mediaTypes: ['photo', 'video'],
+  },
+  { id: 'event_cdn', label: 'Event CDN', mediaTypes: ['photo'] },
+]
+const mockImportMedia = [
+  {
+    externalId: 'archive-photo-1',
+    filename: 'Vespucci Sunset.jpg',
+    imported: false,
+    mediaType: 'photo',
+    size: 2_481_152,
+    sourceId: 'media_archive',
+    url: 'https://picsum.photos/seed/sky-import-1/900/1200',
+  },
+  {
+    externalId: 'archive-photo-2',
+    filename: 'Downtown Meet.jpg',
+    imported: false,
+    mediaType: 'photo',
+    size: 3_114_205,
+    sourceId: 'media_archive',
+    url: 'https://picsum.photos/seed/sky-import-2/1200/900',
+  },
+  {
+    externalId: 'archive-video-1',
+    filename: 'Flower Clip.mp4',
+    imported: false,
+    mediaType: 'video',
+    size: 8_241_152,
+    sourceId: 'media_archive',
+    url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+  },
+  {
+    externalId: 'event-photo-1',
+    filename: 'Opening Night.jpg',
+    imported: false,
+    mediaType: 'photo',
+    size: 1_824_331,
+    sourceId: 'event_cdn',
+    url: 'https://picsum.photos/seed/sky-event-1/900/1200',
   },
 ]
 const marketplaceInquiries = [
@@ -1926,10 +2770,45 @@ const pagesPosts = [
     images: [],
   },
 ]
+const cityMarktSharedScenarioPost = {
+  id: 'pages-citymarkt-owner-demo',
+  account_id: 1,
+  author_name: 'demo',
+  source_type: 'citymarkt',
+  citymarkt_listing_id: '81bc9d37-20e1-4d8a-82f8-f4b85f77cf04',
+  title: 'Complete mechanic tool set',
+  body: 'Complete mechanic tool set with trolley, sockets and diagnostic equipment. Everything is clean and ready for work.',
+  category: 'citymarkt',
+  district: 'south_los_santos',
+  created_at: Date.parse('2026-08-06T13:10:00Z'),
+  like_count: 4,
+  images: [
+    {
+      media_id: 'capture-tools',
+      gradient: 'linear-gradient(135deg, #ffc75f, #f96d80 48%, #4b4453)',
+      sort_order: 1,
+    },
+  ],
+}
+
+function pagesPostsForScenario(testScenario) {
+  return testScenario === 'citymarkt-shared'
+    ? [cityMarktSharedScenarioPost, ...pagesPosts]
+    : pagesPosts
+}
 const pagesReactions = [
   { post_id: 'pages-1', account_id: 1, kind: 'like' },
   { post_id: 'pages-3', account_id: 1, kind: 'save' },
 ]
+let pagesProfile = {
+  avatar_media_id: null,
+  avatar_url: null,
+  bio: 'Vinewood tips and city stories.',
+  email: 'demo@ifruit.com',
+  exists: true,
+  handle: 'demo',
+}
+let pagesOnboardingCompleted = false
 
 function pageView(post) {
   const listing = marketplaceListings.find(
@@ -1937,6 +2816,7 @@ function pageView(post) {
   )
   return {
     ...post,
+    author_avatar: post.account_id === 1 ? pagesProfile.avatar_url : null,
     citymarkt_price: listing?.price ?? null,
     image: post.images[0]?.gradient ?? null,
     is_liked: pagesReactions.some(
@@ -2057,9 +2937,9 @@ const flareMatches = [
       lookingFor: 'dates',
       photoUrls: [],
     },
-    lastMessage: 'That place sounds perfect. Friday?',
-    lastMessageAt: isoTime(-38 * 60 * 1000),
-    lastMessageType: 'text',
+    lastMessage: 'Friday night jazz',
+    lastMessageAt: isoTime(-18 * 60 * 1000),
+    lastMessageType: 'share',
     unread: 1,
   },
 ]
@@ -2085,6 +2965,25 @@ const flareMessages = {
       mediaUrl: null,
       messageType: 'text',
     },
+    {
+      id: 'flare-message-3',
+      direction: 'received',
+      body: 'Friday night jazz',
+      createdAt: isoTime(-18 * 60 * 1000),
+      mediaDurationMs: null,
+      mediaUrl: null,
+      messageType: 'share',
+      sharePayload: {
+        appId: 'music',
+        copyText: 'A late-night playlist for the drive to Vinewood.',
+        id: 'music-playlist-friday-jazz',
+        imageUrl: 'https://picsum.photos/seed/easyshare-jazz/720/720',
+        kind: 'playlist',
+        link: 'skyphone://music/playlist/music-playlist-friday-jazz',
+        subtitle: '12 tracks · 48 min',
+        title: 'Friday night jazz',
+      },
+    },
   ],
 }
 
@@ -2094,6 +2993,488 @@ function flareBootstrap() {
     suggestions: flareProfile.discoverable ? flareSuggestions : [],
     likes: flareLikes,
     matches: flareMatches,
+  }
+}
+
+const companyCategories = [
+  { id: 'public_services', name: 'Public Services' },
+  { id: 'medical', name: 'Medical' },
+  { id: 'mechanics', name: 'Mechanics' },
+  { id: 'transport', name: 'Transport' },
+  { id: 'gastronomy', name: 'Food & Drink' },
+]
+let companyCallAvailable = false
+const companyProfiles = [
+  {
+    acceptsRequests: false,
+    announcement: {
+      body: 'Community traffic unit active around Legion Square.',
+      expiresAt: isoTime(6 * 60 * 60 * 1000),
+      publishedAt: isoTime(-35 * 60 * 1000),
+    },
+    availability: 'available',
+    availabilityUpdatedAt: isoTime(-12 * 60 * 1000),
+    canCall: true,
+    canMessage: false,
+    categoryId: 'public_services',
+    categoryName: 'Public Services',
+    coverUrl: 'https://picsum.photos/seed/companies-police-cover/900/360',
+    description:
+      'Public safety, non-emergency assistance, and community response for Los Santos.',
+    hours: [],
+    id: 'police',
+    location: {
+      address: 'Sinner Street',
+      coords: { x: 441.2, y: -981.9, z: 30.7 },
+      district: 'Mission Row',
+      label: 'Mission Row Police Station',
+    },
+    logoUrl: 'https://picsum.photos/seed/companies-police-logo/180/180',
+    name: 'Los Santos Police',
+    phoneNumber: '911',
+    revision: 3,
+    services: [
+      {
+        acceptsRequests: false,
+        active: true,
+        description: 'Immediate police response through the service line.',
+        id: 'emergency-response',
+        priceText: null,
+        title: 'Emergency Response',
+      },
+      {
+        acceptsRequests: false,
+        active: true,
+        description: 'General information and non-emergency assistance.',
+        id: 'public-assistance',
+        priceText: null,
+        title: 'Public Assistance',
+      },
+    ],
+    serviceSummary: 'Emergency response and public assistance',
+    verified: true,
+  },
+  {
+    acceptsRequests: false,
+    announcement: null,
+    availability: 'busy',
+    availabilityUpdatedAt: isoTime(-22 * 60 * 1000),
+    canCall: true,
+    canMessage: false,
+    categoryId: 'medical',
+    categoryName: 'Medical',
+    coverUrl: 'https://picsum.photos/seed/companies-ems-cover/900/360',
+    description:
+      'Emergency medical response and patient care across Los Santos County.',
+    hours: [],
+    id: 'ambulance',
+    location: {
+      address: 'Elgin Avenue',
+      coords: { x: 298.4, y: -584.6, z: 43.3 },
+      district: 'Pillbox Hill',
+      label: 'Pillbox Medical Center',
+    },
+    logoUrl: 'https://picsum.photos/seed/companies-ems-logo/180/180',
+    name: 'Los Santos Medical',
+    phoneNumber: '912',
+    revision: 1,
+    services: [
+      {
+        acceptsRequests: false,
+        active: true,
+        description: 'Urgent medical assistance through the service line.',
+        id: 'medical-response',
+        priceText: null,
+        title: 'Medical Response',
+      },
+    ],
+    serviceSummary: 'Emergency medical care',
+    verified: true,
+  },
+  {
+    acceptsRequests: true,
+    announcement: {
+      body: 'Same-day repairs available until 10 PM.',
+      expiresAt: isoTime(10 * 60 * 60 * 1000),
+      publishedAt: isoTime(-48 * 60 * 1000),
+    },
+    availability: 'available',
+    availabilityUpdatedAt: isoTime(-6 * 60 * 1000),
+    canCall: true,
+    canMessage: true,
+    categoryId: 'mechanics',
+    categoryName: 'Mechanics',
+    coverUrl: 'https://picsum.photos/seed/companies-bennys-cover/900/360',
+    description:
+      'Repairs, roadside assistance, performance upgrades, and custom bodywork.',
+    hours: [
+      { closesAt: '22:00', day: 0, isClosed: false, opensAt: '10:00' },
+      { closesAt: '22:00', day: 1, isClosed: false, opensAt: '10:00' },
+      { closesAt: '22:00', day: 2, isClosed: false, opensAt: '10:00' },
+      { closesAt: '22:00', day: 3, isClosed: false, opensAt: '10:00' },
+      { closesAt: '23:30', day: 4, isClosed: false, opensAt: '10:00' },
+      { closesAt: '23:30', day: 5, isClosed: false, opensAt: '12:00' },
+      { closesAt: null, day: 6, isClosed: true, opensAt: null },
+    ],
+    id: 'bennys',
+    location: {
+      address: 'Alta Street',
+      coords: { x: -211.6, y: -1324.2, z: 30.9 },
+      district: 'Strawberry',
+      label: "Benny's Original Motor Works",
+    },
+    logoUrl: 'https://picsum.photos/seed/companies-bennys-logo/180/180',
+    name: "Benny's Motor Works",
+    phoneNumber: '5550102',
+    revision: 7,
+    services: [
+      {
+        acceptsRequests: true,
+        active: true,
+        description: 'Diagnostics and general mechanical repairs.',
+        id: 'repair',
+        priceText: 'from $250',
+        title: 'Vehicle Repair',
+      },
+      {
+        acceptsRequests: true,
+        active: true,
+        description: 'Mobile help for disabled vehicles.',
+        id: 'roadside',
+        priceText: 'from $175',
+        title: 'Roadside Assistance',
+      },
+      {
+        acceptsRequests: true,
+        active: true,
+        description: 'Paint, wheels, and body modifications.',
+        id: 'customization',
+        priceText: 'Quote',
+        title: 'Customization',
+      },
+    ],
+    serviceSummary: 'Repairs, roadside help, and customization',
+    verified: true,
+  },
+  {
+    acceptsRequests: true,
+    announcement: null,
+    availability: 'available',
+    availabilityUpdatedAt: isoTime(-19 * 60 * 1000),
+    canCall: true,
+    canMessage: true,
+    categoryId: 'transport',
+    categoryName: 'Transport',
+    coverUrl: 'https://picsum.photos/seed/companies-taxi-cover/900/360',
+    description: 'Citywide passenger transport and pre-arranged group rides.',
+    hours: [],
+    id: 'downtown-cab',
+    location: {
+      address: 'Tangerine Street',
+      coords: { x: 900.3, y: -170.2, z: 74.1 },
+      district: 'East Vinewood',
+      label: 'Downtown Cab Co.',
+    },
+    logoUrl: 'https://picsum.photos/seed/companies-taxi-logo/180/180',
+    name: 'Downtown Cab Co.',
+    phoneNumber: '5550103',
+    revision: 2,
+    services: [
+      {
+        acceptsRequests: true,
+        active: true,
+        description: 'A driver will collect you at your location.',
+        id: 'pickup',
+        priceText: 'Metered',
+        title: 'Passenger Pickup',
+      },
+    ],
+    serviceSummary: 'Passenger pickups throughout the city',
+    verified: true,
+  },
+  {
+    acceptsRequests: true,
+    announcement: null,
+    availability: 'closed',
+    availabilityUpdatedAt: isoTime(-3 * 60 * 60 * 1000),
+    canCall: true,
+    canMessage: true,
+    categoryId: 'gastronomy',
+    categoryName: 'Food & Drink',
+    coverUrl: 'https://picsum.photos/seed/companies-burgershot-cover/900/360',
+    description: 'Burgers, fries, shakes, and late-night catering.',
+    hours: [],
+    id: 'burgershot',
+    location: {
+      address: 'San Andreas Avenue',
+      coords: { x: -1193.8, y: -892.5, z: 14 },
+      district: 'Vespucci',
+      label: 'Burger Shot',
+    },
+    logoUrl: 'https://picsum.photos/seed/companies-burgershot-logo/180/180',
+    name: 'Burger Shot',
+    phoneNumber: '5550104',
+    revision: 1,
+    services: [
+      {
+        acceptsRequests: true,
+        active: true,
+        description: 'Food order for collection at the restaurant.',
+        id: 'catering',
+        priceText: 'Quote',
+        title: 'Event Catering',
+      },
+    ],
+    serviceSummary: 'Food, drinks, and event catering',
+    verified: true,
+  },
+]
+
+let companyRequestSequence = 4
+let companyRequests = [
+  {
+    actions: {
+      allowedStatuses: ['in_progress', 'waiting_customer', 'completed'],
+      canAssign: true,
+      canCall: true,
+      canCancel: true,
+      canClaim: false,
+      canReply: true,
+    },
+    assignedLabel: 'you',
+    companyId: 'bennys',
+    companyLogoUrl: companyProfiles[2].logoUrl,
+    companyName: companyProfiles[2].name,
+    createdAt: isoTime(-2 * 60 * 60 * 1000),
+    description:
+      'My Sultan stopped near Legion Square and the engine will not start.',
+    events: [
+      {
+        createdAt: isoTime(-2 * 60 * 60 * 1000),
+        id: 'company-event-1',
+        status: 'new',
+        type: 'created',
+      },
+      {
+        createdAt: isoTime(-95 * 60 * 1000),
+        id: 'company-event-2',
+        status: 'assigned',
+        type: 'assigned',
+      },
+      {
+        createdAt: isoTime(-80 * 60 * 1000),
+        id: 'company-event-3',
+        status: 'in_progress',
+        type: 'status_changed',
+      },
+    ],
+    id: 'company-request-1',
+    media: [
+      {
+        id: 3,
+        url: 'https://picsum.photos/seed/sky-phone-3/800/600',
+      },
+      {
+        id: 4,
+        url: 'https://picsum.photos/seed/sky-phone-4/800/600',
+      },
+    ],
+    messages: [
+      {
+        author: 'customer',
+        authorLabel: 'you',
+        body: 'I am parked on the north side of the square.',
+        createdAt: isoTime(-110 * 60 * 1000),
+        id: 'company-message-1',
+        isMine: true,
+      },
+      {
+        author: 'company',
+        authorLabel: 'company',
+        body: 'A mechanic is heading your way. Please stay near the vehicle.',
+        createdAt: isoTime(-78 * 60 * 1000),
+        id: 'company-message-2',
+        isMine: false,
+      },
+    ],
+    phoneNumber: companyProfiles[2].phoneNumber,
+    revision: 3,
+    serviceId: 'roadside',
+    serviceName: 'Roadside Assistance',
+    status: 'in_progress',
+    subject: 'Vehicle will not start',
+    unreadCount: 1,
+    updatedAt: isoTime(-78 * 60 * 1000),
+  },
+  {
+    actions: {
+      allowedStatuses: ['assigned', 'cancelled'],
+      canAssign: true,
+      canCall: true,
+      canCancel: true,
+      canClaim: true,
+      canReply: true,
+    },
+    assignedLabel: null,
+    companyId: 'bennys',
+    companyLogoUrl: companyProfiles[2].logoUrl,
+    companyName: companyProfiles[2].name,
+    createdAt: isoTime(-18 * 60 * 1000),
+    description:
+      'I would like a quote for a metallic blue repaint and new wheels.',
+    events: [
+      {
+        createdAt: isoTime(-18 * 60 * 1000),
+        id: 'company-event-4',
+        status: 'new',
+        type: 'created',
+      },
+    ],
+    id: 'company-request-2',
+    media: [],
+    messages: [],
+    phoneNumber: companyProfiles[2].phoneNumber,
+    revision: 1,
+    serviceId: 'customization',
+    serviceName: 'Customization',
+    status: 'new',
+    subject: 'Repaint and wheels',
+    unreadCount: 0,
+    updatedAt: isoTime(-18 * 60 * 1000),
+  },
+  {
+    actions: {
+      allowedStatuses: [],
+      canAssign: false,
+      canCall: true,
+      canCancel: false,
+      canClaim: false,
+      canReply: false,
+    },
+    assignedLabel: 'assigned',
+    companyId: 'bennys',
+    companyLogoUrl: companyProfiles[2].logoUrl,
+    companyName: companyProfiles[2].name,
+    createdAt: isoTime(-2 * 24 * 60 * 60 * 1000),
+    description: 'Routine engine service and fluids.',
+    events: [
+      {
+        createdAt: isoTime(-2 * 24 * 60 * 60 * 1000),
+        id: 'company-event-5',
+        status: 'new',
+        type: 'created',
+      },
+      {
+        createdAt: isoTime(-26 * 60 * 60 * 1000),
+        id: 'company-event-6',
+        status: 'completed',
+        type: 'completed',
+      },
+    ],
+    id: 'company-request-3',
+    media: [],
+    messages: [],
+    phoneNumber: companyProfiles[2].phoneNumber,
+    revision: 4,
+    serviceId: 'repair',
+    serviceName: 'Vehicle Repair',
+    status: 'completed',
+    subject: 'Routine service',
+    unreadCount: 0,
+    updatedAt: isoTime(-26 * 60 * 60 * 1000),
+  },
+]
+
+const companyMembers = [
+  { id: 'member-mia', name: 'Mia Torres', online: true, role: 'Mechanic' },
+  { id: 'member-jay', name: 'Jay Coleman', online: true, role: 'Tow Operator' },
+  { id: 'member-robin', name: '', online: false, role: 'Mechanic' },
+]
+
+function companySummary(company) {
+  const { coverUrl, hours, revision, services, ...summary } = company
+  return {
+    ...summary,
+    serviceSummary:
+      company.serviceSummary ??
+      services.map((service) => service.title).join(', '),
+  }
+}
+
+function companyRequestSummary(request) {
+  const {
+    actions,
+    description,
+    events,
+    media,
+    messages,
+    phoneNumber,
+    revision,
+    ...summary
+  } = request
+  return summary
+}
+
+function companyWorkContext(testScenario = '') {
+  if (testScenario === 'companies-unauthorized') {
+    return {
+      authorized: false,
+      callAvailable: false,
+      company: null,
+      metrics: { assigned: 0, completedToday: 0, new: 0, waiting: 0 },
+      ownRequests: [],
+      permissions: {
+        canAssign: false,
+        canManageAnnouncement: false,
+        canManageHours: false,
+        canManageProfile: false,
+        canManageServices: false,
+        canSetAvailability: false,
+        canTakeCalls: false,
+      },
+      recentRequests: [],
+      role: null,
+      unreadCount: 0,
+    }
+  }
+  const manager = testScenario === 'companies-manager'
+  const open = companyRequests.filter(
+    (request) =>
+      request.companyId === 'bennys' &&
+      !['completed', 'cancelled'].includes(request.status),
+  )
+  return {
+    authorized: true,
+    callAvailable: companyCallAvailable,
+    company: companyProfiles.find((company) => company.id === 'bennys'),
+    metrics: {
+      assigned: open.filter((request) => request.assignedLabel).length,
+      completedToday: companyRequests.filter(
+        (request) =>
+          request.companyId === 'bennys' && request.status === 'completed',
+      ).length,
+      new: open.filter((request) => request.status === 'new').length,
+      waiting: open.filter((request) => request.status === 'waiting_customer')
+        .length,
+    },
+    ownRequests: open
+      .filter((request) => request.assignedLabel)
+      .map(companyRequestSummary),
+    permissions: {
+      canAssign: manager,
+      canManageAnnouncement: manager,
+      canManageHours: manager,
+      canManageProfile: manager,
+      canManageServices: manager,
+      canSetAvailability: true,
+      canTakeCalls: true,
+    },
+    recentRequests: open.slice(0, 4).map(companyRequestSummary),
+    role: manager ? 'manager' : 'employee',
+    unreadCount: open.reduce(
+      (total, request) => total + request.unreadCount,
+      0,
+    ),
   }
 }
 
@@ -2655,10 +4036,893 @@ const featherTopics = [
 ]
 let featherOnboarded = true
 
+const easyShareTargets = [
+  { distance: 2.4, id: 41, name: 'Mia Santos' },
+  { distance: 7.8, id: 72, name: 'Noah Walker' },
+  { distance: 14.6, id: 105, name: 'Jamie Rivera' },
+]
+const easyShareHistory = [
+  {
+    createdAt: Date.now() - 2 * 60 * 1000,
+    direction: 'incoming',
+    id: 'easyshare-incoming-pending',
+    otherName: 'Mia Santos',
+    payload: {
+      appId: 'notes',
+      copyText: 'Meet at Mission Row at 20:30.',
+      id: 'note-easyshare-meeting',
+      kind: 'note',
+      title: 'Mission Row meeting',
+    },
+    progress: 0,
+    status: 'pending',
+  },
+  {
+    createdAt: Date.now() - 8 * 60 * 1000,
+    direction: 'outgoing',
+    id: 'easyshare-outgoing-transferring',
+    otherName: 'Noah Walker',
+    payload: {
+      appId: 'photos',
+      copyText: 'Sunset over Los Santos.',
+      id: 3,
+      imageUrl:
+        'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=900',
+      kind: 'photo',
+      title: 'Los Santos sunset',
+    },
+    progress: 58,
+    status: 'transferring',
+  },
+  {
+    createdAt: Date.now() - 22 * 60 * 1000,
+    direction: 'incoming',
+    id: 'easyshare-completed',
+    otherName: 'Jamie Rivera',
+    payload: {
+      appId: 'map',
+      copyText: 'Legion Square',
+      kind: 'location',
+      link: 'https://maps.sky/legion-square',
+      title: 'Legion Square',
+    },
+    progress: 100,
+    status: 'completed',
+  },
+  {
+    createdAt: Date.now() - 48 * 60 * 1000,
+    direction: 'outgoing',
+    id: 'easyshare-accepted',
+    otherName: 'Mia Santos',
+    payload: {
+      appId: 'music',
+      copyText: 'Night Drive by Neon Coast',
+      kind: 'track',
+      title: 'Night Drive',
+    },
+    progress: 15,
+    status: 'accepted',
+  },
+  {
+    createdAt: Date.now() - 2 * 60 * 60 * 1000,
+    direction: 'outgoing',
+    id: 'easyshare-declined',
+    otherName: 'Noah Walker',
+    payload: {
+      appId: 'feather',
+      copyText: 'Road closure near Alta Street.',
+      id: 'feather-post-3',
+      kind: 'post',
+      title: 'Road closure',
+    },
+    progress: 0,
+    status: 'declined',
+  },
+  {
+    createdAt: Date.now() - 4 * 60 * 60 * 1000,
+    direction: 'outgoing',
+    id: 'easyshare-cancelled',
+    otherName: 'Jamie Rivera',
+    payload: {
+      appId: 'phone',
+      copyText: 'Mia Santos\n5550142',
+      kind: 'contact',
+      title: 'Mia Santos',
+    },
+    progress: 31,
+    status: 'cancelled',
+  },
+  {
+    createdAt: Date.now() - 7 * 60 * 60 * 1000,
+    direction: 'incoming',
+    id: 'easyshare-expired',
+    otherName: 'Mia Santos',
+    payload: {
+      appId: 'picstagram',
+      copyText: 'New post from @mia.santos',
+      id: 'picstagram-post-1',
+      kind: 'post',
+      title: 'Vespucci evening',
+    },
+    progress: 0,
+    status: 'expired',
+  },
+  {
+    createdAt: Date.now() - 24 * 60 * 60 * 1000,
+    direction: 'outgoing',
+    id: 'easyshare-failed',
+    otherName: 'Noah Walker',
+    payload: {
+      appId: 'photos',
+      copyText: 'Vehicle walkaround video.',
+      id: 7,
+      kind: 'video',
+      title: 'Vehicle walkaround',
+    },
+    progress: 73,
+    status: 'failed',
+  },
+]
+const easyShareCatalog = [
+  {
+    appId: 'phone',
+    copyText: 'Mia Santos\n5550142',
+    id: 'contact-mia-santos',
+    kind: 'contact',
+    link: 'skyphone://phone/5550142',
+    subtitle: '5550142',
+    title: 'Mia Santos',
+  },
+  {
+    appId: 'calendar',
+    copyText: 'Downtown meetup\nBring the project notes.',
+    id: 'calendar-event-easyshare',
+    kind: 'document',
+    link: 'skyphone://calendar/event/calendar-event-easyshare',
+    subtitle: 'Tonight, 20:30',
+    title: 'Downtown meetup',
+  },
+  {
+    appId: 'citymarkt',
+    copyText: 'Comet Retro Custom in excellent condition.',
+    id: 'listing-easyshare-comet',
+    imageUrl:
+      'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=900',
+    kind: 'link',
+    link: 'skyphone://citymarkt/listing/listing-easyshare-comet',
+    subtitle: '$84,000',
+    title: 'Comet Retro Custom',
+  },
+  {
+    appId: 'map',
+    copyText: 'Legion Square meeting point',
+    kind: 'location',
+    link: 'skyphone://location/current',
+    title: 'Legion Square',
+  },
+  {
+    appId: 'notes',
+    copyText: 'Check fuel, tires and radio before departure.',
+    id: 'note-easyshare-checklist',
+    kind: 'note',
+    title: 'Departure checklist',
+  },
+  {
+    appId: 'photos',
+    copyText: 'Sunset over Los Santos.',
+    id: 3,
+    imageUrl:
+      'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=900',
+    kind: 'photo',
+    link: 'skyphone://media/3',
+    title: 'Los Santos sunset',
+  },
+  {
+    appId: 'music',
+    copyText: 'Night Drive collection · 8 tracks',
+    id: 'playlist-easyshare-night-drive',
+    kind: 'playlist',
+    link: 'skyphone://music/playlist/playlist-easyshare-night-drive',
+    subtitle: '8 tracks',
+    title: 'Night Drive collection',
+  },
+  {
+    appId: 'local-pages',
+    copyText: 'Road closure\nAlta Street is closed until midnight.',
+    id: 'pages-post-easyshare-road-closure',
+    kind: 'post',
+    link: 'skyphone://local-pages/post/pages-post-easyshare-road-closure',
+    subtitle: '@nightshiftls',
+    title: 'Road closure',
+  },
+  {
+    appId: 'picstagram',
+    copyText: '@mia.santos',
+    id: 'picstagram-profile-easyshare-mia',
+    imageUrl: 'https://i.pravatar.cc/320?img=47',
+    kind: 'profile',
+    link: 'skyphone://picstagram/profile/picstagram-profile-easyshare-mia',
+    subtitle: '@mia.santos',
+    title: 'Mia Santos',
+  },
+  {
+    appId: 'darkchat',
+    copyText: 'Use the north entrance. The south gate is locked.',
+    id: 'darkchat-message-easyshare-entrance',
+    kind: 'text',
+    subtitle: 'NightOwl',
+    title: 'Use the north entrance',
+  },
+  {
+    appId: 'music',
+    copyText: 'Night Drive — Neon Coast',
+    id: 'night-drive',
+    imageUrl: 'https://picsum.photos/seed/easyshare-night-drive/720/720',
+    kind: 'track',
+    link: 'skyphone://music/server/night-drive',
+    subtitle: 'Neon Coast',
+    title: 'Night Drive',
+  },
+  {
+    appId: 'photos',
+    copyText: 'Vehicle walkaround video.',
+    id: 7,
+    imageUrl:
+      'https://videos.pexels.com/video-files/3130284/3130284-hd_1920_1080_30fps.mp4',
+    kind: 'video',
+    link: 'skyphone://media/7',
+    title: 'Vehicle walkaround',
+  },
+  {
+    appId: 'companies',
+    copyText: 'Los Santos Customs\nRepairs, tuning and roadside support.',
+    id: 'mechanic',
+    kind: 'profile',
+    link: 'skyphone://companies/profile/mechanic',
+    subtitle: '555-MECH',
+    title: 'Los Santos Customs',
+  },
+  {
+    appId: 'mail',
+    copyText: 'Project handoff\nThe final checklist is attached below.',
+    id: 17,
+    kind: 'document',
+    link: 'skyphone://mail/message/17',
+    subtitle: 'mia@ifruit.com',
+    title: 'Project handoff',
+  },
+  {
+    appId: 'garage',
+    copyText: 'Comet Retro Custom\nSKY 2048',
+    id: 'SKY 2048',
+    kind: 'document',
+    link: 'skyphone://garage/vehicle/SKY%202048',
+    subtitle: 'SKY 2048',
+    title: 'Comet Retro Custom',
+  },
+  {
+    appId: 'house',
+    copyText: 'Vespucci Canals Apartment',
+    id: 'vespucci-apartment-4',
+    kind: 'document',
+    link: 'skyphone://house/property/vespucci-apartment-4',
+    subtitle: 'Owner',
+    title: 'Vespucci Canals Apartment',
+  },
+].map((payload, index) => ({
+  createdAt: Date.now() - (index + 1) * 5 * 60 * 1000,
+  direction: index % 2 === 0 ? 'incoming' : 'outgoing',
+  id: `easyshare-catalog-${payload.kind}`,
+  otherName: index % 2 === 0 ? 'Mia Santos' : 'Noah Walker',
+  payload,
+  progress: 100,
+  status: 'completed',
+}))
+let easyShareVisibility = 'everyone'
+
+function easyShareHistoryForScenario(testScenario) {
+  if (testScenario === 'easyshare-empty') return []
+  if (testScenario === 'easyshare-incoming') {
+    return easyShareHistory.filter(
+      (transfer) => transfer.id === 'easyshare-incoming-pending',
+    )
+  }
+  if (testScenario === 'easyshare-history') {
+    return easyShareHistory.filter(
+      (transfer) => !['pending', 'transferring'].includes(transfer.status),
+    )
+  }
+  if (testScenario === 'easyshare-catalog') return easyShareCatalog
+  if (testScenario === 'easyshare-full') {
+    return [...easyShareHistory, ...easyShareCatalog]
+  }
+  return easyShareHistory
+}
+
 app.post('/api/:endpoint', (request, response) => {
-  console.log(`[NUI] ${request.params.endpoint}`, request.body)
   const endpoint = request.params.endpoint
   const testScenario = String(request.body._testScenario ?? '')
+  if (lifecycleEndpoints.has(endpoint)) {
+    response.json({ success: true })
+    return
+  }
+  const canManageWeazelNews = testScenario !== 'weazel-readonly'
+  if (endpoint === 'weazel-news:context') {
+    response.json({
+      success: true,
+      data: {
+        canManage: canManageWeazelNews,
+        categories: weazelNewsCategoryIds.map((id) => ({
+          count: weazelNewsArticles.filter(
+            (article) =>
+              article.status === 'published' && article.category === id,
+          ).length,
+          id,
+        })),
+        ...(canManageWeazelNews
+          ? { jobGradeLabel: 'Senior Reporter', jobLabel: 'Weazel News' }
+          : {}),
+      },
+    })
+    return
+  }
+  if (endpoint === 'weazel-news:list') {
+    const category = request.body.category ?? null
+    const search = String(request.body.search ?? '')
+      .trim()
+      .toLowerCase()
+    if (
+      category !== null &&
+      !weazelNewsCategoryIds.includes(String(category))
+    ) {
+      response.json({ success: false, error: 'invalid_request' })
+      return
+    }
+    const items = weazelNewsArticles
+      .filter((article) => article.status === 'published')
+      .filter((article) => category === null || article.category === category)
+      .filter(
+        (article) =>
+          !search ||
+          `${article.title} ${article.body}`.toLowerCase().includes(search),
+      )
+      .sort((left, right) => (right.publishedAt ?? 0) - (left.publishedAt ?? 0))
+    response.json({
+      success: true,
+      data: pageWeazelNewsArticles(items, request.body),
+    })
+    return
+  }
+  if (endpoint === 'weazel-news:get') {
+    if (request.body.manage === true && !canManageWeazelNews) {
+      response.json({ success: false, error: 'not_authorized' })
+      return
+    }
+    const article = weazelNewsArticles.find(
+      (item) =>
+        item.id === request.body.id &&
+        (request.body.manage === true || item.status === 'published'),
+    )
+    response.json(
+      article
+        ? { success: true, data: { article } }
+        : { success: false, error: 'not_found' },
+    )
+    return
+  }
+  if (endpoint === 'weazel-news:manage-list') {
+    if (!canManageWeazelNews) {
+      response.json({ success: false, error: 'not_authorized' })
+      return
+    }
+    const status = String(request.body.status ?? 'all')
+    const search = String(request.body.search ?? '')
+      .trim()
+      .toLowerCase()
+    if (!['all', 'published', 'draft'].includes(status)) {
+      response.json({ success: false, error: 'invalid_request' })
+      return
+    }
+    const items = weazelNewsArticles
+      .filter((article) => status === 'all' || article.status === status)
+      .filter(
+        (article) =>
+          !search ||
+          `${article.title} ${article.body}`.toLowerCase().includes(search),
+      )
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+    response.json({
+      success: true,
+      data: pageWeazelNewsArticles(items, request.body),
+    })
+    return
+  }
+  if (
+    ['weazel-news:create', 'weazel-news:update', 'weazel-news:delete'].includes(
+      endpoint,
+    ) &&
+    !canManageWeazelNews
+  ) {
+    response.json({ success: false, error: 'not_authorized' })
+    return
+  }
+  if (endpoint === 'weazel-news:create') {
+    const validation = validateWeazelNewsDraft(request.body)
+    if (!validation.article) {
+      response.json({ success: false, error: validation.error })
+      return
+    }
+    const now = Date.now()
+    const id = `34c0ec54-bfb1-4ad7-81da-${String(weazelNewsSequence).padStart(12, '0')}`
+    weazelNewsSequence += 1
+    const article = {
+      ...validation.article,
+      authorName: 'Jordan Hayes',
+      createdAt: now,
+      id,
+      publishedAt: validation.article.status === 'published' ? now : null,
+      revision: 1,
+      updatedAt: now,
+    }
+    weazelNewsArticles.unshift(article)
+    response.json({ success: true, data: { article } })
+    return
+  }
+  if (endpoint === 'weazel-news:update') {
+    const index = weazelNewsArticles.findIndex(
+      (article) => article.id === request.body.id,
+    )
+    if (index < 0) {
+      response.json({ success: false, error: 'not_found' })
+      return
+    }
+    const current = weazelNewsArticles[index]
+    if (current.revision !== Number(request.body.revision)) {
+      response.json({ success: false, error: 'revision_conflict' })
+      return
+    }
+    const validation = validateWeazelNewsDraft(request.body)
+    if (!validation.article) {
+      response.json({ success: false, error: validation.error })
+      return
+    }
+    const now = Date.now()
+    const article = {
+      ...current,
+      ...validation.article,
+      publishedAt:
+        validation.article.status === 'published'
+          ? (current.publishedAt ?? now)
+          : null,
+      revision: current.revision + 1,
+      updatedAt: now,
+    }
+    weazelNewsArticles[index] = article
+    response.json({ success: true, data: { article } })
+    return
+  }
+  if (endpoint === 'weazel-news:delete') {
+    const index = weazelNewsArticles.findIndex(
+      (article) => article.id === request.body.id,
+    )
+    if (index < 0) {
+      response.json({ success: false, error: 'not_found' })
+      return
+    }
+    if (weazelNewsArticles[index].revision !== Number(request.body.revision)) {
+      response.json({ success: false, error: 'revision_conflict' })
+      return
+    }
+    weazelNewsArticles.splice(index, 1)
+    response.json({ success: true })
+    return
+  }
+  if (endpoint.startsWith('companies:') && testScenario === 'companies-error') {
+    response.json({ success: false, error: 'service_unavailable' })
+    return
+  }
+  if (endpoint === 'companies:list') {
+    const reply = () => {
+      const search = String(request.body.search ?? '')
+        .trim()
+        .toLowerCase()
+      const categoryId = String(request.body.categoryId ?? '')
+      const availability = String(request.body.availability ?? '')
+      const offset = Math.max(0, Number(request.body.cursor ?? 0))
+      const pageSize = 3
+      let items = companyProfiles.filter((company) => {
+        if (categoryId && company.categoryId !== categoryId) return false
+        if (availability && company.availability !== availability) return false
+        if (request.body.hasLocation && !company.location) return false
+        if (request.body.acceptsRequests && !company.acceptsRequests)
+          return false
+        if (!search) return true
+        return [
+          company.name,
+          company.categoryName,
+          company.description,
+          company.location?.district,
+          ...company.services.flatMap((service) => [
+            service.title,
+            service.description,
+          ]),
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(search))
+      })
+      if (request.body.sort === 'name') {
+        items = [...items].sort((left, right) =>
+          left.name.localeCompare(right.name),
+        )
+      } else if (request.body.sort === 'updated') {
+        items = [...items].sort(
+          (left, right) =>
+            new Date(right.availabilityUpdatedAt).getTime() -
+            new Date(left.availabilityUpdatedAt).getTime(),
+        )
+      }
+      if (
+        testScenario === 'companies-empty-search' ||
+        search === 'no results'
+      ) {
+        items = []
+      }
+      const page = items.slice(offset, offset + pageSize)
+      response.json({
+        success: true,
+        data: {
+          categories: companyCategories,
+          companies: page.map(companySummary),
+          nextCursor:
+            offset + page.length < items.length
+              ? String(offset + page.length)
+              : null,
+        },
+      })
+    }
+    if (testScenario === 'companies-loading') setTimeout(reply, 1200)
+    else reply()
+    return
+  }
+  if (endpoint === 'companies:get') {
+    const company = companyProfiles.find(
+      (item) => item.id === String(request.body.companyId),
+    )
+    response.json(
+      company
+        ? { success: true, data: { company } }
+        : { success: false, error: 'company_not_found' },
+    )
+    return
+  }
+  if (endpoint === 'companies:my-requests') {
+    const list = request.body.list === 'closed' ? 'closed' : 'open'
+    const offset = Math.max(0, Number(request.body.cursor ?? 0))
+    const matches = companyRequests.filter((item) =>
+      list === 'closed'
+        ? ['completed', 'cancelled'].includes(item.status)
+        : !['completed', 'cancelled'].includes(item.status),
+    )
+    const page = matches.slice(offset, offset + 2)
+    response.json({
+      success: true,
+      data: {
+        nextCursor:
+          offset + page.length < matches.length
+            ? String(offset + page.length)
+            : null,
+        requests: page.map(companyRequestSummary),
+        unreadCount: companyRequests.reduce(
+          (total, item) => total + item.unreadCount,
+          0,
+        ),
+      },
+    })
+    return
+  }
+  if (endpoint === 'companies:get-request') {
+    const item = companyRequests.find(
+      (candidate) => candidate.id === String(request.body.requestId),
+    )
+    if (item) item.unreadCount = 0
+    response.json(
+      item
+        ? { success: true, data: { request: item } }
+        : { success: false, error: 'request_not_found' },
+    )
+    return
+  }
+  if (endpoint === 'companies:work-context') {
+    response.json({
+      success: true,
+      data: { context: companyWorkContext(testScenario) },
+    })
+    return
+  }
+  if (endpoint === 'companies:work-queue') {
+    const filter = String(request.body.filter ?? 'new')
+    const offset = Math.max(0, Number(request.body.cursor ?? 0))
+    const matches = companyRequests.filter((item) => {
+      if (item.companyId !== 'bennys') return false
+      if (filter === 'assigned') return item.assignedLabel === 'you'
+      return item.status === filter
+    })
+    const page = matches.slice(offset, offset + 2)
+    response.json({
+      success: true,
+      data: {
+        nextCursor:
+          offset + page.length < matches.length
+            ? String(offset + page.length)
+            : null,
+        requests: page.map(companyRequestSummary),
+      },
+    })
+    return
+  }
+  if (endpoint === 'companies:list-members') {
+    response.json({ success: true, data: { members: companyMembers } })
+    return
+  }
+  if (endpoint === 'companies:create-request') {
+    const company = companyProfiles.find(
+      (item) => item.id === String(request.body.companyId),
+    )
+    const service = company?.services.find(
+      (item) => item.id === String(request.body.serviceId),
+    )
+    if (!company?.acceptsRequests || !service?.acceptsRequests) {
+      response.json({ success: false, error: 'invalid_service' })
+      return
+    }
+    const now = new Date().toISOString()
+    const item = {
+      actions: {
+        allowedStatuses: ['assigned', 'cancelled'],
+        canAssign: true,
+        canCall: true,
+        canCancel: true,
+        canClaim: true,
+        canReply: true,
+      },
+      assignedLabel: null,
+      companyId: company.id,
+      companyLogoUrl: company.logoUrl,
+      companyName: company.name,
+      createdAt: now,
+      description: String(request.body.description ?? ''),
+      events: [
+        {
+          createdAt: now,
+          id: `company-event-${Date.now()}`,
+          status: 'new',
+          type: 'created',
+        },
+      ],
+      id: `company-request-${companyRequestSequence++}`,
+      media: (Array.isArray(request.body.mediaIds)
+        ? request.body.mediaIds
+        : []
+      ).flatMap((mediaId) => {
+        const media = mockMedia.find(
+          (candidate) =>
+            candidate.id === Number(mediaId) && candidate.mediaType === 'photo',
+        )
+        return media ? [{ id: media.id, url: media.url }] : []
+      }),
+      messages: [],
+      phoneNumber: company.phoneNumber,
+      revision: 1,
+      serviceId: service.id,
+      serviceName: service.title,
+      status: 'new',
+      subject: String(request.body.subject ?? ''),
+      unreadCount: 0,
+      updatedAt: now,
+    }
+    companyRequests.unshift(item)
+    response.json({ success: true, data: { request: item } })
+    return
+  }
+  if (
+    [
+      'companies:cancel-request',
+      'companies:send-message',
+      'companies:claim-request',
+      'companies:assign-request',
+      'companies:update-request-status',
+    ].includes(endpoint)
+  ) {
+    const item = companyRequests.find(
+      (candidate) => candidate.id === String(request.body.requestId),
+    )
+    if (!item) {
+      response.json({ success: false, error: 'request_not_found' })
+      return
+    }
+    if (Number(request.body.revision) !== item.revision) {
+      response.json({ success: false, error: 'revision_conflict' })
+      return
+    }
+    const now = new Date().toISOString()
+    if (endpoint === 'companies:cancel-request') {
+      item.status = 'cancelled'
+      item.actions = {
+        allowedStatuses: [],
+        canAssign: false,
+        canCall: true,
+        canCancel: false,
+        canClaim: false,
+        canReply: false,
+      }
+      item.events.push({
+        createdAt: now,
+        id: `company-event-${Date.now()}`,
+        status: 'cancelled',
+        type: 'cancelled',
+      })
+    }
+    if (endpoint === 'companies:send-message') {
+      item.messages.push({
+        author: 'customer',
+        authorLabel: 'you',
+        body: String(request.body.body ?? ''),
+        createdAt: now,
+        id: `company-message-${Date.now()}`,
+        isMine: true,
+      })
+    }
+    if (endpoint === 'companies:claim-request') {
+      item.assignedLabel = 'you'
+      item.status = 'assigned'
+      item.actions.canClaim = false
+      item.events.push({
+        createdAt: now,
+        id: `company-event-${Date.now()}`,
+        status: 'assigned',
+        type: 'assigned',
+      })
+    }
+    if (endpoint === 'companies:assign-request') {
+      const member = companyMembers.find(
+        (candidate) => candidate.id === String(request.body.memberId),
+      )
+      if (!member?.online) {
+        response.json({ success: false, error: 'not_authorized' })
+        return
+      }
+      item.assignedLabel = 'assigned'
+      item.status = 'assigned'
+      item.actions.canClaim = false
+      item.events.push({
+        createdAt: now,
+        id: `company-event-${Date.now()}`,
+        status: 'assigned',
+        type: 'assigned',
+      })
+    }
+    if (endpoint === 'companies:update-request-status') {
+      item.status = String(request.body.status)
+      item.events.push({
+        createdAt: now,
+        id: `company-event-${Date.now()}`,
+        status: item.status,
+        type:
+          item.status === 'completed'
+            ? 'completed'
+            : item.status === 'cancelled'
+              ? 'cancelled'
+              : 'status_changed',
+      })
+    }
+    item.revision += 1
+    item.updatedAt = now
+    response.json({
+      success: true,
+      data: {
+        context: companyWorkContext(testScenario),
+        request: item,
+      },
+    })
+    return
+  }
+  if (
+    [
+      'companies:update-availability',
+      'companies:update-profile',
+      'companies:update-hours',
+      'companies:update-services',
+      'companies:publish-announcement',
+    ].includes(endpoint)
+  ) {
+    const company = companyProfiles.find((item) => item.id === 'bennys')
+    if (
+      testScenario === 'companies-conflict' ||
+      Number(request.body.revision) !== company.revision
+    ) {
+      response.json({ success: false, error: 'revision_conflict' })
+      return
+    }
+    if (endpoint === 'companies:update-availability') {
+      company.availability = String(request.body.availability)
+      company.availabilityUpdatedAt = new Date().toISOString()
+    }
+    if (endpoint === 'companies:update-profile') {
+      company.acceptsRequests = request.body.acceptsRequests === true
+      company.description = String(request.body.description ?? '')
+      company.location = {
+        ...company.location,
+        address: String(request.body.address ?? ''),
+        coords:
+          request.body.coords && typeof request.body.coords === 'object'
+            ? { ...request.body.coords }
+            : company.location.coords,
+        district: String(request.body.district ?? ''),
+        label: String(request.body.locationLabel ?? ''),
+      }
+      const logo = mockMedia.find(
+        (item) => item.id === Number(request.body.logoMediaId),
+      )
+      const cover = mockMedia.find(
+        (item) => item.id === Number(request.body.coverMediaId),
+      )
+      if (logo) company.logoUrl = logo.url
+      if (cover) company.coverUrl = cover.url
+    }
+    if (endpoint === 'companies:update-hours') {
+      company.hours = Array.isArray(request.body.hours)
+        ? request.body.hours
+        : []
+    }
+    if (endpoint === 'companies:update-services') {
+      company.services = Array.isArray(request.body.services)
+        ? request.body.services.map((service, index) => ({
+            ...service,
+            id: service.id || `service-${Date.now()}-${index}`,
+          }))
+        : []
+      company.serviceSummary = company.services
+        .filter((service) => service.active)
+        .map((service) => service.title)
+        .join(', ')
+    }
+    if (endpoint === 'companies:publish-announcement') {
+      const body = String(request.body.body ?? '').trim()
+      company.announcement = body
+        ? {
+            body,
+            expiresAt: request.body.expiresAt || null,
+            publishedAt: new Date().toISOString(),
+          }
+        : null
+    }
+    company.revision += 1
+    response.json({
+      success: true,
+      data: {
+        company,
+        context: companyWorkContext(testScenario),
+      },
+    })
+    return
+  }
+  if (endpoint === 'companies:set-call-availability') {
+    companyCallAvailable = request.body.available === true
+    response.json({
+      success: true,
+      data: { context: companyWorkContext(testScenario) },
+    })
+    return
+  }
+  if (endpoint === 'companies:call-customer') {
+    const item = companyRequests.find(
+      (candidate) => candidate.id === String(request.body.requestId),
+    )
+    response.json(
+      item ? { success: true } : { success: false, error: 'request_not_found' },
+    )
+    return
+  }
   if (endpoint === 'crewlink:bootstrap') {
     response.json({ success: true, data: crewLinkBootstrap(testScenario) })
     return
@@ -2671,6 +4935,10 @@ app.post('/api/:endpoint', (request, response) => {
     }
     crewLinkProfile = {
       activeGroupId: null,
+      avatarMediaId: Number(request.body.avatarMediaId) || null,
+      avatarUrl:
+        mockMedia.find((item) => item.id === Number(request.body.avatarMediaId))
+          ?.url ?? null,
       id: `crewlink-profile-${Date.now()}`,
       mapVisible: true,
       overheadVisible: false,
@@ -2680,8 +4948,25 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:update-profile') {
+    const hasAvatarUpdate = request.body.avatarMediaId !== undefined
+    const avatarMediaId = Number(request.body.avatarMediaId) || null
+    const avatar = hasAvatarUpdate
+      ? mockMedia.find(
+          (item) => item.id === avatarMediaId && item.mediaType === 'photo',
+        )
+      : null
+    if (avatarMediaId && !avatar) {
+      response.json({ success: false, error: 'invalid_profile_image' })
+      return
+    }
     crewLinkProfile = {
       ...crewLinkProfile,
+      avatarMediaId: hasAvatarUpdate
+        ? avatarMediaId
+        : crewLinkProfile.avatarMediaId,
+      avatarUrl: hasAvatarUpdate
+        ? (avatar?.url ?? null)
+        : crewLinkProfile.avatarUrl,
       mapVisible: request.body.mapVisible === true,
       overheadVisible: request.body.overheadVisible === true,
       username: String(request.body.username ?? crewLinkProfile.username),
@@ -2689,6 +4974,7 @@ app.post('/api/:endpoint', (request, response) => {
     for (const members of Object.values(crewLinkMembers)) {
       const own = members.find((member) => member.id === crewLinkProfile.id)
       if (own) {
+        own.avatarUrl = crewLinkProfile.avatarUrl
         own.mapVisible = crewLinkProfile.mapVisible
         own.overheadVisible = crewLinkProfile.overheadVisible
         own.username = crewLinkProfile.username
@@ -2734,7 +5020,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:update-group') {
-    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const group = crewLinkGroups.find(
+      (item) => item.id === request.body.groupId,
+    )
     if (!group) {
       response.json({ success: false, error: 'group_not_found' })
       return
@@ -2749,7 +5037,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:delete-group') {
-    crewLinkGroups = crewLinkGroups.filter((item) => item.id !== request.body.groupId)
+    crewLinkGroups = crewLinkGroups.filter(
+      (item) => item.id !== request.body.groupId,
+    )
     delete crewLinkMembers[request.body.groupId]
     delete crewLinkPings[request.body.groupId]
     crewLinkProfile.activeGroupId = crewLinkGroups[0]?.id ?? null
@@ -2757,7 +5047,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:set-active') {
-    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const group = crewLinkGroups.find(
+      (item) => item.id === request.body.groupId,
+    )
     if (!group) {
       response.json({ success: false, error: 'group_not_found' })
       return
@@ -2802,7 +5094,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:rotate-code') {
-    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const group = crewLinkGroups.find(
+      (item) => item.id === request.body.groupId,
+    )
     if (group) group.inviteCode = 'FRESH247'
     response.json({ success: true, data: { inviteCode: 'FRESH247' } })
     return
@@ -2848,7 +5142,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'crewlink:transfer-owner') {
-    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const group = crewLinkGroups.find(
+      (item) => item.id === request.body.groupId,
+    )
     const members = crewLinkMembers[request.body.groupId] ?? []
     const current = members.find((item) => item.id === crewLinkProfile.id)
     const next = members.find((item) => item.id === request.body.profileId)
@@ -2867,13 +5163,17 @@ app.post('/api/:endpoint', (request, response) => {
     crewLinkMembers[request.body.groupId] = members.filter(
       (item) => item.id !== request.body.profileId,
     )
-    const group = crewLinkGroups.find((item) => item.id === request.body.groupId)
+    const group = crewLinkGroups.find(
+      (item) => item.id === request.body.groupId,
+    )
     if (group) group.memberCount = crewLinkMembers[request.body.groupId].length
     response.json({ success: true })
     return
   }
   if (endpoint === 'crewlink:leave') {
-    crewLinkGroups = crewLinkGroups.filter((item) => item.id !== request.body.groupId)
+    crewLinkGroups = crewLinkGroups.filter(
+      (item) => item.id !== request.body.groupId,
+    )
     crewLinkProfile.activeGroupId = crewLinkGroups[0]?.id ?? null
     response.json({ success: true, data: crewLinkBootstrap() })
     return
@@ -2922,7 +5222,7 @@ app.post('/api/:endpoint', (request, response) => {
       success: true,
       data: {
         onboarded: featherOnboarded,
-        profile: featherProfiles[0],
+        profile: featherOnboarded ? featherProfiles[0] : null,
         feed: {
           items: empty
             ? []
@@ -2968,6 +5268,22 @@ app.post('/api/:endpoint', (request, response) => {
     featherProfiles[0].display_name = displayName
     featherProfiles[0].handle = handle
     featherProfiles[0].bio = bio
+    const avatar = mockMedia.find(
+      (item) =>
+        item.id === Number(request.body.avatarId) && item.mediaType === 'photo',
+    )
+    if (request.body.avatarId && !avatar) {
+      response.json({ success: false, error: 'invalid_media' })
+      return
+    }
+    featherProfiles[0].avatar_url = avatar?.url ?? null
+    featherPosts
+      .filter((post) => post.profile_id === featherProfiles[0].id)
+      .forEach((post) => {
+        post.avatar_url = featherProfiles[0].avatar_url
+        post.display_name = displayName
+        post.handle = handle
+      })
     featherOnboarded = true
     response.json({ success: true })
     return
@@ -3572,7 +5888,9 @@ app.post('/api/:endpoint', (request, response) => {
       !match ||
       (messageType === 'text'
         ? !body
-        : !['image', 'gif', 'video'].includes(messageType) || !mediaUrl)
+        : messageType === 'share'
+          ? !request.body.sharePayload
+          : !['image', 'gif', 'video'].includes(messageType) || !mediaUrl)
     ) {
       response.json({ success: false, error: 'invalid_message' })
       return
@@ -3580,11 +5898,17 @@ app.post('/api/:endpoint', (request, response) => {
     const message = {
       id: `flare-message-${Date.now()}`,
       direction: 'sent',
-      body: messageType === 'text' ? body : '',
+      body:
+        messageType === 'share'
+          ? body || request.body.sharePayload.title
+          : messageType === 'text'
+            ? body
+            : '',
       createdAt: Date.now(),
       mediaDurationMs: request.body.mediaDurationMs ?? null,
       mediaUrl: messageType === 'text' ? null : mediaUrl,
       messageType,
+      sharePayload: messageType === 'share' ? request.body.sharePayload : null,
     }
     flareMessages[match.id] ??= []
     flareMessages[match.id].push(message)
@@ -3627,6 +5951,15 @@ app.post('/api/:endpoint', (request, response) => {
       success: true,
       data: { hasMore: false, items: picstagramPosts, nextCursor: null },
     })
+    return
+  }
+  if (endpoint === 'picstagram:post') {
+    const post = picstagramPosts.find((item) => item.id === request.body.id)
+    response.json(
+      post
+        ? { success: true, data: post }
+        : { success: false, error: 'post_not_found' },
+    )
     return
   }
   if (endpoint === 'picstagram:explore') {
@@ -4010,6 +6343,15 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true })
     return
   }
+  if (endpoint === 'fliptok:video') {
+    const video = flipTokVideos.find((item) => item.id === request.body.id)
+    response.json(
+      video
+        ? { success: true, data: video }
+        : { success: false, error: 'video_not_found' },
+    )
+    return
+  }
   if (endpoint === 'fliptok:follow') {
     flipTokVideos
       .filter((video) => video.profile_id === request.body.profileId)
@@ -4044,6 +6386,47 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'fliptok:activities') {
     response.json({ success: true, data: flipTokActivities })
+    return
+  }
+  if (endpoint === 'fliptok:mark-activities') {
+    const readAt = new Date().toISOString()
+    flipTokActivities = flipTokActivities.map((activity) => ({
+      ...activity,
+      read_at: activity.read_at ?? readAt,
+    }))
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'fliptok:view') {
+    const video = flipTokVideos.find((item) => item.id === request.body.id)
+    if (!video) {
+      response.json({ success: false, error: 'video_not_found' })
+      return
+    }
+    video.view_count += 1
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'fliptok:report') {
+    const video = flipTokVideos.find((item) => item.id === request.body.id)
+    if (!video) {
+      response.json({ success: false, error: 'video_not_found' })
+      return
+    }
+    flipTokReports.push({
+      caption: video.caption,
+      created_at: Date.now(),
+      creator_display_name: video.display_name,
+      creator_handle: video.handle,
+      details: String(request.body.details ?? ''),
+      id: `report-${Date.now()}`,
+      reason: request.body.reason,
+      reporter_display_name: flipTokProfile.display_name,
+      reporter_handle: flipTokProfile.handle,
+      url: video.url,
+      video_id: video.id,
+    })
+    response.json({ success: true })
     return
   }
   if (endpoint === 'fliptok:profile') {
@@ -4683,7 +7066,13 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'housing:overview') {
-    response.json({ success: true, data: mockHousingOverview })
+    response.json({
+      success: true,
+      data:
+        testScenario === 'house-empty'
+          ? { ...mockHousingOverview, properties: [] }
+          : mockHousingOverview,
+    })
     return
   }
   if (endpoint === 'housing:key-candidates') {
@@ -4907,7 +7296,10 @@ app.post('/api/:endpoint', (request, response) => {
     }
     const messageType = request.body.messageType ?? 'text'
     const body = String(request.body.body ?? '')
-    if ((messageType === 'text' || messageType === 'emoji') && !body.trim()) {
+    if (
+      ((messageType === 'text' || messageType === 'emoji') && !body.trim()) ||
+      (messageType === 'share' && !request.body.sharePayload)
+    ) {
       response.json({ success: false, error: 'invalid_message' })
       return
     }
@@ -4920,7 +7312,10 @@ app.post('/api/:endpoint', (request, response) => {
       direction: 'sent',
       senderProfileId: darkChatProfile.id,
       messageType,
-      body,
+      body:
+        messageType === 'share'
+          ? body.trim() || request.body.sharePayload.title
+          : body,
       mediaPayload:
         messageType === 'gif' ? request.body.mediaPayload : undefined,
       mediaSecret:
@@ -4931,6 +7326,7 @@ app.post('/api/:endpoint', (request, response) => {
       replyToId: request.body.replyToId,
       replyBody: reply?.body,
       reactions: {},
+      sharePayload: messageType === 'share' ? request.body.sharePayload : null,
       createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
       readAt: null,
     }
@@ -5070,6 +7466,77 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: [...grouped.values()] })
     return
   }
+  if (endpoint === 'easyshare:bootstrap') {
+    const history = easyShareHistoryForScenario(testScenario)
+    response.json({
+      success: true,
+      data: {
+        history,
+        pending: history.filter((item) =>
+          ['pending', 'transferring'].includes(item.status),
+        ),
+        targets: testScenario === 'easyshare-empty' ? [] : easyShareTargets,
+        visibility: easyShareVisibility,
+      },
+    })
+    return
+  }
+  if (endpoint === 'easyshare:own-contact') {
+    response.json({
+      success: true,
+      data: {
+        appId: 'phone',
+        copyText: 'Alex Morgan\n5551234567',
+        id: 'self',
+        kind: 'contact',
+        meta: { name: 'Alex Morgan', phoneNumber: '5551234567' },
+        subtitle: '5551234567',
+        title: 'Alex Morgan',
+      },
+    })
+    return
+  }
+  if (endpoint === 'easyshare:set-visibility') {
+    easyShareVisibility = request.body.visibility
+    response.json({ success: true, data: { visibility: easyShareVisibility } })
+    return
+  }
+  if (endpoint === 'easyshare:request') {
+    const target = easyShareTargets.find(
+      (candidate) => candidate.id === Number(request.body.targetId),
+    )
+    const transfer = {
+      createdAt: Date.now(),
+      direction: 'outgoing',
+      id: `easyshare-${Date.now()}`,
+      otherName: target?.name ?? 'Unknown device',
+      payload: request.body.payload,
+      progress: target?.id === 72 ? 58 : 0,
+      status: target?.id === 72 ? 'transferring' : 'pending',
+    }
+    easyShareHistory.unshift(transfer)
+    response.json({ success: true, data: transfer })
+    return
+  }
+  if (endpoint === 'easyshare:respond' || endpoint === 'easyshare:cancel') {
+    const transfer = easyShareHistory.find(
+      (item) => item.id === request.body.id,
+    )
+    if (!transfer) {
+      response.json({ success: false, error: 'transfer_not_found' })
+      return
+    }
+    transfer.status =
+      endpoint === 'easyshare:cancel'
+        ? 'cancelled'
+        : request.body.accepted
+          ? 'completed'
+          : 'declined'
+    transfer.progress =
+      transfer.status === 'completed' ? 100 : transfer.progress
+    response.json({ success: true, data: transfer })
+    return
+  }
   if (endpoint === 'messages:gifs') {
     const offset = Math.max(0, Number(request.body.offset ?? 0))
     const pageSize = 6
@@ -5094,22 +7561,120 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'development:bootstrap') {
-    if (testScenario === 'feather-onboarding') featherOnboarded = false
+    authenticated = true
+    linkedAccount = {
+      devices: accountDevices,
+      email: 'demo@ifruit.com',
+      id: 1,
+    }
+    if (
+      testScenario === 'feather-onboarding' ||
+      testScenario === 'feather-register'
+    )
+      featherOnboarded = false
     else featherOnboarded = true
+    pagesOnboardingCompleted = ![
+      'local-pages-onboarding',
+      'local-pages-register',
+      'citymarkt-local-pages-account-missing',
+    ].includes(testScenario)
+    if (testScenario === 'crewlink-register') {
+      crewLinkProfile = null
+    } else {
+      crewLinkProfile = {
+        activeGroupId: 'crewlink-group-night-shift',
+        avatarMediaId: 1,
+        avatarUrl: 'https://picsum.photos/seed/crewlink-skyline/240/240',
+        id: 'crewlink-profile-skyline',
+        mapVisible: true,
+        overheadVisible: false,
+        username: 'Skyline',
+      }
+    }
+    if (testScenario === 'citymarkt-register') {
+      marketplaceProfile = {
+        avatar_media_id: null,
+        avatar_url: null,
+        bio: '',
+        display_name: '',
+        email: linkedAccount?.email ?? 'demo@ifruit.com',
+        exists: false,
+        listing_count: 0,
+      }
+    } else {
+      marketplaceProfile = {
+        avatar_media_id: 1,
+        avatar_url: 'https://picsum.photos/seed/citymarkt-demo-avatar/240/240',
+        bio: 'Fair prices, quick replies, and meetups anywhere in Los Santos.',
+        display_name: 'Skyline Deals',
+        email: linkedAccount?.email ?? 'demo@ifruit.com',
+        exists: true,
+        listing_count: marketplaceListings.filter(
+          (listing) => listing.seller_account_id === 1,
+        ).length,
+      }
+    }
     response.json({
       success: true,
       data: {
-        account: testScenario === 'feather-login' ? null : linkedAccount,
+        account: linkedAccount,
         device: {
-          data: deviceData,
+          data:
+            testScenario.startsWith('citymarkt-') ||
+            testScenario.startsWith('feather-') ||
+            testScenario.startsWith('local-pages-') ||
+            testScenario.startsWith('crewlink-')
+              ? {
+                  ...deviceData,
+                  apps: {
+                    ...deviceData.apps,
+                    payload: {
+                      ...deviceData.apps.payload,
+                      homeLayout: {
+                        dock: [],
+                        grid: testScenario.startsWith('crewlink-')
+                          ? ['crewlink']
+                          : testScenario === 'citymarkt-local-pages-missing'
+                            ? ['citymarkt']
+                            : ['citymarkt', 'local-pages'],
+                        hidden:
+                          testScenario === 'citymarkt-local-pages-missing'
+                            ? ['local-pages']
+                            : [],
+                        version: 3,
+                      },
+                    },
+                  },
+                  appAuth: [
+                    'citymarkt-login',
+                    'citymarkt-register',
+                    'feather-login',
+                    'feather-register',
+                    'local-pages-login',
+                    'local-pages-register',
+                    'crewlink-login',
+                    'crewlink-register',
+                  ].includes(testScenario)
+                    ? {
+                        payload: {
+                          accountEmail: linkedAccount?.email ?? '',
+                          signedIn: testScenario.startsWith('feather-')
+                            ? ['citymarkt', 'local-pages', 'crewlink']
+                            : testScenario.startsWith('local-pages-')
+                              ? ['citymarkt', 'feather', 'crewlink']
+                              : testScenario.startsWith('crewlink-')
+                                ? ['citymarkt', 'local-pages', 'feather']
+                                : ['local-pages', 'feather', 'crewlink'],
+                          version: 1,
+                        },
+                        revision: deviceData.appAuth?.revision ?? 0,
+                      }
+                    : deviceData.appAuth,
+                }
+              : deviceData,
           imei: '356938035643809',
           name: 'Personal iFruit Phone',
-          sim: {
-            id: 'development-sim',
-            number: '5551234567',
-            registered: true,
-            type: 'registered',
-          },
+          sim: mockSim,
         },
         notes: mockNotes,
         security: mockSecurity,
@@ -5132,6 +7697,8 @@ app.post('/api/:endpoint', (request, response) => {
       success: true,
       data: thread.map(({ media_payload, ...message }) => ({
         ...message,
+        contact: message.message_type === 'contact' ? media_payload : null,
+        share: message.message_type === 'share' ? media_payload : null,
         media_asset_id: ['image', 'gif', 'video'].includes(message.message_type)
           ? media_payload
           : null,
@@ -5161,6 +7728,10 @@ app.post('/api/:endpoint', (request, response) => {
     const phoneNumber = String(request.body.phoneNumber ?? '')
     const messageType = request.body.messageType ?? 'text'
     const isAttachment = ['image', 'gif', 'video'].includes(messageType)
+    const selectedContact =
+      messageType === 'contact'
+        ? contacts.find((contact) => contact.id === request.body.contactId)
+        : null
     const requestedAttachmentId = String(request.body.mediaAssetId ?? '')
     const selectedMedia = /^\d+$/.test(requestedAttachmentId)
       ? mockMedia.find((item) => String(item.id) === requestedAttachmentId)
@@ -5170,6 +7741,8 @@ app.post('/api/:endpoint', (request, response) => {
       !phoneNumber ||
       (messageType === 'text' && !body) ||
       (messageType === 'voice' && !request.body.mediaPayload) ||
+      (messageType === 'contact' && !selectedContact) ||
+      (messageType === 'share' && !request.body.sharePayload) ||
       (isAttachment &&
         !attachmentAssets[messageType].has(attachmentId) &&
         !attachmentId.startsWith('https://') &&
@@ -5179,7 +7752,19 @@ app.post('/api/:endpoint', (request, response) => {
       return
     }
     const message = {
-      body,
+      body:
+        selectedContact?.name ??
+        (messageType === 'share'
+          ? body || request.body.sharePayload.title
+          : body),
+      contact: selectedContact
+        ? {
+            avatar_url: selectedContact.avatar_url ?? null,
+            name: selectedContact.name,
+            organization: selectedContact.organization ?? null,
+            phone_number: selectedContact.phone_number,
+          }
+        : null,
       created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
       direction: 'sent',
       id: `sms-${Date.now()}`,
@@ -5194,14 +7779,23 @@ app.post('/api/:endpoint', (request, response) => {
             : messageType === 'gif'
               ? 'image/gif'
               : messageType === 'video'
-                ? 'video/mp4'
+                ? 'video/webm'
                 : null,
       media_payload:
         messageType === 'voice'
           ? request.body.mediaPayload
-          : isAttachment
-            ? attachmentId
-            : null,
+          : selectedContact
+            ? {
+                avatar_url: selectedContact.avatar_url ?? null,
+                name: selectedContact.name,
+                organization: selectedContact.organization ?? null,
+                phone_number: selectedContact.phone_number,
+              }
+            : messageType === 'share'
+              ? request.body.sharePayload
+              : isAttachment
+                ? attachmentId
+                : null,
       media_waveform:
         messageType === 'voice' ? request.body.mediaWaveform : null,
       message_type: messageType,
@@ -5209,6 +7803,7 @@ app.post('/api/:endpoint', (request, response) => {
       read_at: null,
       recipient_number: phoneNumber,
       sender_number: '5551234567',
+      share: messageType === 'share' ? request.body.sharePayload : null,
     }
     smsMessages.push(message)
     const { media_payload, ...publicMessage } = message
@@ -5238,15 +7833,35 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'contacts:save') {
     const name = String(request.body.name ?? '').trim()
+    const notes = String(request.body.notes ?? '')
+      .trim()
+      .slice(0, 500)
+    const organization = String(request.body.organization ?? '')
+      .trim()
+      .slice(0, 80)
     const phoneNumber = String(request.body.phoneNumber ?? '').trim()
-    if (!name || !phoneNumber) {
+    const avatarMediaId = Number(request.body.avatarMediaId) || 0
+    const avatarMedia = avatarMediaId
+      ? mockMedia.find(
+          (item) => item.id === avatarMediaId && item.mediaType === 'photo',
+        )
+      : null
+    if (!name || !phoneNumber || (avatarMediaId && !avatarMedia)) {
       response.json({ success: false, error: 'invalid_contact' })
       return
     }
     let contact = contacts.find((item) => item.id === request.body.id)
+    if (contact?.readonly) {
+      response.json({ success: false, error: 'readonly_contact' })
+      return
+    }
     if (contact) {
       contact.name = name
+      contact.notes = notes || null
+      contact.organization = organization || null
       contact.phone_number = phoneNumber
+      contact.avatar_media_id = avatarMedia?.id ?? null
+      contact.avatar_url = avatarMedia?.url ?? null
       contact.updated_at = new Date()
         .toISOString()
         .slice(0, 19)
@@ -5255,9 +7870,14 @@ app.post('/api/:endpoint', (request, response) => {
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
       contact = {
         created_at: now,
+        favorite: false,
         id: `contact-${contactSequence++}`,
         name,
+        notes: notes || null,
+        organization: organization || null,
         phone_number: phoneNumber,
+        avatar_media_id: avatarMedia?.id ?? null,
+        avatar_url: avatarMedia?.url ?? null,
         updated_at: now,
       }
       contacts.push(contact)
@@ -5265,14 +7885,126 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: contact })
     return
   }
+  if (endpoint === 'contacts:favorite') {
+    const contact = contacts.find((item) => item.id === request.body.id)
+    if (!contact || typeof request.body.favorite !== 'boolean') {
+      response.json({ success: false, error: 'contact_not_found' })
+      return
+    }
+    contact.favorite = request.body.favorite
+    contact.updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    response.json({
+      success: true,
+      data: { favorite: contact.favorite, id: contact.id },
+    })
+    return
+  }
   if (endpoint === 'contacts:delete') {
     const index = contacts.findIndex((item) => item.id === request.body.id)
+    if (index >= 0 && contacts[index].readonly) {
+      response.json({ success: false, error: 'readonly_contact' })
+      return
+    }
     if (index >= 0) contacts.splice(index, 1)
     response.json({ success: true })
     return
   }
   if (endpoint === 'media:config') {
     response.json({ success: true, data: { videoBitrateKbps: 1500 } })
+    return
+  }
+  if (endpoint === 'media:devCapture') {
+    const mediaType = request.body.mediaType === 'video' ? 'video' : 'photo'
+    const id = Math.max(0, ...mockMedia.map((item) => Number(item.id) || 0)) + 1
+    const fallbackVideo = mockMedia.find((item) => item.mediaType === 'video')
+    const media = {
+      createdAt: Date.now(),
+      id,
+      mediaType,
+      url:
+        mediaType === 'photo'
+          ? `https://picsum.photos/seed/sky-camera-${id}/900/1600`
+          : fallbackVideo?.url,
+    }
+    if (!media.url) {
+      response.json({ success: false, error: 'unsupported' })
+      return
+    }
+    mockMedia.unshift(media)
+    response.json({ success: true, data: media })
+    return
+  }
+  if (endpoint === 'media:import:sources') {
+    response.json({
+      success: true,
+      data: { maxSelection: 10, sources: mockImportSources },
+    })
+    return
+  }
+  if (endpoint === 'media:import:list') {
+    const page = Math.max(1, Number(request.body.page) || 1)
+    const limit = 30
+    const filtered = mockImportMedia.filter(
+      (item) =>
+        item.sourceId === request.body.sourceId &&
+        item.mediaType === request.body.mediaType,
+    )
+    const offset = (page - 1) * limit
+    response.json({
+      success: true,
+      data: {
+        hasMore: offset + limit < filtered.length,
+        items: filtered.slice(offset, offset + limit),
+        page,
+        total: filtered.length,
+      },
+    })
+    return
+  }
+  if (endpoint === 'media:import:commit') {
+    const externalIds = Array.isArray(request.body.externalIds)
+      ? request.body.externalIds
+      : []
+    const imported = []
+    const failed = []
+    for (const externalId of externalIds) {
+      const item = mockImportMedia.find(
+        (candidate) =>
+          candidate.externalId === externalId &&
+          candidate.sourceId === request.body.sourceId,
+      )
+      if (!item) {
+        failed.push({ error: 'import_media_unavailable', externalId })
+        continue
+      }
+      item.imported = true
+      const media = {
+        createdAt: Date.now(),
+        id: Math.max(0, ...mockMedia.map((entry) => Number(entry.id) || 0)) + 1,
+        mediaType: item.mediaType,
+        url: item.url,
+      }
+      mockMedia.unshift(media)
+      imported.push(media)
+    }
+    response.json({ success: true, data: { failed, imported } })
+    return
+  }
+  if (endpoint === 'media:import:url') {
+    const url = String(request.body.url || '').trim()
+    if (!url.startsWith('https://')) {
+      response.json({ success: false, error: 'invalid_import_url' })
+      return
+    }
+    const mediaType = /\.(mp4|webm)(?:[?#]|$)/i.test(url) ? 'video' : 'photo'
+    const media = {
+      createdAt: Date.now(),
+      id: Math.max(0, ...mockMedia.map((entry) => Number(entry.id) || 0)) + 1,
+      mediaType,
+      url,
+    }
+    mockMedia.unshift(media)
+    response.json({ success: true, data: media })
     return
   }
   if (endpoint === 'gallery:list') {
@@ -5345,6 +8077,15 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: { revision } })
     return
   }
+  if (endpoint === 'notifications:save') {
+    const revision = (deviceData.notifications?.revision ?? 0) + 1
+    deviceData.notifications = {
+      payload: request.body.payload,
+      revision,
+    }
+    response.json({ success: true, data: { revision } })
+    return
+  }
   if (endpoint === 'security:unlock') {
     response.json(
       !mockSecurity.enabled || request.body.passcode === mockPasscode
@@ -5399,55 +8140,32 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true })
     return
   }
-  if (endpoint === 'contacts:list') {
-    response.json({ success: true, data: mockContacts })
-    return
-  }
-  if (endpoint === 'contacts:save') {
-    const now = new Date().toISOString()
-    const existing = mockContacts.find(
-      (contact) => contact.id === request.body.id,
-    )
-    if (existing) {
-      Object.assign(existing, {
-        name: request.body.name,
-        phone_number: request.body.phoneNumber,
-        updated_at: now,
-      })
-      response.json({ success: true, data: existing })
-      return
-    }
-    const contact = {
-      created_at: now,
-      id: `contact-${Date.now()}`,
-      name: request.body.name,
-      phone_number: request.body.phoneNumber,
-      updated_at: now,
-    }
-    mockContacts.push(contact)
-    response.json({ success: true, data: contact })
-    return
-  }
-  if (endpoint === 'contacts:delete') {
-    mockContacts = mockContacts.filter(
-      (contact) => contact.id !== request.body.id,
-    )
-    response.json({ success: true })
-    return
-  }
   if (endpoint === 'calls:recents') {
     response.json({ success: true, data: recentCalls })
     return
   }
   if (endpoint === 'calls:dial') {
+    const phoneNumber = String(request.body.phoneNumber ?? '').replace(
+      /\D/g,
+      '',
+    )
+    if (phoneNumber.length !== 10) {
+      response.json({ success: false, error: 'invalid_number' })
+      return
+    }
+    if (!contacts.some((contact) => contact.phone_number === phoneNumber)) {
+      response.json({ success: false, error: 'recipient_not_found' })
+      return
+    }
     const id = `call-${Date.now()}`
+    const startedAt = Date.now()
     recentCalls.unshift({
       call_id: id,
       created_at: Date.now(),
       direction: 'outgoing',
       duration_seconds: 0,
       id: recentCalls.length + 1,
-      other_number: request.body.phoneNumber,
+      other_number: phoneNumber,
       status: 'completed',
     })
     response.json({
@@ -5455,11 +8173,24 @@ app.post('/api/:endpoint', (request, response) => {
       data: {
         direction: 'outgoing',
         id,
-        otherNumber: request.body.phoneNumber,
-        startedAt: Date.now(),
+        otherNumber: phoneNumber,
+        startedAt,
         state: 'ringing',
       },
     })
+    return
+  }
+  if (endpoint === 'calls:block') {
+    const phoneNumber = String(request.body.phoneNumber ?? '').replace(
+      /\D/g,
+      '',
+    )
+    if (!phoneNumber) {
+      response.json({ success: false, error: 'invalid_number' })
+      return
+    }
+    blockedCallNumbers.add(phoneNumber)
+    response.json({ success: true, data: { blocked: true, phoneNumber } })
     return
   }
   if (
@@ -5526,7 +8257,7 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'pages:list') {
     const query = String(request.body.search ?? '').toLowerCase()
-    let items = pagesPosts
+    let items = pagesPostsForScenario(testScenario)
     if (request.body.category && request.body.category !== 'all')
       items = items.filter((item) => item.category === request.body.category)
     if (query)
@@ -5549,7 +8280,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'pages:get') {
-    const post = pagesPosts.find((item) => item.id === request.body.id)
+    const post = pagesPostsForScenario(testScenario).find(
+      (item) => item.id === request.body.id,
+    )
     response.json(
       post
         ? { success: true, data: pageView(post) }
@@ -5561,12 +8294,73 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: false, error: 'not_authenticated' })
     return
   }
+  if (endpoint === 'pages:profile') {
+    const email = linkedAccount?.email ?? pagesProfile.email
+    const onboarding =
+      [
+        'local-pages-onboarding',
+        'local-pages-register',
+        'citymarkt-local-pages-account-missing',
+      ].includes(testScenario) && !pagesOnboardingCompleted
+    response.json({
+      success: true,
+      data: {
+        avatar_media_id: onboarding ? null : pagesProfile.avatar_media_id,
+        avatar_url: onboarding ? null : pagesProfile.avatar_url,
+        bio: onboarding ? '' : pagesProfile.bio,
+        email,
+        exists: onboarding ? false : pagesProfile.exists,
+        handle: onboarding ? email.split('@')[0] : pagesProfile.handle,
+        post_count: pagesPostsForScenario(testScenario).filter(
+          (item) => item.account_id === 1,
+        ).length,
+      },
+    })
+    return
+  }
+  if (endpoint === 'pages:profile-save') {
+    pagesOnboardingCompleted = true
+    const avatarMediaId = Number(request.body.avatarMediaId) || 0
+    const avatarMedia =
+      avatarMediaId > 0
+        ? mockMedia.find(
+            (item) => item.id === avatarMediaId && item.mediaType === 'photo',
+          )
+        : null
+    if (avatarMediaId > 0 && !avatarMedia) {
+      response.json({ success: false, error: 'invalid_profile_image' })
+      return
+    }
+    pagesProfile = {
+      avatar_media_id: avatarMedia?.id ?? null,
+      avatar_url: avatarMedia?.url ?? null,
+      bio: String(request.body.bio ?? '').trim(),
+      email: linkedAccount?.email ?? pagesProfile.email,
+      exists: true,
+      handle: String(request.body.handle ?? '')
+        .trim()
+        .toLowerCase(),
+    }
+    pagesPosts.forEach((post) => {
+      if (post.account_id === 1) post.author_name = pagesProfile.handle
+    })
+    response.json({
+      success: true,
+      data: {
+        ...pagesProfile,
+        post_count: pagesPosts.filter((item) => item.account_id === 1).length,
+      },
+    })
+    return
+  }
   if (endpoint === 'pages:list-own') {
     response.json({
       success: true,
       data: {
         hasMore: false,
-        items: pagesPosts.filter((item) => item.account_id === 1).map(pageView),
+        items: pagesPostsForScenario(testScenario)
+          .filter((item) => item.account_id === 1)
+          .map(pageView),
         offset: 0,
       },
     })
@@ -5591,7 +8385,7 @@ app.post('/api/:endpoint', (request, response) => {
       ...request.body,
       id,
       account_id: 1,
-      author_name: 'demo',
+      author_name: pagesProfile.handle,
       source_type: 'personal',
       citymarkt_listing_id: null,
       created_at: new Date().toISOString(),
@@ -5612,7 +8406,11 @@ app.post('/api/:endpoint', (request, response) => {
       response.json({ success: false, error: 'citymarkt_not_found' })
       return
     }
-    if (pagesPosts.some((item) => item.citymarkt_listing_id === listing.id)) {
+    if (
+      pagesPostsForScenario(testScenario).some(
+        (item) => item.citymarkt_listing_id === listing.id,
+      )
+    ) {
       response.json({ success: false, error: 'citymarkt_already_shared' })
       return
     }
@@ -5631,7 +8429,7 @@ app.post('/api/:endpoint', (request, response) => {
     pagesPosts.unshift({
       id,
       account_id: 1,
-      author_name: 'demo',
+      author_name: pagesProfile.handle,
       source_type: 'citymarkt',
       citymarkt_listing_id: listing.id,
       title: listing.title,
@@ -5710,6 +8508,42 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint.startsWith('marketplace:') && !authenticated) {
     response.json({ success: false, error: 'not_authenticated' })
+    return
+  }
+  if (endpoint === 'marketplace:profile') {
+    marketplaceProfile.listing_count = marketplaceListings.filter(
+      (listing) => listing.seller_account_id === 1,
+    ).length
+    response.json({ success: true, data: marketplaceProfile })
+    return
+  }
+  if (endpoint === 'marketplace:profile-save') {
+    const displayName = String(request.body.displayName ?? '').trim()
+    const bio = String(request.body.bio ?? '').trim()
+    const avatarMediaId = Number(request.body.avatarMediaId)
+    const avatar = mockMedia.find(
+      (item) => item.id === avatarMediaId && item.mediaType === 'photo',
+    )
+    if (
+      displayName.length < 2 ||
+      displayName.length > 40 ||
+      bio.length > 160 ||
+      !Number.isInteger(avatarMediaId) ||
+      avatarMediaId < 0 ||
+      (avatarMediaId > 0 && !avatar)
+    ) {
+      response.json({ success: false, error: 'invalid_profile' })
+      return
+    }
+    marketplaceProfile = {
+      ...marketplaceProfile,
+      avatar_media_id: avatarMediaId || null,
+      avatar_url: avatar?.url ?? null,
+      bio,
+      display_name: displayName,
+      exists: true,
+    }
+    response.json({ success: true, data: marketplaceProfile })
     return
   }
   if (endpoint === 'marketplace:counts') {
@@ -6013,6 +8847,61 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: false, error: 'confirmation_required' })
     return
   }
+  if (endpoint === 'sim:insert') {
+    mockSim = {
+      id: `development-sim-${request.body.imei}`,
+      number:
+        request.body.imei === '356938035643810' ? '5559876543' : '5551234567',
+      removable: true,
+      registered: true,
+      type: 'registered',
+    }
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'sim:eject') {
+    if (!mockSim) {
+      response.json({ success: false, error: 'no_sim' })
+      return
+    }
+    mockSim = null
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'payphone:dial') {
+    const phoneNumber = String(request.body.phoneNumber ?? '').replace(
+      /\D/g,
+      '',
+    )
+    if (phoneNumber.length !== 10) {
+      response.json({ success: false, error: 'invalid_number' })
+      return
+    }
+    if (phoneNumber === '5550000000') {
+      response.json({ success: false, error: 'busy' })
+      return
+    }
+    mockPayphoneCall = {
+      answeredAt: Math.floor(Date.now() / 1000),
+      elapsedSeconds: 0,
+      id: `payphone-${Date.now()}`,
+      otherNumber: phoneNumber,
+      state: 'connected',
+      totalCost: 0,
+    }
+    response.json({ success: true, data: mockPayphoneCall })
+    return
+  }
+  if (endpoint === 'payphone:hangup') {
+    mockPayphoneCall = null
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'payphone:close') {
+    mockPayphoneCall = null
+    response.json({ success: true })
+    return
+  }
   if (endpoint === 'notes:list') {
     response.json({ success: true, data: mockNotes })
     return
@@ -6123,6 +9012,41 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: { id: 'mock-sent-message' } })
     return
   }
+  if (endpoint === 'mail:delete-many') {
+    const { folder, ids } = request.body
+    if (
+      !['drafts', 'inbox', 'sent', 'trash'].includes(folder) ||
+      !Array.isArray(ids)
+    ) {
+      response.json({ success: false, error: 'invalid_request' })
+      return
+    }
+
+    const selectedIds = new Set(ids.map(String))
+    if (folder === 'drafts') {
+      if (draft && selectedIds.has(String(draft.id))) draft = null
+    } else if (folder === 'trash') {
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index]
+        if (message.trashed_at && selectedIds.has(String(message.id))) {
+          messages.splice(index, 1)
+        }
+      }
+    } else {
+      for (const message of messages) {
+        if (
+          message.folder === folder &&
+          !message.trashed_at &&
+          selectedIds.has(String(message.id))
+        ) {
+          message.trashed_at = '2026-08-04 12:00:00'
+        }
+      }
+    }
+
+    response.json({ success: true })
+    return
+  }
   if (endpoint === 'mail:trash' || endpoint === 'mail:restore') {
     const message = messages.find((item) => item.id === Number(request.body.id))
     if (message)
@@ -6152,9 +9076,14 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true })
     return
   }
-  response.json({ success: true })
+  console.error(`[NUI] Missing browser mock for ${endpoint}`)
+  response.json({ success: false, error: 'mock_endpoint_missing' })
 })
 
-app.listen(port, () => {
-  console.log(`Mock NUI server listening on http://localhost:${port}`)
-})
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Mock NUI server listening on http://localhost:${port}`)
+  })
+}
+
+module.exports = { app }

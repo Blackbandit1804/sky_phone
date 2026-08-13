@@ -68,4 +68,54 @@ describe('calls store', () => {
     expect(calls.activeCall).toBeNull()
     expect(nuiCall).toHaveBeenCalledWith('calls:recents')
   })
+
+  it('blocks the active caller and closes the call screen', async () => {
+    const calls = useCallsStore()
+    calls.applyCallState({
+      direction: 'incoming',
+      id: 'call-3',
+      otherNumber: '5551110025',
+      startedAt: 1,
+      state: 'ringing',
+    })
+
+    const response = await calls.blockNumber('5551110025')
+
+    expect(response.success).toBe(true)
+    expect(nuiCall).toHaveBeenCalledWith('calls:block', {
+      phoneNumber: '5551110025',
+    })
+    expect(calls.activeCall).toBeNull()
+    expect(nuiCall).toHaveBeenCalledWith('calls:recents')
+  })
+
+  it('updates a contact favorite and refreshes the contact list', async () => {
+    vi.mocked(nuiCall)
+      .mockResolvedValueOnce({
+        success: true,
+        data: { favorite: true, id: 'contact-alex' },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: [
+          {
+            favorite: true,
+            id: 'contact-alex',
+            name: 'Alex Rivera',
+            phone_number: '5551110001',
+          },
+        ],
+      })
+    const calls = useCallsStore()
+
+    const response = await calls.setContactFavorite('contact-alex', true)
+
+    expect(response.success).toBe(true)
+    expect(nuiCall).toHaveBeenNthCalledWith(1, 'contacts:favorite', {
+      favorite: true,
+      id: 'contact-alex',
+    })
+    expect(nuiCall).toHaveBeenNthCalledWith(2, 'contacts:list')
+    expect(calls.contacts[0]?.favorite).toBe(true)
+  })
 })

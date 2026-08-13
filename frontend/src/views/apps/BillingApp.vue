@@ -51,6 +51,7 @@ import type {
   BillingStatus,
   InvoiceSummary,
 } from '@/types/billing'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type BillingTab = 'overview' | 'inbox' | 'history'
 type BillingScreen = 'main' | 'detail'
@@ -225,6 +226,7 @@ async function disputeInvoice(): Promise<void> {
 }
 
 function onBillingMessage(event: MessageEvent): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (
     event.data?.type !== 'billing:changed' &&
     event.data?.type !== 'billing:new'
@@ -286,6 +288,7 @@ onBeforeUnmount(() => {
       </div>
       <template v-else-if="billing.detail">
         <kGlass
+          :highlight="false"
           class="billing-detail__hero"
           :class="{
             'billing-detail__hero--paid': billing.detail.status === 'paid',
@@ -439,17 +442,26 @@ onBeforeUnmount(() => {
 
       <template v-else-if="tab === 'overview' && billing.overview">
         <div class="billing-summary">
-          <kGlass class="billing-summary__item billing-summary__item--open">
+          <kGlass
+            :highlight="false"
+            class="billing-summary__item billing-summary__item--open"
+          >
             <ReceiptText :size="19" />
             <span>{{ t('summary.open') }}</span>
             <strong>{{ billing.overview.openCount }}</strong>
           </kGlass>
-          <kGlass class="billing-summary__item billing-summary__item--due">
+          <kGlass
+            :highlight="false"
+            class="billing-summary__item billing-summary__item--due"
+          >
             <CalendarDays :size="19" />
             <span>{{ t('summary.due') }}</span>
             <strong>{{ formatMoney(billing.overview.openTotal) }}</strong>
           </kGlass>
-          <kGlass class="billing-summary__item billing-summary__item--overdue">
+          <kGlass
+            :highlight="false"
+            class="billing-summary__item billing-summary__item--overdue"
+          >
             <AlertTriangle :size="19" />
             <span>{{ t('summary.overdue') }}</span>
             <strong>{{ billing.overview.overdueCount }}</strong>
@@ -741,7 +753,7 @@ onBeforeUnmount(() => {
         /></span>
         <h2>{{ t('payment.title') }}</h2>
         <p>{{ t('payment.body', { issuer: billing.detail.issuerLabel }) }}</p>
-        <kGlass class="billing-payment-total">
+        <kGlass :highlight="false" class="billing-payment-total">
           <span>{{ billing.detail.title }}</span>
           <strong>{{
             formatMoney(billing.detail.amount, billing.detail.currency)
@@ -1391,6 +1403,31 @@ onBeforeUnmount(() => {
 .billing-payment-sheet :deep(.k-button) {
   --k-button-bg-color: var(--billing-blue);
   width: 100%;
+}
+@supports not (color: color-mix(in srgb, white, black)) {
+  .billing-navbar {
+    --k-navbar-bg-color: rgb(7 9 12 / 90%);
+    background: rgb(7 9 12 / 88%);
+  }
+  .billing-app--light .billing-navbar {
+    --k-navbar-bg-color: rgb(245 247 250 / 91%);
+    background: rgb(245 247 250 / 88%);
+  }
+  .billing-summary__item,
+  .billing-filter-panel,
+  .billing-invoice-card,
+  .billing-list-row,
+  .billing-search :deep(form),
+  .billing-detail__hero,
+  .billing-panel,
+  .billing-note {
+    background: var(--billing-panel);
+  }
+  .billing-detail__hero--paid {
+    background:
+      radial-gradient(circle at 50% 6%, rgb(72 199 111 / 18%), transparent 52%),
+      var(--billing-panel);
+  }
 }
 .billing-toast {
   z-index: 50;

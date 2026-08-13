@@ -1,28 +1,5 @@
 <script setup lang="ts">
 import {
-  kBlock,
-  kBlockTitle,
-  kButton,
-  kDialog,
-  kDialogButton,
-  kLink,
-  kList,
-  kListButton,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPopover,
-  kPreloader,
-  kRange,
-  kSearchbar,
-  kSegmented,
-  kSegmentedButton,
-  kToast,
-  kToggle,
-} from 'konsta/vue'
-import {
   BellRing,
   Bluetooth,
   Check,
@@ -49,10 +26,15 @@ import {
 } from 'vue'
 
 import { PHONE_FRAME_COLORS } from '@/config/appearance'
-import { isLaunchablePhoneApp, PHONE_APPS } from '@/config/apps'
+import {
+  getPhoneAppLabel,
+  isLaunchablePhoneApp,
+  PHONE_APPS,
+} from '@/config/apps'
 import { usePhoneStore } from '@/stores/phone'
 import PhonePasscode from '@/components/PhonePasscode.vue'
 import { useAccountStore } from '@/stores/account'
+import { useAppAuthStore } from '@/stores/app-auth'
 import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
@@ -63,6 +45,27 @@ import {
 } from '@/utils/mail'
 import { nuiCall } from '@/utils/nui'
 import { formatPhoneNumber } from '@/utils/phone'
+import {
+  SkyAppPage,
+  SkyBlock,
+  SkyButton,
+  SkyDialog,
+  SkyDialogButton,
+  SkyField,
+  SkyLink,
+  SkyNavbar,
+  SkyProgress,
+  SkyScrollArea,
+  SkySearchbar,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySettingsGroup,
+  SkySettingsIcon,
+  SkySettingsRangeRow,
+  SkySettingsRow,
+  SkySpinner,
+  SkyToast,
+} from '@/ui'
 import {
   APPEARANCE_MODE_IDS,
   GRAPHICS_MODE_IDS,
@@ -110,36 +113,15 @@ type PasscodeFlow =
   | null
 
 const FACTORY_RESET_DURATION_MS = 60_000
-const FACTORY_RESET_CIRCUMFERENCE = 2 * Math.PI * 48
-const FRAME_PICKER_WIDTH = 240
-const FRAME_PICKER_COLUMN_COUNT = 3
-const FRAME_PICKER_SWATCH_SIZE = 40
-const FRAME_PICKER_GRID_GAP = 20
-const FRAME_PICKER_PADDING = 20
-const FRAME_PICKER_ROW_COUNT = Math.ceil(
-  PHONE_FRAME_IDS.length / FRAME_PICKER_COLUMN_COUNT,
-)
-const FRAME_PICKER_HEIGHT =
-  FRAME_PICKER_PADDING * 2 +
-  FRAME_PICKER_ROW_COUNT * FRAME_PICKER_SWATCH_SIZE +
-  Math.max(0, FRAME_PICKER_ROW_COUNT - 1) * FRAME_PICKER_GRID_GAP
-const FRAME_PICKER_INSET = 8
-const FRAME_PICKER_GAP = 8
 
 const phone = usePhoneStore()
 const account = useAccountStore()
+const appAuth = useAppAuthStore()
 const query = ref('')
 const activeView = ref<SettingsView>('root')
 const selectedNotificationAppId = ref<LaunchablePhoneAppId>('calculator')
 const settingsPage = ref<ComponentPublicInstance | null>(null)
-const framePickerButton = ref<ComponentPublicInstance | null>(null)
 const framePickerOpened = ref(false)
-const framePickerTarget = computed(
-  () => framePickerButton.value?.$el as HTMLElement | undefined,
-)
-const framePickerPortalTarget = computed(() =>
-  framePickerTarget.value?.closest<HTMLElement>('.phone-screen'),
-)
 const accountMode = ref<'login' | 'register'>('login')
 const accountEmail = ref('')
 const accountPassword = ref('')
@@ -160,9 +142,6 @@ const resetOpened = ref(false)
 const simEjectOpened = ref(false)
 const factoryResetting = ref(false)
 const factoryResetProgress = ref(0)
-const factoryResetDashOffset = computed(
-  () => FACTORY_RESET_CIRCUMFERENCE * (1 - factoryResetProgress.value / 100),
-)
 const selectedFrameColor = computed(
   () => PHONE_FRAME_COLORS[phone.preferences.settings.frame],
 )
@@ -281,7 +260,7 @@ const activeTitle = computed(() => {
   }
   if (activeView.value === 'notification-detail') {
     return selectedNotificationApp.value
-      ? phone.t(selectedNotificationApp.value.labelKey)
+      ? getPhoneAppLabel(selectedNotificationApp.value, phone.t)
       : phone.t('Apps.settings.notifications')
   }
   return phone.t(`Apps.settings.${activeView.value}`)
@@ -312,10 +291,6 @@ function matchesSearch(key: string): boolean {
   )
 }
 
-function updateSearch(event: Event): void {
-  query.value = (event.target as HTMLInputElement).value
-}
-
 function openView(view: SubmenuView): void {
   if (view === 'security') {
     passcodeLength.value = phone.security.length ?? 6
@@ -344,8 +319,8 @@ function scrollPageToTop(): void {
   })
 }
 
-function toggleRootSetting(key: RootToggleKey): void {
-  phone.setPreference(key, !phone.preferences.settings[key])
+function setRootSetting(key: RootToggleKey, value: boolean): void {
+  phone.setPreference(key, value)
 }
 
 function resetPasscodeInput(): void {
@@ -464,12 +439,9 @@ function updateNumberPreference(
     | 'phoneScale'
     | 'ringtoneVolume'
     | 'screenBrightness',
-  event: Event,
+  value: number,
 ): void {
-  phone.setPreference(
-    key,
-    Number.parseInt((event.target as HTMLInputElement).value, 10),
-  )
+  phone.setPreference(key, value)
 }
 
 function selectAppearanceMode(mode: AppearanceMode): void {
@@ -485,62 +457,12 @@ function selectFrame(frame: PhoneFrameId): void {
   framePickerOpened.value = false
 }
 
-function openFramePicker(): void {
-  const target = framePickerTarget.value
-  const screen = framePickerPortalTarget.value
-  if (!target || !screen) {
-    console.error('Unable to position the Settings frame color picker')
-    return
-  }
-
-  const screenRect = screen.getBoundingClientRect()
-  const targetRect = target.getBoundingClientRect()
-  const screenScale = screenRect.width / screen.offsetWidth
-  const targetLeft = (targetRect.left - screenRect.left) / screenScale
-  const targetTop = (targetRect.top - screenRect.top) / screenScale
-  const targetWidth = targetRect.width / screenScale
-  const targetHeight = targetRect.height / screenScale
-  const desiredLeft = targetLeft + targetWidth / 2 - FRAME_PICKER_WIDTH / 2
-  const aboveTop = targetTop - FRAME_PICKER_HEIGHT - FRAME_PICKER_GAP
-  const desiredTop =
-    aboveTop >= FRAME_PICKER_INSET
-      ? aboveTop
-      : targetTop + targetHeight + FRAME_PICKER_GAP
-
-  screen.style.setProperty(
-    '--settings-frame-picker-left',
-    `${Math.max(
-      FRAME_PICKER_INSET,
-      Math.min(
-        desiredLeft,
-        screen.offsetWidth - FRAME_PICKER_WIDTH - FRAME_PICKER_INSET,
-      ),
-    )}px`,
-  )
-  screen.style.setProperty(
-    '--settings-frame-picker-top',
-    `${Math.max(
-      FRAME_PICKER_INSET,
-      Math.min(
-        desiredTop,
-        screen.offsetHeight - FRAME_PICKER_HEIGHT - FRAME_PICKER_INSET,
-      ),
-    )}px`,
-  )
-
-  framePickerOpened.value = true
-}
-
 function selectRingtone(ringtone: RingtoneId): void {
   phone.setPreference('ringtone', ringtone)
 }
 
 function selectNotificationSound(sound: NotificationSoundId): void {
   phone.setPreference('notificationSound', sound)
-}
-
-function eventValue(event: Event): string {
-  return (event.target as HTMLInputElement).value
 }
 
 function updateAccountEmail(event: Event): void {
@@ -598,6 +520,7 @@ async function submitAccount(): Promise<void> {
 
 async function logoutAccount(): Promise<void> {
   if (!(await account.logout())) accountToast.value = accountError()
+  else appAuth.clear()
 }
 
 function requestRemoveDevice(imei: string): void {
@@ -646,6 +569,7 @@ async function confirmFactoryReset(): Promise<void> {
   factoryResetProgress.value = 100
   factoryResetting.value = false
   if (!success) accountToast.value = accountError()
+  else appAuth.hydrate(undefined, '')
 }
 
 async function confirmSimEject(): Promise<void> {
@@ -666,158 +590,138 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
-    ref="settingsPage"
-    :class="['!pb-[24px]', { '!pt-[44px]': activeView !== 'root' }]"
+  <SkyAppPage
+    class="settings-app"
+    accent="#0a84ff"
+    accent-soft="rgba(10, 132, 255, 0.16)"
+    :dark="phone.isDarkMode"
+    :label="phone.t('Apps.settings.name')"
   >
-    <template v-if="activeView === 'root'">
-      <k-navbar
-        large
-        transparent
-        :title="phone.t('Apps.settings.name')"
-        class="top-0 sticky"
-      >
-        <template #subnavbar>
-          <k-searchbar
-            :value="query"
+    <SkyNavbar
+      :title="
+        activeView === 'root' ? phone.t('Apps.settings.name') : activeTitle
+      "
+      :variant="activeView === 'root' ? 'large' : 'compact'"
+      :show-back="activeView !== 'root'"
+      back-appearance="surface"
+      :back-label="phone.t('Apps.settings.back')"
+      @back="goBack"
+    >
+      <template #right>
+        <SkyLink
+          v-if="activeView === 'account' && !account.email"
+          @click="accountMode = accountMode === 'login' ? 'register' : 'login'"
+        >
+          {{
+            phone.t(
+              accountMode === 'login'
+                ? 'Apps.mail.registerLink'
+                : 'Apps.mail.login',
+            )
+          }}
+        </SkyLink>
+      </template>
+    </SkyNavbar>
+
+    <SkyScrollArea ref="settingsPage" class="settings-content">
+      <template v-if="activeView === 'root'">
+        <div class="settings-search" role="search">
+          <SkySearchbar
+            v-model="query"
+            :clear-label="phone.t('Common.clear')"
+            :label="phone.t('Apps.settings.searchPlaceholder')"
             :placeholder="phone.t('Apps.settings.searchPlaceholder')"
-            @input="updateSearch"
-            @clear="query = ''"
           />
-        </template>
-      </k-navbar>
+        </div>
 
-      <k-list strong inset>
-        <k-list-item
-          link
-          :title="phone.t('Apps.settings.accountName')"
-          :subtitle="phone.t('Apps.settings.accountDetail')"
-          @click="openView('account')"
-        >
-          <template #media>
-            <UserRound class="w-9 h-9 text-primary" />
-          </template>
-        </k-list-item>
-      </k-list>
-
-      <k-list v-if="visibleToggleRows.length" strong inset>
-        <k-list-item
-          v-for="row in visibleToggleRows"
-          :key="row.key"
-          :title="phone.t(`Apps.settings.${row.key}`)"
-          title-font-size-ios="text-[16px]"
-          title-wrap-class="whitespace-nowrap"
-        >
-          <template #media>
-            <span
-              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.25)]"
-              :style="{ backgroundColor: row.iconColor }"
-            >
-              <component :is="row.icon" :size="17" :stroke-width="2.25" />
-            </span>
-          </template>
-          <template #after>
-            <k-toggle
-              :checked="phone.preferences.settings[row.key]"
-              :aria-label="phone.t(`Apps.settings.toggle.${row.key}`)"
-              @change="toggleRootSetting(row.key)"
-            />
-          </template>
-        </k-list-item>
-      </k-list>
-
-      <k-list v-if="visibleServiceRows.length" strong inset>
-        <k-list-item
-          v-for="row in visibleServiceRows"
-          :key="row.key"
-          link
-          :title="phone.t(`Apps.settings.${row.key}`)"
-          title-font-size-ios="text-[16px]"
-          title-wrap-class="whitespace-nowrap"
-          @click="openView(row.view)"
-        >
-          <template #media>
-            <span
-              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.25)]"
-              :style="{ backgroundColor: row.iconColor }"
-            >
-              <component :is="row.icon" :size="17" :stroke-width="2.25" />
-            </span>
-          </template>
-        </k-list-item>
-      </k-list>
-
-      <k-list v-if="visiblePreferenceRows.length" strong inset>
-        <k-list-item
-          v-for="row in visiblePreferenceRows"
-          :key="row.key"
-          link
-          :title="phone.t(`Apps.settings.${row.key}`)"
-          title-font-size-ios="text-[16px]"
-          title-wrap-class="whitespace-nowrap"
-          @click="openView(row.view)"
-        >
-          <template #media>
-            <span
-              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.25)]"
-              :style="{ backgroundColor: row.iconColor }"
-            >
-              <component :is="row.icon" :size="17" :stroke-width="2.25" />
-            </span>
-          </template>
-          <template v-if="row.key === 'security' || row.key === 'focus'" #after>
-            {{
-              phone.t(
-                (row.key === 'security' && phone.security.enabled) ||
-                  (row.key === 'focus' && phone.preferences.settings.focusMode)
-                  ? 'Apps.settings.on'
-                  : 'Apps.settings.off',
-              )
-            }}
-          </template>
-        </k-list-item>
-      </k-list>
-    </template>
-
-    <template v-else>
-      <k-navbar
-        :title="activeTitle"
-        :class="[
-          'settings-detail-navbar sticky z-20',
-          { 'settings-detail-navbar--dark': phone.isDarkMode },
-        ]"
-      >
-        <template #left>
-          <k-navbar-back-link
-            component="button"
-            :show-text="false"
-            :text="phone.t('Apps.settings.back')"
-            :aria-label="phone.t('Apps.settings.back')"
-            @click="goBack"
-          />
-        </template>
-        <template #right>
-          <k-link
-            v-if="activeView === 'account' && !account.email"
-            component="button"
-            @click="
-              accountMode = accountMode === 'login' ? 'register' : 'login'
-            "
+        <SkySettingsGroup :aria-label="phone.t('Apps.settings.accountName')">
+          <SkySettingsRow
+            kind="navigation"
+            :title="phone.t('Apps.settings.accountName')"
+            :description="phone.t('Apps.settings.accountDetail')"
+            @activate="openView('account')"
           >
-            {{
-              phone.t(
-                accountMode === 'login'
-                  ? 'Apps.mail.registerLink'
-                  : 'Apps.mail.login',
-              )
-            }}
-          </k-link>
-        </template>
-      </k-navbar>
+            <template #leading>
+              <SkySettingsIcon color="#8e8e93">
+                <UserRound aria-hidden="true" />
+              </SkySettingsIcon>
+            </template>
+          </SkySettingsRow>
+        </SkySettingsGroup>
 
-      <template v-if="activeView === 'account'">
+        <SkySettingsGroup
+          v-if="visibleToggleRows.length"
+          :aria-label="phone.t('Apps.settings.name')"
+        >
+          <SkySettingsRow
+            v-for="row in visibleToggleRows"
+            :key="row.key"
+            kind="toggle"
+            :model-value="phone.preferences.settings[row.key]"
+            :title="phone.t('Apps.settings.' + row.key)"
+            @update:model-value="setRootSetting(row.key, $event)"
+          >
+            <template #leading>
+              <SkySettingsIcon :color="row.iconColor">
+                <component :is="row.icon" aria-hidden="true" />
+              </SkySettingsIcon>
+            </template>
+          </SkySettingsRow>
+        </SkySettingsGroup>
+
+        <SkySettingsGroup
+          v-if="visibleServiceRows.length"
+          :aria-label="phone.t('Apps.settings.notifications')"
+        >
+          <SkySettingsRow
+            v-for="row in visibleServiceRows"
+            :key="row.key"
+            kind="navigation"
+            :title="phone.t('Apps.settings.' + row.key)"
+            @activate="openView(row.view)"
+          >
+            <template #leading>
+              <SkySettingsIcon :color="row.iconColor">
+                <component :is="row.icon" aria-hidden="true" />
+              </SkySettingsIcon>
+            </template>
+          </SkySettingsRow>
+        </SkySettingsGroup>
+
+        <SkySettingsGroup
+          v-if="visiblePreferenceRows.length"
+          :aria-label="phone.t('Apps.settings.name')"
+        >
+          <SkySettingsRow
+            v-for="row in visiblePreferenceRows"
+            :key="row.key"
+            kind="navigation"
+            :title="phone.t('Apps.settings.' + row.key)"
+            :value="
+              row.key === 'security' || row.key === 'focus'
+                ? phone.t(
+                    (row.key === 'security' && phone.security.enabled) ||
+                      (row.key === 'focus' &&
+                        phone.preferences.settings.focusMode)
+                      ? 'Apps.settings.on'
+                      : 'Apps.settings.off',
+                  )
+                : undefined
+            "
+            @activate="openView(row.view)"
+          >
+            <template #leading>
+              <SkySettingsIcon :color="row.iconColor">
+                <component :is="row.icon" aria-hidden="true" />
+              </SkySettingsIcon>
+            </template>
+          </SkySettingsRow>
+        </SkySettingsGroup>
+      </template>
+
+      <template v-else-if="activeView === 'account'">
         <template v-if="!account.email">
-          <k-block-title>
+          <SkyBlock class="settings-copy">
             {{
               phone.t(
                 accountMode === 'login'
@@ -825,11 +729,12 @@ onBeforeUnmount(() => {
                   : 'Apps.mail.passwordWarning',
               )
             }}
-          </k-block-title>
-          <k-list>
-            <k-list-input
-              class="relative"
-              :value="accountEmail"
+          </SkyBlock>
+
+          <SkySettingsGroup :aria-label="phone.t('Apps.settings.accountName')">
+            <SkyField
+              id="sky-cloud-email"
+              :model-value="accountEmail"
               :label="
                 phone.t(
                   accountMode === 'login'
@@ -837,59 +742,47 @@ onBeforeUnmount(() => {
                     : 'Apps.mail.localPart',
                 )
               "
-              outline
-              floating-label
-              :input-class="accountMode === 'register' ? 'pr-20' : undefined"
               autocomplete="username"
               autocapitalize="none"
               autocorrect="off"
-              inputmode="email"
+              input-mode="email"
               :maxlength="MAIL_ADDRESS_INPUT_MAX_LENGTH"
               pattern="[A-Za-z0-9@._-]*"
-              spellcheck="false"
+              :spellcheck="false"
               :clear-button="accountMode === 'login'"
+              :clear-label="phone.t('Common.clear')"
               @input="updateAccountEmail"
               @clear="accountEmail = ''"
             >
-              <span
-                v-if="accountMode === 'register'"
-                class="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-sm opacity-50"
-              >
-                @ifruit.com
-              </span>
-            </k-list-input>
-            <k-list-input
+              <template v-if="accountMode === 'register'" #trailing>
+                <span class="settings-account-suffix">@ifruit.com</span>
+              </template>
+            </SkyField>
+            <SkyField
+              id="sky-cloud-password"
+              v-model="accountPassword"
               type="password"
-              :value="accountPassword"
               :label="phone.t('Apps.mail.password')"
-              outline
-              floating-label
               autocomplete="current-password"
-              @input="accountPassword = eventValue($event)"
-            >
-              <template #media><KeyRound :size="20" /></template>
-            </k-list-input>
-            <k-list-input
+            />
+            <SkyField
               v-if="accountMode === 'register'"
+              id="sky-cloud-confirm-password"
+              v-model="accountConfirm"
               type="password"
-              :value="accountConfirm"
               :label="phone.t('Apps.mail.confirmPassword')"
-              outline
-              floating-label
               autocomplete="new-password"
-              @input="accountConfirm = eventValue($event)"
-            >
-              <template #media><KeyRound :size="20" /></template>
-            </k-list-input>
-          </k-list>
-          <k-block>
-            <k-button
+            />
+          </SkySettingsGroup>
+
+          <div class="settings-primary-action">
+            <SkyButton
+              block
               large
-              rounded
               :disabled="accountSubmitting"
               @click="submitAccount"
             >
-              <k-preloader v-if="accountSubmitting" />
+              <SkySpinner v-if="accountSubmitting" :size="18" />
               <template v-else>
                 {{
                   phone.t(
@@ -899,93 +792,111 @@ onBeforeUnmount(() => {
                   )
                 }}
               </template>
-            </k-button>
-          </k-block>
+            </SkyButton>
+          </div>
         </template>
 
         <template v-else>
-          <k-list strong inset>
-            <k-list-item
+          <SkySettingsGroup :aria-label="account.email">
+            <SkySettingsRow
               :title="account.email"
-              :subtitle="phone.t('Apps.settings.accountCloudDetail')"
+              :description="phone.t('Apps.settings.accountCloudDetail')"
             >
-              <template #media>
-                <UserRound class="w-12 h-12 text-primary" />
+              <template #leading>
+                <SkySettingsIcon color="#0a84ff">
+                  <UserRound aria-hidden="true" />
+                </SkySettingsIcon>
               </template>
-            </k-list-item>
-          </k-list>
+            </SkySettingsRow>
+          </SkySettingsGroup>
 
-          <k-block-title>{{
-            phone.t('Apps.settings.linkedDevices')
-          }}</k-block-title>
-          <k-list strong inset>
-            <k-list-item
-              v-for="device in account.devices"
-              :key="device.imei"
-              :title="device.device_name"
-              :subtitle="device.imei"
-              :after="
-                device.current ? phone.t('Apps.settings.thisDevice') : undefined
-              "
-            >
-              <template #media><Smartphone :size="22" /></template>
-              <template v-if="!device.current" #footer>
-                <k-list-button @click="requestRemoveDevice(device.imei)">
-                  {{ phone.t('Apps.settings.removeDevice') }}
-                </k-list-button>
-              </template>
-            </k-list-item>
-          </k-list>
+          <SkySettingsGroup :title="phone.t('Apps.settings.linkedDevices')">
+            <template v-for="device in account.devices" :key="device.imei">
+              <SkySettingsRow
+                :title="device.device_name"
+                :description="device.imei"
+                :value="
+                  device.current
+                    ? phone.t('Apps.settings.thisDevice')
+                    : undefined
+                "
+              >
+                <template #leading>
+                  <Smartphone :size="20" aria-hidden="true" />
+                </template>
+              </SkySettingsRow>
+              <SkySettingsRow
+                v-if="!device.current"
+                kind="action"
+                tone="danger"
+                :title="phone.t('Apps.settings.removeDevice')"
+                @activate="requestRemoveDevice(device.imei)"
+              />
+            </template>
+          </SkySettingsGroup>
 
-          <k-list strong inset>
-            <k-list-button @click="logoutAccount">
-              {{ phone.t('Apps.settings.signOut') }}
-            </k-list-button>
-          </k-list>
+          <SkySettingsGroup :aria-label="phone.t('Apps.settings.signOut')">
+            <SkySettingsRow
+              kind="action"
+              tone="danger"
+              :title="phone.t('Apps.settings.signOut')"
+              @activate="logoutAccount"
+            />
+          </SkySettingsGroup>
         </template>
       </template>
 
       <template v-else-if="activeView === 'security'">
-        <k-block class="text-sm leading-5 opacity-70">
+        <SkyBlock class="settings-copy">
           {{ phone.t('Apps.settings.passcode.description') }}
-        </k-block>
+        </SkyBlock>
 
         <template v-if="!phone.security.enabled">
-          <k-block-title>{{
-            phone.t('Apps.settings.passcode.codeLength')
-          }}</k-block-title>
-          <k-block>
-            <k-segmented strong rounded>
-              <k-segmented-button
-                :active="passcodeLength === 6"
-                @click="passcodeLength = 6"
+          <SkySettingsGroup
+            :title="phone.t('Apps.settings.passcode.codeLength')"
+          >
+            <li class="settings-segmented-row">
+              <SkySegmented
+                :aria-label="phone.t('Apps.settings.passcode.codeLength')"
               >
-                {{ phone.t('Apps.settings.passcode.sixDigit') }}
-              </k-segmented-button>
-              <k-segmented-button
-                :active="passcodeLength === 4"
-                @click="passcodeLength = 4"
-              >
-                {{ phone.t('Apps.settings.passcode.fourDigit') }}
-              </k-segmented-button>
-            </k-segmented>
-          </k-block>
-          <k-list strong inset>
-            <k-list-button @click="beginSetPasscode">
-              {{ phone.t('Apps.settings.passcode.turnOn') }}
-            </k-list-button>
-          </k-list>
+                <SkySegmentedButton
+                  :active="passcodeLength === 6"
+                  @click="passcodeLength = 6"
+                >
+                  {{ phone.t('Apps.settings.passcode.sixDigit') }}
+                </SkySegmentedButton>
+                <SkySegmentedButton
+                  :active="passcodeLength === 4"
+                  @click="passcodeLength = 4"
+                >
+                  {{ phone.t('Apps.settings.passcode.fourDigit') }}
+                </SkySegmentedButton>
+              </SkySegmented>
+            </li>
+          </SkySettingsGroup>
+
+          <SkySettingsGroup
+            :aria-label="phone.t('Apps.settings.passcode.turnOn')"
+          >
+            <SkySettingsRow
+              kind="action"
+              :title="phone.t('Apps.settings.passcode.turnOn')"
+              @activate="beginSetPasscode"
+            />
+          </SkySettingsGroup>
         </template>
 
         <template v-else>
-          <k-list strong inset>
-            <k-list-item
+          <SkySettingsGroup
+            :aria-label="phone.t('Apps.settings.passcode.status')"
+          >
+            <SkySettingsRow
               :title="phone.t('Apps.settings.passcode.status')"
-              :after="phone.t('Apps.settings.on')"
+              :value="phone.t('Apps.settings.on')"
             />
-            <k-list-item
+            <SkySettingsRow
               :title="phone.t('Apps.settings.passcode.codeLength')"
-              :after="
+              :value="
                 phone.t(
                   phone.security.length === 4
                     ? 'Apps.settings.passcode.fourDigit'
@@ -993,63 +904,73 @@ onBeforeUnmount(() => {
                 )
               "
             />
-          </k-list>
-          <k-block-title>{{
-            phone.t('Apps.settings.passcode.codeLength')
-          }}</k-block-title>
-          <k-block>
-            <k-segmented strong rounded>
-              <k-segmented-button
-                :active="passcodeLength === 6"
-                @click="passcodeLength = 6"
+          </SkySettingsGroup>
+
+          <SkySettingsGroup
+            :title="phone.t('Apps.settings.passcode.codeLength')"
+          >
+            <li class="settings-segmented-row">
+              <SkySegmented
+                :aria-label="phone.t('Apps.settings.passcode.codeLength')"
               >
-                {{ phone.t('Apps.settings.passcode.sixDigit') }}
-              </k-segmented-button>
-              <k-segmented-button
-                :active="passcodeLength === 4"
-                @click="passcodeLength = 4"
-              >
-                {{ phone.t('Apps.settings.passcode.fourDigit') }}
-              </k-segmented-button>
-            </k-segmented>
-          </k-block>
-          <k-list strong inset>
-            <k-list-button @click="beginChangePasscode">
-              {{ phone.t('Apps.settings.passcode.change') }}
-            </k-list-button>
-            <k-list-button class="!text-red-500" @click="beginDisablePasscode">
-              {{ phone.t('Apps.settings.passcode.turnOff') }}
-            </k-list-button>
-          </k-list>
+                <SkySegmentedButton
+                  :active="passcodeLength === 6"
+                  @click="passcodeLength = 6"
+                >
+                  {{ phone.t('Apps.settings.passcode.sixDigit') }}
+                </SkySegmentedButton>
+                <SkySegmentedButton
+                  :active="passcodeLength === 4"
+                  @click="passcodeLength = 4"
+                >
+                  {{ phone.t('Apps.settings.passcode.fourDigit') }}
+                </SkySegmentedButton>
+              </SkySegmented>
+            </li>
+          </SkySettingsGroup>
+
+          <SkySettingsGroup :aria-label="phone.t('Apps.settings.security')">
+            <SkySettingsRow
+              kind="action"
+              :title="phone.t('Apps.settings.passcode.change')"
+              @activate="beginChangePasscode"
+            />
+            <SkySettingsRow
+              kind="action"
+              tone="danger"
+              :title="phone.t('Apps.settings.passcode.turnOff')"
+              @activate="beginDisablePasscode"
+            />
+          </SkySettingsGroup>
         </template>
       </template>
 
       <template v-else-if="activeView === 'notifications'">
-        <k-list strong inset>
-          <k-list-item
+        <SkySettingsGroup :aria-label="phone.t('Apps.settings.notifications')">
+          <SkySettingsRow
             v-for="app in notificationApps"
             :key="app.id"
-            link
-            :title="phone.t(app.labelKey)"
-            :after="
+            kind="navigation"
+            :title="getPhoneAppLabel(app, phone.t)"
+            :value="
               phone.t(
                 phone.preferences.settings.notifications[app.id].enabled
                   ? 'Apps.settings.on'
                   : 'Apps.settings.off',
               )
             "
-            @click="openNotificationApp(app)"
+            @activate="openNotificationApp(app)"
           >
-            <template #media>
+            <template #leading>
               <img
-                class="w-8 h-8 object-contain"
+                class="settings-app-icon"
                 :src="app.iconImage"
                 alt=""
                 draggable="false"
               />
             </template>
-          </k-list-item>
-        </k-list>
+          </SkySettingsRow>
+        </SkySettingsGroup>
       </template>
 
       <template
@@ -1057,283 +978,226 @@ onBeforeUnmount(() => {
           activeView === 'notification-detail' && selectedNotificationApp
         "
       >
-        <k-list strong inset>
-          <k-list-item :title="phone.t(selectedNotificationApp.labelKey)">
-            <template #media>
+        <SkySettingsGroup
+          :aria-label="getPhoneAppLabel(selectedNotificationApp, phone.t)"
+        >
+          <SkySettingsRow
+            :title="getPhoneAppLabel(selectedNotificationApp, phone.t)"
+          >
+            <template #leading>
               <img
-                class="w-12 h-12 object-contain"
+                class="settings-app-icon"
                 :src="selectedNotificationApp.iconImage"
                 alt=""
                 draggable="false"
               />
             </template>
-          </k-list-item>
-        </k-list>
-        <k-list strong inset>
-          <k-list-item :title="phone.t('Apps.settings.allowNotifications')">
-            <template #after>
-              <k-toggle
-                :checked="
-                  phone.preferences.settings.notifications[
-                    selectedNotificationApp.id
-                  ].enabled
-                "
-                :aria-label="
-                  phone.t('Apps.settings.toggle.notifications', {
-                    app: phone.t(selectedNotificationApp.labelKey),
-                  })
-                "
-                @change="
-                  phone.setAppNotification(
-                    selectedNotificationApp.id,
-                    'enabled',
-                    !phone.preferences.settings.notifications[
-                      selectedNotificationApp.id
-                    ].enabled,
-                  )
-                "
-              />
-            </template>
-          </k-list-item>
-          <k-list-item :title="phone.t('Apps.settings.notificationSounds')">
-            <template #after>
-              <k-toggle
-                :disabled="
-                  !phone.preferences.settings.notifications[
-                    selectedNotificationApp.id
-                  ].enabled
-                "
-                :checked="
-                  phone.preferences.settings.notifications[
-                    selectedNotificationApp.id
-                  ].sounds
-                "
-                :aria-label="
-                  phone.t('Apps.settings.toggle.notificationSounds', {
-                    app: phone.t(selectedNotificationApp.labelKey),
-                  })
-                "
-                @change="
-                  phone.setAppNotification(
-                    selectedNotificationApp.id,
-                    'sounds',
-                    !phone.preferences.settings.notifications[
-                      selectedNotificationApp.id
-                    ].sounds,
-                  )
-                "
-              />
-            </template>
-          </k-list-item>
-        </k-list>
+          </SkySettingsRow>
+        </SkySettingsGroup>
+
+        <SkySettingsGroup :aria-label="phone.t('Apps.settings.notifications')">
+          <SkySettingsRow
+            kind="toggle"
+            :model-value="
+              phone.preferences.settings.notifications[
+                selectedNotificationApp.id
+              ].enabled
+            "
+            :title="phone.t('Apps.settings.allowNotifications')"
+            @update:model-value="
+              phone.setAppNotification(
+                selectedNotificationApp.id,
+                'enabled',
+                $event,
+              )
+            "
+          />
+          <SkySettingsRow
+            kind="toggle"
+            :disabled="
+              !phone.preferences.settings.notifications[
+                selectedNotificationApp.id
+              ].enabled
+            "
+            :model-value="
+              phone.preferences.settings.notifications[
+                selectedNotificationApp.id
+              ].sounds
+            "
+            :title="phone.t('Apps.settings.notificationSounds')"
+            @update:model-value="
+              phone.setAppNotification(
+                selectedNotificationApp.id,
+                'sounds',
+                $event,
+              )
+            "
+          />
+        </SkySettingsGroup>
       </template>
 
       <template v-else-if="activeView === 'sounds'">
-        <k-block-title>
-          {{ phone.t('Apps.settings.ringtoneVolume') }} ·
-          {{ phone.preferences.settings.ringtoneVolume }}%
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item>
-            <template #inner>
-              <k-range
-                class="w-full"
-                :value="phone.preferences.settings.ringtoneVolume"
-                :min="0"
-                :max="100"
-                :aria-label="phone.t('Apps.settings.ringtoneVolume')"
-                @input="updateNumberPreference('ringtoneVolume', $event)"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
+        <SkySettingsGroup :aria-label="phone.t('Apps.settings.sounds')">
+          <SkySettingsRangeRow
+            :model-value="phone.preferences.settings.ringtoneVolume"
+            :title="phone.t('Apps.settings.ringtoneVolume')"
+            :value-label="phone.preferences.settings.ringtoneVolume + '%'"
+            :aria-value-text="phone.preferences.settings.ringtoneVolume + '%'"
+            :min="0"
+            :max="100"
+            @update:model-value="
+              updateNumberPreference('ringtoneVolume', $event)
+            "
+          />
+          <SkySettingsRangeRow
+            :model-value="phone.preferences.settings.notificationVolume"
+            :title="phone.t('Apps.settings.notificationVolume')"
+            :value-label="phone.preferences.settings.notificationVolume + '%'"
+            :aria-value-text="
+              phone.preferences.settings.notificationVolume + '%'
+            "
+            :min="0"
+            :max="100"
+            @update:model-value="
+              updateNumberPreference('notificationVolume', $event)
+            "
+          />
+        </SkySettingsGroup>
 
-        <k-block-title>
-          {{ phone.t('Apps.settings.notificationVolume') }} ·
-          {{ phone.preferences.settings.notificationVolume }}%
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item>
-            <template #inner>
-              <k-range
-                class="w-full"
-                :value="phone.preferences.settings.notificationVolume"
-                :min="0"
-                :max="100"
-                :aria-label="phone.t('Apps.settings.notificationVolume')"
-                @input="updateNumberPreference('notificationVolume', $event)"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
-
-        <k-block-title>{{ phone.t('Apps.settings.ringtone') }}</k-block-title>
-        <k-list strong inset>
-          <k-list-item
+        <SkySettingsGroup :title="phone.t('Apps.settings.ringtone')">
+          <SkySettingsRow
             v-for="ringtone in RINGTONE_IDS"
             :key="ringtone"
-            link
-            :chevron="false"
-            :title="phone.t(`Apps.settings.ringtones.${ringtone}`)"
-            @click="selectRingtone(ringtone)"
-          >
-            <template #after>
-              <Check
-                v-if="phone.preferences.settings.ringtone === ringtone"
-                class="w-5 h-5 text-primary"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
+            kind="choice"
+            :selected="phone.preferences.settings.ringtone === ringtone"
+            :title="phone.t('Apps.settings.ringtones.' + ringtone)"
+            @activate="selectRingtone(ringtone)"
+          />
+        </SkySettingsGroup>
 
-        <k-block-title>
-          {{ phone.t('Apps.settings.notificationSound') }}
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item
+        <SkySettingsGroup :title="phone.t('Apps.settings.notificationSound')">
+          <SkySettingsRow
             v-for="sound in NOTIFICATION_SOUND_IDS"
             :key="sound"
-            link
-            :chevron="false"
-            :title="phone.t(`Apps.settings.notificationSoundsList.${sound}`)"
-            @click="selectNotificationSound(sound)"
-          >
-            <template #after>
-              <Check
-                v-if="phone.preferences.settings.notificationSound === sound"
-                class="w-5 h-5 text-primary"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
+            kind="choice"
+            :selected="phone.preferences.settings.notificationSound === sound"
+            :title="phone.t('Apps.settings.notificationSoundsList.' + sound)"
+            @activate="selectNotificationSound(sound)"
+          />
+        </SkySettingsGroup>
       </template>
 
       <template v-else-if="activeView === 'connectivity'">
-        <k-block-title>{{
-          phone.t('Apps.settings.connections')
-        }}</k-block-title>
-        <k-list strong inset>
-          <k-list-item
+        <SkySettingsGroup
+          :title="phone.t('Apps.settings.connections')"
+          :footer="phone.t('Apps.settings.connectivityDescription')"
+        >
+          <SkySettingsRow
             v-for="row in connectivityRows"
             :key="row.key"
-            :title="phone.t(`Apps.settings.${row.key}`)"
+            kind="toggle"
+            :disabled="phone.preferences.settings.airplaneMode"
+            :model-value="phone.preferences.settings[row.preferenceKey]"
+            :title="phone.t('Apps.settings.' + row.key)"
+            @update:model-value="setRootSetting(row.preferenceKey, $event)"
           >
-            <template #media>
-              <span
-                class="settings-row-icon"
-                :style="{ backgroundColor: row.iconColor }"
-              >
-                <component :is="row.icon" :size="17" :stroke-width="2.25" />
-              </span>
+            <template #leading>
+              <SkySettingsIcon :color="row.iconColor">
+                <component :is="row.icon" aria-hidden="true" />
+              </SkySettingsIcon>
             </template>
-            <template #after>
-              <k-toggle
-                :checked="phone.preferences.settings[row.preferenceKey]"
-                :disabled="phone.preferences.settings.airplaneMode"
-                :aria-label="
-                  phone.t(`Apps.settings.toggle.${row.preferenceKey}`)
-                "
-                @change="toggleRootSetting(row.preferenceKey)"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
-        <k-block class="text-sm leading-5 opacity-60">
-          {{ phone.t('Apps.settings.connectivityDescription') }}
-        </k-block>
+          </SkySettingsRow>
+        </SkySettingsGroup>
       </template>
 
       <template v-else-if="activeView === 'focus'">
-        <k-list strong inset>
-          <k-list-item :title="phone.t('Apps.settings.focusMode')">
-            <template #media>
-              <span class="settings-row-icon bg-[#5856d6]">
-                <Moon :size="17" :stroke-width="2.25" />
-              </span>
+        <SkySettingsGroup
+          :footer="phone.t('Apps.settings.focusDescription')"
+          :aria-label="phone.t('Apps.settings.focusMode')"
+        >
+          <SkySettingsRow
+            kind="toggle"
+            :model-value="phone.preferences.settings.focusMode"
+            :title="phone.t('Apps.settings.focusMode')"
+            @update:model-value="setRootSetting('focusMode', $event)"
+          >
+            <template #leading>
+              <SkySettingsIcon color="#5856d6">
+                <Moon aria-hidden="true" />
+              </SkySettingsIcon>
             </template>
-            <template #after>
-              <k-toggle
-                :checked="phone.preferences.settings.focusMode"
-                :aria-label="phone.t('Apps.settings.toggle.focusMode')"
-                @change="toggleRootSetting('focusMode')"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
-        <k-block class="text-sm leading-5 opacity-60">
-          {{ phone.t('Apps.settings.focusDescription') }}
-        </k-block>
+          </SkySettingsRow>
+        </SkySettingsGroup>
       </template>
 
       <template v-else-if="activeView === 'general'">
-        <k-block-title>
-          {{ phone.t('Apps.settings.notificationDuration') }} ·
-          {{
-            phone.t('Apps.settings.seconds', {
-              seconds: String(
-                phone.preferences.settings.notificationDurationSeconds,
-              ),
-            })
-          }}
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item>
-            <template #inner>
-              <k-range
-                class="w-full"
-                :value="phone.preferences.settings.notificationDurationSeconds"
-                :min="3"
-                :max="30"
-                :step="1"
-                :aria-label="phone.t('Apps.settings.notificationDuration')"
-                @input="
-                  updateNumberPreference('notificationDurationSeconds', $event)
-                "
-              />
-            </template>
-          </k-list-item>
-        </k-list>
+        <SkySettingsGroup
+          :aria-label="phone.t('Apps.settings.notificationDuration')"
+        >
+          <SkySettingsRangeRow
+            :model-value="
+              phone.preferences.settings.notificationDurationSeconds
+            "
+            :title="phone.t('Apps.settings.notificationDuration')"
+            :value-label="
+              phone.t('Apps.settings.seconds', {
+                seconds: String(
+                  phone.preferences.settings.notificationDurationSeconds,
+                ),
+              })
+            "
+            :aria-value-text="
+              phone.t('Apps.settings.seconds', {
+                seconds: String(
+                  phone.preferences.settings.notificationDurationSeconds,
+                ),
+              })
+            "
+            :min="3"
+            :max="30"
+            :step="1"
+            @update:model-value="
+              updateNumberPreference('notificationDurationSeconds', $event)
+            "
+          />
+        </SkySettingsGroup>
 
-        <k-block-title>{{ phone.t('Apps.settings.about') }}</k-block-title>
-        <k-list strong inset>
-          <k-list-item
+        <SkySettingsGroup :title="phone.t('Apps.settings.about')">
+          <SkySettingsRow
             :title="phone.t('Apps.settings.deviceName')"
-            :after="phone.t('Apps.settings.deviceNameValue')"
+            :value="phone.t('Apps.settings.deviceNameValue')"
           />
-          <k-list-item
+          <SkySettingsRow
             :title="phone.t('Apps.settings.softwareVersion')"
-            after="0.1.0"
+            value="0.1.0"
           />
-          <k-list-item
+          <SkySettingsRow
             :title="phone.t('Apps.settings.language')"
-            :after="phone.t('Apps.settings.languageValue')"
+            :value="phone.t('Apps.settings.languageValue')"
           />
-          <k-list-item
+          <SkySettingsRow
             :title="phone.t('Apps.settings.localStorage')"
-            :after="phone.t('Apps.settings.localStorageValue')"
+            :value="phone.t('Apps.settings.localStorageValue')"
           />
-        </k-list>
+        </SkySettingsGroup>
 
-        <k-block-title>{{
-          phone.t('Apps.settings.deviceInformation')
-        }}</k-block-title>
-        <k-list strong inset>
-          <k-list-item
+        <SkySettingsGroup :title="phone.t('Apps.settings.deviceInformation')">
+          <SkySettingsRow
             :title="phone.t('Apps.settings.imei')"
-            :after="phone.device?.imei ?? '—'"
+            :value="phone.device?.imei ?? '—'"
           />
-          <k-list-item
+          <SkySettingsRow
             :title="phone.t('Apps.settings.simNumber')"
-            :after="
+            :value="
               phone.device?.sim
                 ? formatPhoneNumber(phone.device.sim.number)
                 : phone.t('Apps.settings.noSim')
             "
           />
-          <k-list-item
-            v-if="phone.device?.sim"
+          <SkySettingsRow
+            v-if="phone.device?.sim?.removable"
             :title="phone.t('Apps.settings.simType')"
-            :after="
+            :value="
               phone.t(
                 phone.device.sim.type === 'registered'
                   ? 'Apps.settings.registeredSim'
@@ -1341,341 +1205,407 @@ onBeforeUnmount(() => {
               )
             "
           />
-          <k-list-button
-            v-if="phone.device?.sim"
-            @click="simEjectOpened = true"
+          <SkySettingsRow
+            v-if="phone.device?.sim?.removable"
+            kind="action"
+            tone="danger"
+            :title="phone.t('Apps.settings.ejectSim')"
+            @activate="simEjectOpened = true"
+          />
+          <SkySettingsRow
+            kind="action"
+            tone="danger"
+            :title="phone.t('Apps.settings.factoryReset')"
+            @activate="resetOpened = true"
           >
-            {{ phone.t('Apps.settings.ejectSim') }}
-          </k-list-button>
-          <k-list-button @click="resetOpened = true">
-            <RotateCcw :size="18" />
-            {{ phone.t('Apps.settings.factoryReset') }}
-          </k-list-button>
-        </k-list>
+            <template #leading>
+              <RotateCcw :size="18" aria-hidden="true" />
+            </template>
+          </SkySettingsRow>
+        </SkySettingsGroup>
       </template>
 
       <template v-else-if="activeView === 'appearance'">
-        <k-block-title>
-          {{ phone.t('Apps.settings.graphicsMode') }}
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item
+        <SkySettingsGroup :title="phone.t('Apps.settings.graphicsMode')">
+          <SkySettingsRow
             v-for="mode in GRAPHICS_MODE_IDS"
             :key="mode"
-            link
-            :chevron="false"
-            :title="phone.t(`Apps.settings.${mode}Mode`)"
-            :subtitle="phone.t(`Apps.settings.${mode}ModeDescription`)"
-            @click="selectGraphicsMode(mode)"
-          >
-            <template #after>
-              <Check
-                v-if="phone.preferences.settings.graphicsMode === mode"
-                class="w-5 h-5 text-primary"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
+            kind="choice"
+            :selected="phone.preferences.settings.graphicsMode === mode"
+            :title="phone.t('Apps.settings.' + mode + 'Mode')"
+            :description="phone.t('Apps.settings.' + mode + 'ModeDescription')"
+            @activate="selectGraphicsMode(mode)"
+          />
+        </SkySettingsGroup>
 
-        <k-block-title>
-          {{ phone.t('Apps.settings.appearanceMode') }}
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item
+        <SkySettingsGroup :title="phone.t('Apps.settings.appearanceMode')">
+          <SkySettingsRow
             v-for="mode in APPEARANCE_MODE_IDS"
             :key="mode"
-            link
-            :chevron="false"
-            :title="phone.t(`Apps.settings.${mode}`)"
-            @click="selectAppearanceMode(mode)"
-          >
-            <template #after>
-              <Check
-                v-if="phone.preferences.settings.appearanceMode === mode"
-                class="w-5 h-5 text-primary"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
+            kind="choice"
+            :selected="phone.preferences.settings.appearanceMode === mode"
+            :title="phone.t('Apps.settings.' + mode)"
+            @activate="selectAppearanceMode(mode)"
+          />
+        </SkySettingsGroup>
 
-        <k-block-title>
-          {{ phone.t('Apps.settings.screenBrightness') }} ·
-          {{ phone.preferences.settings.screenBrightness }}%
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item>
-            <template #inner>
-              <div class="flex w-full items-center gap-3">
-                <Sun :size="16" class="shrink-0 opacity-55" />
-                <k-range
-                  class="w-full"
-                  :value="phone.preferences.settings.screenBrightness"
-                  :min="10"
-                  :max="100"
-                  :aria-label="phone.t('Apps.settings.screenBrightness')"
-                  @input="updateNumberPreference('screenBrightness', $event)"
-                />
-                <Sun :size="23" class="shrink-0" />
-              </div>
-            </template>
-          </k-list-item>
-        </k-list>
+        <SkySettingsGroup
+          :aria-label="phone.t('Apps.settings.screenBrightness')"
+        >
+          <SkySettingsRangeRow
+            :model-value="phone.preferences.settings.screenBrightness"
+            :title="phone.t('Apps.settings.screenBrightness')"
+            :value-label="phone.preferences.settings.screenBrightness + '%'"
+            :aria-value-text="phone.preferences.settings.screenBrightness + '%'"
+            :min="10"
+            :max="100"
+            @update:model-value="
+              updateNumberPreference('screenBrightness', $event)
+            "
+          />
+        </SkySettingsGroup>
 
-        <k-block-title>
-          {{ phone.t('Apps.settings.phoneScale') }} ·
-          {{ phone.preferences.settings.phoneScale }}%
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item>
-            <template #inner>
-              <k-range
-                class="w-full"
-                :value="phone.preferences.settings.phoneScale"
-                :min="PHONE_SCALE_MIN"
-                :max="PHONE_SCALE_MAX"
-                :step="PHONE_SCALE_STEP"
-                :aria-label="phone.t('Apps.settings.phoneScale')"
-                @input="updateNumberPreference('phoneScale', $event)"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
+        <SkySettingsGroup :aria-label="phone.t('Apps.settings.phoneScale')">
+          <SkySettingsRangeRow
+            :model-value="phone.preferences.settings.phoneScale"
+            :title="phone.t('Apps.settings.phoneScale')"
+            :value-label="phone.preferences.settings.phoneScale + '%'"
+            :aria-value-text="phone.preferences.settings.phoneScale + '%'"
+            :min="PHONE_SCALE_MIN"
+            :max="PHONE_SCALE_MAX"
+            :step="PHONE_SCALE_STEP"
+            @update:model-value="updateNumberPreference('phoneScale', $event)"
+          />
+        </SkySettingsGroup>
 
-        <k-block-title>{{ phone.t('Apps.settings.phoneFrame') }}</k-block-title>
-        <k-list strong inset>
-          <k-list-item
-            ref="framePickerButton"
-            link
+        <SkySettingsGroup :title="phone.t('Apps.settings.phoneFrame')">
+          <SkySettingsRow
+            kind="navigation"
             :title="phone.t('Apps.settings.phoneFrame')"
-            @click="openFramePicker"
+            @activate="framePickerOpened = true"
           >
-            <template #after>
+            <template #trailing>
               <span
-                class="h-7 w-7 rounded-full border border-black/15 shadow-sm"
+                class="settings-frame-swatch"
                 :style="{ background: selectedFrameColor }"
                 aria-hidden="true"
               />
             </template>
-          </k-list-item>
-        </k-list>
-
-        <Teleport v-if="framePickerPortalTarget" :to="framePickerPortalTarget">
-          <k-popover
-            :opened="framePickerOpened"
-            :class="[
-              'settings-frame-popover !absolute !z-[200] !left-[var(--settings-frame-picker-left)] !top-[var(--settings-frame-picker-top)]',
-              {
-                dark: phone.isDarkMode,
-                'phone-app--light': !phone.isDarkMode,
-                [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
-              },
-            ]"
-            @backdropclick="framePickerOpened = false"
-          >
-            <div
-              class="grid grid-cols-3 gap-5 p-5"
-              role="group"
-              :aria-label="phone.t('Apps.settings.phoneFrame')"
-            >
-              <button
-                v-for="frame in PHONE_FRAME_IDS"
-                :key="frame"
-                type="button"
-                class="h-10 w-10 rounded-full border border-black/15 shadow-sm"
-                :style="{ background: PHONE_FRAME_COLORS[frame] }"
-                :aria-label="phone.t(`Apps.settings.frames.${frame}`)"
-                :aria-pressed="phone.preferences.settings.frame === frame"
-                @click="selectFrame(frame)"
-              />
-            </div>
-          </k-popover>
-        </Teleport>
+          </SkySettingsRow>
+        </SkySettingsGroup>
       </template>
 
       <template v-else-if="activeView === 'wallpaper'">
-        <k-block-title>
-          {{ phone.t('Apps.settings.wallpaperPicker') }}
-        </k-block-title>
-        <k-list strong inset>
-          <k-list-item
+        <SkySettingsGroup :title="phone.t('Apps.settings.wallpaperPicker')">
+          <SkySettingsRow
             v-for="wallpaper in WALLPAPER_IDS"
             :key="wallpaper"
-            link
-            :chevron="false"
-            :title="phone.t(`Apps.settings.wallpapers.${wallpaper}`)"
-            @click="phone.setWallpaper(wallpaper)"
-          >
-            <template #after>
-              <Check
-                v-if="phone.preferences.settings.wallpaper === wallpaper"
-                class="w-5 h-5 text-primary"
-              />
-            </template>
-          </k-list-item>
-        </k-list>
+            kind="choice"
+            :selected="phone.preferences.settings.wallpaper === wallpaper"
+            :title="phone.t('Apps.settings.wallpapers.' + wallpaper)"
+            @activate="phone.setWallpaper(wallpaper)"
+          />
+        </SkySettingsGroup>
       </template>
-    </template>
-  </k-page>
+    </SkyScrollArea>
 
-  <PhonePasscode
-    v-if="passcodeFlow"
-    :busy="passcodeBusy"
-    :error="passcodeError"
-    :length="passcodeLength"
-    :reset-key="passcodeResetKey"
-    :subtitle="phone.t('Apps.settings.passcode.screenSubtitle')"
-    :title="passcodeTitle"
-    @cancel="cancelPasscodeFlow"
-    @complete="submitSettingsPasscode"
-  />
+    <PhonePasscode
+      v-if="passcodeFlow"
+      :busy="passcodeBusy"
+      :error="passcodeError"
+      :length="passcodeLength"
+      :reset-key="passcodeResetKey"
+      :subtitle="phone.t('Apps.settings.passcode.screenSubtitle')"
+      :title="passcodeTitle"
+      @cancel="cancelPasscodeFlow"
+      @complete="submitSettingsPasscode"
+    />
 
-  <div
-    v-if="factoryResetting"
-    class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black px-8 text-center text-white"
-  >
     <div
-      class="relative flex h-28 w-28 items-center justify-center"
-      role="progressbar"
-      :aria-label="phone.t('Apps.settings.factoryResetProgress')"
-      aria-valuemin="0"
-      aria-valuemax="100"
-      :aria-valuenow="Math.floor(factoryResetProgress)"
+      v-if="factoryResetting"
+      class="settings-reset-overlay"
+      aria-live="polite"
     >
-      <svg
-        class="h-28 w-28 -rotate-90"
-        viewBox="0 0 112 112"
-        aria-hidden="true"
-      >
-        <circle
-          cx="56"
-          cy="56"
-          r="48"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="6"
-          class="text-white/15"
+      <div class="settings-reset-progress">
+        <strong>{{ Math.floor(factoryResetProgress) }}%</strong>
+        <SkyProgress
+          :label="phone.t('Apps.settings.factoryResetProgress')"
+          :progress="factoryResetProgress / 100"
         />
-        <circle
-          cx="56"
-          cy="56"
-          r="48"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="6"
-          stroke-linecap="round"
-          :stroke-dasharray="FACTORY_RESET_CIRCUMFERENCE"
-          :stroke-dashoffset="factoryResetDashOffset"
-          class="text-white"
-        />
-      </svg>
-      <span class="absolute text-xl font-semibold tabular-nums">
-        {{ Math.floor(factoryResetProgress) }}%
-      </span>
+      </div>
+      <h2>{{ phone.t('Apps.settings.factoryResetProgress') }}</h2>
+      <p>{{ phone.t('Apps.settings.factoryResetWarning') }}</p>
     </div>
-    <h2 class="mt-8 text-xl font-semibold">
-      {{ phone.t('Apps.settings.factoryResetProgress') }}
-    </h2>
-    <p class="mt-3 max-w-64 text-sm leading-5 text-white/55">
-      {{ phone.t('Apps.settings.factoryResetWarning') }}
-    </p>
-  </div>
 
-  <k-dialog
-    :opened="removeDeviceOpened"
-    @backdropclick="removeDeviceOpened = false"
-  >
-    <template #title>{{ phone.t('Apps.settings.removeDevice') }}</template>
-    <p>{{ phone.t('Apps.settings.removeDeviceBody') }}</p>
-    <k-list>
-      <k-list-input
-        type="password"
-        :value="removeDevicePassword"
-        :label="phone.t('Apps.mail.password')"
-        @input="removeDevicePassword = eventValue($event)"
-      />
-    </k-list>
-    <template #buttons>
-      <k-dialog-button @click="removeDeviceOpened = false">
-        {{ phone.t('Common.cancel') }}
-      </k-dialog-button>
-      <k-dialog-button strong @click="confirmRemoveDevice">
-        {{ phone.t('Apps.settings.removeDevice') }}
-      </k-dialog-button>
-    </template>
-  </k-dialog>
+    <SkyDialog
+      :opened="framePickerOpened"
+      :title="phone.t('Apps.settings.phoneFrame')"
+      @backdropclick="framePickerOpened = false"
+      @escape="framePickerOpened = false"
+    >
+      <div
+        class="settings-frame-grid"
+        role="group"
+        :aria-label="phone.t('Apps.settings.phoneFrame')"
+      >
+        <button
+          v-for="frame in PHONE_FRAME_IDS"
+          :key="frame"
+          type="button"
+          class="settings-frame-choice"
+          :class="{
+            'settings-frame-choice--selected':
+              phone.preferences.settings.frame === frame,
+          }"
+          :aria-label="phone.t('Apps.settings.frames.' + frame)"
+          :aria-pressed="phone.preferences.settings.frame === frame"
+          @click="selectFrame(frame)"
+        >
+          <span
+            class="settings-frame-choice__swatch"
+            :style="{ background: PHONE_FRAME_COLORS[frame] }"
+            aria-hidden="true"
+          />
+          <Check
+            v-if="phone.preferences.settings.frame === frame"
+            :size="17"
+            aria-hidden="true"
+          />
+        </button>
+      </div>
+      <template #buttons>
+        <SkyDialogButton @click="framePickerOpened = false">
+          {{ phone.t('Common.cancel') }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
 
-  <k-dialog :opened="simEjectOpened" @backdropclick="simEjectOpened = false">
-    <template #title>{{ phone.t('Apps.settings.ejectSim') }}</template>
-    <p>{{ phone.t('Apps.settings.ejectSimBody') }}</p>
-    <template #buttons>
-      <k-dialog-button @click="simEjectOpened = false">{{
-        phone.t('Common.cancel')
-      }}</k-dialog-button>
-      <k-dialog-button strong @click="confirmSimEject">{{
-        phone.t('Apps.settings.ejectSim')
-      }}</k-dialog-button>
-    </template>
-  </k-dialog>
+    <SkyDialog
+      :opened="removeDeviceOpened"
+      :title="phone.t('Apps.settings.removeDevice')"
+      :content="phone.t('Apps.settings.removeDeviceBody')"
+      @backdropclick="removeDeviceOpened = false"
+      @escape="removeDeviceOpened = false"
+    >
+      <SkySettingsGroup :aria-label="phone.t('Apps.mail.password')">
+        <SkyField
+          v-model="removeDevicePassword"
+          type="password"
+          :label="phone.t('Apps.mail.password')"
+          autocomplete="current-password"
+        />
+      </SkySettingsGroup>
+      <template #buttons>
+        <SkyDialogButton @click="removeDeviceOpened = false">
+          {{ phone.t('Common.cancel') }}
+        </SkyDialogButton>
+        <SkyDialogButton
+          class="settings-dialog-button--danger"
+          strong
+          @click="confirmRemoveDevice"
+        >
+          {{ phone.t('Apps.settings.removeDevice') }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
 
-  <k-dialog :opened="resetOpened" @backdropclick="resetOpened = false">
-    <template #title>{{ phone.t('Apps.settings.factoryReset') }}</template>
-    <p>{{ phone.t('Apps.settings.factoryResetBody') }}</p>
-    <template #buttons>
-      <k-dialog-button @click="resetOpened = false">
-        {{ phone.t('Common.cancel') }}
-      </k-dialog-button>
-      <k-dialog-button strong @click="confirmFactoryReset">
-        {{ phone.t('Common.reset') }}
-      </k-dialog-button>
-    </template>
-  </k-dialog>
+    <SkyDialog
+      v-if="phone.device?.sim?.removable"
+      :opened="simEjectOpened"
+      :title="phone.t('Apps.settings.ejectSim')"
+      :content="phone.t('Apps.settings.ejectSimBody')"
+      @backdropclick="simEjectOpened = false"
+      @escape="simEjectOpened = false"
+    >
+      <template #buttons>
+        <SkyDialogButton @click="simEjectOpened = false">
+          {{ phone.t('Common.cancel') }}
+        </SkyDialogButton>
+        <SkyDialogButton
+          class="settings-dialog-button--danger"
+          strong
+          @click="confirmSimEject"
+        >
+          {{ phone.t('Apps.settings.ejectSim') }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
 
-  <k-toast
-    :opened="Boolean(accountToast)"
-    position="center"
-    @click="accountToast = ''"
-  >
-    {{ accountToast }}
-  </k-toast>
+    <SkyDialog
+      :opened="resetOpened"
+      :title="phone.t('Apps.settings.factoryReset')"
+      :content="phone.t('Apps.settings.factoryResetBody')"
+      @backdropclick="resetOpened = false"
+      @escape="resetOpened = false"
+    >
+      <template #buttons>
+        <SkyDialogButton @click="resetOpened = false">
+          {{ phone.t('Common.cancel') }}
+        </SkyDialogButton>
+        <SkyDialogButton
+          class="settings-dialog-button--danger"
+          strong
+          @click="confirmFactoryReset"
+        >
+          {{ phone.t('Common.reset') }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
+
+    <SkyToast
+      :opened="Boolean(accountToast)"
+      position="center"
+      @click="accountToast = ''"
+    >
+      {{ accountToast }}
+    </SkyToast>
+  </SkyAppPage>
 </template>
 
 <style scoped>
-.settings-row-icon {
-  display: flex;
+.settings-search {
+  margin-bottom: var(--sky-space-4);
+}
+
+.settings-content {
+  padding-top: var(--sky-space-2);
+}
+
+.settings-copy {
+  margin: 0 var(--sky-space-1) var(--sky-space-4);
+  color: var(--sky-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.settings-primary-action {
+  margin-bottom: var(--sky-space-5);
+}
+
+.settings-account-suffix {
+  color: var(--sky-muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.settings-segmented-row {
+  min-width: 0;
+  padding: var(--sky-space-2) var(--sky-space-3);
+  list-style: none;
+}
+
+.settings-app-icon {
+  width: 32px;
+  height: 32px;
+  display: block;
+  object-fit: contain;
+}
+
+.settings-frame-swatch {
   width: 28px;
   height: 28px;
-  flex-shrink: 0;
+  display: block;
+  flex: none;
+  border: 1px solid var(--sky-hairline);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+}
+
+.settings-frame-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 52px);
+  justify-content: center;
+  gap: var(--sky-space-2);
+  margin-top: var(--sky-space-4);
+}
+
+.settings-frame-choice {
+  width: 52px;
+  height: 52px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--sky-radius-control);
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.settings-frame-choice:focus-visible {
+  outline: 2px solid var(--sky-app-accent);
+  outline-offset: 1px;
+}
+
+.settings-frame-choice:active {
+  background: var(--sky-app-accent-soft);
+}
+
+.settings-frame-choice__swatch {
+  width: 40px;
+  height: 40px;
+  display: block;
+  border: 1px solid var(--sky-hairline);
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 22%);
+}
+
+.settings-frame-choice > svg {
+  position: absolute;
+}
+
+.settings-frame-choice--selected .settings-frame-choice__swatch {
+  box-shadow:
+    0 0 0 2px var(--sky-surface),
+    0 0 0 4px var(--sky-app-accent);
+}
+
+.settings-reset-overlay {
+  position: absolute;
+  z-index: 100;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 7px;
-  color: #fff;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 35%),
-    0 1px 2px rgb(0 0 0 / 25%);
+  padding: var(--sky-space-6);
+  background: #000000;
+  color: #ffffff;
+  text-align: center;
 }
 
-.settings-detail-navbar {
-  top: 0 !important;
-  background: rgb(248 248 248 / 94%);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+.settings-reset-progress {
+  width: min(240px, 80%);
 }
 
-.settings-detail-navbar::before {
-  position: absolute;
-  right: 0;
-  bottom: 100%;
-  left: 0;
-  height: 44px;
-  background: rgb(248 248 248);
-  content: '';
+.settings-reset-progress strong {
+  display: block;
+  margin-bottom: var(--sky-space-3);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
 }
 
-.settings-detail-navbar--dark {
-  background: rgb(0 0 0 / 94%);
+.settings-reset-overlay h2 {
+  margin: var(--sky-space-5) 0 0;
+  font-size: 20px;
 }
 
-.settings-detail-navbar--dark::before {
-  background: #000;
+.settings-reset-overlay p {
+  max-width: 270px;
+  margin: var(--sky-space-2) 0 0;
+  color: rgb(255 255 255 / 62%);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.settings-dialog-button--danger {
+  color: var(--sky-danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-frame-choice {
+    transition: none;
+  }
 }
 </style>

@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { kBadge } from 'konsta/vue'
 import { Minus } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { NON_REMOVABLE_PHONE_APP_IDS } from '@/config/apps'
+import { getPhoneAppLabel, isPhoneAppRemovable } from '@/config/apps'
 import { useMailStore } from '@/stores/mail'
 import { useBillingStore } from '@/stores/billing'
+import { useCompaniesStore } from '@/stores/companies'
 import { useMarketplaceStore } from '@/stores/marketplace'
 import { useDarkChatStore } from '@/stores/darkchat'
 import { usePhoneStore } from '@/stores/phone'
 import type { PhoneAppDefinition } from '@/types/apps'
+import {
+  reorderDirectionFromKeyboard,
+  type ReorderDirection,
+} from '@/utils/keyboard'
 
 const props = withDefaults(
   defineProps<{
@@ -32,11 +37,13 @@ const emit = defineEmits<{
   dragstart: [event: PointerEvent]
   edit: []
   remove: []
+  reorder: [direction: ReorderDirection]
 }>()
 
 const phone = usePhoneStore()
 const mail = useMailStore()
 const billing = useBillingStore()
+const companies = useCompaniesStore()
 const marketplace = useMarketplaceStore()
 const darkchat = useDarkChatStore()
 const router = useRouter()
@@ -54,15 +61,31 @@ const dragStyle = computed(() =>
       }
     : undefined,
 )
+const iconStyle = computed(() =>
+  props.app.kind === 'external' && props.app.iconBackground
+    ? { backgroundColor: props.app.iconBackground }
+    : undefined,
+)
 const suppressClick = ref(false)
 let holdTimer: number | undefined
 let calendarTimer: number | undefined
 let pointerStart = { x: 0, y: 0 }
+let pointerTarget: HTMLElement | null = null
+let pointerId: number | null = null
+
+watch(
+  () => props.app.iconImage,
+  () => {
+    iconFailed.value = false
+  },
+)
+
 const unreadCount = computed(() => {
   if (props.app.id === 'mail') return mail.counts.unread
   if (props.app.id === 'citymarkt') return marketplace.counts.unread
   if (props.app.id === 'darkchat') return darkchat.unreadCount
   if (props.app.id === 'billing') return billing.overview?.unreadCount ?? 0
+  if (props.app.id === 'companies') return companies.unreadCount
   return 0
 })
 const notificationBadgeColors = {
@@ -119,6 +142,9 @@ function clearHold(): void {
 
 function onPointerDown(event: PointerEvent): void {
   if (props.compact || event.button !== 0) return
+  pointerTarget = event.currentTarget as HTMLElement
+  pointerId = event.pointerId
+  pointerTarget.setPointerCapture(pointerId)
   pointerStart = { x: event.clientX, y: event.clientY }
   clearHold()
   if (props.editMode) {
@@ -157,35 +183,48 @@ function beginPointerDrag(event: PointerEvent): void {
       .closest<HTMLElement>('.springboard-page')
       ?.getBoundingClientRect().width ?? 0
   isDragging.value = true
-  window.addEventListener('pointermove', onPointerMove)
-  window.addEventListener('pointerup', onPointerUp)
-  window.addEventListener('pointercancel', cancelPointerDrag)
   emit('dragstart', event)
 }
 
 function onPointerUp(event: PointerEvent): void {
   clearHold()
-  if (!isDragging.value) return
-  suppressClick.value = true
-  emit('dragend', event)
-  isDragging.value = false
-  dragOffset.value = { x: 0, y: 0 }
-  removeDragListeners()
+  if (isDragging.value) {
+    suppressClick.value = true
+    emit('dragend', event)
+    isDragging.value = false
+    dragOffset.value = { x: 0, y: 0 }
+  }
+  releasePointerCapture()
 }
 
 function cancelPointerDrag(): void {
   clearHold()
-  if (!isDragging.value) return
+  const wasDragging = isDragging.value
   isDragging.value = false
   dragOffset.value = { x: 0, y: 0 }
-  removeDragListeners()
-  emit('dragcancel')
+  releasePointerCapture()
+  if (wasDragging) emit('dragcancel')
 }
 
-function removeDragListeners(): void {
-  window.removeEventListener('pointermove', onPointerMove)
-  window.removeEventListener('pointerup', onPointerUp)
-  window.removeEventListener('pointercancel', cancelPointerDrag)
+function releasePointerCapture(): void {
+  if (
+    pointerTarget &&
+    pointerId !== null &&
+    pointerTarget.hasPointerCapture(pointerId)
+  ) {
+    pointerTarget.releasePointerCapture(pointerId)
+  }
+  pointerTarget = null
+  pointerId = null
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (!props.editMode) return
+  const direction = reorderDirectionFromKeyboard(event)
+  if (!direction) return
+  event.preventDefault()
+  event.stopPropagation()
+  emit('reorder', direction)
 }
 
 onMounted(() => {
@@ -198,7 +237,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearHold()
   if (calendarTimer !== undefined) window.clearInterval(calendarTimer)
-  removeDragListeners()
+  releasePointerCapture()
 })
 </script>
 
@@ -216,12 +255,17 @@ onBeforeUnmount(() => {
       class="app-icon-button"
       :class="{ 'app-icon-button--compact': compact }"
       type="button"
-      :aria-label="phone.t(app.labelKey)"
+      :aria-label="getPhoneAppLabel(app, phone.t)"
       :aria-disabled="!app.route"
+      :aria-keyshortcuts="
+        editMode ? 'ArrowLeft ArrowRight ArrowUp ArrowDown' : undefined
+      "
       @click="launch"
       @contextmenu.prevent
+      @keydown="onKeydown"
       @pointercancel="cancelPointerDrag"
       @pointerdown="onPointerDown"
+      @lostpointercapture="cancelPointerDrag"
       @pointerleave="isDragging || clearHold()"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
@@ -233,6 +277,7 @@ onBeforeUnmount(() => {
             app.iconClass,
             { 'app-icon--image': !iconFailed && app.id !== 'calendar' },
           ]"
+          :style="iconStyle"
         >
           <span v-if="app.id === 'calendar'" class="app-icon-calendar">
             <strong>{{ calendarWeekday }}</strong>
@@ -262,14 +307,18 @@ onBeforeUnmount(() => {
         </k-badge>
       </span>
       <span v-if="showLabel" class="app-icon-label">{{
-        phone.t(app.labelKey)
+        getPhoneAppLabel(app, phone.t)
       }}</span>
     </button>
     <button
-      v-if="editMode && !NON_REMOVABLE_PHONE_APP_IDS.has(app.id)"
+      v-if="editMode && isPhoneAppRemovable(app)"
       class="app-icon-remove"
       type="button"
-      :aria-label="phone.t('Home.removeApp', { app: phone.t(app.labelKey) })"
+      :aria-label="
+        phone.t('Home.removeApp', {
+          app: getPhoneAppLabel(app, phone.t),
+        })
+      "
       @click.stop="emit('remove')"
       @pointerdown.stop
     >

@@ -18,6 +18,7 @@ import PhonePasscode from '@/components/PhonePasscode.vue'
 import PhoneNotifications from '@/components/PhoneNotifications.vue'
 import NotificationPhonePreview from '@/components/NotificationPhonePreview.vue'
 import PhoneStatusBar from '@/components/PhoneStatusBar.vue'
+import EasyShareSheet from '@/components/EasyShareSheet.vue'
 import PayphoneOverlay from '@/components/PayphoneOverlay.vue'
 import RadioHud from '@/components/RadioHud.vue'
 import SimPhonePicker, {
@@ -29,7 +30,9 @@ import { useGamesStore } from '@/features/games/store'
 import { useCallsStore } from '@/stores/calls'
 import { useBankingStore } from '@/stores/banking'
 import { useBillingStore } from '@/stores/billing'
+import { useCompaniesStore } from '@/stores/companies'
 import { useAccountStore } from '@/stores/account'
+import { useAppAuthStore } from '@/stores/app-auth'
 import { useMailStore } from '@/stores/mail'
 import { useMessagesStore } from '@/stores/messages'
 import { useDarkChatStore } from '@/stores/darkchat'
@@ -39,23 +42,32 @@ import { usePicstagramStore } from '@/stores/picstagram'
 import { useFeatherStore } from '@/stores/feather'
 import { useMediaStore } from '@/stores/media'
 import { useMarketplaceStore } from '@/stores/marketplace'
+import { useAppCatalogStore } from '@/stores/app-catalog'
 import { useAppStoreStore } from '@/stores/app-store'
 import { useWidgetsStore } from '@/stores/widgets'
 import { isPhoneAppId } from '@/config/apps'
 import { useNotesStore } from '@/stores/notes'
 import { useWeatherStore } from '@/stores/weather'
+import { useEasyShareStore } from '@/stores/easyshare'
 import {
   useNotificationsStore,
+  type PhoneNotification,
   type PhoneNotificationInput,
 } from '@/stores/notifications'
 import { usePhoneStore, type PhoneOpenPayload } from '@/stores/phone'
 import type { PhoneNotificationDevicePayload } from '@/types/device'
 import type { MailCounts } from '@/types/mail'
 import type { MarketplaceCounts } from '@/types/marketplace'
+import type {
+  CompanyChangedPayload,
+  CompanyUnreadCounts,
+} from '@/types/companies'
 import type { PhoneCall } from '@/types/phone'
+import type { EasyShareEvent } from '@/types/easyshare'
 import { nuiCall } from '@/utils/nui'
 import { formatTimer } from '@/utils/clock'
 import { parsePhonePreferences } from '@/utils/preferences'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 import SpringboardView from '@/views/SpringboardView.vue'
 
 type AppMessage = {
@@ -64,6 +76,7 @@ type AppMessage = {
     | CalendarReminderData
     | MailEventData
     | MarketplaceEventData
+    | CompaniesEventData
     | MessagesEventData
     | DarkChatEventData
     | FlareEventData
@@ -73,9 +86,22 @@ type AppMessage = {
     | PicstagramNotificationData
     | FeatherNotificationData
     | BillingNotificationData
+    | EasyShareEvent
     | PhoneCall
     | PhoneNotificationInput
     | PhoneOpenPayload
+    | CustomAppCatalogEventData
+    | CustomAppEventData
+}
+
+type CustomAppCatalogEventData = {
+  apps?: unknown
+}
+
+type CustomAppEventData = {
+  appId?: unknown
+  data?: unknown
+  payload?: unknown
 }
 
 type SimPickerPayload = {
@@ -100,6 +126,18 @@ type MessagesEventData = {
   device?: PhoneNotificationDevicePayload
   phoneNumber?: string
   sender?: string
+  text?: string
+  title?: string
+}
+
+type CompaniesEventData = {
+  area?: CompanyChangedPayload['area']
+  companyId?: string
+  counts?: CompanyUnreadCounts
+  device?: PhoneNotificationDevicePayload
+  kind?: 'assigned' | 'newMessage' | 'newRequest' | 'requestUpdated'
+  requestId?: string
+  subtitle?: string
   text?: string
   title?: string
 }
@@ -200,15 +238,20 @@ const REFERENCE_VIEWPORT_WIDTH = 1920
 const REFERENCE_VIEWPORT_HEIGHT = 1080
 const PHONE_BASE_SCALE = 0.69
 const DEVELOPMENT_PHONE_SCALE = 1.25
+const PHONE_PORTRAIT_WIDTH = 390
+const PHONE_PORTRAIT_HEIGHT = 844
+const MIN_PRODUCTION_PHONE_ZOOM = 260 / PHONE_PORTRAIT_WIDTH
 const isDevelopment = import.meta.env.DEV
 
 const phone = usePhoneStore()
 const account = useAccountStore()
+const appAuth = useAppAuthStore()
 const clock = useClockStore()
 const games = useGamesStore()
 const calls = useCallsStore()
 const banking = useBankingStore()
 const billing = useBillingStore()
+const companies = useCompaniesStore()
 const mail = useMailStore()
 const messages = useMessagesStore()
 const darkchat = useDarkChatStore()
@@ -218,14 +261,19 @@ const picstagram = usePicstagramStore()
 const feather = useFeatherStore()
 const media = useMediaStore()
 const marketplace = useMarketplaceStore()
+const appCatalog = useAppCatalogStore()
 const appStore = useAppStoreStore()
 const widgets = useWidgetsStore()
 const notes = useNotesStore()
 const weather = useWeatherStore()
+const easyShare = useEasyShareStore()
 const notifications = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
 const isAppRoute = computed(() => route.name === 'app')
+const showActiveCallReturn = computed(
+  () => Boolean(calls.activeCall) && route.params.appId !== 'phone',
+)
 const appTransitionName = computed(() =>
   route.query.transition === 'app-switch' ? 'app-switch' : 'app-window',
 )
@@ -248,11 +296,34 @@ const phoneBaseZoom = computed(
     viewportScale.value *
     (isDevelopment ? DEVELOPMENT_PHONE_SCALE : PHONE_BASE_SCALE),
 )
+const phoneZoom = computed(() => {
+  const preferred =
+    phoneBaseZoom.value * (phone.preferences.settings.phoneScale / 100)
+  if (isDevelopment) return preferred
+
+  const edgeGap = 24 * viewportScale.value
+  const shellWidth = phone.cameraLandscape
+    ? PHONE_PORTRAIT_HEIGHT
+    : PHONE_PORTRAIT_WIDTH
+  const shellHeight = phone.cameraLandscape
+    ? PHONE_PORTRAIT_WIDTH
+    : PHONE_PORTRAIT_HEIGHT
+  const viewportMaximum = Math.max(
+    0,
+    Math.min(
+      (window.innerWidth - edgeGap) / shellWidth,
+      (window.innerHeight - edgeGap) / shellHeight,
+    ),
+  )
+  return Math.min(
+    viewportMaximum,
+    Math.max(MIN_PRODUCTION_PHONE_ZOOM, preferred),
+  )
+})
 const phoneResolutionStyle = computed<CSSProperties>(() => ({
   '--phone-edge-gap': `${24 * viewportScale.value}px`,
   '--phone-stack-gap': `${16 * viewportScale.value}px`,
-  '--phone-zoom':
-    phoneBaseZoom.value * (phone.preferences.settings.phoneScale / 100),
+  '--phone-zoom': phoneZoom.value,
 }))
 const phoneStageStyle = computed<CSSProperties>(() => ({
   ...phoneResolutionStyle.value,
@@ -267,9 +338,13 @@ const phoneFrameImage = computed(
   () => PHONE_FRAME_IMAGES[phone.preferences.settings.frame],
 )
 let clockTicker: ReturnType<typeof setInterval> | undefined
+let companiesChangeTimer: number | undefined
+let pendingCompaniesChange: CompanyChangedPayload | null = null
 let unlockTimer: number | undefined
 let passcodeLockTimer: number | undefined
 let unlockedServicesIdle: number | undefined
+let phoneClosePending = false
+let simPickerClosePending = false
 
 function getViewportScale(): number {
   const heightScale = window.innerHeight / REFERENCE_VIEWPORT_HEIGHT
@@ -279,7 +354,16 @@ function getViewportScale(): number {
 }
 
 function hydratePhone(payload: PhoneOpenPayload): void {
+  if (payload.device?.imei) {
+    companies.bindDeviceScope(
+      payload.device.imei,
+      payload.device.sim?.id ?? null,
+    )
+  }
   phone.open(payload)
+  phone.ensureAppNotificationPreferences(
+    appCatalog.externalApps.map((app) => app.id),
+  )
   if (payload.device?.imei) {
     notifications.hydrate(
       payload.device.data.notifications?.payload,
@@ -288,6 +372,10 @@ function hydratePhone(payload: PhoneOpenPayload): void {
     notifications.hideDevicePreview(payload.device.imei)
   }
   account.hydrate(payload.account ?? null)
+  appAuth.hydrate(
+    payload.device?.data.appAuth?.payload,
+    payload.account?.email ?? '',
+  )
   notes.hydrate(payload.notes ?? [])
   clock.hydrate(payload.device?.data.alarms?.payload)
   games.hydrate(payload.device?.data.games?.payload)
@@ -306,6 +394,31 @@ function cancelUnlockedPhoneDataLoad(): void {
   unlockedServicesIdle = undefined
 }
 
+function queueCompaniesChange(change: CompanyChangedPayload): void {
+  if (!pendingCompaniesChange) {
+    pendingCompaniesChange = { ...change }
+  } else {
+    pendingCompaniesChange = {
+      area: pendingCompaniesChange.area === change.area ? change.area : 'all',
+      companyId:
+        pendingCompaniesChange.companyId === change.companyId
+          ? change.companyId
+          : undefined,
+      requestId:
+        pendingCompaniesChange.requestId === change.requestId
+          ? change.requestId
+          : undefined,
+    }
+  }
+  if (companiesChangeTimer !== undefined) return
+  companiesChangeTimer = window.setTimeout(() => {
+    companiesChangeTimer = undefined
+    const queuedChange = pendingCompaniesChange
+    pendingCompaniesChange = null
+    if (queuedChange) void companies.applyChanged(queuedChange)
+  }, 2000)
+}
+
 async function bootstrapUnlockedPhoneData(): Promise<void> {
   const tasks: Array<() => Promise<unknown> | void> = [
     () => calls.bootstrap(),
@@ -316,6 +429,7 @@ async function bootstrapUnlockedPhoneData(): Promise<void> {
       if (account.email) return marketplace.loadCounts()
       marketplace.setCounts({ active: 0, unread: 0 })
     },
+    () => companies.refreshUnreadCounts(),
     () => (account.email ? darkchat.bootstrap() : undefined),
   ]
 
@@ -370,6 +484,7 @@ async function hydrateDevelopmentPhone(): Promise<void> {
       sim: {
         id: 'development-sim',
         number: '5551234567',
+        removable: true,
         registered: true,
         type: 'registered',
       },
@@ -379,15 +494,87 @@ async function hydrateDevelopmentPhone(): Promise<void> {
   })
 }
 
+function openDevelopmentPayphonePreview(): void {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        data: {
+          currency: '$',
+          locales: {
+            busy: 'LINE BUSY',
+            call: 'CALL',
+            callEnded: 'CALL ENDED',
+            clear: 'Clear number',
+            close: 'Close payphone',
+            connected: 'CONNECTED',
+            cost: 'COST',
+            declined: 'CALL DECLINED',
+            delete: 'Delete digit',
+            dialing: 'DIALING',
+            disconnected: 'DISCONNECTED',
+            elapsed: 'TIME',
+            hangup: 'HANG UP',
+            insufficientFunds: 'OUT OF MONEY',
+            invalidNumber: 'ENTER A VALID NUMBER',
+            keypad: 'Dial pad',
+            noAnswer: 'NO ANSWER',
+            numberLabel: 'NUMBER TO CALL',
+            numberPlaceholder: 'Enter a phone number',
+            rate: '{currency}{price} / SEC',
+            ready: 'READY',
+            requestFailed: 'CALL COULD NOT BE STARTED',
+            ringing: 'RINGING',
+            subtitle: 'PUBLIC TELEPHONE',
+            title: 'PAYPHONE',
+            unavailable: 'NUMBER UNAVAILABLE',
+            voiceUnavailable: 'VOICE SERVICE UNAVAILABLE',
+          },
+          maxNumberLength: 10,
+          pricePerSecond: 2,
+        },
+        type: 'payphone:open',
+      },
+    }),
+  )
+}
+
 function onMessage(event: MessageEvent<AppMessage>): void {
-  if (event.data?.type === 'app:open') {
+  if (!isTrustedRootMessageSource(event.source, window)) return
+
+  if (event.data?.type === 'custom-apps:catalog') {
+    appCatalog.replaceCatalog(event.data.data)
+    const activeAppId = route.params.appId
+    if (typeof activeAppId === 'string' && !isPhoneAppId(activeAppId)) {
+      void router.push('/')
+    }
+  } else if (event.data?.type === 'custom-app:message') {
+    const data = event.data.data as CustomAppEventData | undefined
+    if (typeof data?.appId === 'string') {
+      appCatalog.queueHostMessage(data.appId, data.payload)
+    } else {
+      console.error('[Custom apps] Ignored a message without a valid app id.')
+    }
+  } else if (event.data?.type === 'custom-app:open') {
+    const data = event.data.data as CustomAppEventData | undefined
+    if (
+      typeof data?.appId === 'string' &&
+      appCatalog.requestOpen(data.appId, data.data)
+    ) {
+      void router.push(`/apps/${data.appId}`)
+    }
+  } else if (event.data?.type === 'custom-app:close') {
+    const data = event.data.data as CustomAppEventData | undefined
+    if (typeof data?.appId === 'string' && route.params.appId === data.appId) {
+      void router.push('/')
+    }
+  } else if (event.data?.type === 'app:open') {
     hydratePhone(event.data.data as PhoneOpenPayload)
     void nuiCall('ui:opened')
   } else if (event.data?.type === 'device:updated') {
     hydratePhone(event.data.data as PhoneOpenPayload)
   } else if (event.data?.type === 'app:close') {
     activitySuspended.value = false
-    phone.close()
+    phone.endDeviceSession()
   } else if (event.data?.type === 'app:suspend') {
     activitySuspended.value = true
   } else if (event.data?.type === 'app:resume') {
@@ -396,10 +583,7 @@ function onMessage(event: MessageEvent<AppMessage>): void {
     const data = event.data.data as NotificationEventData
     const { device, ...input } = data
     const notification: PhoneNotificationInput = input
-    if (
-      device &&
-      (!phone.isOpen || device.imei !== phone.device?.imei)
-    ) {
+    if (device && (!phone.isOpen || device.imei !== phone.device?.imei)) {
       notification.device = {
         imei: device.imei,
         name: device.name,
@@ -441,6 +625,47 @@ function onMessage(event: MessageEvent<AppMessage>): void {
   } else if (event.data?.type === 'marketplace:changed' && event.data.data) {
     const data = event.data.data as MarketplaceEventData
     if (data.counts) marketplace.setCounts(data.counts)
+  } else if (event.data?.type === 'companies:changed') {
+    const data = event.data.data as CompaniesEventData | undefined
+    if (data?.counts) companies.applyUnreadCounts(data.counts)
+    if (data?.area) {
+      queueCompaniesChange({
+        area: data.area,
+        companyId: data.companyId,
+        requestId: data.requestId,
+      })
+    } else if (!data?.counts) queueCompaniesChange({ area: 'all' })
+  } else if (event.data?.type === 'companies:notification' && event.data.data) {
+    const data = event.data.data as CompaniesEventData
+    if (data.counts) companies.applyUnreadCounts(data.counts)
+
+    const notification: PhoneNotificationInput = {
+      appId: 'companies',
+      ...(data.requestId && data.area
+        ? {
+            route: `/apps/companies?requestId=${encodeURIComponent(data.requestId)}&area=${encodeURIComponent(data.area)}`,
+          }
+        : {}),
+      persistent: !phone.isOpen && Boolean(data.requestId && data.area),
+      subtitle: data.subtitle,
+      text:
+        data.text ??
+        phone.t(
+          `Apps.companies.notifications.${data.kind ?? 'requestUpdated'}`,
+        ),
+      title: data.title ?? phone.t('Apps.companies.name'),
+    }
+    if (
+      data.device &&
+      (!phone.isOpen || data.device.imei !== phone.device?.imei)
+    ) {
+      notification.device = {
+        imei: data.device.imei,
+        name: data.device.name,
+        preferences: parsePhonePreferences(data.device.settings ?? null),
+      }
+    }
+    notifications.show(notification)
   } else if (
     event.data?.type === 'fliptok:verification-changed' &&
     event.data.data
@@ -568,6 +793,8 @@ function onMessage(event: MessageEvent<AppMessage>): void {
     notifications.show(notification)
   } else if (event.data?.type === 'contacts:changed') {
     void calls.loadContacts()
+  } else if (event.data?.type === 'easyshare:changed' && event.data.data) {
+    easyShare.applyEvent(event.data.data as EasyShareEvent)
   } else if (event.data?.type === 'messages:changed') {
     void messages.loadConversations()
     if (messages.activeNumber) void messages.openThread(messages.activeNumber)
@@ -702,10 +929,7 @@ function onMessage(event: MessageEvent<AppMessage>): void {
       }
     }
     notifications.show(notification)
-  } else if (
-    event.data?.type === 'crewlink:notification' &&
-    event.data.data
-  ) {
+  } else if (event.data?.type === 'crewlink:notification' && event.data.data) {
     const data = event.data.data as CrewLinkNotificationData
     const notification: PhoneNotificationInput = {
       appId: 'crewlink',
@@ -744,14 +968,69 @@ function onMessage(event: MessageEvent<AppMessage>): void {
   }
 }
 
+async function closeSimPicker(): Promise<void> {
+  if (simPickerClosePending || !simPicker.value) return
+  simPickerClosePending = true
+  const closingPicker = simPicker.value
+  try {
+    const response = await nuiCall('sim:picker-close')
+    if (response.success && simPicker.value === closingPicker) {
+      simPicker.value = null
+    }
+  } finally {
+    simPickerClosePending = false
+  }
+}
+
+async function closePhone(): Promise<void> {
+  if (phoneClosePending || !phone.isOpen) return
+  phoneClosePending = true
+  const closingGeneration = phone.persistenceGeneration
+  const closingImei = phone.device?.imei ?? null
+  const closingToken = phone.deviceSessionToken
+  try {
+    await phone.flushDevicePersistence()
+    if (
+      !phone.isOpen ||
+      phone.persistenceGeneration !== closingGeneration ||
+      (phone.device?.imei ?? null) !== closingImei ||
+      phone.deviceSessionToken !== closingToken
+    ) {
+      return
+    }
+    const response = await nuiCall('close')
+    if (
+      !response.success ||
+      !phone.isOpen ||
+      phone.persistenceGeneration !== closingGeneration ||
+      (phone.device?.imei ?? null) !== closingImei ||
+      phone.deviceSessionToken !== closingToken
+    ) {
+      return
+    }
+    phone.endDeviceSession()
+  } finally {
+    phoneClosePending = false
+  }
+}
+
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !phone.isOpen || activitySuspended.value) return
-  if (controlCenterOpened.value) {
-    controlCenterOpened.value = false
+  if (event.key !== 'Escape') return
+  if (simPicker.value) {
+    event.preventDefault()
+    void closeSimPicker()
     return
   }
-  phone.close()
-  void nuiCall('close')
+
+  queueMicrotask(() => {
+    if (event.defaultPrevented || !phone.isOpen || activitySuspended.value)
+      return
+    if (controlCenterOpened.value) {
+      controlCenterOpened.value = false
+      return
+    }
+    void closePhone()
+  })
 }
 
 function onSystemColorSchemeChange(event: MediaQueryListEvent): void {
@@ -799,6 +1078,28 @@ function unlockPhone(): void {
     return
   }
   finishUnlock()
+}
+
+function openLockScreenNotification(notification: PhoneNotification): void {
+  if (!notification.route) return
+  pendingUnlockRoute.value = notification.route
+  notifications.dismissFromLockScreen(notification.id)
+  unlockPhone()
+}
+
+async function openNotificationPreview(
+  notification: PhoneNotification,
+): Promise<void> {
+  if (!notification.route) return
+  const imei = notification.device?.imei ?? phone.device?.imei
+  if (!imei) return
+  pendingUnlockRoute.value = notification.route
+  const response = await nuiCall('device:notification-open', { imei })
+  if (!response.success) {
+    pendingUnlockRoute.value = null
+    return
+  }
+  notifications.dismissFromLockScreen(notification.id, imei)
 }
 
 function cancelPasscode(): void {
@@ -862,6 +1163,12 @@ function lockPhone(): void {
   isLocked.value = true
 }
 
+function returnToActiveCall(): void {
+  if (!calls.activeCall) return
+  controlCenterOpened.value = false
+  void router.push('/apps/phone')
+}
+
 function unlockCamera(): void {
   if (phone.security.enabled) {
     pendingUnlockRoute.value = '/apps/camera'
@@ -878,7 +1185,7 @@ onMounted(() => {
   window.addEventListener('resize', updateViewportScale)
   systemColorScheme.addEventListener('change', onSystemColorSchemeChange)
   phone.setSystemDarkMode(systemColorScheme.matches)
-  void nuiCall('ui:ready')
+  void nuiCall('ui:ready', { protocolVersion: 1 })
   clockTicker = setInterval(() => {
     const now = Date.now()
     for (const alarm of clock.dueAlarms(now)) {
@@ -907,8 +1214,9 @@ onMounted(() => {
     }
   }, 1000)
   if (isDevelopment) {
+    const developmentParameters = new URLSearchParams(window.location.search)
     void hydrateDevelopmentPhone()
-    if (new URLSearchParams(window.location.search).has('simPickerPreview')) {
+    if (developmentParameters.has('simPickerPreview')) {
       simPicker.value = {
         choices: [
           {
@@ -926,24 +1234,31 @@ onMounted(() => {
         number: '5551234567',
       }
     }
+    if (developmentParameters.has('payphonePreview')) {
+      openDevelopmentPayphonePreview()
+    }
   }
 })
 
 watch(
   () => route.params.appId,
   (appId) => {
-    if (typeof appId === 'string' && isPhoneAppId(appId)) {
+    if (
+      phone.isOpen &&
+      phone.device?.imei &&
+      appStore.hydrated &&
+      typeof appId === 'string' &&
+      isPhoneAppId(appId)
+    ) {
       appStore.recordLaunch(appId)
     }
   },
 )
 
 watch(
-  [() => notifications.requiresAttention, () => calls.activeCall],
-  ([requiresAttention, activeCall]) => {
-    void nuiCall('notification:focus', {
-      active: requiresAttention || activeCall !== null,
-    })
+  () => notifications.requiresAttention,
+  (requiresAttention) => {
+    void nuiCall('notification:focus', { active: requiresAttention })
   },
 )
 
@@ -953,6 +1268,7 @@ watch(
     if (unlockTimer !== undefined) window.clearTimeout(unlockTimer)
     if (!isOpen) {
       cancelUnlockedPhoneDataLoad()
+      appStore.cancelPendingInstalls()
       activitySuspended.value = false
       weather.stop()
       controlCenterOpened.value = false
@@ -1001,6 +1317,9 @@ onBeforeUnmount(() => {
   cancelUnlockedPhoneDataLoad()
   weather.stop()
   if (clockTicker) clearInterval(clockTicker)
+  if (companiesChangeTimer !== undefined) {
+    window.clearTimeout(companiesChangeTimer)
+  }
   if (unlockTimer !== undefined) window.clearTimeout(unlockTimer)
   if (passcodeLockTimer !== undefined) window.clearInterval(passcodeLockTimer)
   window.removeEventListener('message', onMessage)
@@ -1018,7 +1337,7 @@ onBeforeUnmount(() => {
     v-if="simPicker"
     :choices="simPicker.choices"
     :number="simPicker.number"
-    @close="simPicker = null"
+    @close="closeSimPicker"
   />
   <Transition name="phone-lift" appear>
     <main
@@ -1047,6 +1366,7 @@ onBeforeUnmount(() => {
               100)
           "
           @close="notifications.dismiss(notification.id)"
+          @open="openNotificationPreview"
         />
         <div
           v-if="phone.isOpen || notifications.current"
@@ -1076,15 +1396,19 @@ onBeforeUnmount(() => {
                 :style="phoneDisplayStyle"
                 :class="{
                   dark: phone.isDarkMode,
+                  'phone-app--darkchat': route.params.appId === 'darkchat',
                   'phone-app--light': !phone.isDarkMode,
+                  'phone-app--messages': route.params.appId === 'messages',
                   [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
                   'phone-app--unlocking': isUnlocking,
                 }"
               >
                 <PhoneStatusBar
                   v-if="!isLocked"
+                  :active-call-return="showActiveCallReturn"
                   :control-center-opened="controlCenterOpened"
                   lockable
+                  @active-call="returnToActiveCall"
                   @control-center="toggleControlCenter"
                   @lock="lockPhone"
                 />
@@ -1110,6 +1434,7 @@ onBeforeUnmount(() => {
                     @camera="unlockCamera"
                     @clear-notifications="notifications.clearLockScreen"
                     @dismiss-notification="notifications.dismissFromLockScreen"
+                    @open-notification="openLockScreenNotification"
                     @unlock="unlockPhone"
                   />
                 </Transition>
@@ -1136,7 +1461,9 @@ onBeforeUnmount(() => {
                 <PhoneNotifications
                   :notification="phone.isOpen ? null : notifications.current"
                   @close="notifications.dismissCurrent()"
+                  @open="openNotificationPreview"
                 />
+                <EasyShareSheet />
                 <div class="phone-display-dimmer" aria-hidden="true"></div>
               </k-app>
             </div>

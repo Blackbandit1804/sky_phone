@@ -78,6 +78,7 @@ import type {
   SkyRideRide,
   SkyRideRideStatus,
 } from '@/types/skyride'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type SkyRideTab = 'home' | 'rides' | 'activity' | 'messages' | 'profile'
 type LocationTarget = 'pickup' | 'destination'
@@ -677,6 +678,7 @@ function selectTab(tab: SkyRideTab): void {
 }
 
 function handleSkyRideMessage(event: MessageEvent<unknown>): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (typeof event.data !== 'object' || event.data === null) return
   const message = event.data as Partial<SkyRideChangedMessage>
   if (message.type !== 'skyride:changed' || !message.data) return
@@ -731,6 +733,7 @@ onBeforeUnmount(() => {
     <div class="skyride-ambient" aria-hidden="true"></div>
     <k-navbar
       class="skyride-navbar"
+      title-class="skyride-navbar__title"
       :title="phone.t('Apps.skyride.name')"
       :subtitle="phone.t(`Apps.skyride.mode.${mode}`)"
     />
@@ -1808,13 +1811,14 @@ onBeforeUnmount(() => {
           </div>
           <k-link
             component="button"
+            class="skyride-sheet__close"
             :link-props="{ type: 'button' }"
             :aria-label="phone.t('Common.close')"
             @click="locationTarget = null"
             ><X :size="20"
           /></k-link>
         </div>
-        <k-list inset strong>
+        <k-list inset strong class="skyride-sheet-list">
           <k-list-item
             link
             :title="phone.t('Apps.skyride.currentLocation')"
@@ -1830,8 +1834,10 @@ onBeforeUnmount(() => {
             ><template #media><MapPin :size="19" /></template
           ></k-list-item>
         </k-list>
-        <k-block-title>{{ phone.t('Apps.skyride.savedPlaces') }}</k-block-title>
-        <k-list inset strong>
+        <k-block-title class="skyride-sheet-section-title">{{
+          phone.t('Apps.skyride.savedPlaces')
+        }}</k-block-title>
+        <k-list inset strong class="skyride-sheet-list skyride-saved-list">
           <k-list-item
             v-for="location in skyride.quickLocations"
             :key="location.id ?? location.label"
@@ -1999,6 +2005,23 @@ onBeforeUnmount(() => {
   color: var(--ride-text);
 }
 
+.skyride-navbar :deep(.skyride-navbar__title) {
+  color: var(--ride-text);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 20px;
+  letter-spacing: -0.25px;
+}
+
+.skyride-navbar :deep(.skyride-navbar__title > div) {
+  margin-top: 1px;
+  color: var(--ride-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 14px;
+  opacity: 1;
+}
+
 .skyride-mode {
   z-index: 21;
   position: relative;
@@ -2008,6 +2031,12 @@ onBeforeUnmount(() => {
 
 .skyride-mode > :deep(*) {
   width: 100%;
+}
+
+.skyride-mode :deep(button) {
+  min-height: 38px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .skyride-scroll {
@@ -2259,16 +2288,19 @@ onBeforeUnmount(() => {
 .skyride-ride-status-card p {
   margin: 0;
   color: var(--ride-muted);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 18px;
 }
 
 .skyride-heading h1,
 .skyride-ride-status-card h1,
 .skyride-screen-title h1 {
   margin: 2px 0 0;
-  font-size: 23px;
-  line-height: 1.08;
-  letter-spacing: -0.5px;
+  color: var(--ride-text);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 28px;
+  letter-spacing: -0.55px;
 }
 
 .skyride-heading__icon,
@@ -2325,8 +2357,13 @@ onBeforeUnmount(() => {
 }
 
 .skyride-custom-block-title {
-  margin: 18px 4px 10px !important;
+  height: auto !important;
+  margin: 20px 4px 10px !important;
   padding: 0 !important;
+  color: var(--ride-muted) !important;
+  font-size: 15px !important;
+  font-weight: 650 !important;
+  line-height: 20px !important;
 }
 
 .skyride-quick-card,
@@ -2385,11 +2422,11 @@ onBeforeUnmount(() => {
 .skyride-quick-card {
   display: flex;
   width: 100%;
-  min-height: 68px;
+  min-height: 64px;
   align-items: center;
   justify-content: flex-start;
-  gap: 9px;
-  padding: 12px;
+  gap: 10px;
+  padding: 11px 13px;
   color: inherit;
   text-align: left;
 }
@@ -2403,9 +2440,9 @@ onBeforeUnmount(() => {
   display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 650;
-  line-height: 1.18;
+  line-height: 16px;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -2413,7 +2450,11 @@ onBeforeUnmount(() => {
 
 .skyride-primary {
   width: calc(100% - 4px);
+  min-height: 50px;
   margin: 4px 2px 0;
+  gap: 5px;
+  font-size: 16px;
+  font-weight: 650;
 }
 
 .skyride-primary :deep(svg) {
@@ -2747,7 +2788,8 @@ onBeforeUnmount(() => {
 .skyride-request-card span,
 .skyride-history-card span {
   color: var(--ride-muted);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .skyride-driver-metrics :deep(.k-card) {
@@ -2788,6 +2830,12 @@ onBeforeUnmount(() => {
   flex-direction: column;
 }
 
+.skyride-request-card__top > div > span,
+.skyride-history-card__header > div > span {
+  font-size: 11px;
+  line-height: 15px;
+}
+
 .skyride-request-route,
 .skyride-history-route {
   display: grid;
@@ -2803,6 +2851,8 @@ onBeforeUnmount(() => {
 .skyride-request-route span,
 .skyride-history-route span {
   overflow: hidden;
+  font-size: 12px;
+  line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2930,11 +2980,6 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(26px);
 }
 
-.skyride-tabbar :deep(.k-tabbar-link-label) {
-  font-size: 9px;
-  line-height: 1.1;
-}
-
 .skyride-tabbar :deep(.skyride-tabbar__inner) {
   width: 100% !important;
   max-width: none !important;
@@ -2950,9 +2995,24 @@ onBeforeUnmount(() => {
 .skyride-tab-pane :deep(> .k-link) {
   flex: 1 1 20%;
   min-width: 0 !important;
-  padding-inline: 4px !important;
+  min-height: 58px;
+  padding-inline: 3px !important;
   border-radius: 999px;
   outline: none;
+}
+
+.skyride-tab-pane :deep(> .k-link > span > span:last-child) {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 13px;
+  text-overflow: ellipsis;
+}
+
+.skyride-tab-pane :deep(> .k-link .k-tabbar-link-icon) {
+  width: 26px;
+  height: 26px;
 }
 
 .skyride-sheet__content {
@@ -2983,15 +3043,61 @@ onBeforeUnmount(() => {
 .skyride-sheet__title span,
 .skyride-rating-label {
   color: var(--ride-muted);
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 14px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.65px;
 }
 
 .skyride-sheet__title h2,
 .skyride-rating h2 {
-  margin: 2px 0 0;
-  font-size: 21px;
+  margin: 3px 0 0;
+  color: var(--ride-text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 27px;
+  letter-spacing: -0.35px;
+}
+
+.skyride-sheet__close {
+  display: grid;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  margin-right: -8px;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.skyride-sheet-list {
+  margin-block: 0 !important;
+}
+
+.skyride-sheet-list :deep(.text-\[17px\]) {
+  color: var(--ride-text);
+  font-size: 16px;
+  line-height: 21px;
+}
+
+.skyride-sheet-list :deep(.text-sm) {
+  color: var(--ride-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.skyride-sheet-section-title {
+  height: auto !important;
+  margin: 22px 4px 10px !important;
+  padding: 0 !important;
+  color: var(--ride-muted) !important;
+  font-size: 15px !important;
+  font-weight: 650 !important;
+  line-height: 20px !important;
+}
+
+.skyride-saved-list {
+  margin-bottom: 4px !important;
 }
 
 .skyride-rating {

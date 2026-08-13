@@ -1,7 +1,20 @@
 <script setup lang="ts">
-import { kDialog, kDialogButton, kPage, kPreloader, kToast } from 'konsta/vue'
+import {
+  kDialog,
+  kDialogButton,
+  kFab,
+  kLink,
+  kNavbar,
+  kNavbarBackLink,
+  kPage,
+  kPreloader,
+  kToast,
+  kToolbar,
+  kToolbarPane,
+} from 'konsta/vue'
 import {
   ArrowLeft,
+  Check,
   ChevronRight,
   FileText,
   Forward,
@@ -14,6 +27,7 @@ import {
   RotateCcw,
   Search,
   Send,
+  Share2,
   ShieldCheck,
   SquarePen,
   Trash2,
@@ -26,6 +40,7 @@ import MailMarkdownEditor, {
   type MailEditorLabels,
 } from '@/components/MailMarkdownEditor.vue'
 import { useMailStore } from '@/stores/mail'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type {
   MailComposeDraft,
@@ -44,6 +59,7 @@ import {
   mailPlainText,
   parseMailRecipients,
 } from '@/utils/mail'
+import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
 import {
   clampMailSwipeOffset,
   resolveMailSwipeAction,
@@ -51,6 +67,7 @@ import {
   type MailSwipeAction,
   type MailSwipeAxis,
 } from '@/utils/mailSwipe'
+import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type AuthMode = 'login' | 'register'
 type MailScreen = 'folders' | 'list' | 'message' | 'compose'
@@ -71,9 +88,11 @@ type MailSwipeState = {
 }
 
 const MAIL_SWIPE_COMMIT_ANIMATION_MS = 180
+const MAIL_DELETE_BATCH_SIZE = 50
 
 const phone = usePhoneStore()
 const mail = useMailStore()
+const easyShare = useEasyShareStore()
 const authMode = ref<AuthMode>('login')
 const authEmail = ref('')
 const authPassword = ref('')
@@ -92,6 +111,9 @@ const toastText = ref('')
 const emptyTrashOpened = ref(false)
 const swipeState = ref<MailSwipeState | null>(null)
 const ignoredRowClick = ref<string | null>(null)
+const selecting = ref(false)
+const selectedItemKeys = ref<string[]>([])
+const deletingSelected = ref(false)
 let draftTimer: ReturnType<typeof setTimeout> | undefined
 let ignoredRowClickTimer: ReturnType<typeof setTimeout> | undefined
 let searchTimer: ReturnType<typeof setTimeout> | undefined
@@ -99,6 +121,11 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 const authenticated = computed(() => Boolean(mail.accountEmail))
 const folderTitle = computed(() => phone.t(`Apps.mail.${mail.folder}`))
+const selectedItems = computed(() =>
+  mail.items.filter((item) =>
+    selectedItemKeys.value.includes(mailItemKey(item)),
+  ),
+)
 const canSend = computed(
   () =>
     Boolean(parseMailRecipients(recipientText.value)) &&
@@ -174,14 +201,9 @@ function updateRecipientText(event: Event): void {
   recipientText.value = filteredEventValue(event, filterMailRecipientInput)
 }
 
-function parseDate(value: string): Date | null {
-  const date = new Date(value.replace(' ', 'T'))
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
-function formatDate(value: string): string {
-  const date = parseDate(value)
-  if (!date) return value
+function formatDate(value: DatabaseDateValue): string {
+  const date = parseDatabaseDate(value)
+  if (Number.isNaN(date.getTime())) return String(value)
   return new Intl.DateTimeFormat(phone.lang, {
     day: 'numeric',
     hour: '2-digit',
@@ -191,9 +213,9 @@ function formatDate(value: string): string {
   }).format(date)
 }
 
-function formatListDate(value: string): string {
-  const date = parseDate(value)
-  if (!date) return value
+function formatListDate(value: DatabaseDateValue): string {
+  const date = parseDatabaseDate(value)
+  if (Number.isNaN(date.getTime())) return String(value)
   const today = new Date()
   if (date.toDateString() === today.toDateString()) {
     return new Intl.DateTimeFormat(phone.lang, {
@@ -248,11 +270,57 @@ function mailRowClasses(item: MailListItem): Record<string, boolean> {
     'is-committing-delete': active && state.committing === 'delete',
     'is-committing-read': active && state.committing === 'read',
     'is-dragging': active && state.axis === 'horizontal' && !state.committing,
+    'is-selected': isMailSelected(item),
   }
 }
 
+function isMailSelected(item: MailListItem): boolean {
+  return selectedItemKeys.value.includes(mailItemKey(item))
+}
+
+function clearMailSelection(): void {
+  selecting.value = false
+  selectedItemKeys.value = []
+  swipeState.value = null
+}
+
+function toggleMailSelection(): void {
+  if (deletingSelected.value) return
+  if (selecting.value) {
+    clearMailSelection()
+    return
+  }
+  selecting.value = true
+  selectedItemKeys.value = []
+  swipeState.value = null
+}
+
+function toggleMailItemSelection(item: MailListItem): void {
+  const itemKey = mailItemKey(item)
+  if (selectedItemKeys.value.includes(itemKey)) {
+    selectedItemKeys.value = selectedItemKeys.value.filter(
+      (key) => key !== itemKey,
+    )
+    return
+  }
+  if (selectedItemKeys.value.length >= MAIL_DELETE_BATCH_SIZE) {
+    showToast(
+      phone.t('Apps.mail.selectionLimit', {
+        count: String(MAIL_DELETE_BATCH_SIZE),
+      }),
+    )
+    return
+  }
+  selectedItemKeys.value = [...selectedItemKeys.value, itemKey]
+}
+
 function beginMailSwipe(item: MailListItem, event: PointerEvent): void {
-  if (!event.isPrimary || event.button !== 0 || swipeState.value?.committing) {
+  if (
+    selecting.value ||
+    !event.isPrimary ||
+    event.button !== 0 ||
+    swipeState.value?.committing
+  ) {
     return
   }
 
@@ -268,6 +336,7 @@ function beginMailSwipe(item: MailListItem, event: PointerEvent): void {
 }
 
 function moveMailSwipe(item: MailListItem, event: PointerEvent): void {
+  if (selecting.value) return
   const state = swipeState.value
   if (
     !state ||
@@ -306,7 +375,7 @@ async function executeSwipeAction(
   action: MailSwipeAction,
 ): Promise<boolean> {
   if (action === 'read') {
-    return mail.mutateEntry('mail:set-read', Number(item.id), { isRead: true })
+    return mail.mutateEntry('mail:set-read', Number(item.id), { read: true })
   }
 
   if (mail.folder === 'drafts') {
@@ -338,6 +407,7 @@ async function commitMailSwipe(
 }
 
 function endMailSwipe(item: MailListItem, event: PointerEvent): void {
+  if (selecting.value) return
   const state = swipeState.value
   if (
     !state ||
@@ -378,6 +448,10 @@ function cancelMailSwipe(item: MailListItem, event: PointerEvent): void {
 }
 
 function handleMailRowClick(item: MailListItem): void {
+  if (selecting.value) {
+    toggleMailItemSelection(item)
+    return
+  }
   const itemKey = mailItemKey(item)
   if (ignoredRowClick.value === itemKey) {
     ignoredRowClick.value = null
@@ -440,6 +514,7 @@ async function signOut(): Promise<void> {
 }
 
 async function openFolder(folder: MailFolder): Promise<void> {
+  clearMailSelection()
   if (!(await mail.loadFolder(folder))) {
     showToast(errorText())
     return
@@ -562,6 +637,19 @@ function composeForward(): void {
     beginCompose(buildForwardDraft(selectedMessage.value))
 }
 
+function shareMessage(): void {
+  if (!selectedMessage.value) return
+  easyShare.open({
+    appId: 'mail',
+    copyText: `${selectedMessage.value.subject}\n${mailPlainText(selectedMessage.value.body)}`,
+    id: selectedMessage.value.id,
+    kind: 'document',
+    link: `skyphone://mail/message/${selectedMessage.value.id}`,
+    subtitle: selectedMessage.value.sender,
+    title: selectedMessage.value.subject || phone.t('Apps.mail.untitled'),
+  })
+}
+
 async function mutateSelected(
   endpoint: string,
   extra: Record<string, unknown> = {},
@@ -577,6 +665,7 @@ async function mutateSelected(
 
 function updateSearch(event: Event): void {
   const value = eventValue(event)
+  if (selecting.value) clearMailSelection()
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
     void mail.loadFolder(mail.folder, value)
@@ -588,15 +677,39 @@ async function confirmEmptyTrash(): Promise<void> {
   if (!(await mail.emptyTrash())) showToast(errorText())
 }
 
+function clearMailSearch(): void {
+  if (selecting.value) clearMailSelection()
+  void mail.loadFolder(mail.folder, '')
+}
+
+async function deleteSelectedMessages(): Promise<void> {
+  if (deletingSelected.value || !selectedItems.value.length) return
+
+  deletingSelected.value = true
+  const deleted = await mail.deleteMany(
+    selectedItems.value.map((item) => item.id),
+  )
+  deletingSelected.value = false
+  if (!deleted) {
+    showToast(errorText())
+    return
+  }
+  clearMailSelection()
+}
+
 function goBack(): void {
-  if (screen.value === 'list') screen.value = 'folders'
-  else if (screen.value === 'message') screen.value = 'list'
+  if (deletingSelected.value) return
+  if (screen.value === 'list') {
+    clearMailSelection()
+    screen.value = 'folders'
+  } else if (screen.value === 'message') screen.value = 'list'
 }
 
 function onMailEvent(event: MessageEvent<MailEvent>): void {
+  if (!isTrustedRootMessageSource(event.source, window)) return
   if (event.data.type === 'mail:changed' && event.data.data?.counts) {
     mail.setCounts(event.data.data.counts)
-    if (screen.value === 'list') {
+    if (screen.value === 'list' && !deletingSelected.value) {
       void mail.loadFolder(mail.folder, mail.search)
     }
   }
@@ -606,6 +719,17 @@ watch([recipientText, subject, body], () => {
   composeTouched.value = true
   scheduleDraftSave()
 })
+
+watch(
+  () => mail.items.map((item) => mailItemKey(item)),
+  (visibleItemKeys) => {
+    if (!selecting.value) return
+    const visible = new Set(visibleItemKeys)
+    selectedItemKeys.value = selectedItemKeys.value.filter((key) =>
+      visible.has(key),
+    )
+  },
+)
 
 onMounted(() => window.addEventListener('message', onMailEvent))
 
@@ -794,14 +918,15 @@ onBeforeUnmount(() => {
         </div>
       </main>
 
-      <button
+      <k-fab
+        component="button"
         class="mail-compose-fab"
         type="button"
         :aria-label="phone.t('Apps.mail.compose')"
         @click="beginCompose()"
       >
-        <SquarePen :size="24" />
-      </button>
+        <template #icon><SquarePen :size="22" /></template>
+      </k-fab>
     </div>
   </k-page>
 
@@ -812,27 +937,40 @@ onBeforeUnmount(() => {
   >
     <div class="mail-screen">
       <header class="mail-header mail-header--list">
-        <button
-          class="mail-icon-button"
-          type="button"
+        <k-link
+          component="button"
+          icon-only
+          class="mail-header__back"
           :aria-label="phone.t('Apps.mail.mailboxes')"
           @click="goBack"
         >
           <ArrowLeft :size="21" />
-        </button>
-        <button
-          v-if="mail.folder === 'trash' && mail.items.length"
-          class="mail-header__text"
-          type="button"
-          @click="emptyTrashOpened = true"
-        >
-          {{ phone.t('Apps.mail.emptyTrash') }}
-        </button>
+        </k-link>
+        <div v-if="mail.items.length" class="mail-header__actions">
+          <k-link
+            v-if="mail.folder === 'trash' && !selecting"
+            component="button"
+            @click="emptyTrashOpened = true"
+          >
+            {{ phone.t('Apps.mail.emptyTrash') }}
+          </k-link>
+          <k-link
+            component="button"
+            :disabled="deletingSelected"
+            @click="toggleMailSelection"
+          >
+            {{ phone.t(selecting ? 'Common.done' : 'Apps.mail.select') }}
+          </k-link>
+        </div>
         <span v-else />
         <div class="mail-header__title">
-          <small
-            >{{ mail.items.length }} {{ phone.t('Apps.mail.messages') }}</small
-          >
+          <small>{{
+            selecting
+              ? phone.t('Apps.mail.selectedCount', {
+                  count: String(selectedItems.length),
+                })
+              : `${mail.items.length} ${phone.t('Apps.mail.messages')}`
+          }}</small>
           <h1>{{ folderTitle }}</h1>
         </div>
         <label class="mail-search">
@@ -846,7 +984,7 @@ onBeforeUnmount(() => {
             v-if="mail.search"
             type="button"
             :aria-label="phone.t('Common.close')"
-            @click="mail.loadFolder(mail.folder, '')"
+            @click="clearMailSearch"
           >
             <X :size="14" />
           </button>
@@ -879,14 +1017,19 @@ onBeforeUnmount(() => {
               class="mail-row"
               :class="{
                 'mail-row--unread': mail.folder === 'inbox' && !item.is_read,
+                'mail-row--selecting': selecting,
               }"
               type="button"
+              :aria-pressed="selecting ? isMailSelected(item) : undefined"
               @click="handleMailRowClick(item)"
             >
               <span
-                v-if="mail.folder === 'inbox' && !item.is_read"
+                v-if="!selecting && mail.folder === 'inbox' && !item.is_read"
                 class="mail-row__unread"
               />
+              <span v-if="selecting" class="mail-row__selection">
+                <Check v-if="isMailSelected(item)" :size="14" />
+              </span>
               <span
                 class="mail-avatar"
                 :class="{ 'mail-avatar--draft': mail.folder === 'drafts' }"
@@ -938,14 +1081,41 @@ onBeforeUnmount(() => {
         </div>
       </main>
 
-      <button
+      <k-fab
+        v-if="!selecting"
+        component="button"
         class="mail-compose-fab"
         type="button"
         :aria-label="phone.t('Apps.mail.compose')"
         @click="beginCompose()"
       >
-        <SquarePen :size="21" />
-      </button>
+        <template #icon><SquarePen :size="21" /></template>
+      </k-fab>
+      <k-toolbar
+        v-else
+        class="mail-selection-toolbar"
+        inner-class="mail-selection-toolbar__inner"
+        :outline="false"
+      >
+        <k-toolbar-pane class="mail-selection-toolbar__pane">
+          <span>
+            {{
+              phone.t('Apps.mail.selectedCount', {
+                count: String(selectedItems.length),
+              })
+            }}
+          </span>
+          <k-link
+            component="button"
+            :disabled="deletingSelected || !selectedItems.length"
+            @click="deleteSelectedMessages"
+          >
+            <k-preloader v-if="deletingSelected" />
+            <Trash2 v-else :size="18" />
+            {{ phone.t('Apps.mail.deleteSelected') }}
+          </k-link>
+        </k-toolbar-pane>
+      </k-toolbar>
     </div>
   </k-page>
 
@@ -955,25 +1125,26 @@ onBeforeUnmount(() => {
     :aria-label="selectedMessage.subject"
   >
     <div class="mail-screen">
-      <header class="mail-header mail-header--compact">
-        <button
-          class="mail-icon-button"
-          type="button"
-          :aria-label="folderTitle"
-          @click="goBack"
-        >
-          <ArrowLeft :size="21" />
-        </button>
-        <span class="mail-header__compact-title">{{ folderTitle }}</span>
-        <button
-          class="mail-icon-button"
-          type="button"
-          :aria-label="phone.t('Apps.mail.compose')"
-          @click="beginCompose()"
-        >
-          <SquarePen :size="19" />
-        </button>
-      </header>
+      <k-navbar class="mail-navbar" :title="folderTitle">
+        <template #left>
+          <k-navbar-back-link
+            component="button"
+            :text="folderTitle"
+            :aria-label="folderTitle"
+            @click="goBack"
+          />
+        </template>
+        <template #right>
+          <k-link
+            component="button"
+            icon-only
+            :aria-label="phone.t('Apps.mail.compose')"
+            @click="beginCompose()"
+          >
+            <SquarePen :size="20" />
+          </k-link>
+        </template>
+      </k-navbar>
 
       <article class="mail-message">
         <div class="mail-message__sender">
@@ -1001,88 +1172,127 @@ onBeforeUnmount(() => {
         </div>
       </article>
 
-      <footer class="mail-action-bar">
-        <button
-          type="button"
-          :aria-label="phone.t('Apps.mail.reply')"
-          @click="composeReply(false)"
-        >
-          <Reply :size="20" />
-        </button>
-        <button
-          type="button"
-          :aria-label="phone.t('Apps.mail.replyAll')"
-          @click="composeReply(true)"
-        >
-          <ReplyAll :size="20" />
-        </button>
-        <button
-          type="button"
-          :aria-label="phone.t('Apps.mail.forward')"
-          @click="composeForward"
-        >
-          <Forward :size="20" />
-        </button>
-        <button
-          v-if="selectedMessage.trashed_at"
-          type="button"
-          :aria-label="phone.t('Apps.mail.restore')"
-          @click="mutateSelected('mail:restore')"
-        >
-          <RotateCcw :size="20" />
-        </button>
-        <button
-          v-else
-          class="mail-action-bar__danger"
-          type="button"
-          :aria-label="phone.t('Apps.mail.moveToTrash')"
-          @click="mutateSelected('mail:trash')"
-        >
-          <Trash2 :size="20" />
-        </button>
-        <button
-          v-if="selectedMessage.trashed_at"
-          class="mail-action-bar__danger"
-          type="button"
-          :aria-label="phone.t('Apps.mail.deleteForever')"
-          @click="mutateSelected('mail:delete-forever')"
-        >
-          <Trash2 :size="20" />
-        </button>
-        <button
-          v-else
-          type="button"
-          :aria-label="phone.t('Apps.mail.markUnread')"
-          @click="mutateSelected('mail:set-read', { isRead: false })"
-        >
-          <MailOpen :size="20" />
-        </button>
-      </footer>
+      <k-toolbar
+        class="mail-action-bar"
+        inner-class="mail-action-bar__inner"
+        :outline="false"
+      >
+        <k-toolbar-pane class="mail-action-bar__pane">
+          <k-link
+            component="button"
+            icon-only
+            type="button"
+            :aria-label="phone.t('Apps.easyShare.share')"
+            @click="shareMessage"
+          >
+            <Share2 :size="20" />
+          </k-link>
+          <k-link
+            component="button"
+            icon-only
+            type="button"
+            :aria-label="phone.t('Apps.mail.reply')"
+            @click="composeReply(false)"
+          >
+            <Reply :size="20" />
+          </k-link>
+          <k-link
+            component="button"
+            icon-only
+            type="button"
+            :aria-label="phone.t('Apps.mail.replyAll')"
+            @click="composeReply(true)"
+          >
+            <ReplyAll :size="20" />
+          </k-link>
+          <k-link
+            component="button"
+            icon-only
+            type="button"
+            :aria-label="phone.t('Apps.mail.forward')"
+            @click="composeForward"
+          >
+            <Forward :size="20" />
+          </k-link>
+          <k-link
+            v-if="selectedMessage.trashed_at"
+            component="button"
+            icon-only
+            type="button"
+            :aria-label="phone.t('Apps.mail.restore')"
+            @click="mutateSelected('mail:restore')"
+          >
+            <RotateCcw :size="20" />
+          </k-link>
+          <k-link
+            v-else
+            component="button"
+            icon-only
+            class="mail-action-bar__danger"
+            type="button"
+            :aria-label="phone.t('Apps.mail.moveToTrash')"
+            @click="mutateSelected('mail:trash')"
+          >
+            <Trash2 :size="20" />
+          </k-link>
+          <k-link
+            v-if="selectedMessage.trashed_at"
+            component="button"
+            icon-only
+            class="mail-action-bar__danger"
+            type="button"
+            :aria-label="phone.t('Apps.mail.deleteForever')"
+            @click="mutateSelected('mail:delete-forever')"
+          >
+            <Trash2 :size="20" />
+          </k-link>
+          <k-link
+            v-else
+            component="button"
+            icon-only
+            type="button"
+            :aria-label="phone.t('Apps.mail.markUnread')"
+            @click="mutateSelected('mail:set-read', { read: false })"
+          >
+            <MailOpen :size="20" />
+          </k-link>
+        </k-toolbar-pane>
+      </k-toolbar>
     </div>
   </k-page>
 
   <k-page v-else-if="screen === 'compose'" class="mail-page">
     <div class="mail-screen mail-compose">
-      <header class="mail-header mail-header--compose">
-        <button
-          class="mail-icon-button mail-icon-button--large"
-          type="button"
-          :aria-label="phone.t('Common.cancel')"
-          @click="closeCompose"
-        >
-          <X :size="22" />
-        </button>
-        <h1>{{ phone.t('Apps.mail.compose') }}</h1>
-        <button
-          class="mail-icon-button mail-icon-button--large mail-icon-button--send"
-          type="button"
-          :disabled="!canSend"
-          :aria-label="phone.t('Common.send')"
-          @click="sendMessage"
-        >
-          <Send :size="20" />
-        </button>
-      </header>
+      <k-navbar
+        class="mail-navbar mail-compose__navbar"
+        left-class="mail-compose__nav-side mail-compose__nav-side--left"
+        right-class="mail-compose__nav-side mail-compose__nav-side--right"
+        title-class="mail-compose__nav-title"
+        :title="phone.t('Apps.mail.compose')"
+      >
+        <template #left>
+          <k-link
+            component="button"
+            class="mail-compose__nav-action"
+            type="button"
+            @click="closeCompose"
+          >
+            {{ phone.t('Common.cancel') }}
+          </k-link>
+        </template>
+        <template #right>
+          <k-link
+            component="button"
+            class="mail-compose__nav-action"
+            type="button"
+            :disabled="!canSend"
+            :aria-label="phone.t('Common.send')"
+            @click="sendMessage"
+          >
+            {{ phone.t('Common.send') }}
+          </k-link>
+        </template>
+      </k-navbar>
 
       <div class="mail-compose__fields">
         <label>
@@ -1261,38 +1471,10 @@ button {
   cursor: pointer;
 }
 
-.mail-icon-button {
-  display: grid;
+.mail-header__back {
   width: 38px;
   height: 38px;
-  place-items: center;
-  border: 1px solid #ffffff20;
-  border-radius: 50%;
-  background: #242426e8;
-  color: #f5f5f7;
-  box-shadow: inset 0 1px #ffffff18;
-  cursor: pointer;
-  transition:
-    transform 160ms cubic-bezier(0.22, 0.8, 0.3, 1),
-    border-color 160ms ease,
-    background-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.mail-icon-button:disabled {
-  color: #68686d;
-  cursor: default;
-}
-
-.mail-icon-button--large {
-  width: 44px;
-  height: 44px;
-}
-
-.mail-icon-button--send:not(:disabled) {
-  border-color: #0a84ff55;
-  background: var(--mail-blue);
+  color: var(--mail-blue);
 }
 
 .mail-folders {
@@ -1355,8 +1537,24 @@ button {
   grid-template-columns: 1fr 1fr;
 }
 
-.mail-header--list .mail-header__text {
+.mail-header--list > .mail-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   justify-self: end;
+  white-space: nowrap;
+}
+
+.mail-header__actions :deep(.k-link) {
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--mail-blue);
+  font-size: 12px;
+}
+
+.mail-header__actions :deep(.k-link:disabled) {
+  opacity: 0.4;
 }
 
 .mail-search {
@@ -1473,6 +1671,31 @@ button {
     transform 260ms cubic-bezier(0.22, 0.8, 0.3, 1),
     background-color 160ms ease;
   will-change: transform;
+}
+
+.mail-row--selecting {
+  grid-template-columns: 26px 48px minmax(0, 1fr) 15px;
+  gap: 9px;
+  padding-left: 11px;
+}
+
+.mail-row-shell.is-selected .mail-row {
+  background: #0a84ff1c;
+}
+
+.mail-row__selection {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1.5px solid #636366;
+  border-radius: 50%;
+  color: #fff;
+}
+
+.mail-row-shell.is-selected .mail-row__selection {
+  border-color: var(--mail-blue);
+  background: var(--mail-blue);
 }
 
 .mail-row-shell.is-dragging .mail-row {
@@ -1592,25 +1815,45 @@ button {
   z-index: 8;
   right: 17px;
   bottom: 32px;
-  display: grid;
-  width: 52px;
-  height: 52px;
-  place-items: center;
-  border: 1px solid #ffffff24;
-  border-radius: 50%;
-  background: #2c2c2ef0;
-  color: var(--mail-blue);
-  box-shadow:
-    0 8px 24px #000a,
-    inset 0 1px #ffffff24;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  cursor: pointer;
-  transition:
-    transform 180ms cubic-bezier(0.22, 0.8, 0.3, 1),
-    border-color 180ms ease,
-    background-color 180ms ease,
-    box-shadow 180ms ease;
+}
+
+.mail-selection-toolbar {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.mail-selection-toolbar :deep(.mail-selection-toolbar__inner) {
+  width: 100%;
+  max-width: 330px;
+}
+
+.mail-selection-toolbar :deep(.mail-selection-toolbar__pane) {
+  width: 100%;
+  gap: 14px;
+  padding: 0 7px 0 15px;
+}
+
+.mail-selection-toolbar :deep(.mail-selection-toolbar__pane > span) {
+  overflow: hidden;
+  color: #f5f5f7;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mail-selection-toolbar :deep(.k-link) {
+  gap: 6px;
+  color: #ff453a;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.mail-selection-toolbar :deep(.k-link:disabled) {
+  opacity: 0.4;
 }
 
 .mail-loading,
@@ -1649,21 +1892,42 @@ button {
   color: var(--mail-blue);
 }
 
-.mail-header--compact {
-  grid-template-columns: 44px 1fr 44px;
-  border-bottom: 1px solid var(--mail-border);
+.mail-navbar {
+  --k-safe-area-top: 46px;
+  color: #f5f5f7;
 }
 
-.mail-header__compact-title {
+.mail-navbar :deep(.k-link) {
+  color: var(--mail-blue);
+}
+
+.mail-navbar :deep(.k-link:disabled) {
+  opacity: 0.4;
+}
+
+.mail-compose__navbar :deep(.mail-compose__nav-side--left) {
+  margin-right: 12px;
+}
+
+.mail-compose__navbar :deep(.mail-compose__nav-side--right) {
+  margin-left: 12px;
+}
+
+.mail-compose__navbar :deep(.mail-compose__nav-title) {
+  max-width: 112px;
   overflow: hidden;
-  font-size: 14px;
-  font-weight: 650;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.mail-compose__navbar :deep(.mail-compose__nav-action) {
+  min-width: 54px;
+  justify-content: center;
+  padding-right: 10px;
+  padding-left: 10px;
 }
 
 .mail-message {
-  height: calc(100% - 102px);
+  height: calc(100% - 90px);
   overflow-y: auto;
   padding: 18px 18px 104px;
   user-select: text;
@@ -1716,43 +1980,27 @@ button {
 .mail-action-bar {
   position: absolute;
   z-index: 7;
-  right: 12px;
-  bottom: 25px;
-  left: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  padding: 8px;
-  border: 1px solid #ffffff24;
-  border-radius: 24px;
-  background: #242426e8;
-  box-shadow:
-    0 9px 28px #000b,
-    inset 0 1px #ffffff1f;
-  backdrop-filter: blur(22px) saturate(160%);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  right: 0;
+  bottom: 0;
+  left: 0;
   animation: mail-action-bar-enter 320ms cubic-bezier(0.22, 0.8, 0.3, 1) both;
 }
 
-.mail-action-bar button {
-  position: relative;
-  display: grid;
-  width: 42px;
-  height: 36px;
-  place-items: center;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: #f5f5f7;
-  cursor: pointer;
-  transition:
-    transform 160ms cubic-bezier(0.22, 0.8, 0.3, 1),
-    color 160ms ease,
-    background-color 160ms ease,
-    box-shadow 160ms ease;
+.mail-action-bar :deep(.mail-action-bar__inner) {
+  width: 100%;
+  max-width: 340px;
 }
 
-.mail-action-bar button::after {
+.mail-action-bar :deep(.mail-action-bar__pane) {
+  width: 100%;
+}
+
+.mail-action-bar :deep(.k-link) {
+  position: relative;
+  color: #f5f5f7;
+}
+
+.mail-action-bar :deep(.k-link::after) {
   position: absolute;
   bottom: calc(100% + 9px);
   left: 50%;
@@ -1774,20 +2022,13 @@ button {
   white-space: nowrap;
 }
 
-.mail-action-bar button:active,
-.mail-compose-fab:active,
-.mail-icon-button:active {
-  transform: scale(0.9);
-}
-
-.mail-action-bar button:focus-visible,
-.mail-compose-fab:focus-visible,
-.mail-icon-button:focus-visible {
+.mail-action-bar :deep(.k-link:focus-visible),
+.mail-compose-fab:focus-visible {
   outline: 2px solid var(--mail-blue);
   outline-offset: 2px;
 }
 
-.mail-action-bar button:focus-visible::after {
+.mail-action-bar :deep(.k-link:focus-visible::after) {
   opacity: 1;
   transform: translate(-50%, 0) scale(1);
 }
@@ -1798,54 +2039,18 @@ button {
     background: #ffffff0b;
   }
 
-  .mail-icon-button:not(:disabled):hover {
-    border-color: #0a84ff66;
-    background: #343438f2;
-    color: #fff;
-    box-shadow:
-      0 5px 16px #0007,
-      inset 0 1px #ffffff2b;
-    transform: translateY(-1px) scale(1.04);
-  }
-
-  .mail-compose-fab:hover {
-    border-color: #0a84ff70;
-    background: #343438fa;
-    box-shadow:
-      0 11px 28px #000b,
-      0 0 0 4px #0a84ff18,
-      inset 0 1px #ffffff30;
-    transform: translateY(-2px) scale(1.05);
-  }
-
-  .mail-action-bar button:hover {
-    background: #0a84ff26;
+  .mail-action-bar :deep(.k-link:hover) {
     color: #64b5ff;
-    box-shadow: inset 0 0 0 1px #0a84ff35;
-    transform: translateY(-2px) scale(1.06);
   }
 
-  .mail-action-bar button.mail-action-bar__danger:hover {
-    background: #ff453a24;
+  .mail-action-bar :deep(.mail-action-bar__danger:hover) {
     color: #ff6961;
-    box-shadow: inset 0 0 0 1px #ff453a35;
   }
 
-  .mail-action-bar button:hover::after {
+  .mail-action-bar :deep(.k-link:hover::after) {
     opacity: 1;
     transform: translate(-50%, 0) scale(1);
   }
-}
-
-.mail-header--compose {
-  grid-template-columns: 52px 1fr 52px;
-  padding-bottom: 12px;
-}
-
-.mail-header--compose h1 {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
 }
 
 .mail-compose__fields {
@@ -2119,10 +2324,12 @@ button {
 
   .mail-row,
   .mail-row-action,
-  .mail-action-bar button,
   .mail-compose-fab,
-  .mail-icon-button,
   .mail-folder-row {
+    transition-duration: 0.01ms;
+  }
+
+  .mail-action-bar :deep(.k-link) {
     transition-duration: 0.01ms;
   }
 }

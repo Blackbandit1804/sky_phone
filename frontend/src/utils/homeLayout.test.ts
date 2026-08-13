@@ -5,6 +5,7 @@ import {
   createDefaultHomeLayout,
   deleteHomePage,
   HOME_GRID_PAGE_SIZE,
+  homeKeyboardTarget,
   MAX_HOME_GRID_PAGES,
   moveHomeApp,
   parseHomeLayout,
@@ -34,7 +35,7 @@ describe('home layout', () => {
       null,
     ])
     expect(layout.dock).toEqual(['phone', 'messages', 'clock', null])
-    expect(layout.version).toBe(2)
+    expect(layout.version).toBe(3)
   })
 
   it('migrates compact persisted arrays and appends newly installed apps', () => {
@@ -51,7 +52,7 @@ describe('home layout', () => {
     expect(layout.dock).toEqual(['messages', null, null, null])
     expect(layout.grid.slice(0, 4)).toEqual(['mail', 'clock', 'notes', null])
     expect(layout.hidden).toEqual(['phone'])
-    expect(layout.version).toBe(2)
+    expect(layout.version).toBe(3)
   })
 
   it('preserves explicit gaps in versioned layouts', () => {
@@ -77,6 +78,28 @@ describe('home layout', () => {
     expect(layout.grid[1]).toBeNull()
     expect(layout.grid[7]).toBe('mail')
     expect(layout.dock).toEqual(['messages', null, 'clock', null])
+  })
+
+  it('keeps valid custom-app tombstones in version 3 layouts', () => {
+    const grid: HomeLayout['grid'] = Array.from(
+      { length: HOME_GRID_PAGE_SIZE },
+      () => null,
+    )
+    grid[6] = 'temporarily-missing' as HomeLayout['hidden'][number]
+
+    const layout = parseHomeLayout(
+      {
+        dock: ['phone', null, null, null],
+        grid,
+        hidden: [],
+        version: 3,
+      },
+      defaults,
+      [...installed],
+    )
+
+    expect(layout.grid[6]).toBe('temporarily-missing')
+    expect(layout.version).toBe(3)
   })
 
   it('preserves independently positioned shortcuts for the same app', () => {
@@ -110,6 +133,15 @@ describe('home layout', () => {
     expect(moved.grid[12]).toBe('mail')
     expect(moved.grid[0]).toBe('phone')
     expect(moved.grid[4]).toBe('notes')
+  })
+
+  it('provides bounded keyboard reorder targets without wrapping rows', () => {
+    expect(homeKeyboardTarget(defaults, 'grid', 1, 'right')).toBe(2)
+    expect(homeKeyboardTarget(defaults, 'grid', 3, 'right')).toBeNull()
+    expect(homeKeyboardTarget(defaults, 'grid', 0, 'up')).toBeNull()
+    expect(homeKeyboardTarget(defaults, 'grid', 0, 'down')).toBe(4)
+    expect(homeKeyboardTarget(defaults, 'dock', 1, 'left')).toBe(0)
+    expect(homeKeyboardTarget(defaults, 'dock', 1, 'down')).toBeNull()
   })
 
   it('shifts occupied grid slots instead of replacing their apps', () => {

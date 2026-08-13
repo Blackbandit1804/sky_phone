@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { LaunchablePhoneAppId } from '@/types/apps'
 import { DEFAULT_PHONE_PREFERENCES, parsePhonePreferences } from './preferences'
 describe('preferences', () => {
   it('falls back for malformed and obsolete records', () => {
@@ -82,6 +83,38 @@ describe('preferences', () => {
     expect(value.settings.phoneScale).toBe(150)
     expect(value.settings.ringtoneVolume).toBe(100)
     expect(value.settings.screenBrightness).toBe(10)
+  })
+
+  it('keeps the phone above the minimum usable scale', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({
+        version: 1,
+        settings: { phoneScale: 50 },
+      }),
+    )
+
+    expect(value.settings.phoneScale).toBe(75)
+  })
+
+  it('preserves safe notification preferences for custom apps', () => {
+    const appId = 'example-app' as LaunchablePhoneAppId
+    const value = parsePhonePreferences(
+      JSON.stringify({
+        version: 1,
+        settings: {
+          notifications: {
+            [appId]: { enabled: false, sounds: true },
+            '../unsafe': { enabled: false, sounds: false },
+          },
+        },
+      }),
+    )
+
+    expect(value.settings.notifications[appId]).toEqual({
+      enabled: false,
+      sounds: true,
+    })
+    expect(value.settings.notifications).not.toHaveProperty('../unsafe')
   })
 
   it('adds safe control center defaults to legacy version one preferences', () => {

@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { kFab, kGlass } from 'konsta/vue'
-import { Camera, Flashlight, LockKeyhole, X } from 'lucide-vue-next'
+import { Camera, Flashlight, LockKeyhole, Trash2 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import PhoneStatusIndicators from '@/components/PhoneStatusIndicators.vue'
 import { getPhoneApp } from '@/config/apps'
 import type { PhoneNotification } from '@/stores/notifications'
 import { usePhoneStore } from '@/stores/phone'
+import {
+  clampNotificationSwipeOffset,
+  NOTIFICATION_SWIPE_ACTION_WIDTH,
+  resolveNotificationSwipeAxis,
+  shouldRevealNotificationAction,
+  type NotificationSwipeAxis,
+} from '@/utils/notificationSwipe'
 import { nuiCall } from '@/utils/nui'
 import type { PhonePreferencesV1 } from '@/utils/preferences'
 
@@ -19,6 +26,7 @@ const emit = defineEmits<{
   camera: []
   clearNotifications: []
   dismissNotification: [id: string]
+  openNotification: [notification: PhoneNotification]
   unlock: []
 }>()
 
@@ -28,6 +36,9 @@ const now = ref(new Date())
 const dragOffset = ref(0)
 const dragging = ref(false)
 const flashlightActive = ref(false)
+const revealedNotificationId = ref<string | null>(null)
+const swipingNotificationId = ref<string | null>(null)
+const notificationSwipeOffset = ref(0)
 const shortcutColors = {
   bgIos: 'bg-ios-light-glass dark:bg-ios-dark-glass',
   activeBgIos: 'active:bg-white/90 dark:active:bg-white/20',
@@ -36,6 +47,12 @@ const shortcutColors = {
 let pointerStart = 0
 let pointerStartedAt = 0
 let clockTicker: number | undefined
+let notificationPointerId: number | null = null
+let notificationPointerStartX = 0
+let notificationPointerStartY = 0
+let notificationPointerStartedAt = 0
+let notificationSwipeAxis: NotificationSwipeAxis | null = null
+let suppressNotificationClickUntil = 0
 
 const date = computed(() =>
   new Intl.DateTimeFormat(phone.lang, {
@@ -72,15 +89,138 @@ const flashlightShortcutColors = computed(() =>
 function onPointerDown(event: PointerEvent): void {
   if (props.preview) return
   if (
-    (event.target as HTMLElement).closest(
-      'button, .lock-screen__notifications',
-    )
+    (event.target as HTMLElement).closest('button, .lock-screen__notifications')
   )
     return
   pointerStart = event.clientY
   pointerStartedAt = Date.now()
   dragging.value = true
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+
+function openNotification(notification: PhoneNotification): void {
+  if (performance.now() <= suppressNotificationClickUntil) return
+  if (revealedNotificationId.value === notification.id) {
+    closeNotificationAction()
+    return
+  }
+  if (notification.route) emit('openNotification', notification)
+}
+
+function notificationOffset(notificationId: string): number {
+  if (swipingNotificationId.value === notificationId)
+    return notificationSwipeOffset.value
+  return revealedNotificationId.value === notificationId
+    ? -NOTIFICATION_SWIPE_ACTION_WIDTH
+    : 0
+}
+
+function notificationStyle(notificationId: string): Record<string, string> {
+  return {
+    '--notification-swipe': `${notificationOffset(notificationId)}px`,
+  }
+}
+
+function closeNotificationAction(): void {
+  revealedNotificationId.value = null
+  swipingNotificationId.value = null
+  notificationSwipeOffset.value = 0
+}
+
+function beginNotificationSwipe(
+  notificationId: string,
+  event: PointerEvent,
+): void {
+  if (props.preview || event.button !== 0) return
+
+  if (
+    revealedNotificationId.value &&
+    revealedNotificationId.value !== notificationId
+  ) {
+    revealedNotificationId.value = null
+  }
+
+  notificationPointerId = event.pointerId
+  notificationPointerStartX = event.clientX
+  notificationPointerStartY = event.clientY
+  notificationPointerStartedAt = performance.now()
+  notificationSwipeAxis = null
+  swipingNotificationId.value = notificationId
+  notificationSwipeOffset.value =
+    revealedNotificationId.value === notificationId
+      ? -NOTIFICATION_SWIPE_ACTION_WIDTH
+      : 0
+}
+
+function moveNotificationSwipe(
+  notificationId: string,
+  event: PointerEvent,
+): void {
+  if (
+    swipingNotificationId.value !== notificationId ||
+    notificationPointerId !== event.pointerId
+  ) {
+    return
+  }
+
+  const deltaX = event.clientX - notificationPointerStartX
+  const deltaY = event.clientY - notificationPointerStartY
+  notificationSwipeAxis ??= resolveNotificationSwipeAxis(deltaX, deltaY)
+
+  if (notificationSwipeAxis === 'vertical') {
+    swipingNotificationId.value = null
+    notificationSwipeOffset.value = 0
+    return
+  }
+  if (notificationSwipeAxis !== 'horizontal') return
+
+  const target = event.currentTarget as HTMLElement
+  if (!target.hasPointerCapture(event.pointerId))
+    target.setPointerCapture(event.pointerId)
+  event.preventDefault()
+
+  const startingOffset =
+    revealedNotificationId.value === notificationId
+      ? -NOTIFICATION_SWIPE_ACTION_WIDTH
+      : 0
+  notificationSwipeOffset.value = clampNotificationSwipeOffset(
+    startingOffset + deltaX,
+  )
+}
+
+function finishNotificationSwipe(
+  notificationId: string,
+  event: PointerEvent,
+): void {
+  if (
+    swipingNotificationId.value !== notificationId ||
+    notificationPointerId !== event.pointerId
+  ) {
+    return
+  }
+
+  const elapsed = Math.max(1, performance.now() - notificationPointerStartedAt)
+  const velocityX = (event.clientX - notificationPointerStartX) / elapsed
+  const wasHorizontal = notificationSwipeAxis === 'horizontal'
+  if (wasHorizontal) {
+    suppressNotificationClickUntil = performance.now() + 120
+    revealedNotificationId.value = shouldRevealNotificationAction(
+      notificationSwipeOffset.value,
+      velocityX,
+    )
+      ? notificationId
+      : null
+  }
+
+  swipingNotificationId.value = null
+  notificationSwipeOffset.value = 0
+  notificationPointerId = null
+  notificationSwipeAxis = null
+}
+
+function dismissNotification(notificationId: string): void {
+  closeNotificationAction()
+  emit('dismissNotification', notificationId)
 }
 
 function onPointerMove(event: PointerEvent): void {
@@ -190,35 +330,64 @@ onBeforeUnmount(() => {
       >
         {{ phone.t('Notifications.clearAll') }}
       </button>
-      <k-glass
+      <div
         v-for="notification in props.notifications"
         :key="notification.id"
-        class="lock-screen__notification"
-        :highlight="false"
+        class="lock-screen__notification-row"
+        :class="{
+          'is-revealed': revealedNotificationId === notification.id,
+          'is-swiping': swipingNotificationId === notification.id,
+          'is-action-visible': notificationOffset(notification.id) < -0.5,
+        }"
+        :style="notificationStyle(notification.id)"
       >
-        <img
-          v-if="getPhoneApp(notification.appId)?.iconImage"
-          :src="getPhoneApp(notification.appId)?.iconImage"
-          alt=""
-          class="lock-screen__notification-icon"
-        />
-        <div class="lock-screen__notification-copy">
-          <div class="lock-screen__notification-heading">
-            <strong>{{ notification.title }}</strong>
-            <span>{{ phone.t('Notifications.now') }}</span>
-          </div>
-          <small v-if="notification.subtitle">{{ notification.subtitle }}</small>
-          <p>{{ notification.text }}</p>
-        </div>
         <button
-          class="lock-screen__notification-close"
+          class="lock-screen__notification-clear"
           type="button"
-          :aria-label="phone.t('Common.close')"
-          @click.stop="emit('dismissNotification', notification.id)"
+          :tabindex="revealedNotificationId === notification.id ? 0 : -1"
+          :aria-hidden="revealedNotificationId !== notification.id"
+          :aria-label="phone.t('Notifications.clear')"
+          @click.stop="dismissNotification(notification.id)"
         >
-          <X :size="14" aria-hidden="true" />
+          <Trash2 :size="18" :stroke-width="1.8" aria-hidden="true" />
+          <span>{{ phone.t('Notifications.clear') }}</span>
         </button>
-      </k-glass>
+        <k-glass
+          class="lock-screen__notification"
+          :class="{ 'is-actionable': !!notification.route }"
+          :highlight="false"
+          :role="notification.route ? 'button' : undefined"
+          :tabindex="notification.route ? 0 : undefined"
+          :aria-label="
+            notification.route ? phone.t('Notifications.open') : undefined
+          "
+          @click="openNotification(notification)"
+          @keydown.enter.prevent="openNotification(notification)"
+          @keydown.space.prevent="openNotification(notification)"
+          @keydown.delete.prevent="dismissNotification(notification.id)"
+          @pointerdown.stop="beginNotificationSwipe(notification.id, $event)"
+          @pointermove.stop="moveNotificationSwipe(notification.id, $event)"
+          @pointerup.stop="finishNotificationSwipe(notification.id, $event)"
+          @pointercancel.stop="finishNotificationSwipe(notification.id, $event)"
+        >
+          <img
+            v-if="getPhoneApp(notification.appId)?.iconImage"
+            :src="getPhoneApp(notification.appId)?.iconImage"
+            alt=""
+            class="lock-screen__notification-icon"
+          />
+          <div class="lock-screen__notification-copy">
+            <div class="lock-screen__notification-heading">
+              <strong>{{ notification.title }}</strong>
+              <span>{{ phone.t('Notifications.now') }}</span>
+            </div>
+            <small v-if="notification.subtitle">{{
+              notification.subtitle
+            }}</small>
+            <p>{{ notification.text }}</p>
+          </div>
+        </k-glass>
+      </div>
     </section>
 
     <div v-if="!preview" class="lock-screen__footer">

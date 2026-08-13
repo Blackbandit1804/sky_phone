@@ -1,9 +1,10 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useAccountStore } from '@/stores/account'
 import { useMailStore } from '@/stores/mail'
-import type { MailCounts, MailListItem } from '@/types/mail'
-import { nuiCall } from '@/utils/nui'
+import type { MailCounts, MailListItem, MailListResponse } from '@/types/mail'
+import { nuiCall, type NuiResponse } from '@/utils/nui'
 
 vi.mock('@/utils/nui', () => ({
   nuiCall: vi.fn(),
@@ -45,7 +46,7 @@ describe('mail store', () => {
         success: true,
       })
       .mockResolvedValueOnce({
-        data: { hasMore: false, items: [listItem(2)] },
+        data: { hasMore: false, items: [listItem(2)], offset: 0 },
         success: true,
       })
 
@@ -82,6 +83,74 @@ describe('mail store', () => {
       id: undefined,
       recipients: ['alex@ifruit.com'],
       subject: 'Subject',
+    })
+  })
+
+  it('deletes selected mail in one batch and reloads the remaining entries', async () => {
+    const remaining = listItem(3)
+    mockNuiCall
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ data: counts, success: true })
+      .mockResolvedValueOnce({
+        data: { hasMore: false, items: [remaining], offset: 0 },
+        success: true,
+      })
+
+    const mail = useMailStore()
+    mail.folder = 'sent'
+    mail.search = 'plans'
+    mail.items = [listItem(1), listItem(2), remaining]
+
+    const success = await mail.deleteMany([1, 2])
+
+    expect(success).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledTimes(3)
+    expect(mockNuiCall).toHaveBeenNthCalledWith(1, 'mail:delete-many', {
+      folder: 'sent',
+      ids: [1, 2],
+    })
+    expect(mockNuiCall).toHaveBeenNthCalledWith(2, 'mail:counts')
+    expect(mockNuiCall).toHaveBeenNthCalledWith(3, 'mail:list', {
+      folder: 'sent',
+      offset: 0,
+      search: 'plans',
+    })
+    expect(mail.items.map((item) => item.id)).toEqual([3])
+  })
+
+  it('does not refresh a cleared session after a batch delete returns', async () => {
+    let resolveDelete!: (response: NuiResponse) => void
+    mockNuiCall.mockReturnValueOnce(
+      new Promise<NuiResponse>((resolve) => {
+        resolveDelete = resolve
+      }),
+    )
+    const mail = useMailStore()
+
+    const deletion = mail.deleteMany([1, 2])
+    await mail.bootstrap('')
+    resolveDelete({ success: true })
+
+    expect(await deletion).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends the mail read state with the server contract field', async () => {
+    mockNuiCall
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ data: counts, success: true })
+      .mockResolvedValueOnce({
+        data: { hasMore: false, items: [listItem(2)], offset: 0 },
+        success: true,
+      })
+    const mail = useMailStore()
+
+    expect(await mail.mutateEntry('mail:set-read', 2, { read: true })).toBe(
+      true,
+    )
+    expect(mockNuiCall).toHaveBeenNthCalledWith(1, 'mail:set-read', {
+      id: 2,
+      read: true,
     })
   })
 
@@ -128,5 +197,104 @@ describe('mail store', () => {
     expect(mail.items).toEqual([])
     expect(mail.folder).toBe('inbox')
     expect(mail.search).toBe('')
+  })
+
+  it('ignores an older folder response after a newer navigation', async () => {
+    let resolveOlder!: (response: NuiResponse<MailListResponse>) => void
+    const olderResponse = new Promise<NuiResponse<MailListResponse>>(
+      (resolve) => {
+        resolveOlder = resolve
+      },
+    )
+    mockNuiCall
+      .mockReturnValueOnce(olderResponse)
+      .mockResolvedValueOnce({
+        data: { hasMore: false, items: [listItem(2)] },
+        success: true,
+      })
+    const mail = useMailStore()
+
+    const olderRequest = mail.loadFolder('inbox')
+    await mail.loadFolder('sent')
+    resolveOlder({
+      data: { hasMore: false, items: [listItem(1)], offset: 0 },
+      success: true,
+    })
+    await olderRequest
+
+    expect(mail.folder).toBe('sent')
+    expect(mail.items.map((item) => item.id)).toEqual([2])
+    expect(mail.loading).toBe(false)
+  })
+
+  it('ignores mailbox counts returned after the session was cleared', async () => {
+    let resolveCounts!: (response: NuiResponse<MailCounts>) => void
+    mockNuiCall.mockReturnValueOnce(
+      new Promise<NuiResponse<MailCounts>>((resolve) => {
+        resolveCounts = resolve
+      }),
+    )
+    const mail = useMailStore()
+
+    const bootstrap = mail.bootstrap('alex@ifruit.com')
+    await mail.bootstrap('')
+    resolveCounts({ data: counts, success: true })
+    await bootstrap
+
+    expect(mail.accountEmail).toBe('')
+    expect(mail.counts).toEqual({
+      drafts: 0,
+      inbox: 0,
+      sent: 0,
+      trash: 0,
+      unread: 0,
+    })
+  })
+
+  it('ignores a late login after the mailbox session was cleared', async () => {
+    let resolveLogin!: (response: NuiResponse<{ devices: []; email: string }>) => void
+    mockNuiCall.mockReturnValueOnce(
+      new Promise<NuiResponse<{ devices: []; email: string }>>((resolve) => {
+        resolveLogin = resolve
+      }),
+    )
+    const mail = useMailStore()
+    const account = useAccountStore()
+
+    const login = mail.login('alex', 'secret')
+    await mail.bootstrap('')
+    resolveLogin({
+      data: { devices: [], email: 'alex@ifruit.com' },
+      success: true,
+    })
+    await login
+
+    expect(mail.accountEmail).toBe('')
+    expect(account.email).toBe('')
+  })
+
+  it('ignores a late login after an external mailbox session change', async () => {
+    let resolveLogin!: (response: NuiResponse<{ devices: []; email: string }>) => void
+    mockNuiCall
+      .mockReturnValueOnce(
+        new Promise<NuiResponse<{ devices: []; email: string }>>((resolve) => {
+          resolveLogin = resolve
+        }),
+      )
+      .mockResolvedValueOnce({ data: counts, success: true })
+    const mail = useMailStore()
+    const account = useAccountStore()
+
+    const login = mail.login('alex', 'secret')
+    account.hydrate({ devices: [], email: 'morgan@ifruit.com' })
+    await mail.bootstrap('morgan@ifruit.com')
+    resolveLogin({
+      data: { devices: [], email: 'alex@ifruit.com' },
+      success: true,
+    })
+    await login
+
+    expect(mail.accountEmail).toBe('morgan@ifruit.com')
+    expect(account.email).toBe('morgan@ifruit.com')
   })
 })

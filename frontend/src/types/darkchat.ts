@@ -1,4 +1,5 @@
 import type { DatabaseDateValue } from '@/utils/date'
+import type { EasySharePayload } from '@/types/easyshare'
 
 export type DarkChatMessageType =
   | 'text'
@@ -7,6 +8,7 @@ export type DarkChatMessageType =
   | 'voice'
   | 'image'
   | 'video'
+  | 'share'
   | 'system'
 export type DarkChatNotificationMode = 'full' | 'private' | 'hidden'
 
@@ -68,6 +70,7 @@ export type DarkChatMessage = {
   replyToId?: string | null
   replyBody?: string | null
   reactions: Record<string, string>
+  sharePayload?: EasySharePayload | null
   expiresAt?: DatabaseDateValue | null
   createdAt: DatabaseDateValue
   readAt?: DatabaseDateValue | null
@@ -88,12 +91,13 @@ export type DarkChatThread = {
 
 export type DarkChatOutgoing = {
   body?: string
-  messageType: 'text' | 'emoji' | 'gif' | 'voice' | 'image' | 'video'
+  messageType: 'text' | 'emoji' | 'gif' | 'voice' | 'image' | 'video' | 'share'
   mediaAssetId?: string
   mediaPayload?: string
   mediaPreviewUrl?: string
   mediaMime?: string
   mediaDurationMs?: number
   mediaWaveform?: number[]
+  sharePayload?: EasySharePayload
   replyToId?: string
 }

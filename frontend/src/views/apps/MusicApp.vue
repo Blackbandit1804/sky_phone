@@ -36,6 +36,7 @@ import {
   Play,
   Plus,
   Search,
+  Share2,
   SkipBack,
   SkipForward,
   Trash2,
@@ -45,10 +46,15 @@ import {
 } from 'lucide-vue-next'
 import type { CSSProperties } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { useMusicStore } from '@/stores/music'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type { MusicPlaylist, MusicTrack } from '@/types/music'
+import { easyShareMusicTarget } from '@/utils/easyshare'
+import { consumeEscape, handleEnterAction } from '@/utils/keyboard'
+import { musicEscapeLayer } from '@/utils/musicEscape'
 
 type MusicTab = 'library' | 'playlists' | 'search'
 type MusicSheet =
@@ -65,7 +71,9 @@ const MUSIC_POPOVER_GAP = 7
 const MUSIC_SHEET_TRANSITION_MS = 420
 
 const music = useMusicStore()
+const easyShare = useEasyShareStore()
 const phone = usePhoneStore()
+const route = useRoute()
 const activeTab = ref<MusicTab>('library')
 const activePlaylist = ref<MusicPlaylist | null>(null)
 const addMenuOpened = ref(false)
@@ -189,7 +197,7 @@ function positionPopover(target: HTMLElement, itemCount: number): boolean {
 
 function openAddMenu(event: MouseEvent): void {
   const target = event.currentTarget as HTMLElement
-  if (!positionPopover(target, activePlaylist.value ? 3 : 2)) return
+  if (!positionPopover(target, activePlaylist.value ? 4 : 2)) return
   actionTrack.value = null
   actionMenuOpened.value = false
   addMenuOpened.value = true
@@ -264,10 +272,43 @@ function openTrackMenu(event: MouseEvent, track: MusicTrack): void {
   event.stopPropagation()
   actionTrack.value = track
   const itemCount =
-    1 + (activePlaylist.value ? 1 : 0) + (track.source === 'youtube' ? 1 : 0)
+    2 + (activePlaylist.value ? 1 : 0) + (track.source === 'youtube' ? 1 : 0)
   if (!positionPopover(event.currentTarget as HTMLElement, itemCount)) return
   addMenuOpened.value = false
   actionMenuOpened.value = true
+}
+
+function shareTrack(selectedTrack: MusicTrack | null = actionTrack.value): void {
+  const track = selectedTrack
+  if (!track) return
+  closeMenus()
+  playerOpened.value = false
+  easyShare.open({
+    appId: 'music',
+    copyText: `${track.title} — ${track.artist}`,
+    id: track.id,
+    imageUrl: track.artwork,
+    kind: 'track',
+    link: `skyphone://music/${track.source}/${track.id}`,
+    meta: { source: track.source },
+    subtitle: track.artist,
+    title: track.title,
+  })
+}
+
+function shareActivePlaylist(): void {
+  const playlist = activePlaylist.value
+  if (!playlist) return
+  closeMenus()
+  easyShare.open({
+    appId: 'music',
+    copyText: `${playlist.name} · ${playlist.entries.length}`,
+    id: playlist.id,
+    kind: 'playlist',
+    link: `skyphone://music/playlist/${playlist.id}`,
+    subtitle: phone.t('Apps.music.songCount', { count: String(playlist.entries.length) }),
+    title: playlist.name,
+  })
 }
 
 function openPlaylist(playlist: MusicPlaylist): void {
@@ -459,6 +500,31 @@ function updateVolume(event: Event): void {
   music.setVolume(Number(eventValue(event)) / 100)
 }
 
+function onKeydown(event: KeyboardEvent): void {
+  const layer = musicEscapeLayer({
+    actionMenuOpened: actionMenuOpened.value,
+    activeSheet: Boolean(activeSheet.value),
+    addMenuOpened: addMenuOpened.value,
+    confirmDeletePlaylist: confirmDeletePlaylist.value,
+    confirmRemoveTrack: confirmRemoveTrack.value,
+    playerOpened: playerOpened.value,
+  })
+  if (!layer) return
+  if (!consumeEscape(event)) return
+
+  if (layer === 'remove-track-confirmation') {
+    cancelRemoveTrack()
+  } else if (layer === 'delete-playlist-confirmation') {
+    confirmDeletePlaylist.value = false
+  } else if (layer === 'sheet') {
+    closeSheet()
+  } else if (layer === 'menu') {
+    dismissMenus()
+  } else if (layer === 'player') {
+    playerOpened.value = false
+  }
+}
+
 watch(
   () => music.playlists,
   () => {
@@ -470,12 +536,30 @@ watch(
   },
 )
 
-onMounted(() => {
-  void music.load()
+onMounted(async () => {
+  window.addEventListener('keydown', onKeydown, true)
+  await music.load()
+  const target = easyShareMusicTarget(
+    route.query.easyShareKind,
+    route.query.easyShareLink,
+  )
+  if (!target) return
+  if (target.kind === 'playlist') {
+    const playlist = music.playlists.find((entry) => entry.id === target.id)
+    if (playlist) openPlaylist(playlist)
+    return
+  }
+  const track = music.allTracks.find(
+    (entry) => entry.id === target.id && entry.source === target.source,
+  )
+  if (!track) return
+  await playTrack(track)
+  playerOpened.value = true
 })
 
 onBeforeUnmount(() => {
   if (playerPickerTimer !== null) window.clearTimeout(playerPickerTimer)
+  window.removeEventListener('keydown', onKeydown, true)
 })
 </script>
 
@@ -934,6 +1018,9 @@ onBeforeUnmount(() => {
     >
       <k-list nested>
         <template v-if="activePlaylist">
+          <k-list-button link-component="button" @click="shareActivePlaylist">
+            <Share2 :size="18" /> {{ phone.t('Apps.easyShare.name') }}
+          </k-list-button>
           <k-list-button
             link-component="button"
             @click="openActivePlaylistTrackPicker"
@@ -975,6 +1062,9 @@ onBeforeUnmount(() => {
       :aria-label="phone.t('Apps.music.songActions')"
     >
       <k-list nested>
+        <k-list-button link-component="button" @click="shareTrack">
+          <Share2 :size="18" /> {{ phone.t('Apps.easyShare.name') }}
+        </k-list-button>
         <k-list-button
           link-component="button"
           @click="openPlaylistPicker(actionTrack)"
@@ -1000,12 +1090,12 @@ onBeforeUnmount(() => {
       </k-list>
     </section>
 
-    <k-sheet
-      :opened="Boolean(activeSheet)"
-      class="music-form-sheet"
-      @backdropclick="closeSheet"
-    >
-      <section class="music-sheet-content">
+    <div class="music-form-sheet">
+      <k-sheet
+        :opened="Boolean(activeSheet)"
+        @backdropclick="closeSheet"
+      >
+        <section class="music-sheet-content">
         <header>
           <k-link component="button" @click="closeSheet">{{
             phone.t(
@@ -1028,7 +1118,7 @@ onBeforeUnmount(() => {
               type="url"
               :value="youtubeUrl"
               @input="youtubeUrl = eventValue($event)"
-              @keydown.enter="submitYouTube"
+              @keydown.enter="handleEnterAction($event, submitYouTube)"
             />
             <k-list-input
               :label="phone.t('Apps.music.youtubeTitle')"
@@ -1037,7 +1127,7 @@ onBeforeUnmount(() => {
               :placeholder="phone.t('Apps.music.youtubeTitlePlaceholder')"
               :value="youtubeTitle"
               @input="youtubeTitle = eventValue($event)"
-              @keydown.enter="submitYouTube"
+              @keydown.enter="handleEnterAction($event, submitYouTube)"
             />
             <k-list-input
               :label="phone.t('Apps.music.youtubeArtist')"
@@ -1046,7 +1136,7 @@ onBeforeUnmount(() => {
               :placeholder="phone.t('Apps.music.youtubeArtistPlaceholder')"
               :value="youtubeArtist"
               @input="youtubeArtist = eventValue($event)"
-              @keydown.enter="submitYouTube"
+              @keydown.enter="handleEnterAction($event, submitYouTube)"
             />
           </k-list>
           <p v-if="music.error" class="music-form-error" role="alert">
@@ -1195,7 +1285,7 @@ onBeforeUnmount(() => {
               :placeholder="phone.t('Apps.music.playlistPlaceholder')"
               :value="playlistName"
               @input="playlistName = eventValue($event)"
-              @keydown.enter="submitPlaylist"
+              @keydown.enter="handleEnterAction($event, submitPlaylist)"
             />
           </k-list>
           <p v-if="music.error" class="music-form-error" role="alert">
@@ -1211,15 +1301,16 @@ onBeforeUnmount(() => {
             <template v-else>{{ phone.t('Common.save') }}</template>
           </k-button>
         </template>
-      </section>
-    </k-sheet>
+        </section>
+      </k-sheet>
+    </div>
 
-    <k-sheet
-      :opened="playerOpened"
-      class="music-player-sheet"
-      @backdropclick="playerOpened = false"
-    >
-      <section v-if="music.currentTrack" class="music-player">
+    <div class="music-player-sheet">
+      <k-sheet
+        :opened="playerOpened"
+        @backdropclick="playerOpened = false"
+      >
+        <section v-if="music.currentTrack" class="music-player">
         <header>
           <k-link
             component="button"
@@ -1230,14 +1321,24 @@ onBeforeUnmount(() => {
             <X :size="20" />
           </k-link>
           <span>{{ phone.t('Apps.music.nowPlaying') }}</span>
-          <k-link
-            component="button"
-            icon-only
-            :aria-label="phone.t('Apps.music.addToPlaylist')"
-            @click="openCurrentTrackPlaylistPicker"
-          >
-            <CirclePlus :size="21" />
-          </k-link>
+          <div class="music-player-header-actions">
+            <k-link
+              component="button"
+              icon-only
+              :aria-label="phone.t('Apps.easyShare.share')"
+              @click="shareTrack(music.currentTrack)"
+            >
+              <Share2 :size="20" />
+            </k-link>
+            <k-link
+              component="button"
+              icon-only
+              :aria-label="phone.t('Apps.music.addToPlaylist')"
+              @click="openCurrentTrackPlaylistPicker"
+            >
+              <CirclePlus :size="21" />
+            </k-link>
+          </div>
         </header>
         <div
           class="music-player-art"
@@ -1312,8 +1413,9 @@ onBeforeUnmount(() => {
         <p v-if="music.playbackError" class="music-player-error">
           {{ phone.t('Apps.music.errors.playback_failed') }}
         </p>
-      </section>
-    </k-sheet>
+        </section>
+      </k-sheet>
+    </div>
 
     <k-dialog
       :opened="confirmRemoveTrack"
@@ -1803,6 +1905,7 @@ onBeforeUnmount(() => {
 .music-form-sheet,
 .music-player-sheet {
   --music-accent: #fa2d48;
+  display: contents;
   color: var(--music-label);
 }
 
@@ -1914,7 +2017,7 @@ onBeforeUnmount(() => {
   color: #ff453a !important;
 }
 
-.music-player-sheet {
+.music-player-sheet :deep(.k-sheet) {
   background: rgb(22 22 25 / 96%) !important;
 }
 
@@ -1936,8 +2039,11 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
-.music-player > header > :last-child {
+.music-player-header-actions {
   justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .music-player-art {

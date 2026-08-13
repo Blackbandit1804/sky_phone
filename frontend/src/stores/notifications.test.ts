@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  MAX_LOCK_SCREEN_NOTIFICATIONS,
   useNotificationsStore,
   type PhoneNotificationDevice,
 } from '@/stores/notifications'
@@ -145,10 +146,11 @@ describe('notifications store', () => {
     const notifications = useNotificationsStore()
 
     notifications.show({
-      appId: 'mail',
+      appId: 'companies',
       device: device('111'),
+      route: '/apps/companies?requestId=request-1&area=customer',
       text: 'Store while closed',
-      title: 'Mail',
+      title: 'Companies',
     })
     await Promise.resolve()
     await Promise.resolve()
@@ -158,9 +160,10 @@ describe('notifications store', () => {
       payload: {
         items: [
           expect.objectContaining({
-            appId: 'mail',
+            appId: 'companies',
+            route: '/apps/companies?requestId=request-1&area=customer',
             text: 'Store while closed',
-            title: 'Mail',
+            title: 'Companies',
           }),
         ],
         version: 1,
@@ -247,14 +250,33 @@ describe('notifications store', () => {
     })
     const notifications = useNotificationsStore()
 
-    notifications.hydrate(
-      phone.device?.data.notifications?.payload,
-      '111',
-    )
+    notifications.hydrate(phone.device?.data.notifications?.payload, '111')
     vi.advanceTimersByTime(60_000)
 
     expect(notifications.lockScreenNotifications[0].text).toBe('Saved message')
     notifications.clearLockScreen()
     expect(notifications.lockScreenNotifications).toEqual([])
+  })
+
+  it('bounds persisted lock screen history to the newest notifications', () => {
+    openPhone('111')
+    const notifications = useNotificationsStore()
+    const items = Array.from(
+      { length: MAX_LOCK_SCREEN_NOTIFICATIONS + 10 },
+      (_, index) => ({
+        appId: 'mail' as const,
+        id: `saved-${index}`,
+        text: `Message ${index}`,
+        title: 'Mail',
+      }),
+    )
+
+    notifications.hydrate({ items, version: 1 }, '111')
+
+    expect(notifications.lockScreenNotifications).toHaveLength(
+      MAX_LOCK_SCREEN_NOTIFICATIONS,
+    )
+    expect(notifications.lockScreenNotifications[0]?.id).toBe('saved-59')
+    expect(notifications.lockScreenNotifications.at(-1)?.id).toBe('saved-10')
   })
 })

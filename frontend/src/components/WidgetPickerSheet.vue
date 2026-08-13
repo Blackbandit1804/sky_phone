@@ -117,12 +117,12 @@ watch(
 </script>
 
 <template>
-  <k-sheet
-    :opened="opened"
-    class="widget-picker-sheet"
-    :colors="sheetColors"
-    @backdropclick="emit('close')"
-  >
+  <div class="widget-picker-sheet">
+    <k-sheet
+      :opened="opened"
+      :colors="sheetColors"
+      @backdropclick="emit('close')"
+    >
     <k-page
       class="widget-picker-page"
       :class="{ 'widget-picker-page--dark': phone.isDarkMode }"
@@ -206,11 +206,12 @@ watch(
         </p>
       </div>
     </k-page>
-  </k-sheet>
+    </k-sheet>
+  </div>
 </template>
 
 <style scoped>
-:global(.widget-picker-sheet) {
+.widget-picker-sheet :deep(.k-sheet) {
   z-index: 110;
   height: calc(100% - 22px);
   overflow: hidden;

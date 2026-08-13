@@ -9,6 +9,7 @@ import {
   removeWidget,
   resizeWidget,
   widgetOccupiedCells,
+  widgetKeyboardTarget,
 } from '@/utils/widgetLayout'
 
 describe('widget layout', () => {
@@ -45,6 +46,21 @@ describe('widget layout', () => {
     expect(clock).toMatchObject({ column: 2, page: 1, row: 0 })
     expect(weather).toMatchObject({ column: 0, page: 1, row: 0 })
     expect(next.instances).toHaveLength(layout.instances.length)
+  })
+
+  it('provides bounded keyboard targets for each widget size', () => {
+    const layout = createDefaultWidgetLayout()
+    const clock = layout.instances.find(
+      (instance) => instance.id === 'home-clock',
+    )!
+    const music = layout.instances.find(
+      (instance) => instance.id === 'home-music',
+    )!
+
+    expect(widgetKeyboardTarget(clock, 'right')).toEqual({ column: 1, row: 0 })
+    expect(widgetKeyboardTarget(clock, 'up')).toBeNull()
+    expect(widgetKeyboardTarget(music, 'right')).toBeNull()
+    expect(widgetKeyboardTarget(music, 'down')).toEqual({ column: 0, row: 3 })
   })
 
   it('allows a small widget in the center with app cells on both sides', () => {

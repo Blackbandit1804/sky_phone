@@ -78,6 +78,47 @@ describe('messages store', () => {
     expect(messages.messages[0].delivery_status).toBe('failed')
   })
 
+  it('shows a shared contact immediately and sends only its id', async () => {
+    const contact = {
+      avatar_url: 'https://picsum.photos/seed/shared-alex/240/240',
+      name: 'Alex Rivera',
+      organization: 'Maze Bank',
+      phone_number: '4205550137',
+    }
+    const serverMessage: SmsMessage = {
+      ...sentMessage('contact-server-id'),
+      body: contact.name,
+      contact,
+      message_type: 'contact',
+    }
+    mockNuiCall
+      .mockResolvedValueOnce({ data: [], success: true })
+      .mockResolvedValueOnce({ data: [], success: true })
+      .mockResolvedValueOnce({ data: serverMessage, success: true })
+      .mockResolvedValueOnce({ data: [], success: true })
+
+    const messages = useMessagesStore()
+    await messages.openThread('4205550196')
+    const sending = messages.send({
+      contact,
+      contactId: 'contact-alex',
+      messageType: 'contact',
+    })
+
+    expect(messages.messages[0]).toMatchObject({
+      contact,
+      delivery_status: 'sending',
+      message_type: 'contact',
+    })
+
+    await sending
+    expect(mockNuiCall).toHaveBeenNthCalledWith(3, 'messages:send', {
+      contactId: 'contact-alex',
+      messageType: 'contact',
+      phoneNumber: '4205550196',
+    })
+  })
+
   it('normalizes numeric phone data from the NUI boundary', async () => {
     mockNuiCall.mockResolvedValueOnce({
       data: [

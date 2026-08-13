@@ -35,6 +35,7 @@ export type WidgetDefinition = {
   configurable: boolean
   defaultSize: WidgetSize
   descriptionKey: string
+  homeLabelKey: string
   kind: WidgetKind
   labelKey: string
   supportedSizes: WidgetSize[]

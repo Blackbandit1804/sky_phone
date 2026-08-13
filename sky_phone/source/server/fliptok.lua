@@ -303,6 +303,32 @@ end)
 
 Bridge.Callbacks.Register("sky_phone:fliptok:feed", feed)
 
+Bridge.Callbacks.Register("sky_phone:fliptok:video", function(source, data)
+    local profile, error_response = require_profile(source)
+    if not profile then return error_response end
+    if not SkyPhone.AllowOperation(source, "fliptok:video", 60, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local video_id = type(data) == "table" and data.id or nil
+    if type(video_id) ~= "string" or #video_id > 64 then
+        return { success = false, error = "video_not_found" }
+    end
+    local rows = list_videos(
+        profile.id,
+        [[v.`id` = ? AND (v.`visibility` = 'public' OR v.`profile_id` = ? OR
+            (v.`visibility` = 'followers' AND EXISTS(
+                SELECT 1 FROM `sky_phone_fliptok_follows` follow
+                WHERE follow.`follower_id` = ? AND follow.`following_id` = v.`profile_id`)))]],
+        { video_id, profile.id, profile.id, profile.id, profile.id },
+        1,
+        0,
+        "v.`created_at` DESC"
+    )
+    return rows[1]
+        and { success = true, data = rows[1] }
+        or { success = false, error = "video_not_found" }
+end)
+
 Bridge.Callbacks.Register("sky_phone:fliptok:discover", function(source, data)
     local profile, error_response = require_profile(source)
     if not profile then return error_response end

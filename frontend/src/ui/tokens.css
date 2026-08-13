@@ -1,0 +1,61 @@
+:root {
+  --sky-safe-area-top: 58px;
+  --sky-safe-area-bottom: 25px;
+  --sky-page-gutter: 14px;
+  --sky-page-space: 12px;
+  --sky-navbar-height: 44px;
+  --sky-navbar-large-title-height: 52px;
+  --sky-tabbar-height: 64px;
+  --sky-touch-target: 44px;
+  --sky-space-1: 4px;
+  --sky-space-2: 8px;
+  --sky-space-3: 12px;
+  --sky-space-4: 16px;
+  --sky-space-5: 20px;
+  --sky-space-6: 24px;
+  --sky-radius-control: 12px;
+  --sky-radius-card: 16px;
+  --sky-radius-sheet: 24px;
+  --sky-font-caption: 12px;
+  --sky-font-body: 15px;
+  --sky-font-title: 17px;
+  --sky-font-large-title: 28px;
+  --sky-widget-label-gap: 5px;
+  --sky-widget-label-height: 15px;
+  --sky-widget-radius-small: 23px;
+  --sky-widget-radius-medium: 25px;
+  --sky-widget-radius-large: 28px;
+}
+
+.sky-app-page {
+  --sky-app-accent: #3b82f6;
+  --sky-app-accent-soft: rgba(59, 130, 246, 0.14);
+  --sky-bg: #f2f4f7;
+  --sky-surface: #ffffff;
+  --sky-surface-muted: #e6e9ee;
+  --sky-text: #111827;
+  --sky-muted: #64748b;
+  --sky-hairline: rgba(15, 23, 42, 0.1);
+  --sky-danger: #dc2626;
+  --sky-danger-soft: rgba(220, 38, 38, 0.14);
+  --sky-success: #059669;
+  --sky-success-soft: rgba(5, 150, 105, 0.14);
+  --sky-warning: #b45309;
+  --sky-warning-soft: rgba(245, 158, 11, 0.16);
+}
+
+.sky-app-page--dark {
+  --sky-app-accent-soft: rgba(96, 165, 250, 0.17);
+  --sky-bg: #08080a;
+  --sky-surface: #1c1c1e;
+  --sky-surface-muted: #2c2c2e;
+  --sky-text: #f5f5f7;
+  --sky-muted: #98989f;
+  --sky-hairline: rgba(255, 255, 255, 0.1);
+  --sky-danger: #ff453a;
+  --sky-danger-soft: rgba(255, 69, 58, 0.16);
+  --sky-success: #30d158;
+  --sky-success-soft: rgba(48, 209, 88, 0.14);
+  --sky-warning: #ffd60a;
+  --sky-warning-soft: rgba(255, 214, 10, 0.16);
+}

@@ -31,14 +31,21 @@ export const useMailStore = defineStore('mail', () => {
   const items = ref<MailListItem[]>([])
   const loading = ref(false)
   const search = ref('')
+  let authenticationGeneration = 0
+  let folderRequestGeneration = 0
+  let sessionGeneration = 0
 
   function clearSession(): void {
+    authenticationGeneration += 1
+    sessionGeneration += 1
+    folderRequestGeneration += 1
     accountEmail.value = ''
     counts.value = emptyCounts()
     items.value = []
     hasMore.value = false
     folder.value = 'inbox'
     search.value = ''
+    loading.value = false
   }
 
   async function bootstrap(email: string): Promise<void> {
@@ -46,16 +53,24 @@ export const useMailStore = defineStore('mail', () => {
       clearSession()
       return
     }
+    authenticationGeneration += 1
+    sessionGeneration += 1
+    folderRequestGeneration += 1
     accountEmail.value = email
     await refreshCounts()
   }
 
   async function login(email: string, password: string) {
+    const generation = ++authenticationGeneration
     const response = await nuiCall<IfruitAccount>('mail:login', {
       email,
       password,
     })
-    if (response.success && response.data) {
+    if (
+      generation === authenticationGeneration &&
+      response.success &&
+      response.data
+    ) {
       account.hydrate(response.data)
       await bootstrap(response.data.email)
     }
@@ -63,11 +78,16 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function register(email: string, password: string) {
+    const generation = ++authenticationGeneration
     const response = await nuiCall<IfruitAccount>('mail:register', {
       email,
       password,
     })
-    if (response.success && response.data) {
+    if (
+      generation === authenticationGeneration &&
+      response.success &&
+      response.data
+    ) {
       account.hydrate(response.data)
       await bootstrap(response.data.email)
     }
@@ -75,10 +95,13 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function logout(): Promise<void> {
+    const generation = ++authenticationGeneration
     if (accountEmail.value) {
       const response = await nuiCall('mail:logout')
+      if (generation !== authenticationGeneration) return
       if (response.success) account.hydrate(null)
     }
+    if (generation !== authenticationGeneration) return
     clearSession()
   }
 
@@ -87,6 +110,8 @@ export const useMailStore = defineStore('mail', () => {
     nextSearch = '',
     append = false,
   ): Promise<boolean> {
+    const generation = ++folderRequestGeneration
+    const session = sessionGeneration
     loading.value = true
     const offset = append ? items.value.length : 0
     const response = await nuiCall<MailListResponse>('mail:list', {
@@ -94,7 +119,13 @@ export const useMailStore = defineStore('mail', () => {
       offset,
       search: nextSearch,
     })
-    loading.value = false
+    if (generation === folderRequestGeneration) loading.value = false
+    if (
+      generation !== folderRequestGeneration ||
+      session !== sessionGeneration
+    ) {
+      return false
+    }
     if (!response.success || !response.data) return false
 
     folder.value = nextFolder
@@ -107,8 +138,17 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function refreshCounts(): Promise<void> {
+    const email = accountEmail.value
+    const session = sessionGeneration
     const response = await nuiCall<MailCounts>('mail:counts')
-    if (response.success && response.data) counts.value = response.data
+    if (
+      session === sessionGeneration &&
+      email === accountEmail.value &&
+      response.success &&
+      response.data
+    ) {
+      counts.value = response.data
+    }
   }
 
   async function openMessage(id: number): Promise<MailMessage | null> {
@@ -169,6 +209,21 @@ export const useMailStore = defineStore('mail', () => {
     return response.success
   }
 
+  async function deleteMany(ids: Array<number | string>): Promise<boolean> {
+    const activeFolder = folder.value
+    const session = sessionGeneration
+    const response = await nuiCall('mail:delete-many', {
+      folder: activeFolder,
+      ids,
+    })
+    if (!response.success || session !== sessionGeneration) {
+      return response.success
+    }
+
+    await Promise.all([refreshCounts(), loadFolder(folder.value, search.value)])
+    return true
+  }
+
   async function emptyTrash(): Promise<boolean> {
     const response = await nuiCall('mail:empty-trash')
     if (response.success) {
@@ -182,6 +237,7 @@ export const useMailStore = defineStore('mail', () => {
     bootstrap,
     counts,
     deleteDraft,
+    deleteMany,
     emptyTrash,
     folder,
     hasMore,

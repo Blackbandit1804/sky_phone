@@ -41,6 +41,9 @@ function select(value: string): void {
 
 function handleKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
+    if (!isOpen.value) return
+    event.preventDefault()
+    event.stopPropagation()
     isOpen.value = false
     return
   }
