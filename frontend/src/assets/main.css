@@ -6555,7 +6555,10 @@ button {
   display: none;
 }
 .app-grid {
-  grid-template-rows: repeat(6, var(--springboard-grid-row));
+  grid-template-rows: repeat(
+    var(--home-grid-rows, 6),
+    var(--springboard-grid-row)
+  );
   gap: var(--springboard-grid-row-gap) var(--springboard-grid-column-gap);
 }
 .app-grid-slot {

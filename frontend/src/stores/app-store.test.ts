@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NON_REMOVABLE_PHONE_APP_IDS } from '@/config/apps'
 import { useAppStoreStore } from '@/stores/app-store'
-import { getHomeFolder, removeHomeApp } from '@/utils/homeLayout'
+import {
+  getHomeFolder,
+  HOME_GRID_PAGE_SIZE,
+  removeHomeApp,
+} from '@/utils/homeLayout'
 
 const mocks = vi.hoisted(() => ({
   phone: {
@@ -43,6 +47,64 @@ describe('app store', () => {
       homeLayout: apps.homeLayout,
       launchCounts: { mail: 4 },
     })
+  })
+
+  it('keeps external app state while migrating version 4 layouts', () => {
+    const apps = useAppStoreStore()
+    const grid = Array.from({ length: 24 }, () => null as string | null)
+    grid[20] = 'external-radio'
+
+    apps.hydrate({
+      claimedApps: ['external-radio'],
+      homeLayout: { dock: [], grid, hidden: [], version: 4 },
+      launchCounts: { 'external-radio': 3 },
+    })
+
+    expect(apps.claimedApps).toEqual(['external-radio'])
+    expect(apps.homeLayout.version).toBe(5)
+    expect(apps.homeLayout.grid).toContain('external-radio')
+    const pageAppCount = apps.homeLayout.grid
+      .slice(0, HOME_GRID_PAGE_SIZE)
+      .filter((appId) => appId !== null).length
+    expect(apps.homeLayout.grid.slice(0, pageAppCount)).not.toContain(null)
+    expect(apps.launchCounts).toEqual({ 'external-radio': 3 })
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps external app state from current version 5 layouts', () => {
+    const apps = useAppStoreStore()
+
+    apps.hydrate({
+      claimedApps: ['external-radio'],
+      homeLayout: {
+        dock: [],
+        grid: ['external-radio'],
+        hidden: [],
+        version: 5,
+      },
+      launchCounts: { 'external-radio': 3 },
+    })
+
+    expect(apps.claimedApps).toEqual(['external-radio'])
+    expect(apps.homeLayout.grid).toContain('external-radio')
+    expect(apps.launchCounts).toEqual({ 'external-radio': 3 })
+    expect(mocks.phone.saveDeviceNamespace).not.toHaveBeenCalled()
+  })
+
+  it('persists a page-aware version 3 to version 5 migration once', () => {
+    const apps = useAppStoreStore()
+    const grid = Array.from({ length: 40 }, () => null as string | null)
+    grid[20] = 'external-page-two'
+
+    apps.hydrate({
+      claimedApps: ['external-page-two'],
+      homeLayout: { dock: [], grid, hidden: [], version: 3 },
+    })
+
+    expect(apps.homeLayout.version).toBe(5)
+    expect(apps.homeLayout.grid[20]).not.toBe('external-page-two')
+    expect(apps.homeLayout.grid[24]).toBe('external-page-two')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
   })
 
   it('installs an app after showing a three second loading state', () => {
@@ -160,6 +222,23 @@ describe('app store', () => {
     })
   })
 
+  it('persists a cross-page drop exactly once', () => {
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+    mocks.phone.saveDeviceNamespace.mockClear()
+    const sourceIndex = apps.homeLayout.grid.indexOf('phone')
+    expect(sourceIndex).toBeGreaterThanOrEqual(0)
+
+    expect(
+      apps.moveHomeAppToGridPage('grid', sourceIndex, 2, 0, [
+        HOME_GRID_PAGE_SIZE,
+        HOME_GRID_PAGE_SIZE,
+      ]),
+    ).toBe(true)
+    expect(apps.homeLayout.grid[HOME_GRID_PAGE_SIZE]).toBe('phone')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
+  })
+
   it('persists the complete folder lifecycle through store actions', () => {
     const apps = useAppStoreStore()
     apps.hydrate(null)
@@ -167,7 +246,6 @@ describe('app store', () => {
 
     const notesIndex = apps.homeLayout.grid.indexOf('notes')
     const clockIndex = apps.homeLayout.grid.indexOf('clock')
-    const mailIndex = apps.homeLayout.grid.indexOf('mail')
     const folderId = apps.createHomeFolder(
       'grid',
       notesIndex,
@@ -181,6 +259,7 @@ describe('app store', () => {
       'clock',
       'notes',
     ])
+    const mailIndex = apps.homeLayout.grid.indexOf('mail')
     expect(apps.addHomeAppToFolder('grid', mailIndex, folderId!)).toBe(true)
     apps.moveHomeFolderApp(folderId!, 2, 0)
     apps.renameHomeFolder(folderId!, 'Work')
@@ -190,10 +269,10 @@ describe('app store', () => {
     })
 
     const emptyIndex = apps.homeLayout.grid.indexOf(null)
-    expect(
-      apps.extractHomeFolderApp(folderId!, 0, 'grid', emptyIndex),
-    ).toBe(true)
-    expect(apps.homeLayout.grid[emptyIndex]).toBe('mail')
+    expect(apps.extractHomeFolderApp(folderId!, 0, 'grid', emptyIndex)).toBe(
+      true,
+    )
+    expect(apps.homeLayout.grid).toContain('mail')
     expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(5)
   })
 

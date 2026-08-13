@@ -8,6 +8,10 @@ import {
   reorderDirectionFromKeyboard,
   type ReorderDirection,
 } from '@/utils/keyboard'
+import {
+  springboardPageDragCompensation,
+  springboardSwipeIntent,
+} from '@/utils/springboardDrag'
 
 const props = withDefaults(
   defineProps<{
@@ -47,8 +51,14 @@ const folderName = computed(() => props.folder.name || props.defaultName)
 const dragStyle = computed(() =>
   isDragging.value
     ? {
-        transform: `translateX(${(phone.currentPage - dragStartPage) * dragPageWidth}px)`,
-        translate: `${dragOffset.value.x}px ${dragOffset.value.y}px`,
+        transform: `translate3d(${springboardPageDragCompensation(dragStartPage, phone.currentPage, dragPageWidth)}px, 0, 0)`,
+      }
+    : undefined,
+)
+const dragPointerStyle = computed(() =>
+  isDragging.value
+    ? {
+        transform: `translate3d(${dragOffset.value.x}px, ${dragOffset.value.y}px, 0)`,
       }
     : undefined,
 )
@@ -82,6 +92,7 @@ function beginPointerDrag(event: PointerEvent): void {
 
 function onPointerDown(event: PointerEvent): void {
   if (event.button !== 0) return
+  suppressClick.value = false
   pointerTarget = event.currentTarget as HTMLElement
   pointerId = event.pointerId
   pointerTarget.setPointerCapture(pointerId)
@@ -109,9 +120,12 @@ function onPointerMove(event: PointerEvent): void {
     return
   }
   if (
-    Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) >
-    8
+    springboardSwipeIntent(
+      event.clientX - pointerStart.x,
+      event.clientY - pointerStart.y,
+    ) !== 'pending'
   ) {
+    suppressClick.value = true
     clearHold()
   }
 }
@@ -120,9 +134,11 @@ function onPointerUp(event: PointerEvent): void {
   clearHold()
   if (isDragging.value) {
     suppressClick.value = true
-    emit('dragend', event)
     isDragging.value = false
     dragOffset.value = { x: 0, y: 0 }
+    releasePointerCapture()
+    emit('dragend', event)
+    return
   }
   releasePointerCapture()
 }
@@ -176,6 +192,7 @@ onBeforeUnmount(() => {
       :aria-keyshortcuts="
         editMode ? 'ArrowLeft ArrowRight ArrowUp ArrowDown' : undefined
       "
+      :style="dragPointerStyle"
       @click="openFolder"
       @contextmenu.prevent
       @keydown="onKeydown"

@@ -4,6 +4,7 @@ import {
   addWidget,
   createDefaultWidgetLayout,
   deleteWidgetPage,
+  MAX_WIDGET_HOME_PAGES,
   moveWidget,
   parseWidgetLayout,
   removeWidget,
@@ -73,6 +74,42 @@ describe('widget layout', () => {
     expect([...widgetOccupiedCells(moved.instances, 2)]).toEqual([5, 6, 9, 10])
     expect(widgetOccupiedCells(moved.instances, 2).has(4)).toBe(false)
     expect(widgetOccupiedCells(moved.instances, 2).has(7)).toBe(false)
+  })
+
+  it('moves a widget across pages into the sixth widget row', () => {
+    const layout = createDefaultWidgetLayout()
+    const moved = moveWidget(layout, 'home-clock', 2, 2, 4)
+
+    expect(
+      moved.instances.find((instance) => instance.id === 'home-clock'),
+    ).toMatchObject({ column: 2, page: 2, row: 4 })
+    expect([...widgetOccupiedCells(moved.instances, 2)]).toEqual([
+      18, 19, 22, 23,
+    ])
+  })
+
+  it('bounds persisted and requested widget pages to the home page limit', () => {
+    const parsed = parseWidgetLayout({
+      instances: [
+        {
+          column: 0,
+          id: 'clock-too-far',
+          kind: 'clock',
+          page: 999,
+          row: 0,
+          settings: {},
+          size: 'small',
+        },
+      ],
+      version: 1,
+    })
+    const moved = moveWidget(parsed, 'clock-too-far', 999, 0, 4)
+
+    expect(parsed.instances[0]?.page).toBe(MAX_WIDGET_HOME_PAGES)
+    expect(moved.instances[0]).toMatchObject({
+      page: MAX_WIDGET_HOME_PAGES,
+      row: 4,
+    })
   })
 
   it('keeps the original layout when displaced widgets cannot be reflowed', () => {

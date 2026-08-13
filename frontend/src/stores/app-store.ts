@@ -20,6 +20,7 @@ import {
   extractHomeFolderApp,
   moveHomeFolderApp,
   moveHomeApp,
+  moveHomeAppToGridPage,
   parseHomeLayout,
   renameHomeFolder,
   removeHomeApp,
@@ -192,14 +193,14 @@ export const useAppStoreStore = defineStore('app-store', {
         data?.homeLayout && typeof data.homeLayout === 'object'
           ? (data.homeLayout as { version?: unknown }).version
           : undefined
+      const supportsPersistedExternalApps =
+        layoutVersion === 3 || layoutVersion === 4 || layoutVersion === 5
       this.claimedApps = Array.isArray(data?.claimedApps)
         ? data.claimedApps.filter(
             (id): id is LaunchablePhoneAppId =>
               typeof id === 'string' &&
               (isPhoneAppId(id) ||
-                ((layoutVersion === 3 ||
-                  layoutVersion === 4 ||
-                  layoutVersion === 5) &&
+                (supportsPersistedExternalApps &&
                   isValidExternalPhoneAppId(id))),
           )
         : []
@@ -226,9 +227,7 @@ export const useAppStoreStore = defineStore('app-store', {
         for (const [appId, count] of Object.entries(data.launchCounts)) {
           if (
             (isPhoneAppId(appId) ||
-              ((layoutVersion === 3 ||
-                layoutVersion === 4 ||
-                layoutVersion === 5) &&
+              (supportsPersistedExternalApps &&
                 isValidExternalPhoneAppId(appId))) &&
             typeof count === 'number' &&
             Number.isFinite(count) &&
@@ -239,7 +238,14 @@ export const useAppStoreStore = defineStore('app-store', {
         }
       }
       this.hydrated = true
-      if (protectedHiddenAppIds.length) this.persist()
+      if (
+        protectedHiddenAppIds.length ||
+        layoutVersion === 2 ||
+        layoutVersion === 3 ||
+        layoutVersion === 4
+      ) {
+        this.persist()
+      }
     },
     isInstalled(appId: LaunchablePhoneAppId): boolean {
       if (this.claimedApps.includes(appId)) return true
@@ -280,15 +286,38 @@ export const useAppStoreStore = defineStore('app-store', {
       sourceIndex: number,
       to: HomeArea,
       targetIndex: number,
-    ): void {
-      this.homeLayout = moveHomeApp(
+    ): boolean {
+      const next = moveHomeApp(
         this.homeLayout,
         from,
         sourceIndex,
         to,
         targetIndex,
       )
+      if (next === this.homeLayout) return false
+      this.homeLayout = next
       this.persist()
+      return true
+    },
+    moveHomeAppToGridPage(
+      from: HomeArea,
+      sourceIndex: number,
+      targetPage: number,
+      targetOffset: number,
+      capacities: readonly number[],
+    ): boolean {
+      const next = moveHomeAppToGridPage(
+        this.homeLayout,
+        from,
+        sourceIndex,
+        targetPage,
+        targetOffset,
+        capacities,
+      )
+      if (next === this.homeLayout) return false
+      this.homeLayout = next
+      this.persist()
+      return true
     },
     createHomeFolder(
       from: HomeArea,
