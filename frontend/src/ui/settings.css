@@ -109,11 +109,6 @@ button.sky-settings-row__frame:focus-visible {
   outline-offset: -2px;
 }
 
-.sky-settings-row--toggle .sky-settings-row__frame {
-  padding-top: var(--sky-space-1);
-  padding-bottom: var(--sky-space-1);
-}
-
 .sky-settings-row__leading,
 .sky-settings-row__accessory,
 .sky-settings-row__trailing {

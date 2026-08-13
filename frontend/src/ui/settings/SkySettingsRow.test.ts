@@ -1,14 +1,33 @@
+import { readFileSync } from 'node:fs'
+
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { describe, expect, it } from 'vitest'
 
 import SkySettingsRow from '@/ui/settings/SkySettingsRow.vue'
 
+const settingsStyles = readFileSync(
+  new URL('../settings.css', import.meta.url),
+  'utf8',
+)
+
 async function renderRow(props: Record<string, unknown>): Promise<string> {
   return renderToString(createSSRApp(SkySettingsRow, props))
 }
 
 describe('SkySettingsRow', () => {
+  it('uses the regular row padding for toggles without compacting them', () => {
+    expect(settingsStyles).toMatch(
+      /\.sky-settings-row__frame,\s*\.sky-settings-range-row__frame\s*\{[^}]*padding:\s*8px 16px/s,
+    )
+    expect(settingsStyles).not.toMatch(
+      /\.sky-settings-row--toggle\s+\.sky-settings-row__frame\s*\{[^}]*padding-(?:top|bottom):/s,
+    )
+    expect(settingsStyles).toMatch(
+      /\.sky-settings-group--compact\s+\.sky-settings-row__frame,[^}]*padding-top:\s*6px;[^}]*padding-bottom:\s*6px/s,
+    )
+  })
+
   it('renders navigation as a full-row button with value and chevron', async () => {
     const html = await renderRow({
       kind: 'navigation',
