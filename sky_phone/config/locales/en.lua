@@ -1527,6 +1527,11 @@ Locales["en"] = {
                 emptyBody = "Create a note to keep important details close at hand.", noResults = "No Results",
                 noResultsBody = "Try searching for a different word or phrase.", pin = "Pin note", unpin = "Unpin note",
                 deleteNote = "Delete note",
+                tools = {
+                    bold = "Bold", bulletList = "Bullet list", decreaseText = "Smaller text", increaseText = "Larger text",
+                    italic = "Italic", numberedList = "Numbered list", quote = "Quote", redo = "Redo",
+                    strike = "Strikethrough", toolbar = "Formatting tools", underline = "Underline", undo = "Undo",
+                },
             },
             easyShare = {
                 name = "EasyShare", incoming = "Incoming Share", recentChats = "Contacts and Chats",

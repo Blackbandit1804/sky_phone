@@ -55,27 +55,29 @@ useOverlayFocusTrap({
 </script>
 
 <template>
-  <div v-if="opened" ref="root" v-bind="$attrs" class="sky-action-sheet">
-    <div
-      class="sky-overlay-backdrop"
-      aria-hidden="true"
-      @click="emit('backdropclick')"
-    ></div>
-    <div
-      ref="panel"
-      class="sky-action-sheet__panel"
-      :role="inferredRole"
-      :aria-modal="
-        inferredRole === 'dialog' || inferredRole === 'alertdialog'
-          ? ariaModal
-          : undefined
-      "
-      :aria-label="inferredRole ? ariaLabel || label || undefined : undefined"
-      :aria-labelledby="inferredRole ? ariaLabelledby : undefined"
-      :aria-describedby="inferredRole ? ariaDescribedby : undefined"
-      :tabindex="tabindex"
-    >
-      <slot />
+  <Transition name="sky-sheet-rise">
+    <div v-if="opened" ref="root" v-bind="$attrs" class="sky-action-sheet">
+      <div
+        class="sky-overlay-backdrop"
+        aria-hidden="true"
+        @click="emit('backdropclick')"
+      ></div>
+      <div
+        ref="panel"
+        class="sky-action-sheet__panel"
+        :role="inferredRole"
+        :aria-modal="
+          inferredRole === 'dialog' || inferredRole === 'alertdialog'
+            ? ariaModal
+            : undefined
+        "
+        :aria-label="inferredRole ? ariaLabel || label || undefined : undefined"
+        :aria-labelledby="inferredRole ? ariaLabelledby : undefined"
+        :aria-describedby="inferredRole ? ariaDescribedby : undefined"
+        :tabindex="tabindex"
+      >
+        <slot />
+      </div>
     </div>
-  </div>
+  </Transition>
 </template>

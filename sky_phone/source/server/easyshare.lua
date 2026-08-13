@@ -55,6 +55,32 @@ local function uuid()
     return id
 end
 
+local rich_note_prefix = "sky-note-html-v1:"
+
+local function plain_note_body(body)
+    if body:sub(1, #rich_note_prefix) ~= rich_note_prefix then
+        return body
+    end
+
+    return body:sub(#rich_note_prefix + 1)
+        :gsub("<[bB][rR]%s*/?>", "\n")
+        :gsub("</[pP]%s*>", "\n")
+        :gsub("</[hH][1-6]%s*>", "\n")
+        :gsub("<[lL][iI][^>]*>", "- ")
+        :gsub("</[lL][iI]%s*>", "\n")
+        :gsub("</[bB][lL][oO][cC][kK][qQ][uU][oO][tT][eE]%s*>", "\n")
+        :gsub("<[^>]*>", "")
+        :gsub("&nbsp;", " ")
+        :gsub("&lt;", "<")
+        :gsub("&gt;", ">")
+        :gsub("&quot;", '"')
+        :gsub("&#39;", "'")
+        :gsub("&amp;", "&")
+        :gsub("[ \t]+\n", "\n")
+        :gsub("\n\n\n+", "\n\n")
+        :match("^%s*(.-)%s*$")
+end
+
 local function trim(value, maximum)
     if type(value) ~= "string" then
         return nil
@@ -646,7 +672,7 @@ local function sanitize_payload(source, device, data)
             return nil, "not_owned"
         end
         payload.title = note.title ~= "" and note.title or title
-        payload.copyText = note.body
+        payload.copyText = plain_note_body(note.body)
         payload.meta = { body = note.body, title = note.title }
     elseif data.kind == "photo" or data.kind == "video" then
         local url, media_error = SkyPhoneMedia.ResolveOwnedMedia(source, payload.id, data.kind)
