@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('./GalleryApp.vue', import.meta.url), 'utf8')
+const source = readFileSync(
+  new URL('./GalleryApp.vue', import.meta.url),
+  'utf8',
+)
 const headerActions = source.slice(
   source.indexOf('<template #right>'),
   source.indexOf('</template>', source.indexOf('<template #right>')),
@@ -35,7 +38,7 @@ describe('GalleryApp import action', () => {
     expect(source).toContain(':title="phone.t(\'Apps.photos.library\')"')
     expect(source).toContain(':subtitle="countText"')
     expect(source).toContain("nuiCall<GalleryCounts>('gallery:counts')")
-    expect(source).toContain("`Apps.photos.counts.${translationKey}`")
+    expect(source).toContain('`Apps.photos.counts.${translationKey}`')
     expect(source).toContain('gridColumnStart: bottomRightGridPosition(')
     expect(source).toContain('gridRowStart: bottomRightGridPosition(')
     expect(source).toContain('var(--sky-navbar-large-title-height) - 30px')
@@ -64,7 +67,9 @@ describe('GalleryApp import action', () => {
   it('shows capture time and iPhone-style actions in the media viewer', () => {
     expect(source).toContain(':title="selectedCaptureDay"')
     expect(source).toContain(':subtitle="selectedCaptureTime"')
-    expect(source).not.toContain("'Apps.photos.photo'\n            : 'Apps.photos.video'")
+    expect(source).not.toContain(
+      "'Apps.photos.photo'\n            : 'Apps.photos.video'",
+    )
     expect(source).toContain("nuiCall<FavoriteResult>('gallery:favorite'")
     expect(source).toContain('<Heart')
     expect(source).toContain('gallery-detail-toolbar')
@@ -78,9 +83,9 @@ describe('GalleryApp import action', () => {
     expect(source).toContain('isDevelopment && !developmentApiEnabled')
     expect(source).toContain('all: developmentMedia.length')
     expect(source).toContain('developmentMedia.filter(')
-    expect(source).toContain("mockGalleryImage(\n        'Flower Video'")
-    expect(source).toContain("mockGalleryImage(\n        'Sintel Video'")
-    expect(source).toContain("mockGalleryImage(\n        'Bunny Video'")
+    expect(source).toMatch(/mockGalleryImage\(\s*'Flower Video'/)
+    expect(source).toMatch(/mockGalleryImage\(\s*'Sintel Video'/)
+    expect(source).toMatch(/mockGalleryImage\(\s*'Bunny Video'/)
     expect(source).toContain('const additionalPhotos = [')
     expect(source).toContain("['Campfire', '#c2410c', '#431407', '#fef08a']")
     expect(source).toContain('id: 13 + index')
