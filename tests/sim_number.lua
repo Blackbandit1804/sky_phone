@@ -5,6 +5,10 @@ assert(number == "5508400294", "SIM number must be derived deterministically fro
 assert(SkyPhoneSimNumber.Normalize("550 840 0294", 10, "") == number, "formatted numbers must normalize")
 assert(SkyPhoneSimNumber.Normalize("123", 10, "") == nil, "short numbers must fail")
 assert(SkyPhoneSimNumber.Format(number, { 3, 3, 4 }, 10, "") == "550 840 0294", "groups must format")
+assert(SkyPhoneSimNumber.NormalizeService("9-1-1", 10) == "911", "formatted service numbers must normalize")
+assert(SkyPhoneSimNumber.NormalizeService("0", 10) == "0", "single-digit service numbers must normalize")
+assert(SkyPhoneSimNumber.NormalizeService("", 10) == nil, "empty service numbers must fail")
+assert(SkyPhoneSimNumber.NormalizeService("12345678901", 10) == nil, "long service numbers must fail")
 
 local attempts = 0
 local reserved = SkyPhoneSimNumber.Reserve(function()

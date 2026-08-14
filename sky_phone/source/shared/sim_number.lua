@@ -11,6 +11,17 @@ function SkyPhoneSimNumber.Normalize(value, length, prefix)
     return number
 end
 
+function SkyPhoneSimNumber.NormalizeService(value, maximum_length)
+    if type(value) ~= "string" and type(value) ~= "number" then
+        return nil
+    end
+    local number = tostring(value):gsub("%D", "")
+    if number == "" or #number > maximum_length then
+        return nil
+    end
+    return number
+end
+
 function SkyPhoneSimNumber.FromEntropy(entropy, length, prefix)
     if type(entropy) ~= "string" or entropy == "" then
         return nil

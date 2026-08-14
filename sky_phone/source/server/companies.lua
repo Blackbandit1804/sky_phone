@@ -307,7 +307,7 @@ local function validate_configuration()
         if type(line) ~= "table" then
             error(("[sky_phone] Company '%s' has no service line configuration."):format(company_id))
         end
-        local number = SkyPhoneSimNumber.Normalize(line.Number, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
+        local number = SkyPhoneSimNumber.NormalizeService(line.Number, Config.Sim.NumberLength)
         if not number then
             error(("[sky_phone] Company '%s' has an invalid service number."):format(company_id))
         end
@@ -522,7 +522,7 @@ local function service_line_payload(company_id)
 end
 
 function SkyPhoneCompanies.GetServiceLine(number)
-    local normalized = SkyPhoneSimNumber.Normalize(number, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
+    local normalized = SkyPhoneSimNumber.NormalizeService(number, Config.Sim.NumberLength)
     return normalized and service_line_payload(service_lines_by_number[normalized]) or nil
 end
 
@@ -531,7 +531,7 @@ function SkyPhoneCompanies.GetServiceLineForCompany(company_id)
 end
 
 function SkyPhoneCompanies.IsServiceNumber(number)
-    local normalized = SkyPhoneSimNumber.Normalize(number, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
+    local normalized = SkyPhoneSimNumber.NormalizeService(number, Config.Sim.NumberLength)
     return normalized ~= nil and service_lines_by_number[normalized] ~= nil
 end
 
@@ -539,7 +539,7 @@ function SkyPhoneCompanies.IsSystemContactNumber(number)
     if not Config.Companies.Enabled then
         return false
     end
-    local normalized = SkyPhoneSimNumber.Normalize(number, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
+    local normalized = SkyPhoneSimNumber.NormalizeService(number, Config.Sim.NumberLength)
     local company_id = normalized and service_lines_by_number[normalized] or nil
     local definition = company_id and definitions[company_id] or nil
     return definition ~= nil and definition.Public == true and definition.ServiceLine.AutoContact == true
@@ -2610,7 +2610,7 @@ Bridge.Callbacks.Register("sky_phone:companies:update-profile", function(source,
         return { success = false, error = "invalid_profile" }
     end
     if data.phoneNumber ~= nil then
-        local number = SkyPhoneSimNumber.Normalize(data.phoneNumber, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
+        local number = SkyPhoneSimNumber.NormalizeService(data.phoneNumber, Config.Sim.NumberLength)
         if number ~= member.definition.ServiceLine.Number then
             return { success = false, error = "invalid_profile" }
         end

@@ -946,7 +946,9 @@ Bridge.Callbacks.Register("sky_phone:calls:dial", function(source, data)
         dial_locks[source] = nil
         return { success = false, error = "airplane_mode" }
     end
-    local number = SkyPhoneSimNumber.Normalize(data.phoneNumber, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
+    local service_line = SkyPhoneCompanies.GetServiceLine(data.phoneNumber)
+    local number = service_line and service_line.number
+        or SkyPhoneSimNumber.Normalize(data.phoneNumber, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
     if not number then
         dial_locks[source] = nil
         return { success = false, error = "invalid_number" }
@@ -960,7 +962,6 @@ Bridge.Callbacks.Register("sky_phone:calls:dial", function(source, data)
         return { success = false, error = "busy" }
     end
     dialing_by_sim[scope.device.sim_id] = true
-    local service_line = SkyPhoneCompanies.GetServiceLine(number)
     if service_line then
         if not service_line.canCall then
             local terminal = create_terminal_call(scope, number, nil, "unavailable")
@@ -1109,7 +1110,9 @@ Bridge.Callbacks.Register("sky_phone:payphone:dial", function(source, data)
         return { success = false, error = "busy" }
     end
 
-    local number = SkyPhoneSimNumber.Normalize(data.phoneNumber, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
+    local service_line = SkyPhoneCompanies.GetServiceLine(data.phoneNumber)
+    local number = service_line and service_line.number
+        or SkyPhoneSimNumber.Normalize(data.phoneNumber, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
     if not number then
         return { success = false, error = "invalid_number" }
     end
@@ -1120,7 +1123,6 @@ Bridge.Callbacks.Register("sky_phone:payphone:dial", function(source, data)
     end
 
     dial_locks[source] = true
-    local service_line = SkyPhoneCompanies.GetServiceLine(number)
     if service_line then
         if not service_line.canCall then
             dial_locks[source] = nil
