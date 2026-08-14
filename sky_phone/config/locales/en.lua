@@ -95,7 +95,7 @@ Locales["en"] = {
             },
             security = {
                 eyebrow = "Privacy & Security", title = "Protect this phone", body = "Choose a four- or six-digit passcode to keep your apps and local information private.",
-                local = "The passcode belongs to this physical phone and is never transferred with the SIM.", create = "Create Passcode", createSelected = "Create {count}-Digit Passcode",
+                ["local"] = "The passcode belongs to this physical phone and is never transferred with the SIM.", create = "Create Passcode", createSelected = "Create {count}-Digit Passcode",
                 lengthTitle = "Choose passcode length", fourDigit = "4-Digit Code", sixDigit = "6-Digit Code",
                 enter = "Create a Passcode", confirm = "Verify Your Passcode", codeHint = "Enter a memorable six-digit code.", fourDigitHint = "Enter a memorable four-digit code.", sixDigitHint = "Enter a memorable six-digit code.",
                 mismatch = "The passcodes did not match. Try again.", failed = "The passcode could not be saved.",
