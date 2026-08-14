@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import SkyGlass from '../controls/SkyGlass.vue'
+import SkyToolbar from '../controls/SkyToolbar.vue'
 import { useComposedFieldValue } from '@/ui/controls/useComposedFieldValue'
 
 defineOptions({ inheritAttrs: false })
@@ -9,6 +11,7 @@ const props = withDefaults(
   defineProps<{
     ariaLabel?: string
     disabled?: boolean
+    embedded?: boolean
     id?: string
     modelValue?: string
     name?: string
@@ -19,10 +22,11 @@ const props = withDefaults(
   {
     ariaLabel: '',
     disabled: false,
+    embedded: false,
     id: undefined,
     modelValue: undefined,
     name: undefined,
-    outline: true,
+    outline: false,
     placeholder: '',
     value: '',
   },
@@ -58,32 +62,39 @@ function handleCompositionEnd(event: CompositionEvent): void {
 </script>
 
 <template>
-  <div
+  <SkyToolbar
     v-bind="$attrs"
     class="sky-messagebar"
-    :class="{ 'sky-messagebar--outline': outline }"
+    :class="{
+      'sky-messagebar--embedded': embedded,
+      'sky-messagebar--outline': outline,
+    }"
+    inner-class="sky-messagebar__inner"
+    :outline="outline"
   >
     <div v-if="$slots.left" class="sky-messagebar__left">
       <slot name="left" />
     </div>
-    <textarea
-      :id="id"
-      :aria-label="ariaLabel || placeholder || undefined"
-      :disabled="disabled"
-      :name="name"
-      :placeholder="placeholder"
-      :value="localValue"
-      rows="1"
-      @blur="emit('blur', $event)"
-      @change="emit('change', $event)"
-      @compositionend="handleCompositionEnd"
-      @compositionstart="startComposition"
-      @focus="emit('focus', $event)"
-      @input="handleInput"
-      @keydown="emit('keydown', $event)"
-    ></textarea>
+    <SkyGlass :highlight="false" class="sky-messagebar__area">
+      <textarea
+        :id="id"
+        :aria-label="ariaLabel || placeholder || undefined"
+        :disabled="disabled"
+        :name="name"
+        :placeholder="placeholder"
+        :value="localValue"
+        rows="1"
+        @blur="emit('blur', $event)"
+        @change="emit('change', $event)"
+        @compositionend="handleCompositionEnd"
+        @compositionstart="startComposition"
+        @focus="emit('focus', $event)"
+        @input="handleInput"
+        @keydown="emit('keydown', $event)"
+      ></textarea>
+    </SkyGlass>
     <div v-if="$slots.right" class="sky-messagebar__right">
       <slot name="right" />
     </div>
-  </div>
+  </SkyToolbar>
 </template>

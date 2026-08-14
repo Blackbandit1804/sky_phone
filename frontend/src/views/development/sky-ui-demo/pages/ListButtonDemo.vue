@@ -6,7 +6,7 @@ import SkyUiDemoPage from '../SkyUiDemoPage.vue'
 
 <template>
   <SkyUiDemoPage title="List Button">
-    <SkyList dividers strong>
+    <SkyList dividers outline strong>
       <SkyListButton>Button 1</SkyListButton>
       <SkyListButton>Button 2</SkyListButton>
       <SkyListButton>Button 3</SkyListButton>

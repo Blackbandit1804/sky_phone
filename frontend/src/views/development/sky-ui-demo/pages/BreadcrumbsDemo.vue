@@ -79,6 +79,7 @@ const popoverTarget = ref<HTMLElement | null>(null)
       <SkyPopover
         id="breadcrumbs-menu"
         aria-label="Hidden breadcrumbs"
+        class="breadcrumbs-demo__popover"
         :opened="popoverOpened"
         :offset="0"
         role="region"
@@ -99,6 +100,10 @@ const popoverTarget = ref<HTMLElement | null>(null)
 <style scoped>
 .breadcrumbs-demo__menu {
   width: 100%;
+}
+
+.breadcrumbs-demo__popover :deep(.sky-popover__panel) {
+  width: 120px;
 }
 
 .breadcrumbs-demo__target {

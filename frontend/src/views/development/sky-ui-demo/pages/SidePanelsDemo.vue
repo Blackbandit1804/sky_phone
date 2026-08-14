@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { X } from 'lucide-vue-next'
+import Xmark from 'framework7-icons/vue/vue/Xmark.vue'
 import { reactive } from 'vue'
 
 import {
+  SkyAppPage,
   SkyBlock,
   SkyBlockTitle,
   SkyButton,
@@ -14,6 +15,7 @@ import {
 } from '@/ui'
 
 import SkyUiDemoPage from '../SkyUiDemoPage.vue'
+import { useSkyUiDemoContext } from '../context'
 
 type PanelId = 'left' | 'leftFloating' | 'right' | 'rightFloating'
 
@@ -29,6 +31,7 @@ const opened = reactive<Record<PanelId, boolean>>({
   right: false,
   rightFloating: false,
 })
+const demo = useSkyUiDemoContext()
 
 function openPanel(id: PanelId): void {
   opened[id] = true
@@ -40,12 +43,12 @@ function closePanel(id: PanelId): void {
 </script>
 
 <template>
-  <SkyUiDemoPage title="Panel / Side Panels">
+  <SkyUiDemoPage title="Panel / Side Panel">
     <SkyBlock class="sky-ui-demo-stack" inset strong>
       <p class="sky-ui-demo-copy">
-        Sky UI comes with two panels, one on the left and one on the right. Both
-        are optional and can contain lists, forms, custom content, or an
-        independent view.
+        Konsta UI comes with 2 panels (on left and on right), both are optional.
+        You can put absolutely anything inside: data lists, forms, custom
+        content, etc.
       </p>
     </SkyBlock>
 
@@ -78,7 +81,17 @@ function closePanel(id: PanelId): void {
         @backdropclick="closePanel(panel.id)"
         @escape="closePanel(panel.id)"
       >
-        <div class="sky-app-page sky-ui-demo-panel-page">
+        <SkyAppPage
+          :accent="demo.accent.value"
+          :accent-soft="demo.accentSoft.value"
+          class="sky-ui-demo-panel-page"
+          component="div"
+          :class="{
+            'sky-ui-demo-panel-page--floating': panel.floating,
+          }"
+          :dark="demo.dark.value"
+          :label="panel.title"
+        >
           <SkyNavbar :title="panel.title">
             <template #right>
               <SkyLink
@@ -86,12 +99,12 @@ function closePanel(id: PanelId): void {
                 icon-only
                 @click="closePanel(panel.id)"
               >
-                <SkyIcon :size="24"><X /></SkyIcon>
+                <SkyIcon :size="20"><Xmark /></SkyIcon>
               </SkyLink>
             </template>
           </SkyNavbar>
           <SkyScrollArea>
-            <SkyBlock class="sky-ui-demo-stack">
+            <SkyBlock class="sky-ui-demo-stack sky-ui-demo-panel-copy">
               <p class="sky-ui-demo-copy">Here comes {{ panel.side }} panel.</p>
               <p v-if="panel.side === 'left'" class="sky-ui-demo-copy">
                 Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -119,7 +132,7 @@ function closePanel(id: PanelId): void {
               </p>
             </SkyBlock>
           </SkyScrollArea>
-        </div>
+        </SkyAppPage>
       </SkyPanel>
     </template>
   </SkyUiDemoPage>
@@ -129,14 +142,24 @@ function closePanel(id: PanelId): void {
 .sky-ui-demo-panel-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sky-space-3);
+  gap: var(--sky-space-4);
 }
 
 .sky-ui-demo-panel-page {
   min-height: 100%;
 }
 
-.sky-ui-demo-panel :deep(.sky-panel__panel) {
-  overflow: hidden;
+.sky-ui-demo-panel-page--floating {
+  --sky-safe-area-top: 0px;
+  --sky-safe-area-bottom: 0px;
+  background: transparent;
+}
+
+.sky-ui-demo-panel-page--floating :deep(.sky-app-page__backdrop) {
+  background: transparent;
+}
+
+.sky-ui-demo-panel-copy {
+  gap: var(--sky-space-4);
 }
 </style>

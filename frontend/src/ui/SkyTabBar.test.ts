@@ -65,7 +65,16 @@ describe('SkyTabBar', () => {
       /\.sky-tab-button__icon\s*\{[^}]*width:\s*28px[^}]*height:\s*28px/s,
     )
     expect(controls).toMatch(
-      /\.sky-tab-button__label\s*\{[^}]*font-size:\s*12px[^}]*font-weight:\s*500/s,
+      /\.sky-tab-button__label\s*\{[^}]*font-size:\s*16px[^}]*font-weight:\s*400[^}]*line-height:\s*24px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-tabbar \.sky-tab-button__icon \+ \.sky-tab-button__label\s*\{[^}]*font-size:\s*12px[^}]*font-weight:\s*500[^}]*line-height:\s*16px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-tabbar \.sky-tab-button\s*\{[^}]*color:\s*var\(--sky-text,\s*#000000\)/s,
+    )
+    expect(foundation).not.toContain(
+      '.sky-tabbar__links > button > span > span:last-child',
     )
     expect(source).toContain("attributeFilter: ['class']")
     expect(source).toContain(
@@ -75,7 +84,7 @@ describe('SkyTabBar', () => {
 
   it('keeps Performance solid while Ultimate retains shared Glass', () => {
     expect(mainCss).toMatch(
-      /\.phone-app--performance \.sky-tabbar__pane\s*\{[^}]*background:\s*var\(--phone-performance-glass\)[^}]*box-shadow:\s*none/s,
+      /\.phone-app--performance \.sky-tabbar__pane\s*\{[^}]*background:\s*var\(--sky-glass-solid\)[^}]*box-shadow:\s*none/s,
     )
     expect(source).toContain('<SkyGlass class="sky-tabbar__pane">')
   })

@@ -3812,4 +3812,9 @@ onBeforeUnmount(() => {
     transform: scale(1.02);
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  .crewlink-orbits i {
+    animation: none;
+  }
+}
 </style>

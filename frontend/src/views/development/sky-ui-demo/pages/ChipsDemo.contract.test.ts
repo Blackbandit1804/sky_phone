@@ -23,4 +23,12 @@ describe('ChipsDemo', () => {
     expect(source).toContain('outline')
     expect(source).toContain('selected')
   })
+
+  it('uses the exact Tailwind 500 colors from the Konsta kitchen sink', () => {
+    expect(source).toContain('--sky-app-accent: #fb2c36;')
+    expect(source).toContain('--sky-app-accent: #00c951;')
+    expect(source).toContain('--sky-app-accent: #2b7fff;')
+    expect(source).toContain('--sky-app-accent: #f0b100;')
+    expect(source).toContain('--sky-app-accent: #f6339a;')
+  })
 })

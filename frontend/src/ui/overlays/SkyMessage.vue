@@ -13,11 +13,11 @@ withDefaults(
     type?: 'received' | 'sent'
   }>(),
   {
-    component: 'article',
+    component: 'div',
     name: '',
     textFooter: '',
     textHeader: '',
-    type: 'received',
+    type: 'sent',
   },
 )
 </script>

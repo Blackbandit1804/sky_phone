@@ -51,8 +51,8 @@ const paragraphs = [
 
     <SkyBlock inset strong>
       <p class="sky-ui-demo-copy">
-        Navbar is a fixed area at the top of a screen that contains the page
-        title and navigation elements.
+        Navbar is a fixed area at the top of a screen that contains Page title
+        and navigation elements.
       </p>
     </SkyBlock>
 

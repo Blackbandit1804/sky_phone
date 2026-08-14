@@ -5,12 +5,12 @@ withDefaults(
   defineProps<{
     component?: string
     small?: boolean
-    tone?: 'danger' | 'info' | 'neutral' | 'success' | 'warning'
+    tone?: 'danger' | 'info' | 'neutral' | 'primary' | 'success' | 'warning'
   }>(),
   {
     component: 'span',
     small: false,
-    tone: 'neutral',
+    tone: 'primary',
   },
 )
 </script>

@@ -8,7 +8,7 @@ withDefaults(defineProps<{ component?: string; dividers?: boolean }>(), {
 <template>
   <component
     :is="component"
-    class="sky-action-group"
+    class="sky-action-group sky-glass-surface"
     :class="{ 'sky-action-group--dividers': dividers }"
   >
     <slot />

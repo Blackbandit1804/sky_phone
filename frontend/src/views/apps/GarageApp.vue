@@ -257,7 +257,7 @@ onBeforeUnmount(() => {
       </template>
     </SkyEmptyState>
 
-    <SkyScrollArea v-else class="garage-scroll">
+    <SkyScrollArea v-else padded class="garage-scroll">
       <SkyGlass class="garage-summary">
         <div class="garage-summary__heading">
           <span>
@@ -1133,6 +1133,12 @@ onBeforeUnmount(() => {
   }
   to {
     transform: translateX(155%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .garage-valet-live__track i {
+    animation: none;
+    transform: none;
   }
 }
 .garage-page.sky-app-page--dark .garage-vehicle__visual {

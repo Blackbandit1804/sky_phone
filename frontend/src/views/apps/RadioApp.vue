@@ -235,7 +235,7 @@ onBeforeUnmount(() => {
   >
     <SkyNavbar :title="phone.t('Apps.radio.name')" />
 
-    <SkyScrollArea class="radio-content" with-tabbar>
+    <SkyScrollArea padded class="radio-content" with-tabbar>
       <div v-if="radio.isLoading && !radio.data.provider" class="radio-loading">
         <SkySpinner :label="phone.t('Common.loading')" />
         <span aria-hidden="true">{{ phone.t('Common.loading') }}</span>

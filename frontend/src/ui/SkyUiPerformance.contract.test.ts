@@ -20,17 +20,44 @@ describe('Sky UI graphics modes', () => {
     fileURLToPath(new URL('./controls.css', import.meta.url)),
     'utf8',
   )
+  const controlCenterSource = readFileSync(
+    fileURLToPath(new URL('../components/PhoneControlCenter.vue', import.meta.url)),
+    'utf8',
+  )
+  const appModeConsumers = [
+    '../components/SpringboardWidget.vue',
+    '../views/apps/AppStoreApp.vue',
+    '../views/apps/AppStoreDetail.vue',
+    '../views/apps/MusicApp.vue',
+  ]
+    .map((path) =>
+      readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8'),
+    )
+    .join('\n')
 
   it('keeps Performance glass solid and blur-free', () => {
-    expect(performanceCss).toContain(
-      '--sky-glass: var(--phone-performance-glass)',
-    )
-    expect(performanceCss).toContain(
+    expect(performanceCss).toContain('--sky-glass: var(--sky-glass-solid)')
+    expect(performanceCss).not.toContain(
       '--sky-glass-solid: var(--phone-performance-glass)',
     )
     expect(performanceCss).toContain('--sky-navbar-glass: var(--sky-bg)')
+    expect(performanceCss).toContain('--sky-shadow-glass: none')
     expect(performanceCss).toContain('backdrop-filter: none !important')
     expect(performanceCss).toContain('-webkit-backdrop-filter: none !important')
+    expect(performanceCss).toMatch(
+      /\.phone-app--performance \.k-glass\s*\{[^}]*box-shadow:\s*none !important[^}]*\}/s,
+    )
+    expect(performanceCss).not.toMatch(
+      /\.phone-app--performance \.k-glass\s*\{[^}]*background(?:-color)?:/s,
+    )
+    expect(performanceCss).toMatch(
+      /\.k-glass:where\(\[class~='bg-ios-light-glass'\]\)\s*\{[^}]*background:\s*var\(--phone-performance-glass\) !important/s,
+    )
+    expect(performanceCss).not.toContain("[class~='dark:bg-ios-dark-glass']")
+    expect(controlCenterSource).toContain("bgIos: 'bg-[#5e5ce6]'")
+    expect(controlCenterSource).not.toContain(
+      "bgIos: 'bg-ios-light-glass bg-[#5e5ce6]'",
+    )
   })
 
   it('removes Range and Toggle hold glass only inside Performance mode', () => {
@@ -49,12 +76,17 @@ describe('Sky UI graphics modes', () => {
     expect(performanceCss).toContain(
       '.phone-app--performance .sky-glass--highlight-visible::after',
     )
-    expect(performanceCss).toContain("[class~='rounded-[inherit]']")
+    expect(performanceCss).not.toContain("[class~='rounded-[inherit]']")
     expect(performanceCss).toContain(
       "[class~='group-has-[input:active]/range:scale-[1.4]']",
     )
     expect(performanceCss).toContain("[class~='group-active:scale-[1.4]']")
     expect(performanceCss).toContain("[class~='group-active:opacity-100']")
+    expect(performanceCss).not.toMatch(/(?:^|[;{])\s*scale\s*:/m)
+    expect(performanceCss).toContain('--tw-scale-x: 1 !important')
+    expect(performanceCss).toContain('var(--tw-translate-x, 0)')
+    expect(performanceCss).toContain('var(--tw-translate-y, 0)')
+    expect(performanceCss).toContain('scale(1) !important')
   })
 
   it('does not globally disable functional motion or focus styling', () => {
@@ -70,16 +102,34 @@ describe('Sky UI graphics modes', () => {
 
   it('keeps pill navigation solid in Performance and glass in Ultimate', () => {
     expect(performanceCss).toMatch(
-      /\.phone-app--performance \.sky-segmented--navigation\s*\{[^}]*background:\s*var\(--phone-performance-glass\)[^}]*box-shadow:\s*none/s,
+      /\.phone-app--performance \.sky-segmented--navigation\s*\{[^}]*background:\s*var\(--sky-glass-solid\)[^}]*box-shadow:\s*none/s,
     )
     expect(performanceCss).toMatch(
-      /\.phone-app--performance \.sky-segmented--navbar\s*\{[^}]*background:\s*var\(--phone-performance-glass\)[^}]*box-shadow:\s*none/s,
+      /\.phone-app--performance \.sky-segmented--navbar\s*\{[^}]*background:\s*var\(--sky-glass-solid\)[^}]*box-shadow:\s*none/s,
     )
     expect(controlsCss).toMatch(
       /\.sky-glass\s*\{[^}]*background:\s*var\(--sky-glass-solid[^}]*box-shadow:\s*var\(--sky-shadow-glass\)/s,
     )
-    expect(controlsCss).toMatch(
-      /@supports[\s\S]*?\.sky-glass\s*\{[^}]*backdrop-filter:\s*blur\(16px\)[^}]*\}[\s\S]*?\.sky-glass\s*\{[^}]*background:\s*var\(--sky-glass,/,
+    expect(controlsCss).toContain('@supports (')
+    expect(controlsCss).toContain('backdrop-filter: blur(16px)')
+    expect(controlsCss).toContain(
+      'background: var(--sky-glass, rgba(255, 255, 255, 0.75))',
+    )
+  })
+
+  it('keeps app-specific effect choices behind shared semantic markers', () => {
+    expect(appModeConsumers).not.toContain(':global(.phone-app--performance)')
+    expect(appModeConsumers).not.toContain(
+      '[`phone-app--${phone.preferences.settings.graphicsMode}`]',
+    )
+    expect(appModeConsumers).toContain('phone-effect--expensive-shadow')
+    expect(appModeConsumers).toContain('phone-effect--decorative')
+    expect(appModeConsumers).toContain('phone-effect--solid-surface')
+    expect(performanceCss).toContain(
+      '.phone-app--performance .phone-effect--expensive-shadow',
+    )
+    expect(performanceCss).toMatch(
+      /\.phone-app--performance \.phone-effect--solid-surface\s*\{[^}]*background:\s*var\(/s,
     )
   })
 })

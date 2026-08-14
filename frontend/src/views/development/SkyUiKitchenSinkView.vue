@@ -21,7 +21,11 @@ const initialAccent: SkyUiDemoAccent = {
   name: 'Blue',
   soft: 'rgba(0, 122, 255, 0.16)',
 }
-const dark = ref(phone.isDarkMode)
+const dark = computed({
+  get: () => phone.isDarkMode,
+  set: (value: boolean) =>
+    phone.setPreference('appearanceMode', value ? 'dark' : 'light'),
+})
 const accentChoice = ref(initialAccent)
 
 const demoPages: Record<SkyUiDemoId, Component> = {

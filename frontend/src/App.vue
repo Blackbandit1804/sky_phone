@@ -70,6 +70,7 @@ import type { EasyShareEvent } from '@/types/easyshare'
 import { nuiCall } from '@/utils/nui'
 import { formatTimer } from '@/utils/clock'
 import { parsePhonePreferences } from '@/utils/preferences'
+import { getHairlinePixelStyle } from '@/utils/rendering'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 import SpringboardView from '@/views/SpringboardView.vue'
 
@@ -317,6 +318,7 @@ const setupRequired = computed(
 )
 const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)')
 const viewportScale = ref(getViewportScale())
+const browserDevicePixelRatio = ref(window.devicePixelRatio || 1)
 const phoneBaseZoom = computed(
   () =>
     viewportScale.value *
@@ -347,6 +349,7 @@ const phoneZoom = computed(() => {
   )
 })
 const phoneResolutionStyle = computed<CSSProperties>(() => ({
+  ...getHairlinePixelStyle(phoneZoom.value, browserDevicePixelRatio.value),
   '--phone-edge-gap': `${24 * viewportScale.value}px`,
   '--phone-stack-gap': `${16 * viewportScale.value}px`,
   '--phone-zoom': phoneZoom.value,
@@ -1077,6 +1080,7 @@ function onSystemColorSchemeChange(event: MediaQueryListEvent): void {
 
 function updateViewportScale(): void {
   viewportScale.value = getViewportScale()
+  browserDevicePixelRatio.value = window.devicePixelRatio || 1
 }
 
 function completeUnlock(): void {
@@ -1401,6 +1405,7 @@ onBeforeUnmount(() => {
           v-for="notification in notifications.devicePreviews"
           :key="notification.device?.imei"
           :notification="notification"
+          :device-pixel-ratio="browserDevicePixelRatio"
           :zoom="
             phoneBaseZoom *
             ((notification.device?.preferences.settings.phoneScale ?? 100) /
@@ -1424,7 +1429,7 @@ onBeforeUnmount(() => {
             <div
               class="phone-screen"
               :class="{
-                'phone-screen--app': isAppRoute,
+                'phone-screen--app': isAppRoute || isDevelopmentRoute,
                 'phone-app--light': !phone.isDarkMode,
                 [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
               }"

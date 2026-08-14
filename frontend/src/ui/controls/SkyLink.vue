@@ -12,7 +12,7 @@ const props = withDefaults(
     type?: 'button' | 'reset' | 'submit'
   }>(),
   {
-    component: 'button',
+    component: 'a',
     disabled: false,
     href: undefined,
     iconOnly: false,
@@ -29,7 +29,7 @@ const elementProps = computed<Record<string, unknown>>(() => {
     return {
       'aria-disabled': props.disabled || undefined,
       href: props.disabled ? undefined : props.href,
-      tabindex: props.disabled ? -1 : undefined,
+      tabindex: props.disabled ? -1 : 0,
     }
   }
 
@@ -56,6 +56,7 @@ function handleClick(event: MouseEvent): void {
     v-bind="{ ...$attrs, ...elementProps }"
     class="sky-link"
     :class="{ 'sky-link--icon-only': iconOnly }"
+    role="link"
     @click="handleClick"
   >
     <slot />

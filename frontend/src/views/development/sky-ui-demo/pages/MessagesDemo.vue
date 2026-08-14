@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ArrowUpCircle, Camera } from 'lucide-vue-next'
+import ArrowUpCircleFill from 'framework7-icons/vue/vue/ArrowUpCircleFill.vue'
+import CameraFill from 'framework7-icons/vue/vue/CameraFill.vue'
 import { computed, nextTick, onMounted, ref } from 'vue'
 
 import {
@@ -85,9 +86,12 @@ const currentTime = new Intl.DateTimeFormat('en-US', {
 }).format(currentDate)
 
 function scrollToBottom(animate = true): void {
-  messagesEnd.value?.scrollIntoView({
+  const scrollArea = messagesEnd.value?.closest('.sky-scroll-area')
+  if (!(scrollArea instanceof HTMLElement)) return
+
+  scrollArea.scrollTo({
+    top: scrollArea.scrollHeight - scrollArea.clientHeight,
     behavior: animate ? 'smooth' : 'auto',
-    block: 'end',
   })
 }
 
@@ -115,6 +119,10 @@ function handleMessageKeydown(event: KeyboardEvent): void {
   void sendMessage()
 }
 
+function messageLines(text: string): string[] {
+  return text.split('\n')
+}
+
 onMounted(async () => {
   await nextTick()
   scrollToBottom(false)
@@ -122,7 +130,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <SkyUiDemoPage title="Messages" with-tabbar>
+  <SkyUiDemoPage title="Messages">
     <SkyMessages>
       <SkyMessagesTitle
         ><b>{{ currentDay }}</b
@@ -135,6 +143,15 @@ onMounted(async () => {
         :text="message.text"
         :type="message.type"
       >
+        <template #text>
+          <template
+            v-for="(line, lineIndex) in messageLines(message.text)"
+            :key="`${lineIndex}-${line}`"
+          >
+            {{ line
+            }}<br v-if="lineIndex < messageLines(message.text).length - 1" />
+          </template>
+        </template>
         <template v-if="message.type === 'received'" #avatar>
           <img
             class="sky-ui-demo-messages__avatar"
@@ -143,12 +160,12 @@ onMounted(async () => {
           />
         </template>
       </SkyMessage>
-      <span
-        ref="messagesEnd"
-        class="sky-ui-demo-messages__end"
-        aria-hidden="true"
-      />
     </SkyMessages>
+    <span
+      ref="messagesEnd"
+      class="sky-ui-demo-messages__end"
+      aria-hidden="true"
+    />
 
     <template #fixed>
       <SkyMessagebar
@@ -160,8 +177,13 @@ onMounted(async () => {
       >
         <template #left>
           <SkyToolbarPane>
-            <SkyLink aria-label="Open camera" icon-only>
-              <SkyIcon :size="22"><Camera /></SkyIcon>
+            <SkyLink
+              aria-label="Open camera"
+              component="button"
+              icon-only
+              type="button"
+            >
+              <SkyIcon :size="20"><CameraFill /></SkyIcon>
             </SkyLink>
           </SkyToolbarPane>
         </template>
@@ -169,12 +191,14 @@ onMounted(async () => {
           <SkyToolbarPane>
             <SkyLink
               aria-label="Send message"
+              component="button"
               :disabled="!canSend"
               icon-only
+              type="button"
               :style="{ opacity: canSend ? 1 : 0.3 }"
               @click="sendMessage"
             >
-              <SkyIcon :size="28"><ArrowUpCircle /></SkyIcon>
+              <SkyIcon :size="28"><ArrowUpCircleFill /></SkyIcon>
             </SkyLink>
           </SkyToolbarPane>
         </template>
@@ -194,7 +218,7 @@ onMounted(async () => {
 
 .sky-ui-demo-messages__end {
   width: 1px;
-  height: 1px;
+  height: 36px;
   display: block;
 }
 

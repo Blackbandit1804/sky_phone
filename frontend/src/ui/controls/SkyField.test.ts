@@ -39,7 +39,7 @@ describe('SkyField', () => {
     expect(html).toContain('value="231"')
   })
 
-  it('marks fields with leading media so labels and controls share alignment', async () => {
+  it('keeps the leading alias on the canonical Konsta media column', async () => {
     const app = createSSRApp({
       render: () =>
         h(
@@ -52,7 +52,28 @@ describe('SkyField', () => {
     const html = await renderToString(app)
 
     expect(html).toContain('sky-field--has-leading')
-    expect(html).toContain('sky-field__leading')
+    expect(html).toContain('sky-field--has-media')
+    expect(html).toContain('class="sky-field__media"')
+    expect(html.indexOf('sky-field__media')).toBeLessThan(
+      html.indexOf('sky-field__inner'),
+    )
+  })
+
+  it('renders canonical media, inner, label, and control nesting', async () => {
+    const app = createSSRApp({
+      render: () =>
+        h(
+          SkyField,
+          { label: 'Name' },
+          { media: () => h('img', { alt: 'icon', src: '/demo.png' }) },
+        ),
+    })
+
+    const html = await renderToString(app)
+
+    expect(html).toMatch(
+      /<span class="sky-field__media">[\s\S]*?<\/span><div class="sky-field__inner"><label[\s\S]*?<div class="sky-field__control">/,
+    )
   })
 
   it('forwards text-entry hints to the native input', async () => {
@@ -118,13 +139,29 @@ describe('SkyField', () => {
 
     expect(select).toContain('class="sky-field__input sky-field__select"')
     expect(select).toContain('aria-label="Gender"')
+    expect(select).toContain('placeholder="Please choose..."')
     expect(select).toContain('value="male"')
-    expect(html).toContain(
-      '<option disabled value="">Please choose...</option>',
-    )
+    expect(html).not.toContain('>Please choose...</option>')
     expect(html).toContain('<option value="male">Male</option>')
     expect(html).toContain('<option disabled value="0">Unavailable</option>')
     expect(html).toContain('<option value="custom">Custom</option>')
+  })
+
+  it('renders the exact Konsta dropdown triangle', async () => {
+    const app = createSSRApp(SkyField, {
+      dropdown: true,
+      options: [{ label: 'Male', value: 'Male' }],
+      type: 'select',
+    })
+
+    const html = await renderToString(app)
+
+    expect(html).toContain(
+      '<svg class="sky-field__dropdown" xmlns="http://www.w3.org/2000/svg" width="8" height="5" viewBox="0 0 8 5" fill="currentColor" aria-hidden="true" focusable="false">',
+    )
+    expect(html).toContain(
+      '<polygon fill-rule="evenodd" points="0 0 8 0 4 5"></polygon>',
+    )
   })
 
   it('raises floating labels only after the field has a value', async () => {
@@ -149,17 +186,25 @@ describe('SkyField', () => {
     expect(valuedHtml).toContain('sky-field--floating-raised')
   })
 
-  it('keeps floating-label controls touch-sized and reduced-motion aware', () => {
+  it('locks Konsta input, outline, floating-label, and reduced-motion geometry', () => {
     const controls = readFileSync(
       new URL('../controls.css', import.meta.url),
       'utf8',
     )
 
     expect(controls).toMatch(
-      /\.sky-field__input\s*\{[^}]*min-height:\s*var\(--sky-touch-target, 44px\)/s,
+      /\.sky-field__input\s*\{[^}]*height:\s*40px;[^}]*min-height:\s*40px;[^}]*font-size:\s*16px;[^}]*line-height:\s*24px/s,
+    )
+    expect(controls).toMatch(/\.sky-field__media,[\s\S]*?padding:\s*8px 0;/)
+    expect(controls).toMatch(
+      /\.sky-field__inner\s*\{[^}]*padding:\s*12px calc\(16px \+ var\(--sky-safe-area-right, 0px\)\) 12px 0/s,
+    )
+    expect(controls).toMatch(/\.sky-field--outline\s*\{[^}]*margin:\s*16px 0;/s)
+    expect(controls).toMatch(
+      /\.sky-field--floating-label:not\(\.sky-field--inline\) \.sky-field__label\s*\{[^}]*transform:\s*translateY\(16px\) scale\(1\.33\)/s,
     )
     expect(controls).toMatch(
-      /\.sky-field--floating-label:not\(\.sky-field--inline\) \.sky-field__control\s*\{[^}]*min-height:\s*58px;[^}]*padding-top:\s*14px/s,
+      /\.sky-field--floating-label\.sky-field--outline:not\([\s\S]*?\.sky-field__label\s*\{[^}]*transform:\s*translateY\(24px\) scale\(1\.33\)/s,
     )
     expect(controls).toMatch(
       /@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\.sky-field__label/s,

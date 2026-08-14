@@ -344,3 +344,9 @@ watch(
     </SkyToast>
   </SkyAppPage>
 </template>
+
+<style scoped>
+.weather-scroll {
+  padding: 4px 14px 24px;
+}
+</style>

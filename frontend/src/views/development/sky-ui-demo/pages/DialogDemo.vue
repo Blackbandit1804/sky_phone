@@ -135,8 +135,7 @@ function handleHeroRowClick(event: MouseEvent, value: string): void {
 }
 
 .dialog-demo__list {
-  margin: var(--sky-space-3) calc(var(--sky-space-4) * -1)
-    calc(var(--sky-space-4) * -1);
+  margin: 0 calc(var(--sky-space-4) * -1) calc(var(--sky-space-4) * -1);
 }
 
 .dialog-demo__list :deep(.sky-list-item__row) {

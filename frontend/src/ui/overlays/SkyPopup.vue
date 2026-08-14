@@ -87,11 +87,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Transition
-    name="sky-popup-rise"
-    :duration="{ enter: 400, leave: 400 }"
-    appear
-  >
+  <Transition name="sky-popup-rise" appear>
     <div
       v-if="opened"
       ref="root"

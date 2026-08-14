@@ -14,6 +14,10 @@ const foundationStyles = readFileSync(
   new URL('./foundation.css', import.meta.url),
   'utf8',
 )
+const controlsStyles = readFileSync(
+  new URL('./controls.css', import.meta.url),
+  'utf8',
+)
 const appPageSource = readFileSync(
   new URL('./SkyAppPage.vue', import.meta.url),
   'utf8',
@@ -84,7 +88,7 @@ describe('SkyNavbar', () => {
     )?.groups?.declarations
 
     expect(noNavigationRule).toBeDefined()
-    expect(noNavigationRule).toContain('var(--sky-safe-area-top)')
+    expect(noNavigationRule).toContain('var(--sky-navbar-safe-area-top)')
     expect(noNavigationRule).toContain('var(--sky-navbar-height)')
     expect(noNavigationRule).toContain('var(--sky-space-3)')
     expect(navigationRowRule).toBeDefined()
@@ -211,6 +215,40 @@ describe('SkyNavbar', () => {
 
     expect(html).toContain('sky-navbar__back--surface')
     expect(html).toContain('aria-label="Back to Settings"')
+    expect(html).toContain('class="sky-navbar__back-icon"')
+    expect(html).toContain('viewBox="0 0 12 20"')
+    expect(html).not.toContain('lucide-chevron-left')
+  })
+
+  it('keeps the Konsta glass wrappers and centers the exact iOS back icon', () => {
+    expect(navbarSource).toContain('class="sky-navbar__left sky-glass-surface"')
+    expect(navbarSource).toContain(
+      'class="sky-navbar__right sky-glass-surface"',
+    )
+    expect(foundationStyles).toMatch(
+      /\.sky-navbar__back\s*\{[^}]*padding:\s*0 16px;[^}]*justify-content:\s*center/s,
+    )
+    expect(foundationStyles).toMatch(
+      /\.sky-navbar__back-icon\s*\{[^}]*width:\s*12px;[^}]*height:\s*20px;[^}]*display:\s*block;[^}]*fill:\s*currentColor/s,
+    )
+  })
+
+  it('inherits the Konsta iOS foreground for navbar and toolbar actions', () => {
+    expect(foundationStyles).toMatch(
+      /\.sky-navbar__back\s*\{[^}]*color:\s*inherit;/s,
+    )
+    expect(controlsStyles).toMatch(
+      /\.sky-navbar \.sky-link,\s*\.sky-navbar \.sky-navbar-back-link,\s*\.sky-toolbar \.sky-link\s*\{[^}]*color:\s*inherit;/s,
+    )
+    expect(controlsStyles).toMatch(
+      /\.sky-link\s*\{[^}]*color:\s*var\(--sky-app-accent, #007aff\);/s,
+    )
+    expect(controlsStyles).toMatch(
+      /\.sky-navbar-back-link:active:not\(:disabled\)\s*\{[^}]*opacity:\s*0\.5;[^}]*transition-duration:\s*0ms;/s,
+    )
+    expect(controlsStyles).not.toMatch(
+      /\.sky-navbar-back-link:active:not\(:disabled\)\s*\{[^}]*--sky-app-accent-soft/s,
+    )
   })
 
   it('renders the Konsta 56px subnavbar and custom class hook', async () => {
@@ -238,6 +276,9 @@ describe('SkyNavbar', () => {
   })
 
   it('uses the Konsta navbar glass heights with and without subnavbar', () => {
+    const navbarRule = foundationStyles.match(
+      /(?:^|\n)\.sky-navbar\s*\{(?<declarations>[^}]*)\}/,
+    )?.groups?.declarations
     const baseEffectRule = foundationStyles.match(
       /\.sky-navbar__blur,\s*\.sky-navbar__background\s*\{(?<declarations>[^}]*)\}/,
     )?.groups?.declarations
@@ -245,10 +286,13 @@ describe('SkyNavbar', () => {
       /\.sky-navbar--with-subnavbar \.sky-navbar__blur,\s*\.sky-navbar--with-subnavbar \.sky-navbar__background\s*\{(?<declarations>[^}]*)\}/,
     )?.groups?.declarations
 
-    expect(baseEffectRule).toContain('var(--sky-safe-area-top)')
+    expect(navbarRule).toContain(
+      '--sky-navbar-safe-area-top: max(16px, var(--sky-safe-area-top))',
+    )
+    expect(baseEffectRule).toContain('var(--sky-navbar-safe-area-top)')
     expect(baseEffectRule).toContain('var(--sky-navbar-height)')
     expect(baseEffectRule).toContain('+ 16px')
-    expect(subnavbarEffectRule).toContain('var(--sky-safe-area-top)')
+    expect(subnavbarEffectRule).toContain('var(--sky-navbar-safe-area-top)')
     expect(subnavbarEffectRule).toContain('var(--sky-navbar-height)')
     expect(subnavbarEffectRule).toContain('+ 70px + 16px')
     expect(foundationStyles).toMatch(
@@ -270,7 +314,12 @@ describe('SkyNavbar', () => {
               subnavbar: () =>
                 h(
                   SkySegmented,
-                  { activeIndex: 0, ariaLabel: 'Store sections', itemCount: 2 },
+                  {
+                    activeIndex: 0,
+                    ariaLabel: 'Store sections',
+                    itemCount: 2,
+                    strong: true,
+                  },
                   {
                     default: () => [
                       h(SkySegmentedButton, { active: true }, () => 'Apps'),

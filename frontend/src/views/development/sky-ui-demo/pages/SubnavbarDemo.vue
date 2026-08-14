@@ -5,7 +5,7 @@ import SkyUiDemoPage from '../SkyUiDemoPage.vue'
 </script>
 
 <template>
-  <SkyUiDemoPage title="Subnavbar">
+  <SkyUiDemoPage class="subnavbar-demo" title="Subnavbar">
     <template #subnavbar>
       <SkySegmented
         :active-index="0"
@@ -74,6 +74,23 @@ import SkyUiDemoPage from '../SkyUiDemoPage.vue'
 <style scoped>
 .subnavbar-demo__segmented {
   width: 100%;
+}
+
+.subnavbar-demo :deep(.sky-navbar) {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+}
+
+.subnavbar-demo :deep(.sky-navbar__inner) {
+  margin-bottom: 0;
+}
+
+.subnavbar-demo :deep(.sky-ui-demo-page__scroll::before) {
+  height: calc(
+    max(16px, var(--sky-safe-area-top)) + var(--sky-navbar-height) + 56px
+  );
 }
 
 .subnavbar-demo__content {

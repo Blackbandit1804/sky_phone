@@ -48,12 +48,13 @@
   --sky-navbar-collapse-offset: 0px;
   --sky-navbar-compact-title-opacity: 0;
   --sky-navbar-extended-title-opacity: 1;
+  --sky-navbar-safe-area-top: max(16px, var(--sky-safe-area-top));
   position: relative;
   z-index: 10;
   box-sizing: border-box;
   min-width: 0;
-  min-height: calc(var(--sky-safe-area-top) + var(--sky-navbar-height));
-  padding-top: var(--sky-safe-area-top);
+  min-height: calc(var(--sky-navbar-safe-area-top) + var(--sky-navbar-height));
+  padding-top: var(--sky-navbar-safe-area-top);
   flex: none;
   color: var(--sky-text);
   background: transparent;
@@ -66,7 +67,9 @@
   top: 0;
   right: 0;
   left: 0;
-  height: calc(var(--sky-safe-area-top) + var(--sky-navbar-height) + 16px);
+  height: calc(
+    var(--sky-navbar-safe-area-top) + var(--sky-navbar-height) + 16px
+  );
   pointer-events: none;
 }
 
@@ -102,7 +105,7 @@
 .sky-navbar--with-subnavbar .sky-navbar__blur,
 .sky-navbar--with-subnavbar .sky-navbar__background {
   height: calc(
-    var(--sky-safe-area-top) + var(--sky-navbar-height) + 70px + 16px
+    var(--sky-navbar-safe-area-top) + var(--sky-navbar-height) + 70px + 16px
   );
 }
 
@@ -124,25 +127,32 @@
 
 .sky-navbar--no-navigation {
   padding-top: calc(
-    var(--sky-safe-area-top) + var(--sky-navbar-height) + var(--sky-space-3)
+    var(--sky-navbar-safe-area-top) + var(--sky-navbar-height) +
+      var(--sky-space-3)
   );
 }
 
 .sky-navbar__left,
 .sky-navbar__right {
+  width: max-content;
+  max-width: 100%;
   min-width: 0;
   min-height: var(--sky-navbar-height);
   display: flex;
   align-items: center;
+  overflow: hidden;
+  border-radius: var(--sky-radius-pill);
 }
 
 .sky-navbar__left {
   grid-column: 1;
+  justify-self: start;
   justify-content: flex-start;
 }
 
 .sky-navbar__right {
   grid-column: 3;
+  justify-self: end;
   justify-content: flex-end;
 }
 
@@ -190,15 +200,15 @@
   min-width: var(--sky-touch-target);
   min-height: var(--sky-touch-target);
   margin: 0;
-  padding: 0 var(--sky-space-1);
+  padding: 0 16px;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: var(--sky-space-1);
   border: 0;
   border-radius: var(--sky-radius-pill);
   appearance: none;
-  color: var(--sky-app-accent);
+  color: inherit;
   background: transparent;
   font: inherit;
   cursor: pointer;
@@ -206,6 +216,14 @@
     opacity 300ms ease,
     transform 100ms ease;
   -webkit-tap-highlight-color: transparent;
+}
+
+.sky-navbar__back-icon {
+  width: 12px;
+  height: 20px;
+  display: block;
+  flex: none;
+  fill: currentColor;
 }
 
 .sky-navbar__back-label {
@@ -250,14 +268,14 @@
 
 .sky-navbar--medium {
   min-height: calc(
-    var(--sky-safe-area-top) + var(--sky-navbar-height) +
+    var(--sky-navbar-safe-area-top) + var(--sky-navbar-height) +
       var(--sky-navbar-height)
   );
 }
 
 .sky-navbar--large {
   min-height: calc(
-    var(--sky-safe-area-top) + var(--sky-navbar-height) +
+    var(--sky-navbar-safe-area-top) + var(--sky-navbar-height) +
       var(--sky-navbar-large-title-height)
   );
 }
@@ -293,7 +311,7 @@
 .sky-navbar__collapsed-heading {
   position: absolute;
   z-index: 1;
-  top: var(--sky-safe-area-top);
+  top: var(--sky-navbar-safe-area-top);
   right: calc(var(--sky-page-gutter) + var(--sky-safe-area-right));
   left: calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
   height: var(--sky-navbar-height);
@@ -365,10 +383,7 @@
   box-sizing: border-box;
   min-width: 0;
   min-height: 0;
-  padding: var(--sky-page-space)
-    calc(var(--sky-page-gutter) + var(--sky-safe-area-right))
-    calc(var(--sky-safe-area-bottom) + var(--sky-page-space));
-  padding-left: calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
+  padding: 0;
   flex: 1 1 auto;
   overflow-x: hidden;
   overflow-y: auto;
@@ -376,6 +391,25 @@
   overscroll-behavior: contain;
   touch-action: pan-y;
   scrollbar-width: none;
+}
+
+.sky-scroll-area--padded {
+  --sky-block-gutter-left: 0px;
+  --sky-block-gutter-right: 0px;
+  --sky-block-inset-gutter: 0px;
+  --sky-block-outer-left: 0px;
+  --sky-block-outer-right: 0px;
+  --sky-block-strong-gutter: 16px;
+  --sky-card-outer-left: 0px;
+  --sky-card-outer-right: 0px;
+  --sky-list-outer-left: 0px;
+  --sky-list-outer-right: 0px;
+  --sky-title-gutter-left: 0px;
+  --sky-title-gutter-right: 0px;
+  padding: var(--sky-page-space)
+    calc(var(--sky-page-gutter) + var(--sky-safe-area-right))
+    calc(var(--sky-safe-area-bottom) + var(--sky-page-space));
+  padding-left: calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
 }
 
 .sky-scroll-area::before {
@@ -864,16 +898,6 @@
 .sky-tabbar__links > a > span {
   min-width: 0;
   max-width: 100%;
-}
-
-.sky-tabbar__links > button > span > span:last-child,
-.sky-tabbar__links > a > span > span:last-child {
-  max-width: 100%;
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 14px;
-  text-overflow: ellipsis;
 }
 
 .sky-navbar button:focus-visible,

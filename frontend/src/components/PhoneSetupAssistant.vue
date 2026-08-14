@@ -21,10 +21,7 @@ import { useAppStoreStore } from '@/stores/app-store'
 import { usePhoneStore } from '@/stores/phone'
 import type { BuiltinPhoneAppId } from '@/types/apps'
 import { SkyButton, SkyField, SkySpinner } from '@/ui'
-import {
-  filterMailAddressInput,
-  normalizeMailAddress,
-} from '@/utils/mail'
+import { filterMailAddressInput, normalizeMailAddress } from '@/utils/mail'
 import {
   PHONE_SETUP_LAST_STEP,
   WALLPAPER_IDS,
@@ -264,9 +261,17 @@ function finish(): void {
           </div>
           <footer class="setup-welcome__footer">
             <div class="setup-welcome__privacy">
-              <span><ShieldCheck :size="14" />{{ phone.t('Setup.welcome.private') }}</span>
+              <span
+                ><ShieldCheck :size="14" />{{
+                  phone.t('Setup.welcome.private')
+                }}</span
+              >
               <i aria-hidden="true"></i>
-              <span><Sparkles :size="14" />{{ phone.t('Setup.welcome.personal') }}</span>
+              <span
+                ><Sparkles :size="14" />{{
+                  phone.t('Setup.welcome.personal')
+                }}</span
+              >
             </div>
             <SkyButton class="setup-assistant__primary" @click="continueSetup">
               {{ phone.t('Setup.getStarted') }}
@@ -323,9 +328,23 @@ function finish(): void {
           </p>
           <Transition name="setup-account-copy" mode="out-in">
             <div :key="accountMode" class="setup-cloud-heading">
-              <h1>{{ phone.t(accountMode === 'login' ? 'Setup.cloud.signInTitle' : 'Setup.cloud.createTitle') }}</h1>
+              <h1>
+                {{
+                  phone.t(
+                    accountMode === 'login'
+                      ? 'Setup.cloud.signInTitle'
+                      : 'Setup.cloud.createTitle',
+                  )
+                }}
+              </h1>
               <p class="setup-assistant__lead">
-                {{ phone.t(accountMode === 'login' ? 'Setup.cloud.signInBody' : 'Setup.cloud.createBody') }}
+                {{
+                  phone.t(
+                    accountMode === 'login'
+                      ? 'Setup.cloud.signInBody'
+                      : 'Setup.cloud.createBody',
+                  )
+                }}
               </p>
             </div>
           </Transition>
@@ -333,7 +352,10 @@ function finish(): void {
             <div class="setup-assistant__selector" role="group">
               <span
                 class="setup-assistant__selector-indicator"
-                :class="{ 'setup-assistant__selector-indicator--register': accountMode === 'register' }"
+                :class="{
+                  'setup-assistant__selector-indicator--register':
+                    accountMode === 'register',
+                }"
                 aria-hidden="true"
               ></span>
               <button
@@ -356,7 +378,10 @@ function finish(): void {
               <span>{{ accountInitial }}</span>
               <div>
                 <small>{{ phone.t('Setup.cloud.accountPreview') }}</small>
-                <strong>{{ email || phone.t('Setup.cloud.addressPlaceholder') }}<em>@ifruit.com</em></strong>
+                <strong
+                  >{{ email || phone.t('Setup.cloud.addressPlaceholder')
+                  }}<em>@ifruit.com</em></strong
+                >
               </div>
               <Check v-if="normalizedAccountEmail" :size="17" />
             </div>
@@ -382,7 +407,9 @@ function finish(): void {
                 v-model="password"
                 type="password"
                 :label="phone.t('Setup.cloud.password')"
-                :autocomplete="accountMode === 'login' ? 'current-password' : 'new-password'"
+                :autocomplete="
+                  accountMode === 'login' ? 'current-password' : 'new-password'
+                "
               />
               <Transition name="setup-account-field">
                 <SkyField
@@ -397,7 +424,10 @@ function finish(): void {
             </div>
 
             <Transition name="setup-account-strength">
-              <div v-if="accountMode === 'register'" class="setup-cloud-strength">
+              <div
+                v-if="accountMode === 'register'"
+                class="setup-cloud-strength"
+              >
                 <div>
                   <span
                     v-for="level in 4"
@@ -405,7 +435,9 @@ function finish(): void {
                     :class="{ active: level <= passwordStrength }"
                   ></span>
                 </div>
-                <small>{{ phone.t(`Setup.cloud.strength${passwordStrength}`) }}</small>
+                <small>{{
+                  phone.t(`Setup.cloud.strength${passwordStrength}`)
+                }}</small>
               </div>
             </Transition>
             <p v-if="accountError" class="setup-assistant__error" role="alert">
@@ -418,7 +450,13 @@ function finish(): void {
             >
               <SkySpinner v-if="accountBusy" />
               <Transition v-else name="setup-account-action" mode="out-in">
-                <span :key="accountMode">{{ phone.t(accountMode === 'login' ? 'Setup.cloud.signInAction' : 'Setup.cloud.createAction') }}</span>
+                <span :key="accountMode">{{
+                  phone.t(
+                    accountMode === 'login'
+                      ? 'Setup.cloud.signInAction'
+                      : 'Setup.cloud.createAction',
+                  )
+                }}</span>
               </Transition>
             </SkyButton>
             <div class="setup-cloud-security-note">
@@ -476,9 +514,17 @@ function finish(): void {
             >
               <span>
                 <b>{{ length }}</b>
-                <small>{{ phone.t(`Setup.security.${length === 4 ? 'fourDigit' : 'sixDigit'}`) }}</small>
+                <small>{{
+                  phone.t(
+                    `Setup.security.${length === 4 ? 'fourDigit' : 'sixDigit'}`,
+                  )
+                }}</small>
               </span>
-              <Check v-if="passcodeLength === length" :size="16" :stroke-width="3" />
+              <Check
+                v-if="passcodeLength === length"
+                :size="16"
+                :stroke-width="3"
+              />
             </button>
           </div>
           <div class="setup-assistant__notice">
@@ -488,7 +534,11 @@ function finish(): void {
           <SkyButton
             class="setup-assistant__primary"
             @click="passcodeStage = 'create'"
-            >{{ phone.t('Setup.security.createSelected', { count: String(passcodeLength) }) }}</SkyButton
+            >{{
+              phone.t('Setup.security.createSelected', {
+                count: String(passcodeLength),
+              })
+            }}</SkyButton
           >
           <button
             type="button"
@@ -757,7 +807,13 @@ function finish(): void {
             : 'Setup.security.confirm',
         )
       "
-      :subtitle="phone.t(passcodeLength === 4 ? 'Setup.security.fourDigitHint' : 'Setup.security.sixDigitHint')"
+      :subtitle="
+        phone.t(
+          passcodeLength === 4
+            ? 'Setup.security.fourDigitHint'
+            : 'Setup.security.sixDigitHint',
+        )
+      "
       @cancel="passcodeStage = null"
       @complete="submitPasscode"
     />
@@ -987,7 +1043,13 @@ function finish(): void {
   bottom: 44px;
   left: 12px;
   background:
-    linear-gradient(90deg, transparent, rgb(55 122 255 / 13%) 28%, rgb(121 91 255 / 11%) 72%, transparent),
+    linear-gradient(
+      90deg,
+      transparent,
+      rgb(55 122 255 / 13%) 28%,
+      rgb(121 91 255 / 11%) 72%,
+      transparent
+    ),
     linear-gradient(180deg, transparent, rgb(39 126 255 / 9%) 48%, transparent);
   filter: blur(22px);
   content: '';
@@ -1023,8 +1085,12 @@ function finish(): void {
   transform: translateY(12px) scale(0.94);
   animation: setup-welcome-language 9s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
-.setup-welcome__greetings span:nth-child(2) { animation-delay: 3s; }
-.setup-welcome__greetings span:nth-child(3) { animation-delay: 6s; }
+.setup-welcome__greetings span:nth-child(2) {
+  animation-delay: 3s;
+}
+.setup-welcome__greetings span:nth-child(3) {
+  animation-delay: 6s;
+}
 .setup-welcome__signature {
   position: absolute;
   bottom: 66px;
@@ -1072,7 +1138,11 @@ function finish(): void {
   flex-direction: column;
   align-items: center;
   border-top: 1px solid rgb(255 255 255 / 7%);
-  background: linear-gradient(180deg, rgb(7 10 20 / 30%), rgb(4 7 13 / 94%) 28%);
+  background: linear-gradient(
+    180deg,
+    rgb(7 10 20 / 30%),
+    rgb(4 7 13 / 94%) 28%
+  );
   backdrop-filter: blur(24px);
 }
 .setup-welcome__privacy {
@@ -1109,13 +1179,34 @@ function finish(): void {
   background: rgb(255 255 255 / 92%);
 }
 @keyframes setup-welcome-language {
-  0% { opacity: 0; transform: translateY(12px) scale(0.94); filter: blur(5px); }
-  8%, 27% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-  34%, 100% { opacity: 0; transform: translateY(-10px) scale(1.03); filter: blur(4px); }
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+    filter: blur(5px);
+  }
+  8%,
+  27% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+  34%,
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(1.03);
+    filter: blur(4px);
+  }
 }
 @keyframes setup-welcome-breathe {
-  0%, 100% { transform: scaleX(0.92); opacity: 0.58; }
-  50% { transform: scaleX(1.04); opacity: 1; }
+  0%,
+  100% {
+    transform: scaleX(0.92);
+    opacity: 0.58;
+  }
+  50% {
+    transform: scaleX(1.04);
+    opacity: 1;
+  }
 }
 .setup-connectivity-card {
   position: relative;
@@ -1195,7 +1286,9 @@ function finish(): void {
   font-size: 12px;
   line-height: 1.35;
 }
-.setup-assistant--step-2 .setup-assistant__eyebrow { margin-top: 8px; }
+.setup-assistant--step-2 .setup-assistant__eyebrow {
+  margin-top: 8px;
+}
 .setup-cloud-hero {
   position: relative;
   display: grid;
@@ -1223,7 +1316,9 @@ function finish(): void {
   content: '';
   transform: rotate(58deg);
 }
-.setup-cloud-hero__orbit::after { transform: rotate(-58deg); }
+.setup-cloud-hero__orbit::after {
+  transform: rotate(-58deg);
+}
 .setup-cloud-hero__glow {
   position: absolute;
   inset: 13px;
@@ -1231,7 +1326,10 @@ function finish(): void {
   background: rgb(38 125 255 / 22%);
   box-shadow: 0 0 35px 10px rgb(39 115 255 / 22%);
 }
-.setup-cloud-hero svg { position: relative; filter: drop-shadow(0 6px 12px rgb(25 102 255 / 42%)); }
+.setup-cloud-hero svg {
+  position: relative;
+  filter: drop-shadow(0 6px 12px rgb(25 102 255 / 42%));
+}
 .setup-cloud-hero i {
   position: absolute;
   width: 3px;
@@ -1240,10 +1338,22 @@ function finish(): void {
   background: #8ac1ff;
   box-shadow: 0 0 8px #479eff;
 }
-.setup-cloud-hero i:nth-of-type(1) { top: 2px; left: 23px; }
-.setup-cloud-hero i:nth-of-type(2) { right: -1px; bottom: 25px; }
-.setup-cloud-hero i:nth-of-type(3) { bottom: 3px; left: 11px; }
-.setup-cloud-form { margin-top: 11px; gap: 7px; }
+.setup-cloud-hero i:nth-of-type(1) {
+  top: 2px;
+  left: 23px;
+}
+.setup-cloud-hero i:nth-of-type(2) {
+  right: -1px;
+  bottom: 25px;
+}
+.setup-cloud-hero i:nth-of-type(3) {
+  bottom: 3px;
+  left: 11px;
+}
+.setup-cloud-form {
+  margin-top: 11px;
+  gap: 7px;
+}
 .setup-cloud-identity {
   display: flex;
   min-height: 47px;
@@ -1253,7 +1363,11 @@ function finish(): void {
   gap: 10px;
   border: 1px solid rgb(113 170 255 / 12%);
   border-radius: 16px;
-  background: linear-gradient(135deg, rgb(49 115 213 / 14%), rgb(255 255 255 / 4%));
+  background: linear-gradient(
+    135deg,
+    rgb(49 115 213 / 14%),
+    rgb(255 255 255 / 4%)
+  );
   text-align: left;
 }
 .setup-cloud-identity > span {
@@ -1264,20 +1378,45 @@ function finish(): void {
   border: 1px solid rgb(255 255 255 / 16%);
   border-radius: 50%;
   background: linear-gradient(145deg, #398ff6, #6d5bea);
-  box-shadow: inset 0 1px rgb(255 255 255 / 28%), 0 8px 18px rgb(27 91 208 / 20%);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 28%),
+    0 8px 18px rgb(27 91 208 / 20%);
   color: white;
   font-size: 15px;
   font-style: normal;
   font-weight: 750;
   place-items: center;
 }
-.setup-cloud-identity div { min-width: 0; flex: 1; }
+.setup-cloud-identity div {
+  min-width: 0;
+  flex: 1;
+}
 .setup-cloud-identity small,
-.setup-cloud-identity strong { display: block; }
-.setup-cloud-identity small { color: rgb(255 255 255 / 43%); font-size: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.setup-cloud-identity strong { margin-top: 2px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.setup-cloud-identity em { color: #8dbdff; font-style: normal; font-weight: 600; }
-.setup-cloud-identity > svg { color: #67d99d; }
+.setup-cloud-identity strong {
+  display: block;
+}
+.setup-cloud-identity small {
+  color: rgb(255 255 255 / 43%);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.setup-cloud-identity strong {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.setup-cloud-identity em {
+  color: #8dbdff;
+  font-style: normal;
+  font-weight: 600;
+}
+.setup-cloud-identity > svg {
+  color: #67d99d;
+}
 .setup-cloud-fields {
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 9%);
@@ -1304,17 +1443,47 @@ function finish(): void {
   opacity: 1;
   transform: translateY(0);
 }
-.setup-cloud-fields :deep(.sky-field) { border: 0; border-radius: 0; background: transparent; }
-.setup-cloud-fields :deep(.sky-field + .sky-field) { border-top: 1px solid rgb(255 255 255 / 8%); }
-.setup-cloud-fields :deep(.sky-field) { padding: 3px 12px; }
+.setup-cloud-fields :deep(.sky-field) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.setup-cloud-fields :deep(.sky-field__inner) {
+  padding: 0;
+}
+.setup-cloud-fields :deep(.sky-field + .sky-field) {
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+.setup-cloud-fields :deep(.sky-field) {
+  padding: 3px 12px;
+}
 .setup-cloud-fields :deep(.sky-field__control),
-.setup-cloud-fields :deep(.sky-field__input) { min-height: 43px; }
-.setup-cloud-fields :deep(.sky-field--floating-label .sky-field__control) { min-height: 52px; }
-.setup-cloud-fields :deep(.sky-field--floating-label .sky-field__label) { top: 6px; left: 12px; }
-.setup-cloud-fields :deep(.sky-field__label) { color: rgb(255 255 255 / 52%); }
-.setup-cloud-fields :deep(.sky-field__input) { color: #ffffff; caret-color: #5ba9ff; }
-.setup-cloud-fields :deep(.sky-field__input::placeholder) { color: rgb(255 255 255 / 24%); }
-.setup-cloud-suffix { color: #82b8ff; font-size: 11px; font-weight: 650; white-space: nowrap; }
+.setup-cloud-fields :deep(.sky-field__input) {
+  min-height: 43px;
+}
+.setup-cloud-fields :deep(.sky-field--floating-label .sky-field__control) {
+  min-height: 52px;
+}
+.setup-cloud-fields :deep(.sky-field--floating-label .sky-field__label) {
+  top: 6px;
+  left: 12px;
+}
+.setup-cloud-fields :deep(.sky-field__label) {
+  color: rgb(255 255 255 / 52%);
+}
+.setup-cloud-fields :deep(.sky-field__input) {
+  color: #ffffff;
+  caret-color: #5ba9ff;
+}
+.setup-cloud-fields :deep(.sky-field__input::placeholder) {
+  color: rgb(255 255 255 / 24%);
+}
+.setup-cloud-suffix {
+  color: #82b8ff;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
 .setup-cloud-strength {
   display: flex;
   align-items: center;
@@ -1322,9 +1491,21 @@ function finish(): void {
   color: rgb(255 255 255 / 42%);
   font-size: 9px;
 }
-.setup-cloud-strength > div { display: flex; flex: 1; gap: 4px; }
-.setup-cloud-strength span { height: 3px; flex: 1; border-radius: 99px; background: rgb(255 255 255 / 10%); }
-.setup-cloud-strength span.active { background: linear-gradient(90deg, #318bff, #66c0ff); box-shadow: 0 0 7px rgb(49 139 255 / 34%); }
+.setup-cloud-strength > div {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+}
+.setup-cloud-strength span {
+  height: 3px;
+  flex: 1;
+  border-radius: 99px;
+  background: rgb(255 255 255 / 10%);
+}
+.setup-cloud-strength span.active {
+  background: linear-gradient(90deg, #318bff, #66c0ff);
+  box-shadow: 0 0 7px rgb(49 139 255 / 34%);
+}
 .setup-account-strength-enter-active,
 .setup-account-strength-leave-active {
   transition:
@@ -1344,9 +1525,17 @@ function finish(): void {
   color: rgb(199 215 238 / 46%);
   font-size: 9px;
 }
-.setup-assistant--step-2 .setup-assistant__primary { min-height: 46px; }
-.setup-assistant--step-2 .setup-assistant__later { padding: 7px; }
-@keyframes setup-cloud-orbit { to { transform: rotate(360deg); } }
+.setup-assistant--step-2 .setup-assistant__primary {
+  min-height: 46px;
+}
+.setup-assistant--step-2 .setup-assistant__later {
+  padding: 7px;
+}
+@keyframes setup-cloud-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .setup-assistant__selector {
   position: relative;
   display: grid;
@@ -1474,25 +1663,47 @@ function finish(): void {
   color: #ffffff;
   background: rgb(255 255 255 / 5%);
   text-align: left;
-  transition: border-color 160ms ease, background 160ms ease, transform 120ms ease;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 120ms ease;
 }
-.setup-passcode-length button:active { transform: scale(0.975); }
+.setup-passcode-length button:active {
+  transform: scale(0.975);
+}
 .setup-passcode-length button.selected {
   border-color: rgb(94 172 255 / 72%);
-  background: linear-gradient(145deg, rgb(42 132 245 / 23%), rgb(64 96 210 / 10%));
-  box-shadow: inset 0 1px rgb(255 255 255 / 9%), 0 9px 22px rgb(23 91 193 / 12%);
+  background: linear-gradient(
+    145deg,
+    rgb(42 132 245 / 23%),
+    rgb(64 96 210 / 10%)
+  );
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 9%),
+    0 9px 22px rgb(23 91 193 / 12%);
 }
 .setup-passcode-length button > span,
 .setup-passcode-length b,
-.setup-passcode-length small { display: block; }
-.setup-passcode-length b { font-size: 18px; line-height: 1; }
-.setup-passcode-length small { margin-top: 4px; color: rgb(255 255 255 / 48%); font-size: 9px; }
+.setup-passcode-length small {
+  display: block;
+}
+.setup-passcode-length b {
+  font-size: 18px;
+  line-height: 1;
+}
+.setup-passcode-length small {
+  margin-top: 4px;
+  color: rgb(255 255 255 / 48%);
+  font-size: 9px;
+}
 .setup-passcode-length svg {
   padding: 3px;
   border-radius: 50%;
   background: #318cf5;
 }
-.setup-assistant--step-3 .setup-assistant__notice { margin: 12px 0; }
+.setup-assistant--step-3 .setup-assistant__notice {
+  margin: 12px 0;
+}
 .setup-choice-grid {
   display: grid;
   width: 100%;
@@ -1856,5 +2067,55 @@ function finish(): void {
 .setup-back-leave-to {
   opacity: 0;
   transform: translateX(16px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-assistant,
+  .setup-assistant *,
+  .setup-assistant *::before,
+  .setup-assistant *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .setup-assistant__aurora,
+  .setup-welcome__hero::before,
+  .setup-cloud-hero__orbit {
+    animation: none;
+  }
+
+  .setup-welcome__greetings span {
+    opacity: 0;
+    animation: none;
+    transform: none;
+  }
+
+  .setup-welcome__greetings span:first-child {
+    opacity: 1;
+  }
+
+  .setup-forward-enter-active,
+  .setup-forward-leave-active,
+  .setup-back-enter-active,
+  .setup-back-leave-active {
+    transition-duration: 0.01ms;
+  }
+
+  .setup-forward-enter-from,
+  .setup-forward-leave-to,
+  .setup-back-enter-from,
+  .setup-back-leave-to,
+  .setup-account-field-enter-from,
+  .setup-account-field-leave-to,
+  .setup-account-strength-enter-from,
+  .setup-account-strength-leave-to,
+  .setup-account-copy-enter-from,
+  .setup-account-copy-leave-to,
+  .setup-account-action-enter-from,
+  .setup-account-action-leave-to,
+  .setup-passcode-length button:active {
+    transform: none;
+  }
 }
 </style>

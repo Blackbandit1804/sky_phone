@@ -5,6 +5,7 @@ import { useSkyUiDemoContext } from './context'
 
 withDefaults(
   defineProps<{
+    padded?: boolean
     scrollClass?: string
     subtitle?: string
     title: string
@@ -13,6 +14,7 @@ withDefaults(
     withTabbar?: boolean
   }>(),
   {
+    padded: false,
     scrollClass: '',
     subtitle: '',
     transparent: false,
@@ -33,7 +35,6 @@ const demo = useSkyUiDemoContext()
     :label="title"
   >
     <SkyNavbar
-      back-appearance="surface"
       back-label="Back"
       show-back
       :subtitle="subtitle"
@@ -53,6 +54,7 @@ const demo = useSkyUiDemoContext()
     <SkyScrollArea
       class="sky-ui-demo-page__scroll"
       :class="scrollClass"
+      :padded="padded"
       :with-tabbar="withTabbar"
     >
       <slot />

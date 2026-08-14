@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { BellRing } from 'lucide-vue-next'
 import { onBeforeUnmount, reactive, ref } from 'vue'
 
 import {
@@ -7,10 +6,10 @@ import {
   SkyButton,
   SkyDialog,
   SkyDialogButton,
-  SkyIcon,
   SkyNotification,
 } from '@/ui'
 
+import demoIcon from '../assets/demo-icon.png'
 import SkyUiDemoPage from '../SkyUiDemoPage.vue'
 
 type NotificationId =
@@ -64,10 +63,14 @@ onBeforeUnmount(clearAutoCloseTimer)
 
 <template>
   <SkyUiDemoPage title="Notification">
-    <SkyBlock class="sky-ui-demo-stack" inset strong>
+    <SkyBlock
+      class="sky-ui-demo-stack sky-ui-demo-notification__stack"
+      inset
+      strong
+    >
       <p class="sky-ui-demo-copy">
-        Sky UI comes with a Notifications component that allows you to show
-        useful messages to users and request basic actions.
+        Konsta UI comes with simple Notifications component that allows you to
+        show some useful messages to user and request basic actions.
       </p>
       <SkyButton rounded @click="openNotification('notificationFull')">
         Full layout notification
@@ -92,13 +95,11 @@ onBeforeUnmount(clearAutoCloseTimer)
         role="alert"
         subtitle="This is a subtitle"
         text="This is a simple notification message"
-        title="Sky UI"
+        title="Konsta UI"
         title-right-text="now"
       >
         <template #icon>
-          <span class="sky-ui-demo-notification__icon">
-            <SkyIcon :size="24"><BellRing /></SkyIcon>
-          </span>
+          <img class="sky-ui-demo-notification__icon" :src="demoIcon" alt="" />
         </template>
       </SkyNotification>
 
@@ -107,28 +108,26 @@ onBeforeUnmount(clearAutoCloseTimer)
         :opened="opened.notificationWithButton"
         subtitle="Notification with close button"
         text="Click (x) button to close me"
-        title="Sky UI"
+        title="Konsta UI"
+        @click="opened.notificationWithButton = false"
         @close="opened.notificationWithButton = false"
       >
         <template #icon>
-          <span class="sky-ui-demo-notification__icon">
-            <SkyIcon :size="24"><BellRing /></SkyIcon>
-          </span>
+          <img class="sky-ui-demo-notification__icon" :src="demoIcon" alt="" />
         </template>
+        <template #button />
       </SkyNotification>
 
       <SkyNotification
         :opened="opened.notificationCloseOnClick"
         subtitle="Notification with close on click"
         text="Click me to close"
-        title="Sky UI"
+        title="Konsta UI"
         title-right-text="now"
         @click="opened.notificationCloseOnClick = false"
       >
         <template #icon>
-          <span class="sky-ui-demo-notification__icon">
-            <SkyIcon :size="24"><BellRing /></SkyIcon>
-          </span>
+          <img class="sky-ui-demo-notification__icon" :src="demoIcon" alt="" />
         </template>
       </SkyNotification>
 
@@ -136,28 +135,24 @@ onBeforeUnmount(clearAutoCloseTimer)
         :opened="opened.notificationCallbackOnClose"
         subtitle="Notification with close on click"
         text="Click me to close"
-        title="Sky UI"
+        title="Konsta UI"
         title-right-text="now"
         @click="closeWithCallback"
       >
         <template #icon>
-          <span class="sky-ui-demo-notification__icon">
-            <SkyIcon :size="24"><BellRing /></SkyIcon>
-          </span>
+          <img class="sky-ui-demo-notification__icon" :src="demoIcon" alt="" />
         </template>
       </SkyNotification>
 
       <SkyDialog
         content="Notification closed"
         :opened="alertOpened"
-        title="Sky UI"
+        title="Konsta UI"
         @backdropclick="alertOpened = false"
         @escape="alertOpened = false"
       >
         <template #buttons>
-          <SkyDialogButton strong @click="alertOpened = false"
-            >Ok</SkyDialogButton
-          >
+          <SkyDialogButton @click="alertOpened = false">Ok</SkyDialogButton>
         </template>
       </SkyDialog>
     </template>
@@ -165,13 +160,13 @@ onBeforeUnmount(clearAutoCloseTimer)
 </template>
 
 <style scoped>
+.sky-ui-demo-notification__stack {
+  gap: var(--sky-space-4);
+}
+
 .sky-ui-demo-notification__icon {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  background: var(--sky-app-accent-soft);
-  color: var(--sky-app-accent);
+  width: 28px;
+  height: 28px;
+  display: block;
 }
 </style>

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ChevronLeft } from 'lucide-vue-next'
 import {
   computed,
   onBeforeUnmount,
@@ -152,7 +151,7 @@ function hasNavigationRow(): boolean {
     <div class="sky-navbar__background" aria-hidden="true" />
 
     <div v-if="hasNavigationRow()" class="sky-navbar__inner">
-      <div v-if="hasLeftContent()" class="sky-navbar__left">
+      <div v-if="hasLeftContent()" class="sky-navbar__left sky-glass-surface">
         <slot name="left">
           <button
             v-if="showBack"
@@ -162,7 +161,15 @@ function hasNavigationRow(): boolean {
             :aria-label="accessibleBackLabel"
             @click="emit('back')"
           >
-            <ChevronLeft :size="26" :stroke-width="2" aria-hidden="true" />
+            <svg
+              class="sky-navbar__back-icon"
+              aria-hidden="true"
+              viewBox="0 0 12 20"
+            >
+              <path
+                d="M10.6737904,1.29289322 C11.0342516,1.65335447 11.0619794,2.22054978 10.7569738,2.61281627 L10.6737458,2.70706222 L3.76756619,9.61235263 C3.5939889,9.78590804 3.57468677,10.0553312 3.70967055,10.2502079 L3.76753111,10.3194689 L10.673816,17.2262348 C11.0643303,17.6167774 11.0643188,18.2499456 10.6737904,18.640474 C10.2832661,19.0309983 9.65010112,19.0309983 9.25957683,18.640474 L1.29289322,10.6737904 C0.902368927,10.2832661 0.902368927,9.65010112 1.29289322,9.25957683 L9.25957683,1.29289322 C9.62006079,0.932409257 10.1872918,0.904679722 10.5795831,1.20970461 L10.6737904,1.29289322 Z"
+              />
+            </svg>
             <span v-if="showBackText" class="sky-navbar__back-label">
               {{ backLabel }}
             </span>
@@ -179,7 +186,7 @@ function hasNavigationRow(): boolean {
         </p>
       </div>
 
-      <div v-if="hasRightContent()" class="sky-navbar__right">
+      <div v-if="hasRightContent()" class="sky-navbar__right sky-glass-surface">
         <slot name="right" />
       </div>
     </div>

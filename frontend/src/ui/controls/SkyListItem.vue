@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, useSlots } from 'vue'
+import { computed, inject, useSlots } from 'vue'
+
+import { skyListContextKey } from './list-context'
 
 defineOptions({ inheritAttrs: false })
 
@@ -51,12 +53,12 @@ const props = withDefaults(
     innerClass: '',
     label: false,
     link: false,
-    linkComponent: undefined,
+    linkComponent: 'a',
     linkProps: () => ({}),
     media: undefined,
     mediaClass: '',
     menu: false,
-    strongTitle: false,
+    strongTitle: 'auto',
     subtitle: '',
     target: undefined,
     text: '',
@@ -71,6 +73,11 @@ const emit = defineEmits<{
 }>()
 
 const slots = useSlots()
+const listContext = inject(skyListContextKey, undefined)
+const effectiveDividers = computed(
+  () => props.dividers ?? listContext?.value.dividers ?? false,
+)
+const isNested = computed(() => listContext?.value.nested ?? false)
 const resolvedStrongTitle = computed(
   () =>
     props.strongTitle === true ||
@@ -82,9 +89,7 @@ const hasHref = computed(
   () => typeof props.href === 'string' || props.href === true,
 )
 const isLink = computed(() => props.link || hasHref.value)
-const effectiveLinkComponent = computed(
-  () => props.linkComponent ?? (hasHref.value ? 'a' : 'button'),
-)
+const effectiveLinkComponent = computed(() => props.linkComponent ?? 'a')
 
 const rowComponent = computed(() => {
   if (isLink.value) return effectiveLinkComponent.value
@@ -136,6 +141,10 @@ function handleClick(event: MouseEvent): void {
     v-if="groupTitle"
     v-bind="$attrs"
     class="sky-list-item sky-list-item--group-title"
+    :class="{
+      'sky-list-item--contacts': contacts,
+      'sky-list-item--dividers': effectiveDividers,
+    }"
     :role="component === 'div' ? 'listitem' : undefined"
   >
     <slot name="title">{{ title }}</slot>
@@ -150,11 +159,12 @@ function handleClick(event: MouseEvent): void {
       'sky-list-item--disabled': disabled,
       'sky-list-item--active': active,
       'sky-list-item--contacts': contacts,
-      'sky-list-item--dividers': dividers === true,
-      'sky-list-item--no-dividers': dividers === false,
+      'sky-list-item--dividers': effectiveDividers,
+      'sky-list-item--no-dividers': !effectiveDividers,
       'sky-list-item--label': label,
       'sky-list-item--link': isLink,
       'sky-list-item--menu': menu,
+      'sky-list-item--nested': isNested,
     }"
     :role="component === 'div' ? 'listitem' : undefined"
   >
@@ -189,7 +199,7 @@ function handleClick(event: MouseEvent): void {
           class="sky-list-item__title-wrap"
           :class="titleWrapClass"
         >
-          <strong
+          <div
             v-if="title || $slots.title"
             class="sky-list-item__title"
             :class="[
@@ -198,7 +208,7 @@ function handleClick(event: MouseEvent): void {
             ]"
           >
             <slot name="title">{{ title }}</slot>
-          </strong>
+          </div>
           <span
             v-if="after !== undefined || $slots.after"
             class="sky-list-item__after"
@@ -224,9 +234,9 @@ function handleClick(event: MouseEvent): void {
           <slot name="footer">{{ footer }}</slot>
         </small>
         <slot name="inner" />
-        <slot />
       </span>
       <slot name="content" />
     </component>
+    <slot />
   </component>
 </template>

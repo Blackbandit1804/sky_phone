@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import { computed, provide } from 'vue'
+
+import { skyListContextKey } from './list-context'
+
 defineOptions({ inheritAttrs: false })
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     component?: 'div' | 'ol' | 'ul'
     density?: 'compact' | 'regular'
@@ -14,7 +18,7 @@ withDefaults(
     strong?: boolean
   }>(),
   {
-    component: 'ul',
+    component: 'div',
     density: 'regular',
     dividers: true,
     flush: false,
@@ -24,6 +28,11 @@ withDefaults(
     outline: false,
     strong: false,
   },
+)
+
+provide(
+  skyListContextKey,
+  computed(() => ({ dividers: props.dividers, nested: props.nested })),
 )
 </script>
 
@@ -42,8 +51,9 @@ withDefaults(
       'sky-list--compact': density === 'compact',
       'sky-list--flush': flush,
     }"
-    :role="component === 'div' ? 'list' : undefined"
   >
-    <slot />
+    <ul class="sky-list__items">
+      <slot />
+    </ul>
   </component>
 </template>

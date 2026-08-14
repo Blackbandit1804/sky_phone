@@ -10,12 +10,14 @@ const props = withDefaults(
   defineProps<{
     accent?: string
     accentSoft?: string
+    component?: string
     dark?: boolean
     label: string
   }>(),
   {
     accent: '',
     accentSoft: '',
+    component: 'main',
     dark: undefined,
   },
 )
@@ -52,7 +54,8 @@ const pageStyle = computed<CSSProperties>(
 </script>
 
 <template>
-  <main
+  <component
+    :is="component"
     v-bind="$attrs"
     class="sky-app-page"
     :class="{ 'sky-app-page--dark': isDark }"
@@ -61,5 +64,5 @@ const pageStyle = computed<CSSProperties>(
   >
     <div class="sky-app-page__backdrop" aria-hidden="true"></div>
     <slot />
-  </main>
+  </component>
 </template>

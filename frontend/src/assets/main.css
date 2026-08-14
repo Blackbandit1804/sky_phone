@@ -357,9 +357,12 @@ button {
 .phone-app--performance .sky-ui-provider,
 .phone-app--performance .sky-app,
 .phone-app--performance .sky-app-page {
-  --sky-glass: var(--phone-performance-glass);
-  --sky-glass-solid: var(--phone-performance-glass);
+  /* Resolve Glass from the nearest Sky theme instead of the outer phone theme. */
+  --sky-glass: var(--sky-glass-solid);
   --sky-navbar-glass: var(--sky-bg);
+  --sky-shadow-glass: none;
+  --sky-shadow-glass-fab: none;
+  --sky-shadow-glass-fab-outer: none;
   --sky-hold-thumb-scale: 1;
   --sky-range-hold-background: #ffffff;
   --sky-range-hold-shadow: var(--sky-shadow-thumb);
@@ -378,27 +381,41 @@ button {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
-.phone-app--performance .k-glass {
-  background-color: var(--phone-performance-glass) !important;
-  scale: 1 !important;
+.phone-app--performance .k-glass,
+.phone-app--performance
+  .k-range
+  [class~='group-has-[input:active]/range:scale-[1.4]'],
+.phone-app--performance .k-toggle [class~='group-active:scale-[0.75]'],
+.phone-app--performance .k-toggle [class~='group-active:scale-[1.4]'] {
+  --tw-scale-x: 1 !important;
+  --tw-scale-y: 1 !important;
+  --tw-scale-z: 1 !important;
+  transform:
+    translate3d(
+      var(--tw-translate-x, 0),
+      var(--tw-translate-y, 0),
+      0
+    )
+    scale(1) !important;
 }
-.phone-app--performance .k-glass > [class~='rounded-[inherit]'] {
-  display: none !important;
+.phone-app--performance .k-glass {
+  box-shadow: none !important;
+}
+/* Konsta's default background utility is the solid-surface opt-in marker.
+   Custom color utilities replace it, so semantic Glass colors stay intact. */
+.phone-app--performance
+  .k-glass:where([class~='bg-ios-light-glass']) {
+  background: var(--phone-performance-glass) !important;
 }
 .phone-app--performance
   .k-range
   [class~='group-has-[input:active]/range:scale-[1.4]'] {
   background-color: #ffffff !important;
-  scale: 1 !important;
 }
 .phone-app--performance
   .k-range
   [class~='group-has-[input:active]/range:opacity-100'] {
   opacity: 0 !important;
-}
-.phone-app--performance .k-toggle [class~='group-active:scale-[0.75]'],
-.phone-app--performance .k-toggle [class~='group-active:scale-[1.4]'] {
-  scale: 1 !important;
 }
 .phone-app--performance .k-toggle [class~='group-active:bg-transparent'] {
   background-color: #ffffff !important;
@@ -412,16 +429,20 @@ button {
 .phone-app--performance .sky-glass--touch-highlight {
   transform: none;
 }
+.phone-app--performance .sky-glass,
+.phone-app--performance .sky-navbar__back--surface {
+  box-shadow: none !important;
+}
 .phone-app--performance .sky-segmented--navigation {
-  background: var(--phone-performance-glass);
+  background: var(--sky-glass-solid);
   box-shadow: none;
 }
 .phone-app--performance .sky-segmented--navbar {
-  background: var(--phone-performance-glass);
+  background: var(--sky-glass-solid);
   box-shadow: none;
 }
 .phone-app--performance .sky-tabbar__pane {
-  background: var(--phone-performance-glass);
+  background: var(--sky-glass-solid);
   box-shadow: none;
 }
 .phone-app--performance .control-center__backdrop {
@@ -460,6 +481,22 @@ button {
 .phone-app--performance .sim-picker__glow,
 .phone-app--performance .banking-app__aurora {
   display: none;
+}
+.phone-app--performance .phone-effect--expensive-shadow {
+  box-shadow: none !important;
+}
+.phone-app--performance .phone-effect--decorative {
+  display: none !important;
+}
+.phone-app--performance .phone-effect--filtered-media {
+  filter: none !important;
+}
+.phone-app--performance .phone-effect--solid-surface {
+  background: var(
+    --phone-effect-solid-background,
+    var(--phone-performance-glass)
+  ) !important;
+  box-shadow: none !important;
 }
 
 /* Chromium 103 cannot resolve color-mix() when the mixed color is a variable. */

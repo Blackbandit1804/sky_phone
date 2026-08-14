@@ -25,9 +25,9 @@ const colorPickerTarget = ref<HTMLElement | null>(null)
 const accents: SkyUiDemoAccent[] = [
   { color: '#007aff', name: 'Blue', soft: 'rgba(0, 122, 255, 0.16)' },
   { color: '#ff3b30', name: 'Red', soft: 'rgba(255, 59, 48, 0.16)' },
-  { color: '#34c759', name: 'Green', soft: 'rgba(52, 199, 89, 0.16)' },
+  { color: '#4cd964', name: 'Green', soft: 'rgba(76, 217, 100, 0.16)' },
   { color: '#ffcc00', name: 'Yellow', soft: 'rgba(255, 204, 0, 0.18)' },
-  { color: '#af52de', name: 'Purple', soft: 'rgba(175, 82, 222, 0.16)' },
+  { color: '#9c27b0', name: 'Purple', soft: 'rgba(156, 39, 176, 0.16)' },
 ]
 
 function chooseAccent(accent: SkyUiDemoAccent): void {
@@ -163,7 +163,6 @@ onBeforeUnmount(() => {
     </SkyScrollArea>
 
     <SkyPopover
-      angle
       aria-label="Choose color theme"
       :opened="colorPickerOpened"
       :target="colorPickerTarget"

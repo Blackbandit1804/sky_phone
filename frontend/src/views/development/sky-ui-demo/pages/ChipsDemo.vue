@@ -25,10 +25,10 @@ const deletableChips = ref([
   { avatar: adamAvatar, id: 'adam', name: 'Adam Smith' },
 ])
 const colorChips = [
-  { className: 'sky-ui-demo-color-red', name: 'Red Chip' },
-  { className: 'sky-ui-demo-color-green', name: 'Green Chip' },
+  { className: 'chips-demo__red', name: 'Red Chip' },
+  { className: 'chips-demo__green', name: 'Green Chip' },
   { className: 'chips-demo__blue', name: 'Blue Chip' },
-  { className: 'sky-ui-demo-color-yellow', name: 'Yellow Chip' },
+  { className: 'chips-demo__yellow', name: 'Yellow Chip' },
   { className: 'chips-demo__pink', name: 'Pink Chip' },
 ]
 
@@ -122,17 +122,38 @@ function deleteChip(id: string): void {
   object-fit: cover;
 }
 
-.chips-demo__pink {
-  --sky-app-accent: #ff2d55;
-  --sky-app-accent-soft: rgba(255, 45, 85, 0.16);
-  --sky-chip-outline-border: #ff2d55;
-  --sky-chip-outline-text: #ff2d55;
+.chips-demo__red {
+  --sky-app-accent: #fb2c36;
+  --sky-app-accent-soft: rgba(251, 44, 54, 0.16);
+  --sky-chip-outline-border: #fb2c36;
+  --sky-chip-outline-text: #fb2c36;
+}
+
+.chips-demo__green {
+  --sky-app-accent: #00c951;
+  --sky-app-accent-soft: rgba(0, 201, 81, 0.16);
+  --sky-chip-outline-border: #00c951;
+  --sky-chip-outline-text: #00c951;
 }
 
 .chips-demo__blue {
-  --sky-app-accent: #007aff;
-  --sky-app-accent-soft: rgba(0, 122, 255, 0.16);
-  --sky-chip-outline-border: #007aff;
-  --sky-chip-outline-text: #007aff;
+  --sky-app-accent: #2b7fff;
+  --sky-app-accent-soft: rgba(43, 127, 255, 0.16);
+  --sky-chip-outline-border: #2b7fff;
+  --sky-chip-outline-text: #2b7fff;
+}
+
+.chips-demo__yellow {
+  --sky-app-accent: #f0b100;
+  --sky-app-accent-soft: rgba(240, 177, 0, 0.16);
+  --sky-chip-outline-border: #f0b100;
+  --sky-chip-outline-text: #f0b100;
+}
+
+.chips-demo__pink {
+  --sky-app-accent: #f6339a;
+  --sky-app-accent-soft: rgba(246, 51, 154, 0.16);
+  --sky-chip-outline-border: #f6339a;
+  --sky-chip-outline-text: #f6339a;
 }
 </style>

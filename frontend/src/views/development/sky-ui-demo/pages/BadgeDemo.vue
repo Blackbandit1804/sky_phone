@@ -1,16 +1,10 @@
 <script setup lang="ts">
-import {
-  CalendarDays,
-  CircleUserRound,
-  CloudUpload,
-  Mail,
-} from 'lucide-vue-next'
 import { ref } from 'vue'
 
 import {
   SkyBadge,
-  SkyGlass,
   SkyIcon,
+  SkyLink,
   SkyList,
   SkyListItem,
   SkyTabBar,
@@ -18,6 +12,7 @@ import {
 } from '@/ui'
 
 import SkyUiDemoPage from '../SkyUiDemoPage.vue'
+import BadgeIosIcon from '../assets/BadgeIosIcon.vue'
 import demoIcon from '../assets/demo-icon.png'
 
 const activeTab = ref('inbox')
@@ -26,19 +21,15 @@ const activeTab = ref('inbox')
 <template>
   <SkyUiDemoPage title="Badge" with-tabbar>
     <template #navbarRight>
-      <SkyGlass
+      <SkyLink
         aria-label="Profile, 5 notifications"
         class="badge-demo__profile-action"
-        component="button"
-        type="button"
+        icon-only
       >
-        <span class="badge-demo__icon-wrap">
-          <SkyIcon :size="28"><CircleUserRound /></SkyIcon>
-          <SkyBadge class="badge-demo__icon-badge" small tone="danger">
-            5
-          </SkyBadge>
-        </span>
-      </SkyGlass>
+        <SkyIcon badge="5" :badge-colors="{ bg: '#ef4444' }" :size="28">
+          <BadgeIosIcon name="person-circle-fill" />
+        </SkyIcon>
+      </SkyLink>
     </template>
 
     <SkyList inset strong>
@@ -46,25 +37,31 @@ const activeTab = ref('inbox')
         <template #media>
           <img class="badge-demo__list-icon" :src="demoIcon" alt="" />
         </template>
-        <template #after><SkyBadge>0</SkyBadge></template>
+        <template #after>
+          <SkyBadge class="badge-demo__badge--gray">0</SkyBadge>
+        </template>
       </SkyListItem>
       <SkyListItem title="Ivan Petrov">
         <template #media>
           <img class="badge-demo__list-icon" :src="demoIcon" alt="" />
         </template>
-        <template #after><SkyBadge tone="info">CEO</SkyBadge></template>
+        <template #after><SkyBadge>CEO</SkyBadge></template>
       </SkyListItem>
       <SkyListItem title="John Doe">
         <template #media>
           <img class="badge-demo__list-icon" :src="demoIcon" alt="" />
         </template>
-        <template #after><SkyBadge tone="success">5</SkyBadge></template>
+        <template #after>
+          <SkyBadge class="badge-demo__badge--green">5</SkyBadge>
+        </template>
       </SkyListItem>
       <SkyListItem title="Jane Doe">
         <template #media>
           <img class="badge-demo__list-icon" :src="demoIcon" alt="" />
         </template>
-        <template #after><SkyBadge tone="warning">NEW</SkyBadge></template>
+        <template #after>
+          <SkyBadge class="badge-demo__badge--yellow">NEW</SkyBadge>
+        </template>
       </SkyListItem>
     </SkyList>
 
@@ -76,12 +73,9 @@ const activeTab = ref('inbox')
           @click="activeTab = 'inbox'"
         >
           <template #icon>
-            <span class="badge-demo__icon-wrap">
-              <Mail />
-              <SkyBadge class="badge-demo__icon-badge" small tone="success">
-                5
-              </SkyBadge>
-            </span>
+            <SkyIcon badge="5" :badge-colors="{ bg: '#22c55e' }" :size="28">
+              <BadgeIosIcon name="envelope-fill" />
+            </SkyIcon>
           </template>
         </SkyTabButton>
         <SkyTabButton
@@ -90,12 +84,9 @@ const activeTab = ref('inbox')
           @click="activeTab = 'calendar'"
         >
           <template #icon>
-            <span class="badge-demo__icon-wrap">
-              <CalendarDays />
-              <SkyBadge class="badge-demo__icon-badge" small tone="danger">
-                7
-              </SkyBadge>
-            </span>
+            <SkyIcon badge="7" :badge-colors="{ bg: '#ef4444' }" :size="28">
+              <BadgeIosIcon name="calendar" />
+            </SkyIcon>
           </template>
         </SkyTabButton>
         <SkyTabButton
@@ -104,12 +95,9 @@ const activeTab = ref('inbox')
           @click="activeTab = 'upload'"
         >
           <template #icon>
-            <span class="badge-demo__icon-wrap">
-              <CloudUpload />
-              <SkyBadge class="badge-demo__icon-badge" small tone="danger">
-                1
-              </SkyBadge>
-            </span>
+            <SkyIcon badge="1" :badge-colors="{ bg: '#ef4444' }" :size="28">
+              <BadgeIosIcon name="cloud-upload-fill" />
+            </SkyIcon>
           </template>
         </SkyTabButton>
       </SkyTabBar>
@@ -136,31 +124,22 @@ const activeTab = ref('inbox')
   outline-offset: 2px;
 }
 
-.badge-demo__icon-wrap {
-  width: 28px;
-  height: 28px;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.badge-demo__icon-wrap > svg {
-  width: 100%;
-  height: 100%;
-}
-
-.badge-demo__icon-badge {
-  position: absolute;
-  inset-block-start: -2px;
-  inset-inline-end: -6px;
+.badge-demo__badge--gray {
+  background: #6b7280;
   color: #ffffff;
 }
 
+.badge-demo__badge--green {
+  background: #22c55e;
+}
+
+.badge-demo__badge--yellow {
+  background: #eab308;
+}
+
 .badge-demo__list-icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: block;
-  border-radius: 50%;
 }
 </style>

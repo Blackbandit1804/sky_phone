@@ -26,7 +26,7 @@ withDefaults(
       role="status"
       aria-live="polite"
     >
-      <div class="sky-toast__inner">
+      <div class="sky-toast__inner sky-glass-surface">
         <div class="sky-toast__content">
           <div class="sky-toast__text"><slot /></div>
           <div v-if="$slots.button" class="sky-toast__button">

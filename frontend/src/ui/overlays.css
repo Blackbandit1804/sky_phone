@@ -133,15 +133,12 @@
 
 .sky-popup-rise-enter-active .sky-popup__panel,
 .sky-popup-rise-leave-active .sky-popup__panel {
-  transition:
-    opacity 400ms ease,
-    transform 400ms var(--sky-ease-out, ease-out);
-  will-change: opacity, transform;
+  transition: transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
 }
 
 .sky-popup-rise-enter-from .sky-popup__panel,
 .sky-popup-rise-leave-to .sky-popup__panel {
-  opacity: 0;
   transform: translateY(100%);
 }
 
@@ -149,21 +146,17 @@
 .sky-panel-left-leave-active .sky-panel__panel,
 .sky-panel-right-enter-active .sky-panel__panel,
 .sky-panel-right-leave-active .sky-panel__panel {
-  transition:
-    opacity 400ms ease,
-    transform 400ms var(--sky-ease-out, ease-out);
-  will-change: opacity, transform;
+  transition: transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
 }
 
 .sky-panel-left-enter-from .sky-panel__panel,
 .sky-panel-left-leave-to .sky-panel__panel {
-  opacity: 0;
   transform: translateX(-100%);
 }
 
 .sky-panel-right-enter-from .sky-panel__panel,
 .sky-panel-right-leave-to .sky-panel__panel {
-  opacity: 0;
   transform: translateX(100%);
 }
 
@@ -242,8 +235,8 @@
   color: var(--sky-app-accent);
   background: transparent;
   font: inherit;
-  font-size: 17px;
-  line-height: 22px;
+  font-size: 20px;
+  line-height: 28px;
   text-align: center;
   text-decoration: none;
   cursor: pointer;
@@ -342,22 +335,13 @@
 
 .sky-dialog-button {
   min-width: 0;
-  min-height: 44px;
   flex: 1 1 0;
-  border: 0;
-  border-radius: var(--sky-radius-pill, 999px);
-  padding: 0 12px;
-  color: var(--sky-app-accent);
-  background: var(--sky-app-accent-soft);
-  font: inherit;
 }
 
-.sky-dialog-button:active:not(:disabled) {
+.sky-dialog-button:disabled {
   background: var(--sky-pressed);
-}
-
-.sky-dialog-button--strong {
-  font-weight: 700;
+  color: var(--sky-subtle);
+  opacity: 1;
 }
 
 .sky-toast {
@@ -450,23 +434,29 @@
 .sky-messages {
   display: flex;
   flex-direction: column;
-  padding: var(--sky-space-2) 0;
+  margin-bottom: 48px;
+  padding-right: calc(var(--sky-safe-area-right) + 8px);
+  padding-left: calc(var(--sky-safe-area-left) + 8px);
 }
 
 .sky-messages-title {
-  margin: 8px 0;
-  color: var(--sky-muted);
+  margin: 10px 0 0;
+  color: var(--sky-message-meta);
   font-size: 12px;
+  line-height: 12px;
   text-align: center;
 }
 
 .sky-message {
+  box-sizing: border-box;
   max-width: 70%;
+  position: relative;
   z-index: 1;
   display: flex;
   align-items: flex-end;
   align-self: flex-start;
   margin-bottom: 8px;
+  transform: translateZ(0);
 }
 
 .sky-message--sent {
@@ -476,8 +466,8 @@
 .sky-message__name,
 .sky-message__header {
   display: block;
-  margin: 0 16px 2px;
-  color: var(--sky-muted);
+  margin: 0 0 2px 16px;
+  color: var(--sky-message-meta);
   font-size: 12px;
   line-height: 16px;
 }
@@ -500,13 +490,17 @@
 }
 
 .sky-message__bubble {
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
   margin: 0;
   border-radius: 16px;
   padding: 6px 16px;
-  background: var(--sky-surface-muted);
+  background: var(--sky-message-received-background);
   color: var(--sky-text);
-  font-size: 17px;
-  line-height: 22px;
+  font-size: 16px;
+  line-height: 20px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -540,33 +534,61 @@
 }
 
 .sky-messagebar {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--sky-space-2);
-  border-top: 0;
-  padding: 8px var(--sky-page-gutter)
-    calc(var(--sky-safe-area-bottom) + var(--sky-space-2));
-  background: var(--sky-glass-solid, var(--sky-surface));
+  width: 100%;
+  position: fixed;
+  z-index: var(--sky-overlay-layer, 80);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  --sky-messagebar-gap: 12px;
 }
 
-.sky-messagebar--outline {
-  border-top: 1px solid var(--sky-hairline);
+.sky-messagebar .sky-toolbar__background {
+  background: linear-gradient(
+    to top,
+    var(--sky-messagebar-gradient-start),
+    transparent
+  );
+}
+
+.sky-messagebar__inner {
+  width: 100%;
+  align-items: center;
+  gap: var(--sky-messagebar-gap);
+}
+
+.sky-messagebar__area {
+  min-width: 0;
+  height: 40px;
+  flex: 1;
+  overflow: hidden;
+  border: 0;
+  border-radius: 24px;
 }
 
 .sky-messagebar textarea {
-  min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px;
   min-height: 40px;
   max-height: 100px;
-  flex: 1;
+  display: block;
   resize: none;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: 24px;
-  padding: 10px 16px;
+  padding: 12px 16px 4px;
+  outline: 0;
   color: var(--sky-text);
-  background: var(--sky-surface-muted);
+  background: transparent;
   font: inherit;
-  font-size: 17px;
-  line-height: 20px;
+  font-size: 16px;
+  line-height: 16px;
+  touch-action: none;
+}
+
+.sky-messagebar textarea::placeholder {
+  color: var(--sky-messagebar-placeholder);
+  opacity: 1;
 }
 
 .sky-messagebar__left,
@@ -576,18 +598,58 @@
   display: grid;
   flex: none;
   place-items: center;
-  color: var(--sky-app-accent);
+  color: var(--sky-messagebar-icon);
+}
+
+.sky-messagebar__left .sky-link,
+.sky-messagebar__right .sky-link {
+  color: inherit;
+}
+
+.sky-messagebar .sky-toolbar-pane {
+  height: 40px;
+  overflow: visible;
 }
 
 .sky-messagebar__right {
-  margin-right: -4px;
+  margin-right: 0;
+}
+
+.sky-messagebar--embedded {
+  min-height: 0;
+  position: relative;
+  z-index: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  padding: 0;
+  --sky-messagebar-gap: 4px;
+}
+
+.sky-messagebar--embedded .sky-toolbar__blur,
+.sky-messagebar--embedded .sky-toolbar__background {
+  display: none;
+}
+
+.sky-messagebar--embedded .sky-messagebar__inner {
+  min-height: 0;
+}
+
+.sky-messagebar--embedded .sky-messagebar__area {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .sky-notification {
   box-sizing: border-box;
-  min-height: 72px;
   position: absolute;
-  z-index: 100;
+  z-index: 50;
   top: calc(var(--sky-safe-area-top, 0px) + 8px);
   right: 8px;
   left: 8px;
@@ -595,11 +657,11 @@
   align-items: center;
   gap: 16px;
   padding: 16px;
-  border: 1px solid var(--sky-hairline);
+  border: 0;
   border-radius: 24px;
-  background: var(--sky-glass-solid, var(--sky-surface));
   color: var(--sky-text);
   box-shadow: var(--sky-shadow-glass);
+  touch-action: none;
 }
 
 .sky-notification__icon {
@@ -610,14 +672,20 @@
 }
 
 .sky-notification__content {
+  width: 100%;
   min-width: 0;
-  flex: 1;
+  flex-shrink: 1;
 }
 
 .sky-notification__header {
+  position: relative;
   min-width: 0;
   display: flex;
   align-items: center;
+}
+
+.sky-notification__header--with-close {
+  padding-inline-end: 24px;
 }
 
 .sky-notification__title,
@@ -625,7 +693,7 @@
 .sky-notification__subtitle,
 .sky-notification__text {
   font-size: 14px;
-  line-height: 18px;
+  line-height: 20px;
 }
 
 .sky-notification__title,
@@ -634,17 +702,13 @@
 }
 
 .sky-notification__title {
-  overflow: hidden;
   font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sky-notification__time {
-  margin-left: auto;
-  padding-left: 8px;
-  color: var(--sky-muted);
-  white-space: nowrap;
+  margin-inline-start: auto;
+  margin-inline-end: 4px;
+  color: var(--sky-notification-meta);
 }
 
 .sky-notification__text {
@@ -654,21 +718,28 @@
 .sky-notification__close {
   width: var(--sky-touch-target, 44px);
   height: var(--sky-touch-target, 44px);
-  display: inline-grid;
-  flex: none;
-  margin: -13px -13px -13px 2px;
+  position: absolute;
+  top: 50%;
+  right: -8px;
+  display: grid;
   place-items: center;
+  padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--sky-muted);
+  color: var(--sky-notification-close);
   font: inherit;
-  font-size: 22px;
   cursor: pointer;
+  transform: translateY(-50%);
 }
 
 .sky-notification__close:active {
-  background: var(--sky-pressed);
+  color: var(--sky-notification-close-active);
+}
+
+.sky-notification__close-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .sky-notification__close:focus-visible {
@@ -679,14 +750,14 @@
 .sky-notification-slide-enter-active,
 .sky-notification-slide-leave-active {
   transition:
-    opacity 500ms ease,
-    transform 500ms var(--sky-ease-out, ease-out);
+    opacity 500ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 500ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sky-notification-slide-enter-from,
 .sky-notification-slide-leave-to {
   opacity: 0;
-  transform: translateY(calc(-100% - var(--sky-safe-area-top, 0px) - 8px));
+  transform: translateY(-100%);
 }
 
 .sky-panel__panel,
@@ -695,9 +766,24 @@
   position: absolute;
   z-index: 1;
   border: 0;
-  background: var(--sky-glass-solid, var(--sky-surface));
   color: var(--sky-text);
   box-shadow: var(--sky-shadow-glass);
+}
+
+.sky-popup__panel {
+  background: var(--sky-popup-background, var(--sky-surface));
+}
+
+.sky-popover__panel {
+  background: var(--sky-glass-solid, var(--sky-surface));
+}
+
+.sky-panel__backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.sky-popup__backdrop {
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .sky-panel__panel {
@@ -705,7 +791,12 @@
   bottom: 0;
   width: 288px;
   max-width: 100%;
-  overflow: auto;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.sky-panel__panel:not(.sky-panel__panel--floating) {
+  background: var(--sky-panel-background, var(--sky-surface));
 }
 
 .sky-panel__panel--left {
@@ -732,7 +823,7 @@
 
 .sky-popup__panel {
   inset: 0;
-  overflow: auto;
+  overflow: hidden;
   box-shadow: none;
 }
 
@@ -853,7 +944,6 @@
 
 .sky-action-button:disabled,
 .sky-action-button--disabled,
-.sky-dialog-button:disabled,
 .sky-messagebar textarea:disabled {
   opacity: 0.45;
 }
@@ -861,18 +951,6 @@
 @supports (
   (-webkit-backdrop-filter: blur(16px)) or (backdrop-filter: blur(16px))
 ) {
-  .sky-action-group,
-  .sky-dialog__panel,
-  .sky-messagebar,
-  .sky-notification,
-  .sky-panel__panel,
-  .sky-popover__panel,
-  .sky-toast__inner {
-    background: var(--sky-glass);
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
-  }
-
   .sky-popover__arrow {
     background: var(--sky-glass);
     -webkit-backdrop-filter: blur(16px);

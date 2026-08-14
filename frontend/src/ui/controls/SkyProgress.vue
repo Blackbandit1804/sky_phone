@@ -21,6 +21,7 @@ const normalizedProgress = computed(() =>
   ),
 )
 const percentage = computed(() => Math.round(normalizedProgress.value * 100))
+const remainingPercentage = computed(() => 100 - normalizedProgress.value * 100)
 </script>
 
 <template>
@@ -33,6 +34,9 @@ const percentage = computed(() => Math.round(normalizedProgress.value * 100))
     aria-valuemax="100"
     :aria-valuenow="percentage"
   >
-    <span class="sky-progress__value" :style="{ width: `${percentage}%` }" />
+    <span
+      class="sky-progress__value"
+      :style="{ transform: `translateX(-${remainingPercentage}%)` }"
+    />
   </div>
 </template>

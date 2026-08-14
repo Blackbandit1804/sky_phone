@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Grid2X2 } from 'lucide-vue-next'
 import { ref } from 'vue'
 
-import { SkyBlock, SkyIcon, SkyMenuList, SkyMenuListItem } from '@/ui'
+import { SkyBlock, SkyMenuList, SkyMenuListItem } from '@/ui'
 
+import demoIcon from '../assets/demo-icon.png'
 import SkyUiDemoPage from '../SkyUiDemoPage.vue'
 
 const firstActive = ref('home')
@@ -34,7 +34,7 @@ const items = [
         @click="firstActive = item.id"
       >
         <template #media>
-          <SkyIcon :size="24"><Grid2X2 /></SkyIcon>
+          <img class="menu-list-demo__icon" :src="demoIcon" alt="" />
         </template>
       </SkyMenuListItem>
     </SkyMenuList>
@@ -49,7 +49,7 @@ const items = [
         @click="secondActive = item.id"
       >
         <template #media>
-          <SkyIcon :size="24"><Grid2X2 /></SkyIcon>
+          <img class="menu-list-demo__icon" :src="demoIcon" alt="" />
         </template>
       </SkyMenuListItem>
     </SkyMenuList>
@@ -59,5 +59,11 @@ const items = [
 <style scoped>
 .menu-list-copy {
   margin: 0;
+}
+
+.menu-list-demo__icon {
+  width: 28px;
+  height: 28px;
+  display: block;
 }
 </style>

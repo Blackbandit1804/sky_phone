@@ -9,13 +9,19 @@ import {
   SkyActionButton,
   SkyActionGroup,
   SkyBadge,
+  SkyButton,
   SkyCard,
   SkyChip,
   SkyDialog,
+  SkyField,
   SkyListItem,
+  SkyMessage,
+  SkyMessagebar,
   SkyMenuList,
   SkyMenuListItem,
   SkySearchbar,
+  SkyScrollArea,
+  SkySpinner,
   SkyToast,
 } from '@/ui'
 
@@ -30,6 +36,60 @@ async function render(
 }
 
 describe('Sky UI Konsta 5.3 parity contracts', () => {
+  it('keeps Page content edge-to-edge unless padded compatibility is explicit', async () => {
+    const edgeToEdge = await render(
+      SkyScrollArea,
+      {},
+      { default: () => 'Content' },
+    )
+    const padded = await render(
+      SkyScrollArea,
+      { padded: true },
+      { default: () => 'Content' },
+    )
+
+    expect(edgeToEdge).toContain('class="sky-scroll-area"')
+    expect(edgeToEdge).not.toContain('sky-scroll-area--padded')
+    expect(padded).toContain('sky-scroll-area--padded')
+  })
+
+  it('keeps Field styling on its root while forwarding native attrs to the control', async () => {
+    const html = await render(SkyField, {
+      class: 'native-input-class',
+      'data-native': 'yes',
+      inputId: 'native-input',
+      placeholder: 'Name',
+    })
+
+    const rootTag = html.match(/^<li[^>]*>/)?.[0]
+    const inputTag = html.match(/<input[^>]*>/)?.[0]
+
+    expect(rootTag).toMatch(/class="[^"]*\bsky-field\b/)
+    expect(rootTag).toContain('native-input-class')
+    expect(rootTag).not.toContain('sky-field--error')
+    expect(rootTag).not.toContain('data-native')
+    expect(inputTag).not.toContain('native-input-class')
+    expect(inputTag).toContain('data-native="yes"')
+  })
+
+  it('uses Konsta iOS defaults for Badge, Button, Messagebar, Message and Spinner', async () => {
+    const [badge, button, messagebar, message, spinner] = await Promise.all([
+      render(SkyBadge),
+      render(SkyButton, {}, { default: () => 'Continue' }),
+      render(SkyMessagebar),
+      render(SkyMessage, {}, { default: () => 'Sent' }),
+      render(SkySpinner),
+    ])
+
+    expect(badge).toContain('sky-badge--primary')
+    expect(button).not.toContain('sky-button--inline')
+    expect(messagebar).not.toContain('sky-messagebar--outline')
+    expect(message).toMatch(/^<div[^>]*sky-message--sent/)
+    expect(spinner).toContain('width:32px')
+    expect(spinner.match(/<path/g)).toHaveLength(8)
+    expect(spinner).not.toContain('<i')
+  })
+
   it('keeps the main ListItem migration hooks and slot geometry', async () => {
     const html = await render(
       SkyListItem,
@@ -48,6 +108,7 @@ describe('Sky UI Konsta 5.3 parity contracts', () => {
       },
       {
         content: () => h('span', { class: 'custom-content-slot' }, 'Content'),
+        default: () => h('span', { class: 'custom-default-slot' }, 'Default'),
         inner: () => h('span', { class: 'custom-inner-slot' }, 'Inner'),
       },
     )
@@ -61,7 +122,11 @@ describe('Sky UI Konsta 5.3 parity contracts', () => {
     expect(html).toContain('custom-inner')
     expect(html).toContain('custom-media')
     expect(html).toContain('custom-content-slot')
+    expect(html.indexOf('custom-default-slot')).toBeGreaterThan(
+      html.indexOf('</a>'),
+    )
     expect(html).toContain('custom-inner-slot')
+    expect(html).toContain('<div class="sky-list-item__title')
   })
 
   it('marks MenuList and forwards inherited MenuListItem content', async () => {
@@ -181,6 +246,62 @@ describe('Sky UI Konsta 5.3 parity contracts', () => {
     expect(combined).toMatch(/@supports[\s\S]*backdrop-filter/)
     expect(combined).toContain('sky-glass--highlight-visible')
     expect(combined).toContain('sky-glass--touch-highlight')
+    expect(combined).toContain('sky-glass-surface')
     expect(combined).toContain('var(--sky-navbar-glass, var(--sky-bg))')
+  })
+
+  it('locks visible iOS geometry while keeping touch expansion invisible', () => {
+    const uiDirectory = fileURLToPath(new URL('.', import.meta.url))
+    const controls = readFileSync(`${uiDirectory}/controls.css`, 'utf8')
+    const overlays = readFileSync(`${uiDirectory}/overlays.css`, 'utf8')
+
+    expect(controls).toMatch(
+      /\.sky-button\s*\{[^}]*height:\s*34px[^}]*min-height:\s*34px[^}]*padding:\s*4px 8px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-button--small\s*\{[^}]*height:\s*28px[^}]*min-height:\s*28px[^}]*padding-inline:\s*8px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-button::before\s*\{[^}]*width:\s*max\(100%, var\(--sky-touch-target, 44px\)\)[^}]*inset-block:\s*-5px/s,
+    )
+    expect(controls).not.toMatch(
+      /\.sky-button:active:not\(:disabled\)\s*\{[^}]*transform:/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-checkbox__mark\s*\{[^}]*width:\s*22px[^}]*height:\s*22px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-list-item__title-wrap\s*\{[^}]*min-height:\s*28px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-list-item__row\s*\{[^}]*gap:\s*0[^}]*padding:\s*0 0 0 calc\(var\(--sky-safe-area-left\) \+ 16px\)/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-list-item__media\s*\{[^}]*margin-right:\s*16px[^}]*padding:\s*8px 0/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-list-item__content\s*\{[^}]*padding:\s*12px calc\(var\(--sky-safe-area-right\) \+ 16px\) 12px 0/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-block-title \+ \.sky-block-header,[\s\S]*?\.sky-block-title \+ \.sky-block-footer,[\s\S]*?\{[\s\S]*?margin-top:\s*8px;/,
+    )
+    expect(controls).toContain(
+      '.sky-list-item--dividers:not(.sky-list-item--menu)',
+    )
+    expect(controls).toMatch(
+      /\.sky-radio__mark\s*\{[^}]*width:\s*22px[^}]*height:\s*22px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-toggle__track\s*\{[^}]*width:\s*64px[^}]*height:\s*28px/s,
+    )
+    expect(controls).toMatch(/\.sky-range__input\s*\{[^}]*height:\s*28px/s)
+    expect(controls).toMatch(
+      /\.sky-spinner__svg\s*\{[^}]*animation:\s*sky-spinner-spin 1s steps\(8, end\) infinite/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-list-item--group-title\.sky-list-item--contacts\s*\{[^}]*background:\s*var\(--sky-list-group-title-contacts-background[^}]*color:\s*var\(--sky-list-group-title-contacts-text/s,
+    )
+    expect(overlays).toMatch(/\.sky-action-button\s*\{[^}]*font-size:\s*20px/s)
+    expect(overlays).toMatch(/\.sky-messages\s*\{[^}]*margin-bottom:\s*48px/s)
   })
 })

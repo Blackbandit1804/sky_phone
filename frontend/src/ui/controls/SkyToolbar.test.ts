@@ -5,6 +5,7 @@ import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { describe, expect, it } from 'vitest'
 
+import SkyLink from './SkyLink.vue'
 import SkyToolbar from './SkyToolbar.vue'
 import SkyToolbarPane from './SkyToolbarPane.vue'
 
@@ -50,6 +51,30 @@ describe('SkyToolbar', () => {
     )
     expect(controls).toMatch(
       /\.sky-toolbar__blur\s*\{[\s\S]*?backdrop-filter: blur\(2px\);[\s\S]*?mask-image: linear-gradient/,
+    )
+  })
+
+  it('inherits the iOS foreground for Toolbar links without changing generic links', async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(SkyToolbar, {}, () =>
+            h(SkyToolbarPane, {}, () => h(SkyLink, {}, () => 'Link 1')),
+          ),
+      }),
+    )
+    const uiDirectory = fileURLToPath(new URL('..', import.meta.url))
+    const controls = readFileSync(`${uiDirectory}/controls.css`, 'utf8')
+
+    expect(html).toContain('class="sky-link"')
+    expect(controls).toMatch(
+      /\.sky-toolbar \.sky-link\s*\{\s*color: inherit;\s*\}/,
+    )
+    expect(controls).toMatch(
+      /\.sky-glass\s*\{[^}]*color: var\(--sky-text, #000000\);/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-link\s*\{[^}]*color: var\(--sky-app-accent, #007aff\);/s,
     )
   })
 })

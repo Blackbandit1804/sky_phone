@@ -120,7 +120,12 @@ function updateActivePreview(): void {
     </header>
 
     <section class="store-detail__hero">
-      <img :src="app.iconImage" alt="" draggable="false" />
+      <img
+        class="phone-effect--filtered-media phone-effect--expensive-shadow"
+        :src="app.iconImage"
+        alt=""
+        draggable="false"
+      />
       <div>
         <h1>{{ appName }}</h1>
         <p>{{ developer }}</p>
@@ -204,7 +209,9 @@ function updateActivePreview(): void {
         class="store-detail__previews"
         @scroll.passive="updateActivePreview"
       >
-        <article class="store-detail-preview store-detail-preview--overview">
+        <article
+          class="store-detail-preview store-detail-preview--overview phone-effect--expensive-shadow"
+        >
           <div class="store-detail-preview__status">
             <span>{{ phone.t('Apps.appStore.details.previewLive') }}</span>
             <Activity :size="14" aria-hidden="true" />
@@ -223,7 +230,9 @@ function updateActivePreview(): void {
           </div>
         </article>
 
-        <article class="store-detail-preview store-detail-preview--community">
+        <article
+          class="store-detail-preview store-detail-preview--community phone-effect--expensive-shadow"
+        >
           <div class="store-detail-preview__status">
             <span>{{ phone.t('Apps.appStore.details.previewCommunity') }}</span>
             <Users :size="14" aria-hidden="true" />
@@ -242,7 +251,9 @@ function updateActivePreview(): void {
           <img :src="app.iconImage" alt="" draggable="false" />
         </article>
 
-        <article class="store-detail-preview store-detail-preview--insights">
+        <article
+          class="store-detail-preview store-detail-preview--insights phone-effect--expensive-shadow"
+        >
           <div class="store-detail-preview__status">
             <span>{{ phone.t('Apps.appStore.details.previewInsights') }}</span>
             <BarChart3 :size="14" aria-hidden="true" />
@@ -732,11 +743,6 @@ function updateActivePreview(): void {
 .store-detail-preview__insight span {
   color: rgba(255, 255, 255, 0.68);
   font-size: 10px;
-}
-
-:global(.phone-app--performance) .store-detail-preview,
-:global(.phone-app--performance) .store-detail__hero > img {
-  box-shadow: none;
 }
 
 @media (hover: hover) {

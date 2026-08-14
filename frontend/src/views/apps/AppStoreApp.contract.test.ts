@@ -64,7 +64,9 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toContain('@click="profileOpened = true"')
     expect(source).toContain('const installedApps = computed')
     expect(source).toContain('return !appStore.isInstalled(app.id)')
-    expect(source).toContain('class="store-account__apps"')
+    expect(source).toContain(
+      'class="store-account__apps phone-effect--expensive-shadow"',
+    )
     expect(source).toContain('appStore.updateApp(app.id, currentRelease)')
     expect(source).toContain(
       'appStore.uninstallApp(uninstallCandidate.value.id)',
@@ -108,7 +110,7 @@ describe('AppStoreApp Sky navigation contract', () => {
 
   it('keeps one scroll owner and accessible 44px app actions', () => {
     expect(source).toMatch(
-      /<SkyScrollArea\s+ref="storeScroll"\s+class="store-scroll"[\s\S]*?with-tabbar\s*>/,
+      /<SkyScrollArea\s+ref="storeScroll"\s+(?:padded\s+)?class="store-scroll"[\s\S]*?with-tabbar\s*>/,
     )
     expect(source).toMatch(/\.store-scroll\s*\{[^}]*overflow-y:\s*auto/s)
     expect(source).not.toMatch(/\.store-scroll\s*\{[^}]*padding\s*:/s)
@@ -154,11 +156,19 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toContain('getDailyHighlights(')
     expect(source).toContain('!DEFAULT_INSTALLED_PHONE_APP_IDS.has(app.id)')
     expect(source).toContain('v-else-if="tab === \'today\'"')
-    expect(source).toContain('class="store-highlight store-highlight--hero"')
-    expect(source).toContain('class="store-highlight store-highlight--compact"')
+    expect(source).toContain(
+      'class="store-highlight store-highlight--hero phone-effect--expensive-shadow"',
+    )
+    expect(source).toContain(
+      'class="store-highlight store-highlight--compact phone-effect--expensive-shadow"',
+    )
     expect(source).toContain('class="store-today__edition"')
-    expect(source).toContain('class="store-ranking"')
-    expect(source).toContain('class="store-final-pick"')
+    expect(source).toContain(
+      'class="store-ranking phone-effect--expensive-shadow"',
+    )
+    expect(source).toContain(
+      'class="store-final-pick phone-effect--expensive-shadow"',
+    )
     expect(source).toContain('editorialHighlights')
     expect(source).toContain('topToday')
     expect(source).toContain('var(--sky-touch-target)')
@@ -198,7 +208,9 @@ describe('AppStoreApp Sky navigation contract', () => {
   it('builds clean Apps and Games pages with rotating features', () => {
     expect(source).not.toContain('class="store-browse__filters"')
     expect(source).not.toContain('browseFilter')
-    expect(source).toContain('class="store-browse-feature"')
+    expect(source).toContain(
+      'class="store-browse-feature phone-effect--expensive-shadow"',
+    )
     expect(source).toContain('class="store-list store-list--browse"')
     expect(source).toContain('featuredCandidates')
     expect(source).toContain('globalThis.setInterval')

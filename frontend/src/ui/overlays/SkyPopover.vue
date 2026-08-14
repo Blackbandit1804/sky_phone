@@ -527,7 +527,7 @@ onBeforeUnmount(detachListeners)
       <component
         :is="component"
         ref="panel"
-        class="sky-popover__panel"
+        class="sky-popover__panel sky-glass-surface"
         :class="
           position ? `sky-popover__panel--${position.placement}` : undefined
         "

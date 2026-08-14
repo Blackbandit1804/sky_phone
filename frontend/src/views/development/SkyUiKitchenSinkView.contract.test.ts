@@ -17,6 +17,11 @@ const homeSource = readFileSync(
   join(demoDirectory, 'SkyUiDemoHome.vue'),
   'utf8',
 )
+const demoPageSource = readFileSync(
+  join(demoDirectory, 'SkyUiDemoPage.vue'),
+  'utf8',
+)
+const demoCssSource = readFileSync(join(demoDirectory, 'demo.css'), 'utf8')
 const extensionsSource = readFileSync(
   join(pagesDirectory, 'SkyExtensionsDemo.vue'),
   'utf8',
@@ -113,6 +118,10 @@ function demoFileName(id: string): string {
     .join('')}Demo.vue`
 }
 
+function demoPage(name: string): string {
+  return readFileSync(join(pagesDirectory, `${name}Demo.vue`), 'utf8')
+}
+
 describe('development Sky UI Kitchen Sink contract', () => {
   it('mirrors the exact Konsta 5.3 Vue component submenu catalog', () => {
     expect(SKY_UI_DEMO_CATALOG.map(({ id, title }) => [id, title])).toEqual(
@@ -134,6 +143,73 @@ describe('development Sky UI Kitchen Sink contract', () => {
     expect(viewSource).toContain('defineAsyncComponent')
     expect(routerSource).toContain("path: '/development/sky-ui/:demo?'")
     expect(combinedDemoSource).toContain('./assets/demo-icon.png')
+  })
+
+  it('keeps the shared demo shell aligned with the Konsta reference', () => {
+    expect(demoPageSource).not.toContain('back-appearance="surface"')
+    expect(demoCssSource).toMatch(/\.sky-ui-demo-copy\s*\{\s*margin:\s*0;\s*\}/)
+    expect(homeSource).not.toMatch(/<SkyPopover[\s\S]*?\sangle(?:\s|>)/)
+    expect(homeSource).toContain("{ color: '#4cd964', name: 'Green'")
+    expect(homeSource).toContain("{ color: '#9c27b0', name: 'Purple'")
+  })
+
+  it('preserves the locally expressible Konsta examples and states', () => {
+    const cards = demoPage('Cards')
+    const checkbox = demoPage('Checkbox')
+    const contacts = demoPage('ContactsList')
+    const dialog = demoPage('Dialog')
+    const fab = demoPage('Fab')
+    const list = demoPage('List')
+    const listButton = demoPage('ListButton')
+    const messages = demoPage('Messages')
+    const menuList = demoPage('MenuList')
+    const notification = demoPage('Notification')
+    const panels = demoPage('SidePanels')
+    const popover = demoPage('Popover')
+    const popup = demoPage('Popup')
+    const preloader = demoPage('Preloader')
+    const sheet = demoPage('SheetModal')
+    const tabbar = demoPage('Tabbar')
+    const toggle = demoPage('Toggle')
+    const toolbar = demoPage('Toolbar')
+
+    expect(cards).not.toContain('linear-gradient')
+    expect(cards).not.toContain('font-size: 22px')
+    expect(cards).toContain('<SkyMediaCard')
+    expect(cards).not.toMatch(/cards-demo__(?:image|date|copy|actions)/)
+    expect(checkbox).toContain(
+      '<SkyList class="checkbox-demo__children" nested>',
+    )
+    expect(contacts).toContain('<SkyListItem contacts group-title')
+    expect(contacts).toMatch(/contacts\s+:title="name"/)
+    expect(dialog).toContain(
+      'margin: 0 calc(var(--sky-space-4) * -1) calc(var(--sky-space-4) * -1);',
+    )
+    expect(fab.match(/class="fab-demo__button/g)).toHaveLength(6)
+    expect(fab).toContain('fab-demo__button--right-top sky-ui-demo-color-red')
+    expect(listButton).toContain('<SkyList dividers outline strong>')
+    expect(list).toContain('user, etc.')
+    expect(list).not.toContain(':chevron="false"')
+    expect(list).toContain("import demoIcon from '../assets/demo-icon.png'")
+    expect(messages).toContain("return text.split('\\n')")
+    expect(messages).toContain('<template #text>')
+    expect(menuList).toContain("import demoIcon from '../assets/demo-icon.png'")
+    expect(notification).toContain(
+      '@click="opened.notificationWithButton = false"',
+    )
+    expect(notification).not.toContain('<SkyDialogButton strong')
+    expect(panels).toContain('sky-ui-demo-panel-page--floating')
+    expect(panels).toContain('--sky-safe-area-top: 0px;')
+    expect(popover).not.toMatch(/<SkyPopover[\s\S]*?\sangle(?:\s|>)/)
+    expect(popup).toContain('"Temporary Views".')
+    expect(popup).toContain('Also not, that by default popup')
+    expect(preloader).toContain('color: #4cd964;')
+    expect(preloader).toContain('color: #9c27b0;')
+    expect(sheet).toContain('Such modals allow to create custom overlays')
+    expect(tabbar).not.toContain('color: var(--sky-muted)')
+    expect(toggle).toMatch(/<SkyListItem[\s\S]*?\slabel[\s\S]*?<SkyToggle/)
+    expect(toolbar).toContain('Cras vehicula bibendum lorem quis imperdiet.')
+    expect(toolbar).toContain('sed risus aliquet, vel accumsan dolor feugiat.')
   })
 
   it('demonstrates every public Sky component without Konsta runtime code', () => {

@@ -186,11 +186,17 @@ const canSubmit = computed(() => {
   height: 46px;
   grid-row: 1 / span 2;
   place-items: center;
-  border: 1px solid
-    color-mix(in srgb, var(--auth-accent, #ffd63e) 46%, transparent);
+  border: 1px solid rgba(255, 214, 62, 0.46);
+  border-color: color-mix(
+    in srgb,
+    var(--auth-accent, #ffd63e) 46%,
+    transparent
+  );
   border-radius: 15px;
   color: var(--auth-accent, var(--yellow, #ffd63e));
+  background: rgba(255, 214, 62, 0.14);
   background: color-mix(in srgb, var(--auth-accent, #ffd63e) 14%, transparent);
+  box-shadow: 0 10px 28px rgba(255, 214, 62, 0.16);
   box-shadow: 0 10px 28px
     color-mix(in srgb, var(--auth-accent, #ffd63e) 16%, transparent);
 }
@@ -221,6 +227,7 @@ const canSubmit = computed(() => {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 24px;
+  background: var(--panel, #20262c);
   background: color-mix(in srgb, var(--panel, #20262c) 90%, transparent);
   box-shadow: 0 22px 50px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(22px) saturate(1.15);
@@ -232,6 +239,7 @@ const canSubmit = computed(() => {
   width: 170px;
   height: 150px;
   border-radius: 50%;
+  background: rgba(255, 214, 62, 0.16);
   background: color-mix(in srgb, var(--auth-accent, #ffd63e) 16%, transparent);
   filter: blur(38px);
   content: '';
@@ -279,10 +287,15 @@ const canSubmit = computed(() => {
   height: 66px;
   flex: none;
   place-items: center;
-  border: 2px solid
-    color-mix(in srgb, var(--auth-accent, #ffd63e) 58%, transparent);
+  border: 2px solid rgba(255, 214, 62, 0.58);
+  border-color: color-mix(
+    in srgb,
+    var(--auth-accent, #ffd63e) 58%,
+    transparent
+  );
   border-radius: 50%;
   color: var(--auth-accent, var(--yellow, #ffd63e));
+  background: var(--panel, #20262c);
   background: color-mix(
     in srgb,
     var(--auth-accent, #ffd63e) 10%,
@@ -344,6 +357,7 @@ const canSubmit = computed(() => {
   place-items: center;
   border-radius: 11px;
   color: var(--auth-accent, #ffd63e);
+  background: rgba(255, 214, 62, 0.13);
   background: color-mix(in srgb, var(--auth-accent, #ffd63e) 13%, transparent);
 }
 .app-profile-auth__identity div {
@@ -379,6 +393,7 @@ const canSubmit = computed(() => {
   color: inherit !important;
 }
 .app-profile-auth__fields :deep(.text-xs > div) {
+  background: var(--panel, #20262c) !important;
   background: color-mix(
     in srgb,
     var(--panel, #20262c) 94%,
@@ -404,6 +419,7 @@ const canSubmit = computed(() => {
   padding: 0 17px;
   color: #fff !important;
   background: var(--auth-accent, var(--yellow, #ffd63e)) !important;
+  box-shadow: 0 10px 26px rgba(255, 214, 62, 0.25);
   box-shadow: 0 10px 26px
     color-mix(in srgb, var(--auth-accent, #ffd63e) 25%, transparent);
   font-weight: 750;

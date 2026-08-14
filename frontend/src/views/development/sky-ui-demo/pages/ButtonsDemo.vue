@@ -137,10 +137,4 @@ import SkyUiDemoPage from '../SkyUiDemoPage.vue'
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: var(--sky-space-4, 16px);
 }
-
-.button-row :deep(.sky-button) {
-  width: 100%;
-  min-width: 44px;
-  padding-inline: 6px;
-}
 </style>

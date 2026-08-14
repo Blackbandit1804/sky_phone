@@ -1008,7 +1008,6 @@ onBeforeUnmount(() => {
       :style="popoverStyle"
       :class="{
         'phone-app--light': !phone.isDarkMode,
-        [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
       }"
       role="group"
       :aria-label="phone.t('Apps.music.addMusic')"
@@ -1053,7 +1052,6 @@ onBeforeUnmount(() => {
       :style="popoverStyle"
       :class="{
         'phone-app--light': !phone.isDarkMode,
-        [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
       }"
       role="group"
       :aria-label="phone.t('Apps.music.songActions')"

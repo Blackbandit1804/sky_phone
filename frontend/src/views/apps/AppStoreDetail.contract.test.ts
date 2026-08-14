@@ -18,7 +18,9 @@ describe('AppStoreDetail contract', () => {
     expect(source).toContain("emit('back')")
     expect(source).toContain("emit('share')")
     expect(source).toContain('<AppStoreAction :action="action" />')
-    expect(source).toContain("'store-detail__action--icon': action !== 'open'")
+    expect(source).toContain(
+      ":class=\"{ 'store-detail__action--icon': action !== 'open' }\"",
+    )
     expect(source).not.toContain(':has(')
     expect(source).toMatch(
       /\.store-detail\s*\{[^}]*padding:\s*var\(--sky-space-3\) 0 var\(--sky-space-6\)/s,

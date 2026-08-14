@@ -90,7 +90,7 @@ useOverlayFocusTrap({
       <component
         :is="component"
         ref="panel"
-        class="sky-dialog__panel"
+        class="sky-dialog__panel sky-glass-surface"
         :role="effectiveRole"
         :aria-modal="hasDialogRole ? ariaModal : undefined"
         :aria-label="resolvedAriaLabel"

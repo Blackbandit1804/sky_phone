@@ -45,8 +45,13 @@ const contacts = [
         :key="group.letter"
         :dividers="false"
       >
-        <SkyListItem group-title :title="group.letter" />
-        <SkyListItem v-for="name in group.names" :key="name" :title="name" />
+        <SkyListItem contacts group-title :title="group.letter" />
+        <SkyListItem
+          v-for="name in group.names"
+          :key="name"
+          contacts
+          :title="name"
+        />
       </SkyListGroup>
     </SkyList>
   </SkyUiDemoPage>

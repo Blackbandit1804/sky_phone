@@ -20,6 +20,7 @@ const colorClasses = [
       <SkyListItem
         v-for="(_, index) in values"
         :key="index"
+        label
         :title="`Item ${index + 1}`"
       >
         <template #after>
@@ -27,6 +28,7 @@ const colorClasses = [
             v-model="values[index]"
             :aria-label="`Item ${index + 1}`"
             :class="colorClasses[index]"
+            component="div"
             :name="`demo-toggle-${index + 1}`"
           />
         </template>

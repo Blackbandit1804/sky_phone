@@ -8,10 +8,12 @@ defineOptions({ inheritAttrs: false })
 withDefaults(
   defineProps<{
     as?: string
+    padded?: boolean
     withTabbar?: boolean
   }>(),
   {
     as: 'section',
+    padded: false,
     withTabbar: false,
   },
 )
@@ -38,7 +40,10 @@ onBeforeUnmount(() => unregister?.())
     ref="root"
     v-bind="$attrs"
     class="sky-scroll-area"
-    :class="{ 'sky-scroll-area--tabbar': withTabbar }"
+    :class="{
+      'sky-scroll-area--padded': padded,
+      'sky-scroll-area--tabbar': withTabbar,
+    }"
   >
     <slot />
   </component>

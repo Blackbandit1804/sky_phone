@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import SkyList from './SkyList.vue'
+import SkyListGroupInner from './SkyListGroupInner.vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -38,7 +39,9 @@ withDefaults(
       :outline="outline"
       :strong="strong"
     >
-      <slot />
+      <SkyListGroupInner>
+        <slot />
+      </SkyListGroupInner>
     </SkyList>
   </li>
 </template>

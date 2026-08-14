@@ -1,11 +1,8 @@
 <script setup lang="ts">
-import { UserRound } from 'lucide-vue-next'
-
 import {
   SkyBadge,
   SkyBlock,
   SkyBlockTitle,
-  SkyIcon,
   SkyList,
   SkyListGroup,
   SkyListItem,
@@ -15,6 +12,7 @@ import SkyUiDemoPage from '../SkyUiDemoPage.vue'
 import albumOne from '../assets/people-160x160-1.jpg'
 import albumTwo from '../assets/people-160x160-2.jpg'
 import albumThree from '../assets/people-160x160-3.jpg'
+import demoIcon from '../assets/demo-icon.png'
 
 const people = ['Ivan Petrov', 'John Doe', 'Jenna Smith']
 const alphabetGroups = [
@@ -119,9 +117,7 @@ const mailItems = [
         :title="person"
       >
         <template #media>
-          <span class="sky-ui-demo-list__person-icon">
-            <SkyIcon :size="22"><UserRound /></SkyIcon>
-          </span>
+          <img class="sky-ui-demo-list__person-icon" :src="demoIcon" alt="" />
         </template>
         <template v-if="index === 1" #after
           ><SkyBadge tone="info">5</SkyBadge></template
@@ -139,9 +135,7 @@ const mailItems = [
         :title="person"
       >
         <template #media>
-          <span class="sky-ui-demo-list__person-icon">
-            <SkyIcon :size="22"><UserRound /></SkyIcon>
-          </span>
+          <img class="sky-ui-demo-list__person-icon" :src="demoIcon" alt="" />
         </template>
       </SkyListItem>
     </SkyList>
@@ -150,16 +144,12 @@ const mailItems = [
     <SkyList outline strong>
       <SkyListItem after="Edit" header="Name" link title="John Doe">
         <template #media>
-          <span class="sky-ui-demo-list__person-icon">
-            <SkyIcon :size="22"><UserRound /></SkyIcon>
-          </span>
+          <img class="sky-ui-demo-list__person-icon" :src="demoIcon" alt="" />
         </template>
       </SkyListItem>
       <SkyListItem after="Edit" header="Phone" link title="+7 90 111-22-3344">
         <template #media>
-          <span class="sky-ui-demo-list__person-icon">
-            <SkyIcon :size="22"><UserRound /></SkyIcon>
-          </span>
+          <img class="sky-ui-demo-list__person-icon" :src="demoIcon" alt="" />
         </template>
       </SkyListItem>
       <SkyListItem
@@ -170,9 +160,7 @@ const mailItems = [
         title="john@doe"
       >
         <template #media>
-          <span class="sky-ui-demo-list__person-icon">
-            <SkyIcon :size="22"><UserRound /></SkyIcon>
-          </span>
+          <img class="sky-ui-demo-list__person-icon" :src="demoIcon" alt="" />
         </template>
       </SkyListItem>
       <SkyListItem
@@ -183,9 +171,7 @@ const mailItems = [
         title="john@konsta"
       >
         <template #media>
-          <span class="sky-ui-demo-list__person-icon">
-            <SkyIcon :size="22"><UserRound /></SkyIcon>
-          </span>
+          <img class="sky-ui-demo-list__person-icon" :src="demoIcon" alt="" />
         </template>
       </SkyListItem>
     </SkyList>
@@ -211,12 +197,14 @@ const mailItems = [
       </SkyListGroup>
     </SkyList>
 
-    <SkyBlockTitle large>Media Lists</SkyBlockTitle>
+    <SkyBlockTitle class="sky-ui-demo-list__media-title" large>
+      Media Lists
+    </SkyBlockTitle>
     <SkyBlock>
       <p class="sky-ui-demo-copy">
         Media Lists are almost the same as Data Lists, but with a more flexible
         layout for visualization of more complex data, like products, services,
-        users, and more.
+        user, etc.
       </p>
     </SkyBlock>
 
@@ -226,7 +214,6 @@ const mailItems = [
         v-for="song in songs"
         :key="song.title"
         :after="song.price"
-        :chevron="false"
         link
         :subtitle="song.artist"
         :text="mediaText"
@@ -244,7 +231,6 @@ const mailItems = [
         v-for="mail in mailItems"
         :key="`${mail.title}-${mail.after}`"
         :after="mail.after"
-        :chevron="false"
         link
         :subtitle="mail.subtitle"
         :text="mediaText"
@@ -255,26 +241,25 @@ const mailItems = [
 </template>
 
 <style scoped>
-.sky-ui-demo-list__person-icon,
-.sky-ui-demo-list__album {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  background: var(--sky-app-accent-soft);
-  color: var(--sky-app-accent);
-}
-
 .sky-ui-demo-list__person-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  display: block;
+  flex: none;
   object-fit: cover;
 }
 
 .sky-ui-demo-list__album {
   width: 80px;
   height: 80px;
-  border-radius: 10px;
+  display: block;
+  flex: none;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.sky-ui-demo-list__media-title {
+  font-size: 24px;
 }
 
 .sky-ui-demo-list__sticky-title {

@@ -51,11 +51,11 @@ import SkyUiDemoPage from '../SkyUiDemoPage.vue'
 }
 
 .preloader-grid :deep(.sky-ui-demo-color-green) {
-  color: #34c759;
+  color: #4cd964;
 }
 
 .preloader-grid :deep(.sky-ui-demo-color-purple) {
-  color: #af52de;
+  color: #9c27b0;
 }
 
 .preloader-grid :deep(.sky-ui-demo-color-yellow) {

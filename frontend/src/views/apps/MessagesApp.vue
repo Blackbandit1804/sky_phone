@@ -858,7 +858,7 @@ onBeforeUnmount(() => {
     accent-soft="rgba(52, 199, 89, 0.16)"
   >
     <SkyNavbar variant="large" :title="phone.t('Apps.messages.name')" />
-    <SkyScrollArea class="messages-sky-state-scroll">
+    <SkyScrollArea padded class="messages-sky-state-scroll">
       <SkyEmptyState
         :title="phone.t('Apps.messages.noSim')"
         :body="phone.t('Apps.messages.noSimBody')"
@@ -922,7 +922,7 @@ onBeforeUnmount(() => {
       </template>
     </SkyNavbar>
 
-    <SkyScrollArea with-tabbar class="messages-sky-inbox-scroll">
+    <SkyScrollArea padded with-tabbar class="messages-sky-inbox-scroll">
       <SkySegmented
         v-if="!editingList"
         navigation
@@ -1082,7 +1082,7 @@ onBeforeUnmount(() => {
         </SkyLink>
       </template>
     </SkyNavbar>
-    <SkyScrollArea class="messages-sky-compose-scroll">
+    <SkyScrollArea padded class="messages-sky-compose-scroll">
       <SkyList class="messages-recipient-field" density="compact" flush>
         <SkyField
           v-model="composerNumber"
@@ -1226,7 +1226,7 @@ onBeforeUnmount(() => {
           </SkyLink>
         </template>
       </SkyNavbar>
-      <SkyScrollArea class="messages-contact-overlay__scroll">
+      <SkyScrollArea padded class="messages-contact-overlay__scroll">
         <div class="messages-contact-details__hero">
           <span
             class="messages-avatar messages-avatar--contact"
@@ -1319,7 +1319,7 @@ onBeforeUnmount(() => {
       </SkyScrollArea>
     </SkyAppPage>
 
-    <SkyScrollArea class="messages-sky-thread-scroll">
+    <SkyScrollArea padded class="messages-sky-thread-scroll">
       <SkyMessages class="messages-bubbles">
         <template
           v-for="(message, index) in messages.messages"
@@ -1579,6 +1579,7 @@ onBeforeUnmount(() => {
         <SkyMessagebar
           v-model="draft"
           class="messages-sky-messagebar"
+          embedded
           :outline="false"
           :placeholder="phone.t('Apps.messages.message')"
           :disabled="sending"
@@ -1674,6 +1675,9 @@ onBeforeUnmount(() => {
 
 .messages-sky-conversation :deep(.sky-list-item__row) {
   min-height: 72px;
+}
+
+.messages-sky-conversation :deep(.sky-list-item__content) {
   padding-top: 9px;
   padding-bottom: 9px;
 }
@@ -1769,8 +1773,16 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   display: flex;
   align-items: center;
-  gap: 10px;
   background: transparent;
+}
+
+.messages-recipient-field :deep(.sky-field__inner) {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
 }
 
 .messages-contact-list :deep(.sky-list-item__row) {
@@ -1792,6 +1804,7 @@ onBeforeUnmount(() => {
 
 .messages-recipient-field :deep(.sky-field__control) {
   flex: 1;
+  margin: 0;
 }
 
 .messages-recipient-field :deep(.sky-field__input) {
@@ -1867,7 +1880,7 @@ onBeforeUnmount(() => {
 }
 
 .messages-bubbles :deep(.sky-message--received .sky-message__bubble) {
-  background: var(--sky-surface-muted);
+  background: var(--sky-message-received-background);
   color: var(--sky-text);
 }
 

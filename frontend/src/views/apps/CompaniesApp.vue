@@ -1059,6 +1059,7 @@ onBeforeUnmount(() => {
 
     <SkyScrollArea
       v-if="screen === 'root' && activeTab === 'directory'"
+      padded
       class="companies-content companies-directory"
       with-tabbar
     >
@@ -1193,6 +1194,7 @@ onBeforeUnmount(() => {
 
     <SkyScrollArea
       v-else-if="screen === 'root' && activeTab === 'requests'"
+      padded
       class="companies-content"
       with-tabbar
     >
@@ -1303,6 +1305,7 @@ onBeforeUnmount(() => {
 
     <SkyScrollArea
       v-else-if="screen === 'root' && activeTab === 'work'"
+      padded
       class="companies-content companies-work"
       with-tabbar
     >
@@ -1441,6 +1444,7 @@ onBeforeUnmount(() => {
 
     <SkyScrollArea
       v-else-if="screen === 'company'"
+      padded
       class="companies-content company-profile"
     >
       <SkyEmptyState
@@ -1626,6 +1630,7 @@ onBeforeUnmount(() => {
 
     <SkyScrollArea
       v-else-if="screen === 'request'"
+      padded
       class="companies-content request-thread"
     >
       <SkyEmptyState
@@ -1766,6 +1771,7 @@ onBeforeUnmount(() => {
 
     <SkyScrollArea
       v-else-if="screen === 'manager' && workCompany"
+      padded
       class="companies-content manager-screen"
     >
       <SkyCard class="manager-intro">
@@ -2562,8 +2568,8 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.company-list :deep(.sky-list-item__row),
-.company-request-list :deep(.sky-list-item__row) {
+.company-list :deep(.sky-list-item__content),
+.company-request-list :deep(.sky-list-item__content) {
   padding-top: 11px;
   padding-bottom: 11px;
 }
@@ -2964,11 +2970,11 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 0;
   left: 0;
-  background: var(--company-surface);
+  background: transparent;
 }
 
 .companies-app.sky-app-page--dark .company-messagebar {
-  background: var(--company-surface);
+  background: transparent;
 }
 
 .manager-screen {

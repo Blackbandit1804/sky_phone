@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, useId, useSlots } from 'vue'
 
+import SkyChipDeleteIcon from '../controls/SkyChipDeleteIcon.vue'
+
 defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
@@ -48,6 +50,7 @@ const resolvedAriaLabelledby = computed(() => {
   if (props.ariaLabel) return undefined
   return props.ariaLabelledby ?? (hasTitle.value ? titleId : undefined)
 })
+const resolvedCloseLabel = computed(() => props.closeLabel ?? props.button)
 </script>
 
 <template>
@@ -56,7 +59,7 @@ const resolvedAriaLabelledby = computed(() => {
       :is="component"
       v-if="opened"
       v-bind="$attrs"
-      class="sky-notification"
+      class="sky-notification sky-glass-surface"
       :role="role"
       :aria-atomic="true"
       :aria-describedby="ariaDescribedby"
@@ -72,7 +75,12 @@ const resolvedAriaLabelledby = computed(() => {
       </div>
 
       <div class="sky-notification__content">
-        <div class="sky-notification__header">
+        <div
+          class="sky-notification__header"
+          :class="{
+            'sky-notification__header--with-close': hasCloseButton,
+          }"
+        >
           <strong v-if="hasTitle" :id="titleId" class="sky-notification__title">
             <slot name="title">{{ title }}</slot>
           </strong>
@@ -88,13 +96,11 @@ const resolvedAriaLabelledby = computed(() => {
             v-if="hasCloseButton"
             type="button"
             class="sky-notification__close"
-            :aria-label="closeLabel"
+            :aria-label="resolvedCloseLabel"
             @click="emit('close', $event)"
           >
-            <slot name="button">
-              <span v-if="button !== undefined">{{ button }}</span>
-              <span v-else aria-hidden="true">&times;</span>
-            </slot>
+            <SkyChipDeleteIcon class="sky-notification__close-icon" />
+            <slot name="button" />
           </button>
         </div>
 

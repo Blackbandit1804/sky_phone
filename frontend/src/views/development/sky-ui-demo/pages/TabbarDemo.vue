@@ -70,9 +70,9 @@ const activeLabel = computed(
         <b>{{ activeLabel }}</b>
       </p>
       <p class="sky-ui-demo-tabbar__copy">
-        <span v-for="paragraph in activeCopy" :key="paragraph">{{
-          paragraph
-        }}</span>
+        <span v-for="paragraph in activeCopy" :key="paragraph"
+          >{{ paragraph }}{{ ' ' }}</span
+        >
       </p>
     </SkyBlock>
 
@@ -106,10 +106,6 @@ const activeLabel = computed(
 }
 
 .sky-ui-demo-tabbar__copy {
-  display: grid;
-  gap: var(--sky-space-3);
-  color: var(--sky-muted);
-  font-size: 14px;
-  line-height: 20px;
+  display: block;
 }
 </style>

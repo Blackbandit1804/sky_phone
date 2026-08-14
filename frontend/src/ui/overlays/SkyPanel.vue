@@ -111,11 +111,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Transition
-    :name="`sky-panel-${side}`"
-    :duration="{ enter: 400, leave: 400 }"
-    appear
-  >
+  <Transition :name="`sky-panel-${side}`" appear>
     <div
       v-if="opened"
       ref="root"
@@ -136,7 +132,7 @@ onBeforeUnmount(() => {
       <component
         :is="component"
         ref="panel"
-        class="sky-panel__panel"
+        class="sky-panel__panel sky-glass-surface"
         :class="[
           sizeClass,
           `sky-panel__panel--${side}`,

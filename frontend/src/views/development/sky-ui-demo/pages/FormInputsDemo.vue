@@ -125,12 +125,13 @@ const nameError = computed(() =>
             : undefined
         "
         :label="field.label"
+        :dropdown="field.type === 'select'"
         :options="field.options"
         :placeholder="field.placeholder"
         :type="field.type"
       >
-        <template #leading>
-          <img class="form-inputs-demo__icon" :src="demoIcon" alt="" />
+        <template #media>
+          <img class="form-inputs-demo__icon" :src="demoIcon" alt="icon" />
         </template>
       </SkyField>
     </SkyList>
@@ -147,13 +148,14 @@ const nameError = computed(() =>
             : undefined
         "
         :label="field.label"
+        :dropdown="field.type === 'select'"
         :options="field.options"
         outline
         :placeholder="field.placeholder"
         :type="field.type"
       >
-        <template #leading>
-          <img class="form-inputs-demo__icon" :src="demoIcon" alt="" />
+        <template #media>
+          <img class="form-inputs-demo__icon" :src="demoIcon" alt="icon" />
         </template>
       </SkyField>
     </SkyList>
@@ -169,8 +171,8 @@ const nameError = computed(() =>
         :placeholder="field.placeholder"
         :type="field.type"
       >
-        <template #leading>
-          <img class="form-inputs-demo__icon" :src="demoIcon" alt="" />
+        <template #media>
+          <img class="form-inputs-demo__icon" :src="demoIcon" alt="icon" />
         </template>
       </SkyField>
     </SkyList>
@@ -187,8 +189,8 @@ const nameError = computed(() =>
         :placeholder="field.placeholder"
         :type="field.type"
       >
-        <template #leading>
-          <img class="form-inputs-demo__icon" :src="demoIcon" alt="" />
+        <template #media>
+          <img class="form-inputs-demo__icon" :src="demoIcon" alt="icon" />
         </template>
       </SkyField>
     </SkyList>
@@ -198,14 +200,14 @@ const nameError = computed(() =>
       <SkyField
         v-model="name"
         :error="nameError"
-        help="Basic string checking"
+        info="Basic string checking"
         label="Name"
         placeholder="Your name"
         type="text"
         @input="nameChanged = true"
       >
-        <template #leading>
-          <img class="form-inputs-demo__icon" :src="demoIcon" alt="" />
+        <template #media>
+          <img class="form-inputs-demo__icon" :src="demoIcon" alt="icon" />
         </template>
       </SkyField>
     </SkyList>
@@ -214,15 +216,15 @@ const nameError = computed(() =>
     <SkyList inset strong>
       <SkyField
         v-model="demoValue"
-        clear-button
+        :clear-button="demoValue.length > 0"
         clear-label="Clear TV show"
-        help="Type something to see clear button"
+        info="Type something to see clear button"
         label="TV Show"
         placeholder="Your favorite TV show"
         type="text"
       >
-        <template #leading>
-          <img class="form-inputs-demo__icon" :src="demoIcon" alt="" />
+        <template #media>
+          <img class="form-inputs-demo__icon" :src="demoIcon" alt="icon" />
         </template>
       </SkyField>
     </SkyList>
@@ -237,8 +239,8 @@ const nameError = computed(() =>
         :placeholder="field.placeholder"
         :type="field.type"
       >
-        <template #leading>
-          <img class="form-inputs-demo__icon" :src="demoIcon" alt="" />
+        <template #media>
+          <img class="form-inputs-demo__icon" :src="demoIcon" alt="icon" />
         </template>
       </SkyField>
     </SkyList>
@@ -274,7 +276,7 @@ const nameError = computed(() =>
         :key="field.key"
         v-model="infoValues[field.key]"
         :aria-label="field.label"
-        :help="
+        :info="
           [
             'Full name please',
             '8 characters minimum',
@@ -291,9 +293,8 @@ const nameError = computed(() =>
 
 <style scoped>
 .form-inputs-demo__icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: block;
-  border-radius: 50%;
 }
 </style>

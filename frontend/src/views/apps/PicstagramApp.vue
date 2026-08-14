@@ -1804,6 +1804,7 @@ onBeforeUnmount(() => {
           </div>
           <SkyMessagebar
             v-model="commentBody"
+            embedded
             :placeholder="t(replyingTo ? 'replyPlaceholder' : 'addComment')"
             @keydown.enter.prevent="submitComment"
             ><template #right
@@ -3304,16 +3305,41 @@ button {
 .ps-compose-fields :deep(.sky-field),
 .ps-edit-fields :deep(.sky-field) {
   overflow: hidden;
+  margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--sky-hairline);
   border-radius: var(--sky-radius-card);
   background: var(--sky-surface);
 }
+.ps-fields :deep(.sky-field__inner),
+.ps-compose-fields :deep(.sky-field__inner),
+.ps-edit-fields :deep(.sky-field__inner) {
+  padding: 0;
+}
+.ps-fields :deep(.sky-field__label),
+.ps-compose-fields :deep(.sky-field__label),
+.ps-edit-fields :deep(.sky-field__label) {
+  margin-top: 0;
+}
+.ps-fields :deep(.sky-field__label-text),
+.ps-compose-fields :deep(.sky-field__label-text),
+.ps-edit-fields :deep(.sky-field__label-text) {
+  top: auto;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
 .ps-fields :deep(.sky-field__control),
 .ps-compose-fields :deep(.sky-field__control),
 .ps-edit-fields :deep(.sky-field__control) {
+  margin: 0;
   border-radius: calc(var(--sky-radius-control) + 10px);
   background: var(--sky-surface-muted);
+}
+.ps-fields :deep(.sky-field__border),
+.ps-compose-fields :deep(.sky-field__border),
+.ps-edit-fields :deep(.sky-field__border) {
+  display: none;
 }
 .ps-compose-fields :deep(.sky-field__textarea),
 .ps-edit-fields :deep(.sky-field__textarea) {

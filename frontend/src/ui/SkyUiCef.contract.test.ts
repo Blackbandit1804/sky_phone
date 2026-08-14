@@ -5,7 +5,16 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const uiDirectory = fileURLToPath(new URL('.', import.meta.url))
+const frontendDirectory = fileURLToPath(new URL('..', import.meta.url))
 const mainSource = readFileSync(new URL('../main.ts', import.meta.url), 'utf8')
+const mainCssSource = readFileSync(
+  new URL('../assets/main.css', import.meta.url),
+  'utf8',
+)
+const appProfileAuthSource = readFileSync(
+  new URL('../components/account/AppProfileAuth.vue', import.meta.url),
+  'utf8',
+)
 
 interface StyleSource {
   content: string
@@ -106,6 +115,52 @@ describe('Sky UI FiveM CEF contracts', () => {
     })
 
     expect(violations).toEqual([])
+  })
+
+  it('does not make production component styling depend on :has()', () => {
+    const offenders = walkFiles(frontendDirectory)
+      .filter(
+        (path) =>
+          /\.(?:css|vue)$/.test(path) &&
+          !/\.(?:test|spec)\.(?:ts|tsx)$/.test(path),
+      )
+      .filter((path) => /:has\s*\(/i.test(readFileSync(path, 'utf8')))
+      .map((path) => relative(frontendDirectory, path).replace(/\\/g, '/'))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps variable profile color mixes behind Chrome 103 fallbacks', () => {
+    expect(appProfileAuthSource).toMatch(
+      /\.app-profile-auth__card\s*\{[^}]*background:\s*var\(--panel, #20262c\);[^}]*background:\s*color-mix\(/s,
+    )
+    expect(appProfileAuthSource).toMatch(
+      /\.app-profile-auth__mark\s*\{[^}]*background:\s*rgba\(255, 214, 62, 0\.14\);[^}]*background:\s*color-mix\(/s,
+    )
+    expect(appProfileAuthSource).toMatch(
+      /\.app-profile-auth__avatar\s*\{[^}]*background:\s*var\(--panel, #20262c\);[^}]*background:\s*color-mix\(/s,
+    )
+  })
+
+  it('keeps Performance hold transforms on the Chrome 103 syntax floor', () => {
+    const performanceStart = mainCssSource.indexOf(
+      '/* FiveM CEF blur-free glass fallback.',
+    )
+    const performanceEnd = mainCssSource.indexOf(
+      '/* Chromium 103 cannot resolve color-mix()',
+      performanceStart,
+    )
+    const performanceCss = mainCssSource.slice(
+      performanceStart,
+      performanceEnd,
+    )
+
+    expect(performanceStart).toBeGreaterThanOrEqual(0)
+    expect(performanceEnd).toBeGreaterThan(performanceStart)
+    expect(performanceCss).not.toMatch(/(?:^|[;{])\s*scale\s*:/m)
+    expect(performanceCss).toMatch(
+      /transform:\s*translate3d\([\s\S]*?var\(--tw-translate-x, 0\)[\s\S]*?var\(--tw-translate-y, 0\)[\s\S]*?scale\(1\) !important;/,
+    )
   })
 
   it('keeps optional glass blur behind a solid CEF fallback', () => {

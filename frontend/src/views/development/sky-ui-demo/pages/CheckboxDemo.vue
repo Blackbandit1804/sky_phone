@@ -6,6 +6,7 @@ import {
   SkyBlockTitle,
   SkyCheckbox,
   SkyList,
+  SkyListGroupInner,
   SkyListItem,
 } from '@/ui'
 
@@ -109,24 +110,29 @@ function handleCheckboxRowClick(event: MouseEvent, toggle: () => void): void {
             @change="toggleMovies"
           />
         </template>
-      </SkyListItem>
-      <SkyListItem
-        v-for="movie in ['Movie 1', 'Movie 2']"
-        :key="movie"
-        class="checkbox-demo__child"
-        :title="movie"
-        @click="handleCheckboxRowClick($event, () => toggleMovie(movie))"
-      >
-        <template #media>
-          <SkyCheckbox
-            :aria-label="movie"
-            component="div"
-            :checked="movies.includes(movie)"
-            name="demo-movie-checkbox"
-            :value="movie"
-            @change="toggleMovie(movie)"
-          />
-        </template>
+        <SkyList class="checkbox-demo__children" nested>
+          <SkyListGroupInner>
+            <SkyListItem
+              v-for="movie in ['Movie 1', 'Movie 2']"
+              :key="movie"
+              :title="movie"
+              @click.stop="
+                handleCheckboxRowClick($event, () => toggleMovie(movie))
+              "
+            >
+              <template #media>
+                <SkyCheckbox
+                  :aria-label="movie"
+                  component="div"
+                  :checked="movies.includes(movie)"
+                  name="demo-movie-checkbox"
+                  :value="movie"
+                  @change="toggleMovie(movie)"
+                />
+              </template>
+            </SkyListItem>
+          </SkyListGroupInner>
+        </SkyList>
       </SkyListItem>
     </SkyList>
 
@@ -197,7 +203,9 @@ function handleCheckboxRowClick(event: MouseEvent, toggle: () => void): void {
   cursor: pointer;
 }
 
-.checkbox-demo__child :deep(.sky-list-item__row) {
-  padding-left: calc(var(--sky-safe-area-left) + 56px);
+.checkbox-demo__children {
+  width: 100%;
+  margin: 0;
+  padding-left: 48px;
 }
 </style>

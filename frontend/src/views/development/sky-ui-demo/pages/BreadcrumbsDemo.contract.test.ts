@@ -21,7 +21,10 @@ describe('BreadcrumbsDemo', () => {
     expect(popover.match(/\blink\b/g)).toHaveLength(3)
     expect(popover).not.toMatch(/\smenu(?:\s|=|>)/)
     expect(source).toMatch(/\.breadcrumbs-demo__menu\s*\{[^}]*width:\s*100%;/s)
-    expect(source).not.toMatch(/width:\s*120px;/)
+    expect(source).toContain('class="breadcrumbs-demo__popover"')
+    expect(source).toMatch(
+      /\.breadcrumbs-demo__popover :deep\(\.sky-popover__panel\)\s*\{[^}]*width:\s*120px;/s,
+    )
   })
 
   it('keeps the collapsed popover usable through every close path', () => {

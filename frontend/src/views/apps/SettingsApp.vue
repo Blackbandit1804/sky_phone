@@ -719,6 +719,7 @@ onBeforeUnmount(() => {
 
     <SkyScrollArea
       ref="settingsPage"
+      padded
       class="settings-content"
       :class="{ 'settings-content--subpage': activeView !== 'root' }"
     >
@@ -1356,7 +1357,9 @@ onBeforeUnmount(() => {
         </section>
 
         <SkySettingsGroup :title="phone.t('Apps.settings.erasedFromPhone')">
-          <SkySettingsRow :title="phone.t('Apps.settings.eraseDeviceSettings')" />
+          <SkySettingsRow
+            :title="phone.t('Apps.settings.eraseDeviceSettings')"
+          />
           <SkySettingsRow :title="phone.t('Apps.settings.eraseLocalContent')" />
           <SkySettingsRow :title="phone.t('Apps.settings.eraseLocalApps')" />
         </SkySettingsGroup>
@@ -1577,8 +1580,12 @@ onBeforeUnmount(() => {
     >
       <div class="settings-reset-content">
         <div class="settings-reset-mark" aria-hidden="true">
-          <span class="settings-reset-mark__layer settings-reset-mark__layer--back"></span>
-          <span class="settings-reset-mark__layer settings-reset-mark__layer--middle"></span>
+          <span
+            class="settings-reset-mark__layer settings-reset-mark__layer--back"
+          ></span>
+          <span
+            class="settings-reset-mark__layer settings-reset-mark__layer--middle"
+          ></span>
           <div class="settings-reset-mark__face">
             <Smartphone :size="35" :stroke-width="1.45" />
             <span class="settings-reset-mark__erase">
@@ -1596,7 +1603,13 @@ onBeforeUnmount(() => {
           <strong>{{ Math.floor(factoryResetProgress) }}%</strong>
           <span>{{ factoryResetSecondsRemaining }}s</span>
         </div>
-        <div class="settings-reset-progress" role="progressbar" :aria-valuenow="Math.floor(factoryResetProgress)" aria-valuemin="0" aria-valuemax="100">
+        <div
+          class="settings-reset-progress"
+          role="progressbar"
+          :aria-valuenow="Math.floor(factoryResetProgress)"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
           <span :style="{ width: `${factoryResetProgress}%` }" />
         </div>
         <p class="settings-reset-detail">{{ factoryResetPhase.detail }}</p>
@@ -1610,7 +1623,9 @@ onBeforeUnmount(() => {
             <small>{{ phone.t('Apps.settings.factoryResetCloudSafe') }}</small>
           </span>
         </div>
-        <p class="settings-reset-warning">{{ phone.t('Apps.settings.factoryResetWarning') }}</p>
+        <p class="settings-reset-warning">
+          {{ phone.t('Apps.settings.factoryResetWarning') }}
+        </p>
       </div>
     </div>
 
@@ -1767,8 +1782,14 @@ onBeforeUnmount(() => {
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 24px;
   color: #ff665f;
-  background: linear-gradient(145deg, rgb(255 74 66 / 18%), rgb(255 255 255 / 5%));
-  box-shadow: inset 0 1px rgb(255 255 255 / 12%), 0 18px 35px rgb(0 0 0 / 14%);
+  background: linear-gradient(
+    145deg,
+    rgb(255 74 66 / 18%),
+    rgb(255 255 255 / 5%)
+  );
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 12%),
+    0 18px 35px rgb(0 0 0 / 14%);
 }
 
 .settings-reset-hero h2 {
@@ -2122,9 +2143,24 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: -30%;
   background:
-    linear-gradient(118deg, transparent 36%, rgb(100 151 255 / 7%) 36.2%, transparent 36.7%),
-    linear-gradient(118deg, transparent 49%, rgb(164 122 255 / 6%) 49.2%, transparent 49.8%),
-    linear-gradient(118deg, transparent 63%, rgb(72 187 255 / 5%) 63.2%, transparent 63.7%);
+    linear-gradient(
+      118deg,
+      transparent 36%,
+      rgb(100 151 255 / 7%) 36.2%,
+      transparent 36.7%
+    ),
+    linear-gradient(
+      118deg,
+      transparent 49%,
+      rgb(164 122 255 / 6%) 49.2%,
+      transparent 49.8%
+    ),
+    linear-gradient(
+      118deg,
+      transparent 63%,
+      rgb(72 187 255 / 5%) 63.2%,
+      transparent 63.7%
+    );
   content: '';
   transform: translateX(-7%);
 }
@@ -2135,7 +2171,12 @@ onBeforeUnmount(() => {
   right: -20%;
   width: 78%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(155 187 255 / 18%), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(155 187 255 / 18%),
+    transparent
+  );
   box-shadow:
     0 132px rgb(155 187 255 / 7%),
     0 264px rgb(155 187 255 / 5%);
@@ -2171,7 +2212,11 @@ onBeforeUnmount(() => {
 .settings-reset-mark__layer--back {
   top: 0;
   left: 13px;
-  background: linear-gradient(145deg, rgb(72 135 255 / 22%), rgb(82 53 190 / 12%));
+  background: linear-gradient(
+    145deg,
+    rgb(72 135 255 / 22%),
+    rgb(82 53 190 / 12%)
+  );
   transform: rotate(-12deg);
 }
 
@@ -2179,7 +2224,11 @@ onBeforeUnmount(() => {
   top: 13px;
   right: 11px;
   border-color: rgb(168 126 255 / 20%);
-  background: linear-gradient(145deg, rgb(134 87 255 / 19%), rgb(41 89 194 / 9%));
+  background: linear-gradient(
+    145deg,
+    rgb(134 87 255 / 19%),
+    rgb(41 89 194 / 9%)
+  );
   transform: rotate(9deg);
 }
 
@@ -2189,7 +2238,11 @@ onBeforeUnmount(() => {
   display: grid;
   overflow: hidden;
   border-color: rgb(255 255 255 / 20%);
-  background: linear-gradient(145deg, rgb(255 255 255 / 16%), rgb(255 255 255 / 6%));
+  background: linear-gradient(
+    145deg,
+    rgb(255 255 255 / 16%),
+    rgb(255 255 255 / 6%)
+  );
   box-shadow:
     inset 0 1px rgb(255 255 255 / 15%),
     0 22px 48px rgb(0 0 0 / 28%);
@@ -2217,7 +2270,9 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 9px rgb(81 158 255 / 50%);
 }
 
-.settings-reset-heading { margin-top: 25px; }
+.settings-reset-heading {
+  margin-top: 25px;
+}
 
 .settings-reset-heading h2 {
   margin: 0;
@@ -2285,7 +2340,11 @@ onBeforeUnmount(() => {
   padding: 13px 14px;
   border: 1px solid rgb(255 255 255 / 11%);
   border-radius: 16px;
-  background: linear-gradient(135deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 4%));
+  background: linear-gradient(
+    135deg,
+    rgb(255 255 255 / 8%),
+    rgb(255 255 255 / 4%)
+  );
   box-shadow: inset 0 1px rgb(255 255 255 / 5%);
   text-align: left;
 }
@@ -2326,8 +2385,13 @@ onBeforeUnmount(() => {
   line-height: 14px;
 }
 
-.settings-dialog-button--danger {
-  color: var(--sky-danger);
+.settings-dialog-button--danger:not(:disabled) {
+  background: var(--sky-danger);
+  color: #ffffff;
+}
+
+.settings-dialog-button--danger:active:not(:disabled) {
+  filter: brightness(0.86);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { X } from 'lucide-vue-next'
+import Xmark from 'framework7-icons/vue/vue/Xmark.vue'
 import { ref } from 'vue'
 
 import {
+  SkyAppPage,
   SkyBlock,
   SkyButton,
   SkyIcon,
@@ -13,17 +14,19 @@ import {
 } from '@/ui'
 
 import SkyUiDemoPage from '../SkyUiDemoPage.vue'
+import { useSkyUiDemoContext } from '../context'
 
 const popupOpened = ref(false)
+const demo = useSkyUiDemoContext()
 </script>
 
 <template>
   <SkyUiDemoPage title="Popup">
     <SkyBlock class="sky-ui-demo-stack" inset strong>
       <p class="sky-ui-demo-copy">
-        Popup is a modal window with any HTML content that pops up over the
-        app's main content. Like the other overlays, it is part of the temporary
-        views.
+        Popup is a modal window with any HTML content that pops up over App's
+        main content. Popup as all other overlays is part of so called
+        "Temporary Views".
       </p>
       <SkyButton rounded @click="popupOpened = true">Open Popup</SkyButton>
     </SkyBlock>
@@ -31,12 +34,18 @@ const popupOpened = ref(false)
     <template #fixed>
       <SkyPopup
         aria-label="Popup"
-        class="sky-ui-demo-popup"
         :opened="popupOpened"
         @backdropclick="popupOpened = false"
         @escape="popupOpened = false"
       >
-        <div class="sky-app-page sky-ui-demo-overlay-page">
+        <SkyAppPage
+          :accent="demo.accent.value"
+          :accent-soft="demo.accentSoft.value"
+          class="sky-ui-demo-overlay-page"
+          component="div"
+          :dark="demo.dark.value"
+          label="Popup"
+        >
           <SkyNavbar title="Popup">
             <template #right>
               <SkyLink
@@ -44,16 +53,17 @@ const popupOpened = ref(false)
                 icon-only
                 @click="popupOpened = false"
               >
-                <SkyIcon :size="24"><X /></SkyIcon>
+                <SkyIcon :size="20"><Xmark /></SkyIcon>
               </SkyLink>
             </template>
           </SkyNavbar>
           <SkyScrollArea>
             <SkyBlock class="sky-ui-demo-stack" inset strong>
               <p class="sky-ui-demo-copy">
-                Here comes popup. You can put anything here, even an independent
-                view with its own navigation. By default a popup also adapts to
-                its available device size; on a phone it is fullscreen.
+                Here comes popup. You can put here anything, even independent
+                view with its own navigation. Also not, that by default popup
+                looks a bit different on iPhone/iPod and iPad, on iPhone it is
+                fullscreen.
               </p>
               <p class="sky-ui-demo-copy">
                 Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -81,14 +91,8 @@ const popupOpened = ref(false)
               </p>
             </SkyBlock>
           </SkyScrollArea>
-        </div>
+        </SkyAppPage>
       </SkyPopup>
     </template>
   </SkyUiDemoPage>
 </template>
-
-<style scoped>
-.sky-ui-demo-popup :deep(.sky-popup__panel) {
-  overflow: hidden;
-}
-</style>

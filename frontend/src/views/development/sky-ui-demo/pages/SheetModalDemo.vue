@@ -22,7 +22,8 @@ const sheetOpened = ref(false)
     <SkyBlock class="sky-ui-demo-stack" inset strong>
       <p class="sky-ui-demo-copy">
         Sheet Modals slide up from the bottom of the screen to reveal more
-        content. Such modals allow custom overlays with custom content.
+        content. Such modals allow to create custom overlays with custom
+        content.
       </p>
       <SkyButton rounded @click="sheetOpened = true">Open Sheet</SkyButton>
     </SkyBlock>

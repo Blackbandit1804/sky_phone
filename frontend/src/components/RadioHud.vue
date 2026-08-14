@@ -323,4 +323,23 @@ onBeforeUnmount(() => {
     transform: scale(0.86);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .radio-hud__icon {
+    animation: none;
+  }
+
+  .radio-hud-member-enter-active,
+  .radio-hud-member-leave-active {
+    transition: none;
+  }
+
+  .radio-hud-member-enter-from,
+  .radio-hud-member-leave-to,
+  .radio-hud[data-horizontal='left'] .radio-hud-member-enter-from,
+  .radio-hud[data-horizontal='left'] .radio-hud-member-leave-to {
+    opacity: 1;
+    transform: none;
+  }
+}
 </style>

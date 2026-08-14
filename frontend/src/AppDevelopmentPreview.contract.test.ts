@@ -21,4 +21,11 @@ describe('browser development preview contract', () => {
     )
     expect(source).toContain('else loadUnlockedPhoneData()')
   })
+
+  it('keeps hairlines at one rendered device pixel through phone zoom', () => {
+    expect(source).toContain(
+      '...getHairlinePixelStyle(phoneZoom.value, browserDevicePixelRatio.value)',
+    )
+    expect(source).toContain(':device-pixel-ratio="browserDevicePixelRatio"')
+  })
 })

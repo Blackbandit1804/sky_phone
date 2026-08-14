@@ -71,6 +71,7 @@ const actionProps = computed<Record<string, unknown>>(() => ({
     class="sky-menu-list-item"
     :class="{ 'sky-menu-list-item--active': active }"
     :after="after"
+    :active="active"
     :aria-label="ariaLabel"
     :content-class="contentClass"
     :disabled="disabled"

@@ -48,7 +48,7 @@ describe('SkyButton', () => {
     expect(buttonStyles).not.toContain('--sky-app-accent-shade')
   })
 
-  it('keeps outline hover border, surface, and text in one color state', () => {
+  it('keeps outline text accented through hover and pressed states', () => {
     const uiDirectory = fileURLToPath(new URL('..', import.meta.url))
     const controls = readFileSync(`${uiDirectory}/controls.css`, 'utf8')
     const buttonStyles = controls.slice(
@@ -56,11 +56,12 @@ describe('SkyButton', () => {
       controls.indexOf('.sky-badge'),
     )
 
+    expect(buttonStyles).not.toContain('.sky-button--outline:hover')
     expect(buttonStyles).toMatch(
-      /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*?\.sky-button--outline:hover:not\(:disabled\)\s*\{[\s\S]*?border-color:\s*var\(--sky-app-accent, #007aff\);[\s\S]*?background:\s*var\(--sky-app-accent, #007aff\);[\s\S]*?color:\s*#ffffff;/,
+      /\.sky-button--outline:active:not\(:disabled\)\s*\{[\s\S]*?background:\s*var\(--sky-app-accent-soft, rgba\(0, 122, 255, 0\.15\)\);[\s\S]*?color:\s*var\(--sky-app-accent, #007aff\);[\s\S]*?filter:\s*none;/,
     )
     expect(buttonStyles).toMatch(
-      /\.sky-button--danger\.sky-button--outline:hover:not\(:disabled\)\s*\{[\s\S]*?border-color:\s*var\(--sky-danger, #dc2626\);[\s\S]*?background:\s*var\(--sky-danger, #dc2626\);[\s\S]*?color:\s*#ffffff;/,
+      /\.sky-button--danger\.sky-button--outline:active:not\(:disabled\)\s*\{[\s\S]*?background:\s*var\(--sky-danger-soft, rgba\(220, 38, 38, 0\.14\)\);[\s\S]*?color:\s*var\(--sky-danger, #dc2626\);/,
     )
     expect(buttonStyles).toContain(
       'color var(--sky-transition-fast, 100ms) ease,',

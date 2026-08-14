@@ -1640,9 +1640,17 @@ onBeforeUnmount(() => {
 }
 
 .dc-danger-row :deep(.sky-list-item__title),
-.dc-danger-row :deep(svg),
-.dc-danger-text {
+.dc-danger-row :deep(svg) {
   color: var(--sky-danger);
+}
+
+.sky-dialog-button.dc-danger-text:not(:disabled) {
+  background: var(--sky-danger);
+  color: #ffffff;
+}
+
+.sky-dialog-button.dc-danger-text:active:not(:disabled) {
+  filter: brightness(0.86);
 }
 
 .dc-privacy-note {
@@ -1839,7 +1847,7 @@ onBeforeUnmount(() => {
           </template>
         </SkyNavbar>
 
-        <SkyScrollArea with-tabbar class="dc-inbox-content">
+        <SkyScrollArea padded with-tabbar class="dc-inbox-content">
           <SkyGlass
             component="button"
             class="dc-security"
@@ -1923,7 +1931,7 @@ onBeforeUnmount(() => {
           :back-label="phone.t('Common.back')"
           @back="back"
         />
-        <SkyScrollArea class="dc-scroll-content">
+        <SkyScrollArea padded class="dc-scroll-content">
           <SkyCard class="dc-hero" outline>
             <span class="dc-icon-tile"><QrCode :size="27" /></span>
             <h2>{{ t('connectPrivately') }}</h2>
@@ -2238,6 +2246,7 @@ onBeforeUnmount(() => {
           <SkyGlass class="dc-composer-pill">
             <SkyMessagebar
               class="dc-composer"
+              embedded
               :outline="false"
               :value="draft"
               :placeholder="t('message')"
@@ -2269,7 +2278,7 @@ onBeforeUnmount(() => {
           :back-label="phone.t('Common.back')"
           @back="back"
         />
-        <SkyScrollArea class="dc-scroll-content">
+        <SkyScrollArea padded class="dc-scroll-content">
           <div class="dc-profile-hero">
             <span
               class="dc-avatar dc-avatar--profile"
@@ -2381,7 +2390,7 @@ onBeforeUnmount(() => {
             <SkyLink @click="saveProfile">{{ phone.t('Common.done') }}</SkyLink>
           </template>
         </SkyNavbar>
-        <SkyScrollArea class="dc-scroll-content">
+        <SkyScrollArea padded class="dc-scroll-content">
           <div class="dc-profile-hero">
             <span
               class="dc-avatar dc-avatar--profile"

@@ -341,6 +341,7 @@ onBeforeUnmount(() => {
         :class="[
           `home-widget--${instance.kind}`,
           {
+            'phone-effect--solid-surface': instance.kind !== 'weather',
             'home-widget--music-empty':
               instance.kind === 'music' && !music.current.value,
           },
@@ -641,6 +642,7 @@ onBeforeUnmount(() => {
 }
 
 .home-widget {
+  --phone-effect-solid-background: #19191b;
   position: relative;
   box-sizing: border-box;
   width: 100%;
@@ -1401,10 +1403,6 @@ onBeforeUnmount(() => {
   font-size: 20px;
   font-weight: 400;
   line-height: 1;
-}
-
-:global(.phone-app--performance) .home-widget:not(.home-widget--weather) {
-  background-color: #19191b;
 }
 
 @keyframes widget-wobble {

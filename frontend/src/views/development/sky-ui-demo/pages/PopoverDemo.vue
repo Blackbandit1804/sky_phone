@@ -103,7 +103,6 @@ function closePopover(): void {
 
     <template #fixed>
       <SkyPopover
-        angle
         aria-label="Popover menu"
         :opened="popoverOpened"
         role="dialog"

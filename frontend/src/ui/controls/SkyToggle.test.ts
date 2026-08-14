@@ -55,6 +55,17 @@ describe('SkyToggle', () => {
     expect(html).toContain('aria-readonly="true"')
   })
 
+  it('prevents an enclosing label from activating forwarded clicks twice', () => {
+    const componentSource = readFileSync(
+      fileURLToPath(new URL('./SkyToggle.vue', import.meta.url)),
+      'utf8',
+    )
+
+    expect(componentSource).toMatch(
+      /if \(props\.component !== 'label' && event\.target !== input\.value\) \{\s*event\.preventDefault\(\)\s*input\.value\?\.click\(\)/,
+    )
+  })
+
   it('binds the complete enabled-only Konsta hold effect in CSS', () => {
     const uiDirectory = fileURLToPath(new URL('..', import.meta.url))
     const controls = readFileSync(`${uiDirectory}/controls.css`, 'utf8')
@@ -101,11 +112,12 @@ describe('SkyToggle', () => {
     expect(controls).toMatch(
       /\.sky-list-item__after > \.sky-toggle\s*\{\s*margin-block: -8px;/,
     )
+    expect(controls).toMatch(/\.sky-toggle\s*\{[^}]*min-height: 28px/)
     expect(controls).toMatch(
-      /\.sky-toggle,\s*\.sky-radio\s*\{[\s\S]*?min-height: var\(--sky-touch-target, 44px\)/,
+      /\.sky-toggle__input\s*\{[^}]*height: var\(--sky-touch-target, 44px\)/,
     )
     expect(controls).toMatch(
-      /\.sky-list-item__row\s*\{[\s\S]*?padding: 12px 16px;/,
+      /\.sky-list-item__content\s*\{[\s\S]*?padding: 12px calc\(var\(--sky-safe-area-right\) \+ 16px\) 12px 0;/,
     )
   })
 })

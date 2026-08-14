@@ -7,8 +7,10 @@ import PhoneNotifications from '@/components/PhoneNotifications.vue'
 import { PHONE_FRAME_IMAGES } from '@/config/appearance'
 import type { PhoneNotification } from '@/stores/notifications'
 import { usePhoneStore } from '@/stores/phone'
+import { getHairlinePixelStyle } from '@/utils/rendering'
 
 const props = defineProps<{
+  devicePixelRatio: number
   notification: PhoneNotification
   zoom: number
 }>()
@@ -28,7 +30,10 @@ const isDarkMode = computed(() => {
 const frameImage = computed(
   () => PHONE_FRAME_IMAGES[preferences.value.settings.frame],
 )
-const wrapperStyle = computed<CSSProperties>(() => ({ zoom: props.zoom }))
+const wrapperStyle = computed<CSSProperties>(() => ({
+  ...getHairlinePixelStyle(props.zoom, props.devicePixelRatio),
+  zoom: props.zoom,
+}))
 </script>
 
 <template>

@@ -408,6 +408,7 @@ watch(
 
     <SkyScrollArea
       ref="storeScroll"
+      padded
       class="store-scroll"
       :class="{ 'store-scroll--detail': selectedApp }"
       with-tabbar
@@ -434,7 +435,7 @@ watch(
 
         <article
           v-if="dailyHighlights[0]"
-          class="store-highlight store-highlight--hero"
+          class="store-highlight store-highlight--hero phone-effect--expensive-shadow"
           :style="highlightStyle(0)"
         >
           <button
@@ -447,7 +448,10 @@ watch(
             "
             @click="openAppDetail(dailyHighlights[0])"
           ></button>
-          <div class="store-highlight__texture" aria-hidden="true"></div>
+          <div
+            class="store-highlight__texture phone-effect--decorative"
+            aria-hidden="true"
+          ></div>
           <div class="store-highlight__copy">
             <p>
               <Sparkles :size="12" :stroke-width="2.5" aria-hidden="true" />
@@ -470,7 +474,12 @@ watch(
             <span
               class="store-highlight__spark store-highlight__spark--two"
             ></span>
-            <img :src="dailyHighlights[0].iconImage" alt="" draggable="false" />
+            <img
+              class="phone-effect--filtered-media"
+              :src="dailyHighlights[0].iconImage"
+              alt=""
+              draggable="false"
+            />
           </div>
           <footer class="store-highlight__footer">
             <img :src="dailyHighlights[0].iconImage" alt="" draggable="false" />
@@ -510,7 +519,7 @@ watch(
         <article
           v-for="(app, index) in editorialHighlights"
           :key="app.id"
-          class="store-highlight store-highlight--compact"
+          class="store-highlight store-highlight--compact phone-effect--expensive-shadow"
           :class="{ 'store-highlight--reverse': index % 2 === 1 }"
           :style="highlightStyle(index + 1)"
         >
@@ -524,7 +533,10 @@ watch(
             "
             @click="openAppDetail(app)"
           ></button>
-          <div class="store-highlight__texture" aria-hidden="true"></div>
+          <div
+            class="store-highlight__texture phone-effect--decorative"
+            aria-hidden="true"
+          ></div>
           <div class="store-highlight__copy">
             <p>
               <span class="store-highlight__story-number"
@@ -543,7 +555,12 @@ watch(
           </div>
           <div class="store-highlight__art" aria-hidden="true">
             <span class="store-highlight__orbit"></span>
-            <img :src="app.iconImage" alt="" draggable="false" />
+            <img
+              class="phone-effect--filtered-media"
+              :src="app.iconImage"
+              alt=""
+              draggable="false"
+            />
           </div>
           <footer class="store-highlight__footer">
             <img :src="app.iconImage" alt="" draggable="false" />
@@ -568,7 +585,7 @@ watch(
           </footer>
         </article>
 
-        <section class="store-ranking">
+        <section class="store-ranking phone-effect--expensive-shadow">
           <header class="store-ranking__header">
             <span class="store-ranking__icon">
               <Trophy :size="18" :stroke-width="2.2" aria-hidden="true" />
@@ -617,7 +634,7 @@ watch(
 
         <article
           v-if="finalHighlight"
-          class="store-final-pick"
+          class="store-final-pick phone-effect--expensive-shadow"
           :style="highlightStyle(4)"
         >
           <button
@@ -630,13 +647,21 @@ watch(
             "
             @click="openAppDetail(finalHighlight)"
           ></button>
-          <div class="store-final-pick__glow" aria-hidden="true"></div>
+          <div
+            class="store-final-pick__glow phone-effect--decorative"
+            aria-hidden="true"
+          ></div>
           <div class="store-final-pick__heading">
             <span>{{ phone.t('Apps.appStore.today.oneMoreThing') }}</span>
             <strong>{{ highlightTitle(finalHighlight) }}</strong>
             <small>{{ categoryDescription(finalHighlight) }}</small>
           </div>
-          <img :src="finalHighlight.iconImage" alt="" draggable="false" />
+          <img
+            class="phone-effect--filtered-media"
+            :src="finalHighlight.iconImage"
+            alt=""
+            draggable="false"
+          />
           <button
             type="button"
             class="store-action-button"
@@ -662,10 +687,13 @@ watch(
           <article
             v-if="featuredApp"
             :key="featuredApp.id"
-            class="store-browse-feature"
+            class="store-browse-feature phone-effect--expensive-shadow"
             :style="highlightStyle(featuredSlide + 1)"
           >
-            <div class="store-browse-feature__texture" aria-hidden="true"></div>
+            <div
+              class="store-browse-feature__texture phone-effect--decorative"
+              aria-hidden="true"
+            ></div>
             <div class="store-browse-feature__copy">
               <span>{{ phone.t('Apps.appStore.browse.availableNow') }}</span>
               <h2>
@@ -684,7 +712,12 @@ watch(
                 :size="104"
                 :stroke-width="1.1"
               />
-              <img :src="featuredApp.iconImage" alt="" draggable="false" />
+              <img
+                class="phone-effect--filtered-media"
+                :src="featuredApp.iconImage"
+                alt=""
+                draggable="false"
+              />
             </div>
             <footer>
               <img :src="featuredApp.iconImage" alt="" draggable="false" />
@@ -844,6 +877,7 @@ watch(
                 v-for="card in searchDiscoverCards"
                 :key="card.id"
                 type="button"
+                class="phone-effect--solid-surface"
                 :style="{ '--store-search-tile': card.background }"
                 @click="selectSearchDiscovery(card.app)"
               >
@@ -973,7 +1007,7 @@ watch(
           </div>
         </header>
 
-        <section class="store-account__identity">
+        <section class="store-account__identity phone-effect--expensive-shadow">
           <span>{{ profileInitials }}</span>
           <div>
             <strong>{{ profileName }}</strong>
@@ -1001,7 +1035,7 @@ watch(
           <strong>{{ installedApps.length }}</strong>
         </header>
 
-        <div class="store-account__apps">
+        <div class="store-account__apps phone-effect--expensive-shadow">
           <article v-for="app in installedApps" :key="app.id">
             <img :src="app.iconImage" alt="" draggable="false" />
             <div>
@@ -1395,11 +1429,6 @@ watch(
   border-radius: 50%;
   color: var(--sky-danger);
   background: var(--sky-danger-soft);
-}
-
-:global(.phone-app--performance) .store-account__identity,
-:global(.phone-app--performance) .store-account__apps {
-  box-shadow: none;
 }
 
 .store-scroll {
@@ -2002,22 +2031,6 @@ watch(
   background: rgba(255, 255, 255, 0.18);
 }
 
-:global(.phone-app--performance) .store-highlight,
-:global(.phone-app--performance) .store-ranking,
-:global(.phone-app--performance) .store-final-pick {
-  box-shadow: none;
-}
-
-:global(.phone-app--performance) .store-final-pick__glow,
-:global(.phone-app--performance) .store-highlight__texture {
-  display: none;
-}
-
-:global(.phone-app--performance) .store-highlight__art img,
-:global(.phone-app--performance) .store-final-pick > img {
-  filter: none;
-}
-
 @media (hover: hover) and (pointer: fine) {
   .store-highlight:hover,
   .store-final-pick:hover {
@@ -2025,7 +2038,6 @@ watch(
     transform: translateY(-1px);
   }
 }
-
 .store-browse {
   display: grid;
   gap: var(--sky-space-4);
@@ -2319,18 +2331,6 @@ watch(
   font-size: 11px;
 }
 
-:global(.phone-app--performance) .store-browse-feature {
-  box-shadow: none;
-}
-
-:global(.phone-app--performance) .store-browse-feature__texture {
-  display: none;
-}
-
-:global(.phone-app--performance) .store-browse-feature__art > img {
-  filter: none;
-}
-
 .app-store-navbar :deep(.sky-navbar__subnavbar .sky-searchbar__control) {
   border-color: var(--sky-hairline);
   background: var(--sky-surface-variant);
@@ -2505,6 +2505,7 @@ watch(
 }
 
 .store-search__discover-grid > button {
+  --phone-effect-solid-background: var(--store-search-tile);
   min-width: 0;
   min-height: 124px;
   position: relative;
@@ -2566,11 +2567,6 @@ watch(
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-:global(.phone-app--performance) .store-search__discover-grid > button {
-  background: var(--store-search-tile);
-  box-shadow: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

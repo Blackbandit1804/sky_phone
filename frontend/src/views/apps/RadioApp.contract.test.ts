@@ -47,7 +47,7 @@ describe('RadioApp Sky UI contract', () => {
     expect(navigationSource.match(/:size="20"/g)).toHaveLength(2)
     expect(navigationSource).not.toContain('compact')
     expect(source).toContain(
-      '<SkyScrollArea class="radio-content" with-tabbar>',
+      '<SkyScrollArea padded class="radio-content" with-tabbar>',
     )
     expect(source.indexOf('</SkyScrollArea>')).toBeLessThan(
       source.indexOf('<SkyPillNavigation'),

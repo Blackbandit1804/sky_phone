@@ -70,6 +70,7 @@ function handleContainerClick(event: MouseEvent): void {
   }
 
   if (props.component !== 'label' && event.target !== input.value) {
+    event.preventDefault()
     input.value?.click()
   }
 }

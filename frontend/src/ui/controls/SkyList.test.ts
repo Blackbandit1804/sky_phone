@@ -19,5 +19,7 @@ describe('SkyList', () => {
     expect(html).toContain('sky-list--flush')
     expect(html).toContain('sky-list--inset')
     expect(html).toContain('sky-list--strong')
+    expect(html).toMatch(/^<div[^>]*class="sky-list/)
+    expect(html).toMatch(/<ul class="sky-list__items">[\s\S]*<\/ul><\/div>$/)
   })
 })

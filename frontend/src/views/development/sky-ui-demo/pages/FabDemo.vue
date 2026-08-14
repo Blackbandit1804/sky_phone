@@ -86,6 +86,12 @@ import SkyUiDemoPage from '../SkyUiDemoPage.vue'
 
     <template #fixed>
       <SkyFab
+        aria-label="Add from the right top"
+        class="fab-demo__button fab-demo__button--right-top sky-ui-demo-color-red"
+      >
+        <template #icon><Plus /></template>
+      </SkyFab>
+      <SkyFab
         aria-label="Add from the right bottom"
         class="fab-demo__button fab-demo__button--right-bottom"
       >
@@ -139,6 +145,11 @@ import SkyUiDemoPage from '../SkyUiDemoPage.vue'
 .fab-demo__button--right-bottom {
   right: calc(var(--sky-safe-area-right) + var(--sky-space-4));
   bottom: calc(var(--sky-safe-area-bottom) + var(--sky-space-4));
+}
+
+.fab-demo__button--right-top {
+  top: calc(var(--sky-safe-area-top) + var(--sky-navbar-height) + 16px);
+  right: calc(var(--sky-safe-area-right) + var(--sky-space-4));
 }
 
 .fab-demo__button--left-bottom {

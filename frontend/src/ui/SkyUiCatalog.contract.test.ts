@@ -40,6 +40,7 @@ const konstaIosParity = {
   List: 'SkyList',
   ListButton: 'SkyListButton',
   ListGroup: 'SkyListGroup',
+  ListGroupInner: 'SkyListGroupInner',
   ListInput: 'SkyField',
   ListItem: 'SkyListItem',
   MenuList: 'SkyMenuList',
@@ -57,7 +58,6 @@ const konstaIosParity = {
   Popup: 'SkyPopup',
   Preloader: 'SkySpinner',
   Progressbar: 'SkyProgress',
-  Provider: 'SkyProvider',
   Radio: 'SkyRadio',
   Range: 'SkyRange',
   Searchbar: 'SkySearchbar',
@@ -141,6 +141,12 @@ describe('Sky UI public catalog', () => {
       .map(displayPath)
 
     expect(missingIndexes).toEqual([])
+  })
+
+  it('keeps SkyProvider as a Sky extension outside the Konsta catalog', () => {
+    expect(readFileSync(rootIndexPath, 'utf8')).toContain(
+      "export { default as SkyProvider } from './SkyProvider.vue'",
+    )
   })
 
   it('exports every Sky component from its family index exactly once', () => {

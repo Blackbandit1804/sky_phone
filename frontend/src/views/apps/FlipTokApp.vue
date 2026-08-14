@@ -1680,7 +1680,7 @@ onBeforeUnmount(() => {
           />
         </template>
       </SkyNavbar>
-      <SkyScrollArea with-tabbar class="light-screen discover-screen">
+      <SkyScrollArea padded with-tabbar class="light-screen discover-screen">
         <div class="trend-pills">
           <SkyChip component="button" type="button"># LosSantos</SkyChip>
           <SkyChip component="button" type="button"># Roleplay</SkyChip>
@@ -1720,7 +1720,7 @@ onBeforeUnmount(() => {
           </SkyLink>
         </template>
       </SkyNavbar>
-      <SkyScrollArea with-tabbar class="light-screen activity-list">
+      <SkyScrollArea padded with-tabbar class="light-screen activity-list">
         <article
           v-for="activity in store.activities"
           :key="activity.id"
@@ -1755,6 +1755,7 @@ onBeforeUnmount(() => {
       />
       <SkyScrollArea
         v-if="currentProfile"
+        padded
         with-tabbar
         class="light-screen profile-screen"
       >
@@ -1898,7 +1899,7 @@ onBeforeUnmount(() => {
         back-appearance="surface"
         @back="composeOpen = false"
       />
-      <SkyScrollArea class="compose-body">
+      <SkyScrollArea padded class="compose-body">
         <header class="compose-intro">
           <span><Video /></span>
           <div>
@@ -2095,7 +2096,7 @@ onBeforeUnmount(() => {
           </SkyButton>
         </template>
       </SkyNavbar>
-      <SkyScrollArea class="profile-edit__body">
+      <SkyScrollArea padded class="profile-edit__body">
         <section class="profile-photo-editor">
           <button
             class="profile-photo-trigger"
@@ -2385,6 +2386,7 @@ onBeforeUnmount(() => {
             <SkyMessagebar
               v-model="commentBody"
               class="comments-messagebar"
+              embedded
               :outline="false"
               :aria-label="t('addComment')"
               :placeholder="
@@ -2393,6 +2395,7 @@ onBeforeUnmount(() => {
             >
               <template #right>
                 <SkyLink
+                  component="button"
                   icon-only
                   type="submit"
                   :aria-label="phone.t('Common.send')"

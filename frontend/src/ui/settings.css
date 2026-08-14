@@ -232,6 +232,10 @@ label.sky-settings-row__title {
   padding: var(--sky-space-1) 16px;
 }
 
+.sky-settings-group__list > .sky-field .sky-field__inner {
+  padding: 0;
+}
+
 .sky-settings-group__list > .sky-field .sky-field__label {
   font-size: 13px;
   line-height: 18px;
@@ -242,6 +246,10 @@ label.sky-settings-row__title {
 }
 
 .sky-settings-group__list > .sky-field--inline {
+  display: flex;
+}
+
+.sky-settings-group__list > .sky-field--inline .sky-field__inner {
   display: grid;
   grid-template-columns: minmax(0, 42%) minmax(0, 58%);
   align-items: center;
@@ -258,6 +266,7 @@ label.sky-settings-row__title {
 
 .sky-settings-group__list > .sky-field--inline .sky-field__control {
   justify-content: flex-end;
+  margin: 0;
 }
 
 .sky-settings-group__list > .sky-field--inline .sky-field__input {
@@ -265,6 +274,7 @@ label.sky-settings-row__title {
 }
 
 .sky-settings-group__list > .sky-field--inline .sky-field__help,
-.sky-settings-group__list > .sky-field--inline .sky-field__error {
+.sky-settings-group__list > .sky-field--inline .sky-field__error,
+.sky-settings-group__list > .sky-field--inline .sky-field__info {
   grid-column: 1 / -1;
 }
