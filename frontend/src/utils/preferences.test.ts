@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { LaunchablePhoneAppId } from '@/types/apps'
-import { DEFAULT_PHONE_PREFERENCES, parsePhonePreferences } from './preferences'
+import {
+  DEFAULT_PHONE_PREFERENCES,
+  parsePhonePreferences,
+  WALLPAPER_IDS,
+} from './preferences'
 describe('preferences', () => {
   it('falls back for malformed and obsolete records', () => {
     expect(parsePhonePreferences('{')).toEqual(DEFAULT_PHONE_PREFERENCES)
@@ -131,5 +135,53 @@ describe('preferences', () => {
       screenBrightness: 100,
       wifiEnabled: true,
     })
+  })
+
+  it('provides twelve built-in wallpapers', () => {
+    expect(WALLPAPER_IDS).toHaveLength(12)
+    expect(new Set(WALLPAPER_IDS).size).toBe(12)
+  })
+
+  it('restores custom photo wallpapers and only the latest four history entries', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({
+        version: 1,
+        settings: {
+          wallpaper: 'custom',
+          wallpaperImageUrl: 'https://media.example/current.jpg',
+          wallpaperHistory: [
+            {
+              wallpaper: 'custom',
+              imageUrl: 'https://media.example/current.jpg',
+            },
+            { wallpaper: 'prism', imageUrl: null },
+            { wallpaper: 'ocean', imageUrl: null },
+            { wallpaper: 'rose', imageUrl: null },
+            { wallpaper: 'sand', imageUrl: null },
+          ],
+        },
+      }),
+    )
+
+    expect(value.settings.wallpaper).toBe('custom')
+    expect(value.settings.wallpaperImageUrl).toBe(
+      'https://media.example/current.jpg',
+    )
+    expect(value.settings.wallpaperHistory).toHaveLength(4)
+    expect(
+      value.settings.wallpaperHistory.map((entry) => entry.wallpaper),
+    ).toEqual(['custom', 'prism', 'ocean', 'rose'])
+  })
+
+  it('rejects a custom wallpaper without a photo URL', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({
+        version: 1,
+        settings: { wallpaper: 'custom', wallpaperImageUrl: '' },
+      }),
+    )
+
+    expect(value.settings.wallpaper).toBe('midnight')
+    expect(value.settings.wallpaperImageUrl).toBeNull()
   })
 })

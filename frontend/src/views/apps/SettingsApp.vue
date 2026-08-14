@@ -2,9 +2,11 @@
 import {
   BellRing,
   Bluetooth,
+  Camera,
   Check,
   EyeOff,
   KeyRound,
+  Images,
   Monitor,
   PanelsTopLeft,
   Moon,
@@ -22,10 +24,11 @@ import {
   computed,
   nextTick,
   onBeforeUnmount,
+  onMounted,
   ref,
   type ComponentPublicInstance,
 } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { PHONE_FRAME_COLORS } from '@/config/appearance'
 import {
@@ -34,6 +37,7 @@ import {
   PHONE_APPS,
 } from '@/config/apps'
 import { usePhoneStore } from '@/stores/phone'
+import { useMessageMediaStore } from '@/stores/messageMedia'
 import PhonePasscode from '@/components/PhonePasscode.vue'
 import { useAccountStore } from '@/stores/account'
 import { useAppAuthStore } from '@/stores/app-auth'
@@ -83,6 +87,7 @@ import {
   type NotificationSoundId,
   type PhoneFrameId,
   type RingtoneId,
+  type WallpaperHistoryEntry,
 } from '@/utils/preferences'
 
 type SettingsView =
@@ -117,6 +122,8 @@ type PasscodeFlow =
 const FACTORY_RESET_DURATION_MS = 60_000
 
 const phone = usePhoneStore()
+const mediaPicker = useMessageMediaStore()
+const route = useRoute()
 const router = useRouter()
 const isDevelopment = import.meta.env.DEV
 const account = useAccountStore()
@@ -150,6 +157,10 @@ const selectedFrameColor = computed(
   () => PHONE_FRAME_COLORS[phone.preferences.settings.frame],
 )
 let factoryResetAnimationFrame: number | undefined
+
+const wallpaperHistory = computed(
+  () => phone.preferences.settings.wallpaperHistory,
+)
 
 const toggleRows = [
   {
@@ -219,6 +230,30 @@ const preferenceRows = [
 function openSkyUiKitchenSink(): void {
   if (!isDevelopment) return
   void router.push({ name: 'development-sky-ui' })
+}
+
+function openWallpaperMedia(app: 'photos' | 'camera'): void {
+  mediaPicker.begin(
+    'settings:wallpaper',
+    'photo',
+    '/apps/settings?wallpaper=1',
+    1,
+  )
+  void router.push({
+    path: `/apps/${app}`,
+    query: { mediaAttachment: 'photo' },
+  })
+}
+
+function wallpaperPreviewStyle(
+  entry: WallpaperHistoryEntry,
+): Record<string, string> | undefined {
+  if (entry.wallpaper !== 'custom' || !entry.imageUrl) return undefined
+  return { '--phone-wallpaper-image': `url(${JSON.stringify(entry.imageUrl)})` }
+}
+
+function selectWallpaperHistory(entry: WallpaperHistoryEntry): void {
+  phone.setWallpaper(entry.wallpaper, entry.imageUrl)
 }
 
 const connectivityRows = [
@@ -590,6 +625,13 @@ async function confirmSimEject(): Promise<void> {
     )
   }
 }
+
+onMounted(() => {
+  if (route.query.wallpaper === '1') activeView.value = 'wallpaper'
+
+  const selectedPhoto = mediaPicker.consume('settings:wallpaper')
+  if (selectedPhoto) phone.setWallpaper('custom', selectedPhoto.url)
+})
 
 onBeforeUnmount(() => {
   if (factoryResetAnimationFrame !== undefined) {
@@ -1326,16 +1368,105 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else-if="activeView === 'wallpaper'">
-        <SkySettingsGroup :title="phone.t('Apps.settings.wallpaperPicker')">
-          <SkySettingsRow
-            v-for="wallpaper in WALLPAPER_IDS"
-            :key="wallpaper"
-            kind="choice"
-            :selected="phone.preferences.settings.wallpaper === wallpaper"
-            :title="phone.t('Apps.settings.wallpapers.' + wallpaper)"
-            @activate="phone.setWallpaper(wallpaper)"
-          />
-        </SkySettingsGroup>
+        <section class="settings-wallpaper-actions">
+          <button type="button" @click="openWallpaperMedia('photos')">
+            <span class="settings-wallpaper-actions__icon" aria-hidden="true">
+              <Images />
+            </span>
+            <span>
+              <strong>{{
+                phone.t('Apps.settings.wallpaperFromPhotos')
+              }}</strong>
+              <small>{{
+                phone.t('Apps.settings.wallpaperFromPhotosDescription')
+              }}</small>
+            </span>
+          </button>
+          <button type="button" @click="openWallpaperMedia('camera')">
+            <span class="settings-wallpaper-actions__icon" aria-hidden="true">
+              <Camera />
+            </span>
+            <span>
+              <strong>{{
+                phone.t('Apps.settings.wallpaperFromCamera')
+              }}</strong>
+              <small>{{
+                phone.t('Apps.settings.wallpaperFromCameraDescription')
+              }}</small>
+            </span>
+          </button>
+        </section>
+
+        <section
+          v-if="wallpaperHistory.length"
+          class="settings-wallpaper-section"
+        >
+          <h2>{{ phone.t('Apps.settings.wallpaperHistory') }}</h2>
+          <div class="settings-wallpaper-history">
+            <button
+              v-for="(entry, index) in wallpaperHistory"
+              :key="`${entry.wallpaper}-${entry.imageUrl ?? index}`"
+              type="button"
+              :class="[
+                `wallpaper--${entry.wallpaper}`,
+                {
+                  'settings-wallpaper-history__item--selected':
+                    phone.preferences.settings.wallpaper === entry.wallpaper &&
+                    phone.preferences.settings.wallpaperImageUrl ===
+                      entry.imageUrl,
+                },
+              ]"
+              :style="wallpaperPreviewStyle(entry)"
+              :aria-label="
+                entry.wallpaper === 'custom'
+                  ? phone.t('Apps.settings.wallpaperCustom')
+                  : phone.t('Apps.settings.wallpapers.' + entry.wallpaper)
+              "
+              @click="selectWallpaperHistory(entry)"
+            >
+              <Check
+                v-if="
+                  phone.preferences.settings.wallpaper === entry.wallpaper &&
+                  phone.preferences.settings.wallpaperImageUrl ===
+                    entry.imageUrl
+                "
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-wallpaper-section">
+          <h2>{{ phone.t('Apps.settings.wallpaperPicker') }}</h2>
+          <div class="settings-wallpaper-grid">
+            <button
+              v-for="wallpaper in WALLPAPER_IDS"
+              :key="wallpaper"
+              type="button"
+              class="settings-wallpaper-choice"
+              :class="{
+                'settings-wallpaper-choice--selected':
+                  phone.preferences.settings.wallpaper === wallpaper,
+              }"
+              :aria-pressed="phone.preferences.settings.wallpaper === wallpaper"
+              @click="phone.setWallpaper(wallpaper)"
+            >
+              <span
+                class="settings-wallpaper-choice__preview"
+                :class="`wallpaper--${wallpaper}`"
+                aria-hidden="true"
+              >
+                <span class="settings-wallpaper-choice__screen"></span>
+                <Check
+                  v-if="phone.preferences.settings.wallpaper === wallpaper"
+                />
+              </span>
+              <strong>{{
+                phone.t('Apps.settings.wallpapers.' + wallpaper)
+              }}</strong>
+            </button>
+          </div>
+        </section>
       </template>
     </SkyScrollArea>
 
@@ -1546,6 +1677,221 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
 }
 
+.settings-wallpaper-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sky-space-2);
+  margin-bottom: var(--sky-space-5);
+}
+
+.settings-wallpaper-actions > button {
+  min-width: 0;
+  min-height: 116px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sky-space-3);
+  padding: var(--sky-space-4);
+  border: 1px solid var(--sky-hairline);
+  border-radius: 20px;
+  background: var(--sky-surface);
+  color: var(--sky-text);
+  text-align: left;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 8%);
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    background 150ms ease;
+}
+
+.settings-wallpaper-actions > button:hover {
+  background: var(--sky-surface-muted);
+}
+
+.settings-wallpaper-actions > button:active {
+  transform: scale(0.97);
+}
+
+.settings-wallpaper-actions > button:focus-visible,
+.settings-wallpaper-history > button:focus-visible,
+.settings-wallpaper-choice:focus-visible {
+  outline: 2px solid var(--sky-app-accent);
+  outline-offset: 2px;
+}
+
+.settings-wallpaper-actions__icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--sky-app-accent-soft);
+  color: var(--sky-app-accent);
+}
+
+.settings-wallpaper-actions__icon > svg {
+  width: 21px;
+  height: 21px;
+}
+
+.settings-wallpaper-actions strong,
+.settings-wallpaper-actions small {
+  display: block;
+}
+
+.settings-wallpaper-actions strong {
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.settings-wallpaper-actions small {
+  margin-top: 3px;
+  color: var(--sky-muted);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.settings-wallpaper-section {
+  margin-bottom: var(--sky-space-5);
+}
+
+.settings-wallpaper-section > h2 {
+  margin: 0 var(--sky-space-1) var(--sky-space-2);
+  color: var(--sky-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.settings-wallpaper-history {
+  display: flex;
+  gap: var(--sky-space-2);
+  overflow-x: auto;
+  padding: 2px var(--sky-space-1) var(--sky-space-2);
+  scrollbar-width: none;
+}
+
+.settings-wallpaper-history::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-wallpaper-history > button {
+  width: 62px;
+  height: 88px;
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 15px;
+  background-position: center;
+  background-size: cover;
+  color: #ffffff;
+  box-shadow: 0 5px 14px rgb(0 0 0 / 18%);
+  cursor: pointer;
+}
+
+.settings-wallpaper-history > button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.settings-wallpaper-history > button > svg {
+  width: 21px;
+  height: 21px;
+  position: relative;
+  z-index: 1;
+  padding: 4px;
+  border-radius: 50%;
+  background: var(--sky-app-accent);
+  stroke-width: 3;
+}
+
+.settings-wallpaper-history__item--selected {
+  border-color: var(--sky-app-accent) !important;
+}
+
+.settings-wallpaper-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sky-space-3);
+}
+
+.settings-wallpaper-choice {
+  min-width: 0;
+  padding: 0 0 var(--sky-space-2);
+  border: 0;
+  border-radius: 21px;
+  background: var(--sky-surface);
+  color: var(--sky-text);
+  text-align: left;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 8%);
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.settings-wallpaper-choice:hover {
+  box-shadow: 0 11px 24px rgb(0 0 0 / 13%);
+}
+
+.settings-wallpaper-choice:active {
+  transform: scale(0.98);
+}
+
+.settings-wallpaper-choice__preview {
+  aspect-ratio: 0.78;
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 21px 21px 14px 14px;
+  background-position: center;
+  background-size: cover;
+}
+
+.settings-wallpaper-choice__screen {
+  width: 28%;
+  height: 7px;
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 58%);
+  transform: translateX(-50%);
+}
+
+.settings-wallpaper-choice__preview > svg {
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  border-radius: 50%;
+  background: var(--sky-app-accent);
+  color: #ffffff;
+  stroke-width: 3;
+}
+
+.settings-wallpaper-choice > strong {
+  display: block;
+  overflow: hidden;
+  padding: var(--sky-space-2) var(--sky-space-3) 0;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-wallpaper-choice--selected .settings-wallpaper-choice__preview {
+  border-color: var(--sky-app-accent);
+}
+
 .settings-frame-grid {
   display: grid;
   grid-template-columns: repeat(3, 52px);
@@ -1639,7 +1985,9 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .settings-frame-choice {
+  .settings-frame-choice,
+  .settings-wallpaper-actions > button,
+  .settings-wallpaper-choice {
     transition: none;
   }
 }
