@@ -305,6 +305,15 @@ local function delete_result(source, correlation_id, success, error_code, media_
     })
 end
 
+local function delete_many_result(source, correlation_id, success, error_code, deleted_ids)
+    TriggerClientEvent("sky_phone:media:delete-many-result", source, {
+        correlationId = correlation_id,
+        success = success,
+        error = error_code,
+        deletedIds = deleted_ids,
+    })
+end
+
 local function parse_metadata(value)
     if type(value) == "table" then
         return value
@@ -412,10 +421,13 @@ Bridge.Callbacks.Register("sky_phone:gallery:list", function(source, data)
         condition = condition .. " AND `media_type` = ?"
         params[#params + 1] = media_type
     end
+    if data.favoriteOnly == true then
+        condition = condition .. " AND `favorite` = 1"
+    end
     params[#params + 1] = limit
     params[#params + 1] = offset
     local rows = Bridge.Database.Query(([[
-        SELECT `id`, `url`, `media_type` AS `mediaType`,
+        SELECT `id`, `url`, `media_type` AS `mediaType`, `favorite`,
             UNIX_TIMESTAMP(`created_at`) * 1000 AS `createdAt`
         FROM `sky_phone_media`
         WHERE %s
@@ -425,8 +437,83 @@ Bridge.Callbacks.Register("sky_phone:gallery:list", function(source, data)
     for _, row in ipairs(rows) do
         row.id = tonumber(row.id)
         row.createdAt = tonumber(row.createdAt) or 0
+        row.favorite = tonumber(row.favorite) == 1
     end
     return { success = true, data = rows }
+end)
+
+Bridge.Callbacks.Register("sky_phone:gallery:favorite", function(source, data)
+    if not SkyPhone.AllowOperation(source, "media_favorite", 60, 60)
+        or type(data) ~= "table"
+        or type(data.favorite) ~= "boolean"
+    then
+        return { success = false, error = "invalid_request" }
+    end
+    local media_id = tonumber(data.id)
+    if not media_id or media_id < 1 or media_id ~= math.floor(media_id) then
+        return { success = false, error = "invalid_request" }
+    end
+    local owner, error_response = session_owner(source)
+    if not owner then
+        return error_response
+    end
+    local condition, owner_params = owner_condition(owner)
+    local params = { media_id }
+    for _, value in ipairs(owner_params) do
+        params[#params + 1] = value
+    end
+    local rows = Bridge.Database.Query(([[
+        SELECT `id`
+        FROM `sky_phone_media`
+        WHERE `id` = ? AND %s AND `media_type` IN ('photo', 'video')
+        LIMIT 1
+    ]]):format(condition), params)
+    if not rows[1] then
+        return { success = false, error = "media_not_found" }
+    end
+    local update_params = { data.favorite and 1 or 0, media_id }
+    for _, value in ipairs(owner_params) do
+        update_params[#update_params + 1] = value
+    end
+    Bridge.Database.Query(
+        ("UPDATE `sky_phone_media` SET `favorite` = ? WHERE `id` = ? AND %s"):format(condition),
+        update_params
+    )
+    return {
+        success = true,
+        data = { id = media_id, favorite = data.favorite },
+    }
+end)
+
+Bridge.Callbacks.Register("sky_phone:gallery:counts", function(source)
+    local owner, error_response = session_owner(source)
+    if not owner then
+        return error_response
+    end
+    local condition, params = owner_condition(owner)
+    local rows = Bridge.Database.Query(([[
+        SELECT
+            COUNT(*) AS `all_count`,
+            COUNT(CASE WHEN `favorite` = 1 THEN 1 END) AS `favorite_count`,
+            COUNT(CASE WHEN `media_type` = 'photo' AND `favorite` = 1 THEN 1 END) AS `favorite_photo_count`,
+            COUNT(CASE WHEN `media_type` = 'video' AND `favorite` = 1 THEN 1 END) AS `favorite_video_count`,
+            COUNT(CASE WHEN `media_type` = 'photo' THEN 1 END) AS `photo_count`,
+            COUNT(CASE WHEN `media_type` = 'video' THEN 1 END) AS `video_count`
+        FROM `sky_phone_media`
+        WHERE %s AND `media_type` IN ('photo', 'video')
+    ]]):format(condition), params)
+    local counts = rows[1] or {}
+    return {
+        success = true,
+        data = {
+            all = tonumber(counts.all_count) or 0,
+            favoritePhotos = tonumber(counts.favorite_photo_count) or 0,
+            favorites = tonumber(counts.favorite_count) or 0,
+            favoriteVideos = tonumber(counts.favorite_video_count) or 0,
+            photos = tonumber(counts.photo_count) or 0,
+            videos = tonumber(counts.video_count) or 0,
+        },
+    }
 end)
 
 local function current_messaging_device(source)
@@ -676,6 +763,7 @@ RegisterNetEvent("sky_phone:media:complete-upload", function(data)
         id = media_id,
         url = verified.url,
         mediaType = state.media_type,
+        favorite = false,
         createdAt = os.time() * 1000,
     })
 end)
@@ -708,6 +796,43 @@ RegisterNetEvent("sky_phone:media:fail-upload", function(data)
     upload_result(src, state.correlation_id, false, error_code)
 end)
 
+local function delete_owned_media(src, owner, media_id)
+    local condition, params = owner_condition(owner)
+    local query_params = { media_id }
+    for _, value in ipairs(params) do
+        query_params[#query_params + 1] = value
+    end
+    local rows = Bridge.Database.Query(([[
+        SELECT `id`, `remote_id`, `origin` FROM `sky_phone_media`
+        WHERE `id` = ? AND %s AND `media_type` IN ('photo', 'video') LIMIT 1
+    ]]):format(condition), query_params)
+    local row = rows[1]
+    if not row then
+        return false, "not_found"
+    end
+    local delete_key = row.origin == "phone_upload" and row.remote_id or ("import:%s"):format(media_id)
+    if pending_deletes[delete_key] then
+        return false, "operation_in_progress"
+    end
+    pending_deletes[delete_key] = src
+    if row.origin == "phone_upload" then
+        local references = Bridge.Database.Query(
+            "SELECT COUNT(*) AS `count` FROM `sky_phone_media` WHERE `remote_id` = ?",
+            { row.remote_id }
+        )
+        if (tonumber(references[1] and references[1].count) or 0) <= 1 then
+            local deleted, delete_error = delete_remote_file(row.remote_id)
+            if not deleted then
+                pending_deletes[delete_key] = nil
+                return false, delete_error
+            end
+        end
+    end
+    Bridge.Database.Query(("DELETE FROM `sky_phone_media` WHERE `id` = ? AND %s"):format(condition), query_params)
+    pending_deletes[delete_key] = nil
+    return true
+end
+
 RegisterNetEvent("sky_phone:media:delete", function(data)
     local src = source
     data = type(data) == "table" and data or {}
@@ -726,43 +851,54 @@ RegisterNetEvent("sky_phone:media:delete", function(data)
         delete_result(src, correlation_id, false, error_response.error, media_id)
         return
     end
-    local condition, params = owner_condition(owner)
-    local query_params = { media_id }
-    for _, value in ipairs(params) do
-        query_params[#query_params + 1] = value
-    end
-    local rows = Bridge.Database.Query(([[
-        SELECT `id`, `remote_id`, `origin` FROM `sky_phone_media`
-        WHERE `id` = ? AND %s AND `media_type` IN ('photo', 'video') LIMIT 1
-    ]]):format(condition), query_params)
-    local row = rows[1]
-    if not row then
-        delete_result(src, correlation_id, false, "not_found", media_id)
+    local deleted, delete_error = delete_owned_media(src, owner, media_id)
+    if not deleted then
+        delete_result(src, correlation_id, false, delete_error, media_id)
         return
     end
-    local delete_key = row.origin == "phone_upload" and row.remote_id or ("import:%s"):format(media_id)
-    if pending_deletes[delete_key] then
-        delete_result(src, correlation_id, false, "operation_in_progress", media_id)
+    delete_result(src, correlation_id, true, nil, media_id)
+end)
+
+RegisterNetEvent("sky_phone:media:delete-many", function(data)
+    local src = source
+    data = type(data) == "table" and data or {}
+    local correlation_id = data.correlationId
+    if type(correlation_id) ~= "string" or #correlation_id > 80 or type(data.ids) ~= "table" then
+        delete_many_result(src, correlation_id, false, "invalid_request", {})
         return
     end
-    pending_deletes[delete_key] = src
-    if row.origin == "phone_upload" then
-        local references = Bridge.Database.Query(
-            "SELECT COUNT(*) AS `count` FROM `sky_phone_media` WHERE `remote_id` = ?",
-            { row.remote_id }
-        )
-        if (tonumber(references[1] and references[1].count) or 0) <= 1 then
-            local deleted, delete_error = delete_remote_file(row.remote_id)
-            if not deleted then
-                pending_deletes[delete_key] = nil
-                delete_result(src, correlation_id, false, delete_error, media_id)
-                return
-            end
+    local media_ids = {}
+    local seen_ids = {}
+    for _, value in ipairs(data.ids) do
+        local media_id = tonumber(value)
+        if media_id and media_id > 0 and media_id == math.floor(media_id) and not seen_ids[media_id] then
+            seen_ids[media_id] = true
+            media_ids[#media_ids + 1] = media_id
         end
     end
-    Bridge.Database.Query(("DELETE FROM `sky_phone_media` WHERE `id` = ? AND %s"):format(condition), query_params)
-    pending_deletes[delete_key] = nil
-    delete_result(src, correlation_id, true, nil, media_id)
+    if #media_ids < 1 or #media_ids > 50 then
+        delete_many_result(src, correlation_id, false, "invalid_request", {})
+        return
+    end
+    if not SkyPhone.AllowOperation(src, "media_delete_many", 10, 60) then
+        delete_many_result(src, correlation_id, false, "rate_limited", {})
+        return
+    end
+    local owner, error_response = session_owner(src)
+    if not owner then
+        delete_many_result(src, correlation_id, false, error_response.error, {})
+        return
+    end
+    local deleted_ids = {}
+    for _, media_id in ipairs(media_ids) do
+        local deleted, delete_error = delete_owned_media(src, owner, media_id)
+        if not deleted then
+            delete_many_result(src, correlation_id, false, delete_error, deleted_ids)
+            return
+        end
+        deleted_ids[#deleted_ids + 1] = media_id
+    end
+    delete_many_result(src, correlation_id, true, nil, deleted_ids)
 end)
 
 function SkyPhoneMedia.GetDeviceRemoteIds(imei)

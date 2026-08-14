@@ -5,6 +5,7 @@ export type EasyShareKind =
   | 'document'
   | 'link'
   | 'location'
+  | 'media'
   | 'note'
   | 'photo'
   | 'playlist'

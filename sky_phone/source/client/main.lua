@@ -274,6 +274,8 @@ local server_callbacks = {
     "flare:thread",
     "flare:send",
     "gallery:list",
+    "gallery:counts",
+    "gallery:favorite",
     "media:config",
     "media:import:sources",
     "media:import:list",

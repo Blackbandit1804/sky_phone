@@ -1,4 +1,9 @@
-import type { GalleryFilter, MediaType, PhoneMedia } from '@/types/media'
+import type {
+  GalleryFilter,
+  GallerySortOrder,
+  MediaType,
+  PhoneMedia,
+} from '@/types/media'
 
 export const MEDIA_PAGE_SIZE = 30
 
@@ -24,6 +29,37 @@ export function mergeMedia(
   return [...byId.values()].sort(
     (left, right) => right.createdAt - left.createdAt || right.id - left.id,
   )
+}
+
+export function orderMediaOldestFirst(media: PhoneMedia[]): PhoneMedia[] {
+  return [...media].sort(
+    (left, right) => left.createdAt - right.createdAt || left.id - right.id,
+  )
+}
+
+export function orderMedia(
+  media: PhoneMedia[],
+  sortOrder: GallerySortOrder,
+): PhoneMedia[] {
+  return sortOrder === 'oldest'
+    ? orderMediaOldestFirst(media)
+    : [...media].sort(
+        (left, right) =>
+          right.createdAt - left.createdAt || right.id - left.id,
+      )
+}
+
+export function bottomRightGridPosition(
+  itemIndex: number,
+  itemCount: number,
+  columnCount = 3,
+): { column: number; row: number } {
+  const count = Math.max(1, itemCount)
+  const index = Math.max(0, Math.min(itemIndex, count - 1))
+  return {
+    column: columnCount - (index % columnCount),
+    row: Math.ceil(count / columnCount) - Math.floor(index / columnCount),
+  }
 }
 
 export function hasNextMediaPage(pageLength: number): boolean {

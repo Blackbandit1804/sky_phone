@@ -2472,38 +2472,140 @@ let recentCalls = [
     status: 'missed',
   },
 ]
+function mockGalleryImage(title, sky, landscape, accent) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="${sky}"/><stop offset="1" stop-color="${accent}"/></linearGradient><linearGradient id="land" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${landscape}"/><stop offset="1" stop-color="#101114"/></linearGradient></defs><rect width="900" height="1200" fill="url(#sky)"/><circle cx="690" cy="260" r="105" fill="#fff" opacity=".72"/><path d="M0 690 210 440 390 650 585 360 900 720V1200H0Z" fill="${landscape}" opacity=".84"/><path d="M0 790 230 620 410 765 650 525 900 770V1200H0Z" fill="url(#land)"/><path d="M360 1200 475 690 560 690 690 1200Z" fill="${accent}" opacity=".48"/><text x="54" y="1100" fill="#fff" font-family="system-ui,sans-serif" font-size="62" font-weight="700">${title}</text><text x="57" y="1160" fill="#fff" opacity=".72" font-family="system-ui,sans-serif" font-size="30">Sky Phone test media</text></svg>`
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+}
+
 let mockMedia = [
   {
-    createdAt: Date.now() - 60_000,
+    createdAt: Date.now() - 4 * 60_000,
+    favorite: false,
     id: 1,
     mediaType: 'photo',
-    url: 'https://picsum.photos/seed/sky-phone-1/600/800',
+    url: mockGalleryImage('City Night', '#172554', '#111827', '#7c3aed'),
   },
   {
-    createdAt: Date.now() - 120_000,
+    createdAt: Date.now() - 18 * 60_000,
+    favorite: true,
     id: 2,
     mediaType: 'video',
+    thumbnailUrl: mockGalleryImage('Flower Video', '#7f1d1d', '#365314', '#fb7185'),
     url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
   },
   {
-    createdAt: Date.now() - 180_000,
+    createdAt: Date.now() - 47 * 60_000,
+    favorite: true,
     id: 3,
     mediaType: 'photo',
-    url: 'https://picsum.photos/seed/sky-phone-3/800/600',
+    url: mockGalleryImage('Beach Drive', '#0369a1', '#164e63', '#fbbf24'),
   },
   {
-    createdAt: Date.now() - 240_000,
+    createdAt: Date.now() - 2 * 60 * 60_000,
+    favorite: false,
     id: 4,
     mediaType: 'photo',
-    url: 'https://picsum.photos/seed/sky-phone-4/800/600',
+    url: mockGalleryImage('Mountain Road', '#475569', '#334155', '#e2e8f0'),
   },
   {
-    createdAt: Date.now() - 300_000,
+    createdAt: Date.now() - 5 * 60 * 60_000,
+    favorite: false,
     id: 5,
     mediaType: 'photo',
-    url: 'https://picsum.photos/seed/sky-phone-5/800/600',
+    url: mockGalleryImage('Downtown', '#312e81', '#1e293b', '#f472b6'),
+  },
+  {
+    createdAt: Date.now() - 8 * 60 * 60_000,
+    favorite: false,
+    id: 6,
+    mediaType: 'video',
+    thumbnailUrl: mockGalleryImage('Sintel Video', '#9a3412', '#431407', '#fdba74'),
+    url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+  },
+  {
+    createdAt: Date.now() - 12 * 60 * 60_000,
+    favorite: false,
+    id: 7,
+    mediaType: 'photo',
+    url: mockGalleryImage('Palm Sunset', '#c2410c', '#422006', '#facc15'),
+  },
+  {
+    createdAt: Date.now() - 26 * 60 * 60_000,
+    favorite: true,
+    id: 8,
+    mediaType: 'photo',
+    url: mockGalleryImage('Sports Car', '#1f2937', '#111827', '#ef4444'),
+  },
+  {
+    createdAt: Date.now() - 31 * 60 * 60_000,
+    favorite: false,
+    id: 9,
+    mediaType: 'photo',
+    url: mockGalleryImage('Boardwalk', '#0e7490', '#713f12', '#67e8f9'),
+  },
+  {
+    createdAt: Date.now() - 46 * 60 * 60_000,
+    favorite: false,
+    id: 10,
+    mediaType: 'video',
+    thumbnailUrl: mockGalleryImage('Bunny Video', '#166534', '#14532d', '#86efac'),
+    url: 'https://www.w3schools.com/html/mov_bbb.mp4',
+  },
+  {
+    createdAt: Date.now() - 3 * 86_400_000,
+    favorite: false,
+    id: 11,
+    mediaType: 'photo',
+    url: mockGalleryImage('Vinewood', '#1d4ed8', '#166534', '#f8fafc'),
+  },
+  {
+    createdAt: Date.now() - 5 * 86_400_000,
+    favorite: true,
+    id: 12,
+    mediaType: 'photo',
+    url: mockGalleryImage('Friends', '#7e22ce', '#4c1d95', '#f0abfc'),
   },
 ]
+mockMedia.push(
+  ...[
+    ['Airport Lights', '#172554', '#1e3a8a', '#38bdf8'],
+    ['Desert Route', '#fb923c', '#7c2d12', '#fde047'],
+    ['Harbor Morning', '#0e7490', '#164e63', '#a5f3fc'],
+    ['Forest Trail', '#166534', '#14532d', '#bef264'],
+    ['Neon Alley', '#581c87', '#1e1b4b', '#f472b6'],
+    ['Lake House', '#0369a1', '#3f6212', '#fef08a'],
+    ['Snow Pass', '#94a3b8', '#334155', '#f8fafc'],
+    ['Night Drive', '#111827', '#312e81', '#22d3ee'],
+    ['Canyon View', '#b45309', '#78350f', '#fdba74'],
+    ['Green Hills', '#15803d', '#365314', '#86efac'],
+    ['Purple Sky', '#6b21a8', '#312e81', '#e879f9'],
+    ['Ocean Road', '#0284c7', '#0f766e', '#67e8f9'],
+    ['City Park', '#4d7c0f', '#14532d', '#facc15'],
+    ['Sunrise Pier', '#ea580c', '#7c2d12', '#fef3c7'],
+    ['Rainy Street', '#334155', '#0f172a', '#60a5fa'],
+    ['Golden Fields', '#ca8a04', '#713f12', '#fef08a'],
+    ['Metro Station', '#1f2937', '#374151', '#f43f5e'],
+    ['Island Bay', '#0891b2', '#115e59', '#f0fdfa'],
+    ['Cliff Road', '#7c3aed', '#3f3f46', '#c4b5fd'],
+    ['Old Town', '#9a3412', '#451a03', '#fed7aa'],
+    ['Racing Night', '#991b1b', '#111827', '#fb7185'],
+    ['Quiet Beach', '#0ea5e9', '#155e75', '#fde68a'],
+    ['Hilltop', '#65a30d', '#3f6212', '#d9f99d'],
+    ['Downtown Rain', '#3730a3', '#1e293b', '#93c5fd'],
+    ['Coastal Sunset', '#be123c', '#7c2d12', '#fbbf24'],
+    ['Country Road', '#854d0e', '#365314', '#fde047'],
+    ['Blue Mountains', '#1d4ed8', '#334155', '#bfdbfe'],
+    ['Palm Beach', '#0d9488', '#166534', '#fcd34d'],
+    ['Skyline', '#4338ca', '#111827', '#a78bfa'],
+    ['Campfire', '#c2410c', '#431407', '#fef08a'],
+  ].map(([title, sky, landscape, accent], index) => ({
+    createdAt: Date.now() - (6 + index) * 86_400_000,
+    favorite: index % 7 === 0,
+    id: 13 + index,
+    mediaType: 'photo',
+    url: mockGalleryImage(title, sky, landscape, accent),
+  })),
+)
 const weazelNewsCategoryIds = ['official', 'events', 'jobs', 'news', 'business']
 let weazelNewsSequence = 8
 let weazelNewsArticles = [
@@ -8265,6 +8367,7 @@ app.post('/api/:endpoint', (request, response) => {
     const fallbackVideo = mockMedia.find((item) => item.mediaType === 'video')
     const media = {
       createdAt: Date.now(),
+      favorite: false,
       id,
       mediaType,
       url:
@@ -8353,6 +8456,24 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: media })
     return
   }
+  if (endpoint === 'gallery:counts') {
+    response.json({
+      success: true,
+      data: {
+        all: mockMedia.length,
+        favoritePhotos: mockMedia.filter(
+          (item) => item.mediaType === 'photo' && item.favorite,
+        ).length,
+        favorites: mockMedia.filter((item) => item.favorite).length,
+        favoriteVideos: mockMedia.filter(
+          (item) => item.mediaType === 'video' && item.favorite,
+        ).length,
+        photos: mockMedia.filter((item) => item.mediaType === 'photo').length,
+        videos: mockMedia.filter((item) => item.mediaType === 'video').length,
+      },
+    })
+    return
+  }
   if (endpoint === 'gallery:list') {
     if (request.body.mockState === 'error') {
       response.json({ success: false, error: 'service_unavailable' })
@@ -8362,9 +8483,12 @@ app.post('/api/:endpoint', (request, response) => {
       response.json({ success: true, data: [] })
       return
     }
-    const filtered = request.body.mediaType
+    const typeFiltered = request.body.mediaType
       ? mockMedia.filter((item) => item.mediaType === request.body.mediaType)
       : mockMedia
+    const filtered = request.body.favoriteOnly
+      ? typeFiltered.filter((item) => item.favorite)
+      : typeFiltered
     const offset = Number(request.body.offset) || 0
     const limit = Number(request.body.limit) || 30
     response.json({
@@ -8385,6 +8509,37 @@ app.post('/api/:endpoint', (request, response) => {
   if (endpoint === 'gallery:delete') {
     mockMedia = mockMedia.filter((item) => item.id !== Number(request.body.id))
     response.json({ success: true })
+    return
+  }
+  if (endpoint === 'gallery:favorite') {
+    const item = mockMedia.find((entry) => entry.id === Number(request.body.id))
+    if (!item || typeof request.body.favorite !== 'boolean') {
+      response.json({ success: false, error: 'media_not_found' })
+      return
+    }
+    item.favorite = request.body.favorite
+    response.json({
+      success: true,
+      data: { favorite: item.favorite, id: item.id },
+    })
+    return
+  }
+  if (endpoint === 'gallery:delete-many') {
+    const ids = Array.isArray(request.body.ids)
+      ? request.body.ids.map(Number).filter(Number.isInteger)
+      : []
+    const deletedIds = mockMedia
+      .filter((item) => ids.includes(item.id))
+      .map((item) => item.id)
+    mockMedia = mockMedia.filter((item) => !deletedIds.includes(item.id))
+    response.json({
+      success: true,
+      data: {
+        correlationId: request.body.correlationId,
+        deletedIds,
+        success: true,
+      },
+    })
     return
   }
   if (endpoint === 'account:login' || endpoint === 'account:register') {

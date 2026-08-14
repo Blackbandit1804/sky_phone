@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  bottomRightGridPosition,
   filterMedia,
   formatMediaSize,
   formatRecordingDuration,
   hasNextMediaPage,
   mediaErrorKey,
   mergeMedia,
+  orderMedia,
+  orderMediaOldestFirst,
 } from './media'
 
 const media = [
-  { createdAt: 10, id: 1, mediaType: 'photo' as const, url: 'photo' },
-  { createdAt: 20, id: 2, mediaType: 'video' as const, url: 'video' },
+  { createdAt: 10, favorite: false, id: 1, mediaType: 'photo' as const, url: 'photo' },
+  { createdAt: 20, favorite: false, id: 2, mediaType: 'video' as const, url: 'video' },
 ]
 
 describe('media utilities', () => {
@@ -24,14 +27,36 @@ describe('media utilities', () => {
   it('merges pages without duplicates and keeps newest first', () => {
     expect(
       mergeMedia(media, [
-        { createdAt: 30, id: 1, mediaType: 'photo', url: 'updated' },
-        { createdAt: 25, id: 3, mediaType: 'photo', url: 'new' },
+        { createdAt: 30, favorite: true, id: 1, mediaType: 'photo', url: 'updated' },
+        { createdAt: 25, favorite: false, id: 3, mediaType: 'photo', url: 'new' },
       ]).map((entry) => [entry.id, entry.url]),
     ).toEqual([
       [1, 'updated'],
       [3, 'new'],
       [2, 'video'],
     ])
+  })
+
+  it('orders the photo grid from oldest to newest', () => {
+    expect(orderMediaOldestFirst(media).map((entry) => entry.id)).toEqual([
+      1, 2,
+    ])
+  })
+
+  it('orders the photo grid in the selected direction', () => {
+    expect(orderMedia(media, 'oldest').map((entry) => entry.id)).toEqual([1, 2])
+    expect(orderMedia(media, 'newest').map((entry) => entry.id)).toEqual([2, 1])
+  })
+
+  it('fills the gallery from bottom-right to top-left', () => {
+    expect(bottomRightGridPosition(0, 1)).toEqual({ column: 3, row: 1 })
+    expect(bottomRightGridPosition(0, 3)).toEqual({ column: 3, row: 1 })
+    expect(bottomRightGridPosition(1, 3)).toEqual({ column: 2, row: 1 })
+    expect(bottomRightGridPosition(2, 3)).toEqual({ column: 1, row: 1 })
+    expect(bottomRightGridPosition(0, 4)).toEqual({ column: 3, row: 2 })
+    expect(bottomRightGridPosition(3, 4)).toEqual({ column: 3, row: 1 })
+    expect(bottomRightGridPosition(4, 5)).toEqual({ column: 2, row: 1 })
+    expect(bottomRightGridPosition(10, 11)).toEqual({ column: 2, row: 1 })
   })
 
   it('loads another gallery page only after a full 30-item batch', () => {

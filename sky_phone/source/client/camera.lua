@@ -453,6 +453,15 @@ RegisterNUICallback("gallery:delete", function(data, cb)
     cb({ success = true })
 end)
 
+RegisterNUICallback("gallery:delete-many", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    TriggerServerEvent("sky_phone:media:delete-many", data)
+    cb({ success = true })
+end)
+
 RegisterNUICallback("memos:requestUpload", function(data, cb)
     if type(data) ~= "table" then
         cb({ success = false, error = "invalid_request" })
@@ -499,6 +508,10 @@ end)
 
 RegisterNetEvent("sky_phone:media:delete-result", function(data)
     SendNUIMessage({ type = "media:deleteResult", data = data })
+end)
+
+RegisterNetEvent("sky_phone:media:delete-many-result", function(data)
+    SendNUIMessage({ type = "media:deleteManyResult", data = data })
 end)
 
 RegisterNetEvent("sky_phone:memos:upload-ready", function(data)
