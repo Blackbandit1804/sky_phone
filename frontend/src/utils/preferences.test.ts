@@ -1,7 +1,40 @@
 import { describe, expect, it } from 'vitest'
 import type { LaunchablePhoneAppId } from '@/types/apps'
-import { DEFAULT_PHONE_PREFERENCES, parsePhonePreferences } from './preferences'
+import {
+  DEFAULT_PHONE_PREFERENCES,
+  PHONE_SETUP_LAST_STEP,
+  parsePhonePreferences,
+  WALLPAPER_IDS,
+} from './preferences'
 describe('preferences', () => {
+  it('starts Setup Assistant for a phone without saved settings', () => {
+    const value = parsePhonePreferences(null)
+
+    expect(value.settings.setupCompleted).toBe(false)
+    expect(value.settings.setupStep).toBe(0)
+  })
+
+  it('migrates existing phones past Setup Assistant', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({ version: 1, settings: { wallpaper: 'aurora' } }),
+    )
+
+    expect(value.settings.setupCompleted).toBe(true)
+    expect(value.settings.setupStep).toBe(PHONE_SETUP_LAST_STEP)
+  })
+
+  it('restores an interrupted Setup Assistant step', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({
+        version: 1,
+        settings: { setupCompleted: false, setupStep: 5 },
+      }),
+    )
+
+    expect(value.settings.setupCompleted).toBe(false)
+    expect(value.settings.setupStep).toBe(5)
+  })
+
   it('falls back for malformed and obsolete records', () => {
     expect(parsePhonePreferences('{')).toEqual(DEFAULT_PHONE_PREFERENCES)
     expect(parsePhonePreferences('{"version":2}')).toEqual(
@@ -131,5 +164,53 @@ describe('preferences', () => {
       screenBrightness: 100,
       wifiEnabled: true,
     })
+  })
+
+  it('provides twelve built-in wallpapers', () => {
+    expect(WALLPAPER_IDS).toHaveLength(12)
+    expect(new Set(WALLPAPER_IDS).size).toBe(12)
+  })
+
+  it('restores custom photo wallpapers and only the latest four history entries', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({
+        version: 1,
+        settings: {
+          wallpaper: 'custom',
+          wallpaperImageUrl: 'https://media.example/current.jpg',
+          wallpaperHistory: [
+            {
+              wallpaper: 'custom',
+              imageUrl: 'https://media.example/current.jpg',
+            },
+            { wallpaper: 'prism', imageUrl: null },
+            { wallpaper: 'ocean', imageUrl: null },
+            { wallpaper: 'rose', imageUrl: null },
+            { wallpaper: 'sand', imageUrl: null },
+          ],
+        },
+      }),
+    )
+
+    expect(value.settings.wallpaper).toBe('custom')
+    expect(value.settings.wallpaperImageUrl).toBe(
+      'https://media.example/current.jpg',
+    )
+    expect(value.settings.wallpaperHistory).toHaveLength(4)
+    expect(
+      value.settings.wallpaperHistory.map((entry) => entry.wallpaper),
+    ).toEqual(['custom', 'prism', 'ocean', 'rose'])
+  })
+
+  it('rejects a custom wallpaper without a photo URL', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({
+        version: 1,
+        settings: { wallpaper: 'custom', wallpaperImageUrl: '' },
+      }),
+    )
+
+    expect(value.settings.wallpaper).toBe('midnight')
+    expect(value.settings.wallpaperImageUrl).toBeNull()
   })
 })

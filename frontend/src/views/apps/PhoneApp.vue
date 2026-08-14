@@ -96,7 +96,7 @@ const callKeypadOpened = ref(false)
 const inCallKeypad = ref('')
 const blockDialogOpened = ref(false)
 const blockTargetNumber = ref('')
-const callSpeakerEnabled = ref(false)
+const callSpeakerPending = ref(false)
 const callMuted = ref(false)
 const callElapsedSeconds = ref(0)
 let callClock: number | null = null
@@ -471,6 +471,26 @@ async function answerCall(): Promise<void> {
   }
 }
 
+async function toggleCallSpeaker(): Promise<void> {
+  const call = calls.activeCall
+  if (
+    !call ||
+    call.state !== 'connected' ||
+    !call.speakerSupported ||
+    callSpeakerPending.value
+  ) {
+    return
+  }
+
+  error.value = ''
+  callSpeakerPending.value = true
+  const response = await calls.setSpeaker(!call.speakerEnabled)
+  callSpeakerPending.value = false
+  if (!response.success) {
+    error.value = phone.t(`Apps.phone.errors.${response.error ?? 'default'}`)
+  }
+}
+
 function updateCallElapsed(): void {
   const call = calls.activeCall
   if (!call || call.state !== 'connected') {
@@ -784,8 +804,19 @@ onBeforeUnmount(() => {
             <k-button
               rounded
               class="phone-call-action"
-              :class="{ 'is-active': callSpeakerEnabled }"
-              @click="callSpeakerEnabled = !callSpeakerEnabled"
+              :class="{
+                'is-active': calls.activeCall.speakerEnabled,
+                'is-disabled':
+                  calls.activeCall.state !== 'connected' ||
+                  !calls.activeCall.speakerSupported,
+              }"
+              :disabled="
+                calls.activeCall.state !== 'connected' ||
+                !calls.activeCall.speakerSupported ||
+                callSpeakerPending
+              "
+              :aria-pressed="calls.activeCall.speakerEnabled === true"
+              @click="toggleCallSpeaker"
             >
               <Volume2 />
               <span>{{ phone.t('Apps.phone.speaker') }}</span>

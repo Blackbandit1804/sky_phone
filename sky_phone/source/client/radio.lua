@@ -140,6 +140,11 @@ local function join_radio(primary, secondary)
     data.secondaryFrequency = approved_secondary
     data.provider = Bridge.Radio.GetProvider()
     data.secondarySupported = Bridge.Radio.SupportsSecondary()
+    data.speakerSupported = Bridge.Radio.SupportsSpeaker()
+    data.speakerEnabled = data.speakerSupported and data.speakerEnabled == true
+    if data.speakerSupported and Bridge.Radio.GetSpeaker() ~= data.speakerEnabled then
+        Bridge.Radio.SetSpeaker(data.speakerEnabled)
+    end
     return { success = true, data = data }
 end
 
@@ -162,6 +167,11 @@ RegisterNUICallback("radio:get", function(data, cb)
         result.data.volume = current_volume
         result.data.provider = Bridge.Radio.GetProvider()
         result.data.secondarySupported = Bridge.Radio.SupportsSecondary()
+        result.data.speakerSupported = Bridge.Radio.SupportsSpeaker()
+        result.data.speakerEnabled = result.data.speakerSupported and result.data.speakerEnabled == true
+        if result.data.speakerSupported and Bridge.Radio.GetSpeaker() ~= result.data.speakerEnabled then
+            Bridge.Radio.SetSpeaker(result.data.speakerEnabled)
+        end
     elseif result.success then
         result = { success = false, error = "request_failed" }
     end
@@ -193,6 +203,24 @@ RegisterNUICallback("radio:set-volume", function(data, cb)
     current_volume = math.max(0, math.min(100, math.floor(volume + 0.5)))
     Bridge.Radio.SetVolume(current_volume)
     cb({ success = true, data = { volume = current_volume } })
+end)
+
+RegisterNUICallback("radio:set-speaker", function(data, cb)
+    if type(data) ~= "table" or type(data.enabled) ~= "boolean" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    local result = request("set-speaker", { enabled = data.enabled })
+    if not result.success then
+        cb(result)
+        return
+    end
+    Bridge.Radio.SetSpeaker(data.enabled)
+    result.data = {
+        speakerEnabled = data.enabled,
+        speakerSupported = true,
+    }
+    cb(result)
 end)
 
 RegisterNUICallback("radio:save-settings", function(data, cb)

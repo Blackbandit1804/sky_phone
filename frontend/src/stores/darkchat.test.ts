@@ -2,7 +2,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useDarkChatStore } from '@/stores/darkchat'
-import type { DarkChatMessage, DarkChatThread } from '@/types/darkchat'
+import type {
+  DarkChatMessage,
+  DarkChatProfile,
+  DarkChatThread,
+} from '@/types/darkchat'
 import { nuiCall } from '@/utils/nui'
 
 vi.mock('@/utils/nui', () => ({ nuiCall: vi.fn() }))
@@ -16,6 +20,17 @@ const conversation: DarkChatThread['conversation'] = {
   notificationsEnabled: true,
   peer: { alias: 'Nova', avatarSeed: 42, darkId: 'dark:N0VA-41KQ', id: 2 },
   readReceipts: true,
+}
+
+const profile: DarkChatProfile = {
+  activityVisible: false,
+  alias: 'Nightshade',
+  avatarSeed: 267,
+  createdAt: '2026-08-01 21:20:00',
+  darkId: 'dark:7X4K-P92D',
+  id: 1,
+  inviteCode: 'DC-7X4K-NOVA',
+  notificationMode: 'private',
 }
 
 function message(id: string): DarkChatMessage {
@@ -37,28 +52,53 @@ describe('darkchat store', () => {
   })
 
   it('optimistically sends and confirms a private message', async () => {
-    let resolveSend: ((value: { data: DarkChatMessage; success: true }) => void) | undefined
-    const pending = new Promise<{ data: DarkChatMessage; success: true }>((resolve) => (resolveSend = resolve))
+    let resolveSend:
+      | ((value: { data: DarkChatMessage; success: true }) => void)
+      | undefined
+    const pending = new Promise<{ data: DarkChatMessage; success: true }>(
+      (resolve) => (resolveSend = resolve),
+    )
     mockNuiCall
-      .mockResolvedValueOnce({ data: { conversation, messages: [] }, success: true })
-      .mockResolvedValueOnce({ data: { contacts: [], conversations: [], profile: null }, success: true })
+      .mockResolvedValueOnce({
+        data: { conversation, messages: [] },
+        success: true,
+      })
+      .mockResolvedValueOnce({
+        data: { contacts: [], conversations: [], profile: null },
+        success: true,
+      })
       .mockImplementationOnce(() => pending)
-      .mockResolvedValueOnce({ data: { contacts: [], conversations: [], profile: null }, success: true })
+      .mockResolvedValueOnce({
+        data: { contacts: [], conversations: [], profile: null },
+        success: true,
+      })
 
     const store = useDarkChatStore()
     await store.openThread(conversation.id)
     const sending = store.send({ body: 'Quiet channel', messageType: 'text' })
-    expect(store.messages[0]).toMatchObject({ deliveryStatus: 'sending', body: 'Quiet channel' })
+    expect(store.messages[0]).toMatchObject({
+      deliveryStatus: 'sending',
+      body: 'Quiet channel',
+    })
 
     resolveSend?.({ data: message('server-message'), success: true })
     await sending
-    expect(store.messages[0]).toMatchObject({ deliveryStatus: 'delivered', id: 'server-message' })
+    expect(store.messages[0]).toMatchObject({
+      deliveryStatus: 'delivered',
+      id: 'server-message',
+    })
   })
 
   it('keeps failed messages visible for delivery feedback', async () => {
     mockNuiCall
-      .mockResolvedValueOnce({ data: { conversation, messages: [] }, success: true })
-      .mockResolvedValueOnce({ data: { contacts: [], conversations: [], profile: null }, success: true })
+      .mockResolvedValueOnce({
+        data: { conversation, messages: [] },
+        success: true,
+      })
+      .mockResolvedValueOnce({
+        data: { contacts: [], conversations: [], profile: null },
+        success: true,
+      })
       .mockResolvedValueOnce({ error: 'blocked', success: false })
 
     const store = useDarkChatStore()
@@ -69,10 +109,22 @@ describe('darkchat store', () => {
 
   it('uses a local media preview without sending that URL to the server', async () => {
     mockNuiCall
-      .mockResolvedValueOnce({ data: { conversation, messages: [] }, success: true })
-      .mockResolvedValueOnce({ data: { contacts: [], conversations: [], profile: null }, success: true })
-      .mockResolvedValueOnce({ data: { ...message('media-id'), messageType: 'image' }, success: true })
-      .mockResolvedValueOnce({ data: { contacts: [], conversations: [], profile: null }, success: true })
+      .mockResolvedValueOnce({
+        data: { conversation, messages: [] },
+        success: true,
+      })
+      .mockResolvedValueOnce({
+        data: { contacts: [], conversations: [], profile: null },
+        success: true,
+      })
+      .mockResolvedValueOnce({
+        data: { ...message('media-id'), messageType: 'image' },
+        success: true,
+      })
+      .mockResolvedValueOnce({
+        data: { contacts: [], conversations: [], profile: null },
+        success: true,
+      })
 
     const store = useDarkChatStore()
     await store.openThread(conversation.id)
@@ -102,7 +154,41 @@ describe('darkchat store', () => {
     const store = useDarkChatStore()
     expect(await store.loadMedia('voice-id')).toBe(true)
     expect(await store.loadMedia('voice-id')).toBe(true)
-    expect(store.mediaSources['voice-id']).toBe('data:audio/webm;codecs=opus;base64,ZmFrZQ==')
+    expect(store.mediaSources['voice-id']).toBe(
+      'data:audio/webm;codecs=opus;base64,ZmFrZQ==',
+    )
     expect(mockNuiCall).toHaveBeenCalledTimes(1)
+  })
+
+  it('creates a private profile only through the explicit profile action', async () => {
+    mockNuiCall.mockResolvedValueOnce({
+      data: { contacts: [], conversations: [], profile },
+      success: true,
+    })
+
+    const store = useDarkChatStore()
+    expect(await store.createProfile()).toBe(true)
+    expect(store.profile).toEqual(profile)
+    expect(mockNuiCall).toHaveBeenCalledWith('darkchat:create-profile')
+  })
+
+  it('clears all private state after deleting the profile', async () => {
+    mockNuiCall
+      .mockResolvedValueOnce({
+        data: { contacts: [], conversations: [], profile },
+        success: true,
+      })
+      .mockResolvedValueOnce({ success: true })
+
+    const store = useDarkChatStore()
+    await store.bootstrap()
+    store.activeConversation = conversation
+    store.messages = [message('message-id')]
+
+    expect(await store.deleteProfile()).toBe(true)
+    expect(store.profile).toBeNull()
+    expect(store.activeConversation).toBeNull()
+    expect(store.messages).toEqual([])
+    expect(mockNuiCall).toHaveBeenLastCalledWith('darkchat:delete-profile')
   })
 })

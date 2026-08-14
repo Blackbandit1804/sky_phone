@@ -23,9 +23,11 @@ const radioData: RadioData = {
   frequencyStep: 0.1,
   history: [{ primary: 120.5, secondary: 130.7 }],
   members: [],
-  provider: 'yaca',
+  provider: 'saltychat',
   secondaryFrequency: 0,
   secondarySupported: true,
+  speakerEnabled: false,
+  speakerSupported: true,
   settings: { autoRejoin: false, notifications: true },
   volume: 50,
 }
@@ -128,6 +130,53 @@ describe('radio store', () => {
     await first
 
     expect(radio.data.volume).toBe(75)
+  })
+
+  it('applies the provider-authoritative radio speaker state', async () => {
+    mockNuiCall.mockResolvedValueOnce({
+      data: { speakerEnabled: true },
+      success: true,
+    })
+    const radio = useRadioStore()
+    radio.data.connected = true
+    radio.data.speakerSupported = true
+
+    expect(await radio.setSpeaker(true)).toBe(true)
+
+    expect(mockNuiCall).toHaveBeenCalledWith('radio:set-speaker', {
+      enabled: true,
+    })
+    expect(radio.data.speakerEnabled).toBe(true)
+    expect(radio.speakerPending).toBe(false)
+  })
+
+  it('rolls radio speaker state back after provider rejection', async () => {
+    mockNuiCall.mockResolvedValueOnce({
+      error: 'voice_unavailable',
+      success: false,
+    })
+    const radio = useRadioStore()
+    radio.data.connected = true
+    radio.data.speakerEnabled = false
+    radio.data.speakerSupported = true
+
+    expect(await radio.setSpeaker(true)).toBe(false)
+
+    expect(radio.data.speakerEnabled).toBe(false)
+    expect(radio.error).toBe('voice_unavailable')
+    expect(radio.speakerPending).toBe(false)
+  })
+
+  it('does not call NUI when the radio provider lacks speaker support', async () => {
+    const radio = useRadioStore()
+    radio.data.connected = true
+    radio.data.speakerSupported = false
+
+    expect(await radio.setSpeaker(true)).toBe(false)
+
+    expect(mockNuiCall).not.toHaveBeenCalled()
+    expect(radio.data.speakerEnabled).toBe(false)
+    expect(radio.error).toBe('speaker_unavailable')
   })
 
   it('applies canonical profile values accepted by the server', async () => {

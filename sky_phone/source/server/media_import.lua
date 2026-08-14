@@ -351,6 +351,7 @@ local function store_import(owner, media)
 
     return {
         createdAt = os.time() * 1000,
+        favorite = false,
         id = media_id,
         mediaType = media.mediaType,
         url = media.url,

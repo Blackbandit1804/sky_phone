@@ -1,31 +1,62 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import { SKY_UI_DEMO_CATALOG } from './sky-ui-demo/catalog'
+
+const developmentDirectory = fileURLToPath(new URL('.', import.meta.url))
+const demoDirectory = join(developmentDirectory, 'sky-ui-demo')
+const pagesDirectory = join(demoDirectory, 'pages')
 const viewSource = readFileSync(
-  new URL('./SkyUiKitchenSinkView.vue', import.meta.url),
+  join(developmentDirectory, 'SkyUiKitchenSinkView.vue'),
+  'utf8',
+)
+const homeSource = readFileSync(
+  join(demoDirectory, 'SkyUiDemoHome.vue'),
+  'utf8',
+)
+const extensionsSource = readFileSync(
+  join(pagesDirectory, 'SkyExtensionsDemo.vue'),
+  'utf8',
+)
+const toastSource = readFileSync(join(pagesDirectory, 'ToastDemo.vue'), 'utf8')
+const stepperSource = readFileSync(
+  join(pagesDirectory, 'StepperDemo.vue'),
   'utf8',
 )
 const appSource = readFileSync(
-  new URL('../../App.vue', import.meta.url),
+  join(developmentDirectory, '../../App.vue'),
   'utf8',
 )
 const routerSource = readFileSync(
-  new URL('../../router/index.ts', import.meta.url),
+  join(developmentDirectory, '../../router/index.ts'),
   'utf8',
 )
 const settingsSource = readFileSync(
-  new URL('../apps/SettingsApp.vue', import.meta.url),
+  join(developmentDirectory, '../apps/SettingsApp.vue'),
   'utf8',
 )
 
+function sourceFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) return sourceFiles(path)
+    return /\.(?:css|ts|vue)$/.test(entry.name) ? [path] : []
+  })
+}
+
+const demoSources = sourceFiles(demoDirectory).map((path) =>
+  readFileSync(path, 'utf8'),
+)
+const combinedDemoSource = [viewSource, ...demoSources].join('\n')
 const publicIndexSources = [
   '../../ui/index.ts',
   '../../ui/controls/index.ts',
   '../../ui/overlays/index.ts',
   '../../ui/settings/index.ts',
 ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
-
 const publicComponents = Array.from(
   new Set(
     publicIndexSources.flatMap((source) =>
@@ -37,17 +68,84 @@ const publicComponents = Array.from(
   ),
 ).sort()
 
+const referenceCatalog = [
+  ['action-sheet', 'Action Sheet'],
+  ['badge', 'Badge'],
+  ['breadcrumbs', 'Breadcrumbs'],
+  ['buttons', 'Buttons'],
+  ['cards', 'Cards'],
+  ['checkbox', 'Checkbox'],
+  ['chips', 'Chips'],
+  ['contacts-list', 'Contacts List'],
+  ['content-block', 'Content Block'],
+  ['data-table', 'Data Table'],
+  ['dialog', 'Dialog'],
+  ['fab', 'FAB (Floating Action Button)'],
+  ['form-inputs', 'Form Inputs'],
+  ['list', 'List'],
+  ['list-button', 'List Button'],
+  ['menu-list', 'Menu List'],
+  ['messages', 'Messages'],
+  ['navbar', 'Navbar'],
+  ['notification', 'Notification'],
+  ['side-panels', 'Panel / Side Panels'],
+  ['popover', 'Popover'],
+  ['popup', 'Popup'],
+  ['preloader', 'Preloader'],
+  ['progressbar', 'Progressbar'],
+  ['radio', 'Radio'],
+  ['range-slider', 'Range Slider'],
+  ['searchbar', 'Searchbar'],
+  ['segmented-control', 'Segmented Control'],
+  ['sheet-modal', 'Sheet Modal'],
+  ['stepper', 'Stepper'],
+  ['subnavbar', 'Subnavbar'],
+  ['tabbar', 'Tabbar'],
+  ['toast', 'Toast'],
+  ['toggle', 'Toggle'],
+  ['toolbar', 'Toolbar'],
+] as const
+
+function demoFileName(id: string): string {
+  return `${id
+    .split('-')
+    .map((part) => `${part[0]?.toUpperCase()}${part.slice(1)}`)
+    .join('')}Demo.vue`
+}
+
 describe('development Sky UI Kitchen Sink contract', () => {
-  it('demonstrates every public Sky component without Konsta imports', () => {
+  it('mirrors the exact Konsta 5.3 Vue component submenu catalog', () => {
+    expect(SKY_UI_DEMO_CATALOG.map(({ id, title }) => [id, title])).toEqual(
+      referenceCatalog,
+    )
+    expect(new Set(SKY_UI_DEMO_CATALOG.map(({ id }) => id)).size).toBe(35)
+
+    const missingPages = SKY_UI_DEMO_CATALOG.filter(
+      ({ id }) => !existsSync(join(pagesDirectory, demoFileName(id))),
+    ).map(({ id }) => id)
+    expect(missingPages).toEqual([])
+  })
+
+  it('uses a real catalog and parameterized submenu navigation', () => {
+    expect(homeSource).toContain('v-for="entry in SKY_UI_DEMO_CATALOG"')
+    expect(homeSource).toContain('@click="demo.navigate(entry.id)"')
+    expect(viewSource).toContain('params: { demo: id }')
+    expect(combinedDemoSource).toContain('demo.returnToCatalog')
+    expect(viewSource).toContain('defineAsyncComponent')
+    expect(routerSource).toContain("path: '/development/sky-ui/:demo?'")
+    expect(combinedDemoSource).toContain('./assets/demo-icon.png')
+  })
+
+  it('demonstrates every public Sky component without Konsta runtime code', () => {
     const missingComponents = publicComponents.filter(
-      (component) => !new RegExp(`<${component}(?:\\s|/?>)`).test(viewSource),
+      (component) =>
+        !new RegExp(`<${component}(?:\\s|/?>)`).test(combinedDemoSource),
     )
 
     expect(publicComponents.length).toBeGreaterThanOrEqual(63)
     expect(missingComponents).toEqual([])
-    expect(viewSource).toContain("from '@/ui'")
-    expect(viewSource).not.toContain('konsta/vue')
-    expect(viewSource).not.toMatch(/<\/?k-[a-z]/)
+    expect(combinedDemoSource).not.toContain('konsta/vue')
+    expect(combinedDemoSource).not.toMatch(/<\/?k-[a-z]/)
   })
 
   it('keeps the lazy route and launcher development-only', () => {
@@ -58,6 +156,9 @@ describe('development Sky UI Kitchen Sink contract', () => {
     expect(appSource).toContain(
       "isDevelopment && route.name === 'development-sky-ui'",
     )
+    expect(appSource).toContain(
+      'isDevelopmentRoute ? String(route.name) : route.path',
+    )
     expect(settingsSource).toContain(
       'const isDevelopment = import.meta.env.DEV',
     )
@@ -66,5 +167,35 @@ describe('development Sky UI Kitchen Sink contract', () => {
       "router.push({ name: 'development-sky-ui' })",
     )
     expect(settingsSource).not.toContain('SkyUiKitchenSinkView')
+    expect(viewSource).not.toContain('<SkyProvider')
+    expect(viewSource).not.toContain('safe-areas')
+  })
+
+  it('keeps the demo source within the conservative CEF contract', () => {
+    expect(combinedDemoSource).not.toMatch(
+      /:has\(|@container|\b(?:dvh|svh|lvh)\b|color-mix\(|oklch\(|view-transition|draggable\s*=\s*["']true/,
+    )
+  })
+
+  it('keeps exactly one split-navigation highlight active', () => {
+    expect(extensionsSource).toContain(':strong="splitTab < 2"')
+    expect(extensionsSource).toContain(':strong="splitTab === 2"')
+  })
+
+  it('matches the compact Konsta toast buttons without shrinking their hit area', () => {
+    expect(toastSource).toContain('class="toast-demo__button"')
+    expect(toastSource).toMatch(
+      /\.toast-demo__button\s*\{[\s\S]*?height: 34px;[\s\S]*?min-height: 34px;/,
+    )
+    expect(toastSource).toMatch(
+      /\.toast-demo__button::before\s*\{[\s\S]*?inset: -5px 0;/,
+    )
+  })
+
+  it('centers the Konsta text-input stepper examples', () => {
+    expect(stepperSource).toContain('sky-ui-demo-stepper-inputs')
+    expect(stepperSource).toMatch(
+      /\.sky-ui-demo-stepper-inputs\s*\{[\s\S]*?justify-items: center;/,
+    )
   })
 })

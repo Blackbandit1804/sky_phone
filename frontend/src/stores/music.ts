@@ -8,7 +8,7 @@ import type {
 } from '@/types/music'
 import { nuiCall } from '@/utils/nui'
 
-type YouTubePlayer = {
+export type YouTubePlayer = {
   destroy: () => void
   getCurrentTime: () => number
   getDuration: () => number
@@ -19,7 +19,7 @@ type YouTubePlayer = {
   setVolume: (volume: number) => void
 }
 
-type YouTubeApi = {
+export type YouTubeApi = {
   Player: new (
     target: HTMLElement,
     options: {
@@ -199,7 +199,7 @@ function bindAudioEvents(): void {
   })
 }
 
-function loadYouTubeApi(): Promise<YouTubeApi> {
+export function loadYouTubeApi(): Promise<YouTubeApi> {
   if (window.YT?.Player) return Promise.resolve(window.YT)
   if (youtubeApiPromise) return youtubeApiPromise
   youtubeApiPromise = new Promise<YouTubeApi>((resolve, reject) => {

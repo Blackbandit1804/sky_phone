@@ -386,6 +386,7 @@ local schema = {
                 collation = "ascii_bin",
             },
             { name = "verified_at", type = "DATETIME NULL" },
+            { name = "favorite", type = "TINYINT(1) NOT NULL DEFAULT 0" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
         },
         primaryKey = "id",
@@ -1399,6 +1400,24 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_picstagram_comment_reactions",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "comment_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_picstagram_comment_reaction", columns = "(`comment_id`, `profile_id`)" },
+        },
+        foreignKeys = {
+            { column = "comment_id", references = "`sky_phone_picstagram_comments` (`id`) ON DELETE CASCADE" },
+            { column = "profile_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_picstagram_stories",
         columns = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
@@ -1445,7 +1464,7 @@ local schema = {
             { name = "recipient_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "actor_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "post_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
-            { name = "kind", type = "ENUM('follow_request', 'follow', 'request_accepted', 'like', 'comment', 'verified') NOT NULL" },
+            { name = "kind", type = "ENUM('follow_request', 'follow', 'request_accepted', 'like', 'comment', 'comment_like', 'reply', 'verified') NOT NULL" },
             { name = "read_at", type = "DATETIME NULL" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
         },
@@ -1533,6 +1552,7 @@ local schema = {
             { name = "display_name", type = "VARCHAR(40) NOT NULL" },
             { name = "bio", type = "VARCHAR(160) NOT NULL DEFAULT ''" },
             { name = "account_type", type = "ENUM('person', 'business', 'organization', 'media', 'event') NOT NULL DEFAULT 'person'" },
+            { name = "avatar_media_id", type = "BIGINT UNSIGNED NULL" },
             { name = "verified", type = "TINYINT(1) NOT NULL DEFAULT 0" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
             { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
@@ -1542,7 +1562,10 @@ local schema = {
             { name = "uniq_sky_phone_fliptok_account", columns = "(`account_id`)" },
             { name = "uniq_sky_phone_fliptok_handle", columns = "(`handle`)" },
         },
-        foreignKeys = {{ column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" }},
+        foreignKeys = {
+            { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE" },
+            { column = "avatar_media_id", references = "`sky_phone_media` (`id`) ON DELETE SET NULL" },
+        },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
@@ -1590,6 +1613,9 @@ local schema = {
             { name = "original_volume", type = "TINYINT UNSIGNED NOT NULL DEFAULT 100" },
             { name = "music_volume", type = "TINYINT UNSIGNED NOT NULL DEFAULT 0" },
             { name = "music_track", type = "VARCHAR(64) NOT NULL DEFAULT ''", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "custom_music_url", type = "VARCHAR(2048) NOT NULL DEFAULT ''", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "custom_music_title", type = "VARCHAR(160) NOT NULL DEFAULT ''" },
+            { name = "custom_music_artist", type = "VARCHAR(120) NOT NULL DEFAULT ''" },
             { name = "status", type = "ENUM('draft', 'published', 'removed') NOT NULL DEFAULT 'published'" },
             { name = "view_count", type = "INT UNSIGNED NOT NULL DEFAULT 0" },
             { name = "share_count", type = "INT UNSIGNED NOT NULL DEFAULT 0" },
@@ -1646,14 +1672,37 @@ local schema = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "video_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "profile_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "parent_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "body", type = "VARCHAR(300) NOT NULL" },
             { name = "status", type = "ENUM('visible', 'removed') NOT NULL DEFAULT 'visible'" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
         },
         primaryKey = "id",
-        indexes = {{ name = "idx_sky_phone_fliptok_comments", columns = "(`video_id`, `created_at`)" }},
+        indexes = {
+            { name = "idx_sky_phone_fliptok_comments", columns = "(`video_id`, `created_at`)" },
+            { name = "idx_sky_phone_fliptok_comment_parent", columns = "(`parent_id`, `created_at`)" },
+        },
         foreignKeys = {
             { column = "video_id", references = "`sky_phone_fliptok_videos` (`id`) ON DELETE CASCADE" },
+            { column = "profile_id", references = "`sky_phone_fliptok_profiles` (`id`) ON DELETE CASCADE" },
+            { column = "parent_id", references = "`sky_phone_fliptok_comments` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_fliptok_comment_reactions",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "comment_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_fliptok_comment_reaction", columns = "(`comment_id`, `profile_id`)" },
+        },
+        foreignKeys = {
+            { column = "comment_id", references = "`sky_phone_fliptok_comments` (`id`) ON DELETE CASCADE" },
             { column = "profile_id", references = "`sky_phone_fliptok_profiles` (`id`) ON DELETE CASCADE" },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
@@ -2589,6 +2638,10 @@ Bridge.Database.Query([[
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_feather_notifications`
     MODIFY COLUMN `kind` ENUM('like', 'reply', 'follow', 'quote') NOT NULL
+]], {})
+Bridge.Database.Query([[
+    ALTER TABLE `sky_phone_picstagram_activities`
+    MODIFY COLUMN `kind` ENUM('follow_request', 'follow', 'request_accepted', 'like', 'comment', 'comment_like', 'reply', 'verified') NOT NULL
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_flare_swipes`

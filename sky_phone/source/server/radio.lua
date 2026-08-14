@@ -2,25 +2,10 @@ local profiles = {}
 local channels = {}
 local joined_at = {}
 local last_requests = {}
+local speaker_states = {}
 
 local function supports_secondary()
-    if not Config.Radio.AllowSecondary then
-        return false
-    end
-    local configured = Config.Radio.VoiceProvider
-    if configured == "pma" or configured == "pma-voice" then
-        return false
-    end
-    if configured ~= "auto" then
-        return true
-    end
-    if GetResourceState("yaca-voice") == "started" then
-        return true
-    end
-    if GetResourceState("pma-voice") == "started" then
-        return false
-    end
-    return GetResourceState("saltychat") == "started"
+    return Bridge.Radio.SupportsSecondary()
 end
 
 local function default_profile()
@@ -306,6 +291,8 @@ Bridge.Callbacks.Register("sky_phone:radio:get", function(source)
             frequencyStep = 1 / (10 ^ Config.Radio.FrequencyDecimals),
             savedFrequency = profile.primaryFrequency,
             savedSecondaryFrequency = profile.secondaryFrequency,
+            speakerEnabled = speaker_states[source] == true,
+            speakerSupported = Bridge.Radio.SupportsSpeaker(),
         },
     }
 end)
@@ -375,11 +362,17 @@ Bridge.Callbacks.Register("sky_phone:radio:connect", function(source, data)
             secondaryFrequency = secondary,
             members = get_members(primary),
             history = profile.history,
+            speakerEnabled = speaker_states[source] == true,
+            speakerSupported = Bridge.Radio.SupportsSpeaker(),
         },
     }
 end)
 
 Bridge.Callbacks.Register("sky_phone:radio:disconnect", function(source)
+    if speaker_states[source] then
+        Bridge.Radio.SetPlayerSpeaker(source, false)
+    end
+    speaker_states[source] = nil
     remove_from_channels(source)
     local identifier, profile = load_profile(source)
     if profile then
@@ -388,6 +381,32 @@ Bridge.Callbacks.Register("sky_phone:radio:disconnect", function(source)
         save_profile(identifier, profile)
     end
     return { success = true }
+end)
+
+Bridge.Callbacks.Register("sky_phone:radio:set-speaker", function(source, data)
+    if type(data) ~= "table" or type(data.enabled) ~= "boolean" then
+        return { success = false, error = "invalid_request" }
+    end
+    if rate_limited(source, "set-speaker", 250) then
+        return { success = false, error = "rate_limited" }
+    end
+    if not channels[source] then
+        return { success = false, error = "radio_not_connected" }
+    end
+    if not Bridge.Radio.SupportsSpeaker() then
+        return { success = false, error = "speaker_unsupported" }
+    end
+    if not Bridge.Radio.SetPlayerSpeaker(source, data.enabled) then
+        return { success = false, error = "voice_unavailable" }
+    end
+    speaker_states[source] = data.enabled
+    return {
+        success = true,
+        data = {
+            speakerEnabled = data.enabled,
+            speakerSupported = true,
+        },
+    }
 end)
 
 Bridge.Callbacks.Register("sky_phone:radio:save-settings", function(source, data)
@@ -464,6 +483,10 @@ end)
 
 AddEventHandler("playerDropped", function()
     local player_source = source
+    if speaker_states[player_source] then
+        Bridge.Radio.SetPlayerSpeaker(player_source, false)
+    end
+    speaker_states[player_source] = nil
     local identifier = Bridge.Framework.GetIdentifier(player_source)
     remove_from_channels(player_source)
     if identifier then
@@ -472,6 +495,17 @@ AddEventHandler("playerDropped", function()
     for key in pairs(last_requests) do
         if key:sub(1, #tostring(player_source) + 1) == tostring(player_source) .. ":" then
             last_requests[key] = nil
+        end
+    end
+end)
+
+AddEventHandler("onResourceStop", function(resource_name)
+    if resource_name ~= GetCurrentResourceName() then
+        return
+    end
+    for player_source, enabled in pairs(speaker_states) do
+        if enabled then
+            Bridge.Radio.SetPlayerSpeaker(player_source, false)
         end
     end
 end)

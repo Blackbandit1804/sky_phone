@@ -1,9 +1,15 @@
 Bridge = Bridge or {}
 Bridge.Callbacks = Bridge.Callbacks or {}
+Bridge.Calls = Bridge.Calls or {}
 Bridge.Database = Bridge.Database or {}
 Bridge.Framework = Bridge.Framework or {}
 Bridge.Inventory = Bridge.Inventory or {}
 Bridge.Radio = Bridge.Radio or {}
+Bridge.Speaker = Bridge.Speaker or {}
+
+function Bridge.Speaker.IsEnabled()
+    return not Config.Speaker or Config.Speaker.Enabled ~= false
+end
 
 local level_colours = {
     debug = "^5",

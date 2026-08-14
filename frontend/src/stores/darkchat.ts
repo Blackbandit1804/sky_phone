@@ -23,7 +23,10 @@ export const useDarkChatStore = defineStore('darkchat', () => {
   const loading = ref(false)
   const lastError = ref<string | null>(null)
   const unreadCount = computed(() =>
-    conversations.value.reduce((total, conversation) => total + conversation.unread, 0),
+    conversations.value.reduce(
+      (total, conversation) => total + conversation.unread,
+      0,
+    ),
   )
 
   async function bootstrap(): Promise<boolean> {
@@ -37,15 +40,37 @@ export const useDarkChatStore = defineStore('darkchat', () => {
       conversations.value = []
       return false
     }
-    profile.value = response.data.profile
+    profile.value = response.data.profile ?? null
     contacts.value = response.data.contacts
     conversations.value = response.data.conversations
     return true
   }
 
+  async function createProfile(): Promise<boolean> {
+    loading.value = true
+    const response = await nuiCall<DarkChatBootstrap>('darkchat:create-profile')
+    loading.value = false
+    lastError.value = response.error ?? null
+    if (!response.success || !response.data) return false
+    profile.value = response.data.profile ?? null
+    contacts.value = response.data.contacts
+    conversations.value = response.data.conversations
+    return true
+  }
+
+  async function deleteProfile(): Promise<boolean> {
+    const response = await nuiCall('darkchat:delete-profile')
+    lastError.value = response.error ?? null
+    if (!response.success) return false
+    reset()
+    return true
+  }
+
   async function openThread(conversationId: string): Promise<boolean> {
     loading.value = true
-    const response = await nuiCall<DarkChatThread>('darkchat:thread', { conversationId })
+    const response = await nuiCall<DarkChatThread>('darkchat:thread', {
+      conversationId,
+    })
     loading.value = false
     lastError.value = response.error ?? null
     if (!response.success || !response.data) return false
@@ -61,20 +86,28 @@ export const useDarkChatStore = defineStore('darkchat', () => {
   async function refreshInbox(): Promise<boolean> {
     const response = await nuiCall<DarkChatBootstrap>('darkchat:bootstrap')
     if (!response.success || !response.data) return false
-    profile.value = response.data.profile
+    profile.value = response.data.profile ?? null
     contacts.value = response.data.contacts
     conversations.value = response.data.conversations
     return true
   }
 
-  async function start(identifier: string): Promise<NuiResponse<{ conversationId: string }>> {
-    const response = await nuiCall<{ conversationId: string }>('darkchat:start', { identifier })
+  async function start(
+    identifier: string,
+  ): Promise<NuiResponse<{ conversationId: string }>> {
+    const response = await nuiCall<{ conversationId: string }>(
+      'darkchat:start',
+      { identifier },
+    )
     if (response.success) await refreshInbox()
     return response
   }
 
-  async function send(outgoing: DarkChatOutgoing): Promise<NuiResponse<DarkChatMessage>> {
-    if (!activeConversation.value) return { success: false, error: 'invalid_conversation' }
+  async function send(
+    outgoing: DarkChatOutgoing,
+  ): Promise<NuiResponse<DarkChatMessage>> {
+    if (!activeConversation.value)
+      return { success: false, error: 'invalid_conversation' }
     const clientId = `dark-pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const { mediaPreviewUrl, ...request } = outgoing
     const optimistic: DarkChatMessage = {
@@ -100,13 +133,16 @@ export const useDarkChatStore = defineStore('darkchat', () => {
     }
     messages.value.push(optimistic)
     if (outgoing.messageType === 'voice' && outgoing.mediaPayload) {
-      mediaSources.value[clientId] = `data:${outgoing.mediaMime};base64,${outgoing.mediaPayload}`
+      mediaSources.value[clientId] =
+        `data:${outgoing.mediaMime};base64,${outgoing.mediaPayload}`
     }
     const response = await nuiCall<DarkChatMessage>('darkchat:send', {
       ...request,
       conversationId: activeConversation.value.id,
     })
-    const index = messages.value.findIndex((message) => message.clientId === clientId)
+    const index = messages.value.findIndex(
+      (message) => message.clientId === clientId,
+    )
     if (!response.success || !response.data) {
       if (index >= 0) messages.value[index].deliveryStatus = 'failed'
       return response
@@ -115,7 +151,11 @@ export const useDarkChatStore = defineStore('darkchat', () => {
     delete mediaSources.value[clientId]
     if (source) mediaSources.value[response.data.id] = source
     if (index >= 0) {
-      messages.value[index] = { ...response.data, clientId, deliveryStatus: 'delivered' }
+      messages.value[index] = {
+        ...response.data,
+        clientId,
+        deliveryStatus: 'delivered',
+      }
     }
     await refreshInbox()
     return response
@@ -123,13 +163,20 @@ export const useDarkChatStore = defineStore('darkchat', () => {
 
   async function loadMedia(messageId: string): Promise<boolean> {
     if (mediaSources.value[messageId]) return true
-    const response = await nuiCall<{ mime: string; payload: string }>('darkchat:media', { messageId })
+    const response = await nuiCall<{ mime: string; payload: string }>(
+      'darkchat:media',
+      { messageId },
+    )
     if (!response.success || !response.data) return false
-    mediaSources.value[messageId] = `data:${response.data.mime};base64,${response.data.payload}`
+    mediaSources.value[messageId] =
+      `data:${response.data.mime};base64,${response.data.payload}`
     return true
   }
 
-  async function mutate(endpoint: string, data: Record<string, unknown>): Promise<boolean> {
+  async function mutate(
+    endpoint: string,
+    data: Record<string, unknown>,
+  ): Promise<boolean> {
     const response = await nuiCall(`darkchat:${endpoint}`, data)
     return response.success
   }
@@ -140,12 +187,25 @@ export const useDarkChatStore = defineStore('darkchat', () => {
     mediaSources.value = {}
   }
 
+  function reset(): void {
+    profile.value = null
+    contacts.value = []
+    conversations.value = []
+    activeConversation.value = null
+    messages.value = []
+    mediaSources.value = {}
+    loading.value = false
+    lastError.value = null
+  }
+
   return {
     activeConversation,
     bootstrap,
     closeThread,
+    createProfile,
     contacts,
     conversations,
+    deleteProfile,
     lastError,
     loadMedia,
     loading,
@@ -155,6 +215,7 @@ export const useDarkChatStore = defineStore('darkchat', () => {
     openThread,
     profile,
     refreshInbox,
+    reset,
     send,
     start,
     unreadCount,

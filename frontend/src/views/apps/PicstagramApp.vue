@@ -2,6 +2,7 @@
 import {
   Bell,
   Bookmark,
+  Camera,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -9,73 +10,76 @@ import {
   Eye,
   Heart,
   Home,
+  ImagePlus,
   Images,
   LockKeyhole,
   MapPin,
   MessageCircle,
   MoreHorizontal,
   Plus,
+  Reply,
   Search,
   Send,
   Share2,
   ShieldAlert,
   Trash2,
   UserRound,
+  UsersRound,
+  Video,
+  X,
 } from 'lucide-vue-next'
-import {
-  kActions,
-  kActionsButton,
-  kActionsGroup,
-  kBadge,
-  kBlock,
-  kButton,
-  kCard,
-  kChip,
-  kDialog,
-  kDialogButton,
-  kGlass,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kMessagebar,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kSearchbar,
-  kSegmented,
-  kSegmentedButton,
-  kSheet,
-  kTabbar,
-  kTabbarLink,
-  kToast,
-  kToolbar,
-  kToolbarPane,
-  kToggle,
-} from 'konsta/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import picstagramIcon from '@/assets/img/app-icons/picstagram.webp'
-import { useMessageMediaStore } from '@/stores/messageMedia'
 import { useEasyShareStore } from '@/stores/easyshare'
+import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import { usePicstagramStore } from '@/stores/picstagram'
 import type { PhoneMedia } from '@/types/media'
 import type {
   PicstagramActivity,
+  PicstagramComment,
   PicstagramPost,
   PicstagramProfile,
   PicstagramReportReason,
   PicstagramReportTarget,
   PicstagramStory,
 } from '@/types/picstagram'
+import {
+  SkyActionButton,
+  SkyActionGroup,
+  SkyActionSheet,
+  SkyAppPage,
+  SkyButton,
+  SkyCard,
+  SkyChip,
+  SkyDialog,
+  SkyDialogButton,
+  SkyField,
+  SkyGlass,
+  SkyLink,
+  SkyList,
+  SkyListItem,
+  SkyMessagebar,
+  SkyNavbar,
+  SkyPillNavigation,
+  SkyScrollArea,
+  SkySearchbar,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySheet,
+  SkySpinner,
+  SkyToast,
+  SkyToggle,
+} from '@/ui'
 
 type Tab = 'home' | 'explore' | 'create' | 'activity' | 'profile'
 type AuthMode = 'login' | 'register'
 type ComposeKind = 'post' | 'story'
+type ConnectionMode = 'followers' | 'following'
 type ProfileSection = 'photos' | 'saved'
+type MediaSource = 'camera' | 'photos'
 
 const phone = usePhoneStore()
 const store = usePicstagramStore()
@@ -100,10 +104,11 @@ const publishing = ref(false)
 const search = ref('')
 const profileSection = ref<ProfileSection>('photos')
 const selectedPost = ref<PicstagramPost | null>(null)
+const actionPost = ref<PicstagramPost | null>(null)
 const selectedStory = ref<PicstagramStory | null>(null)
 const commentsOpen = ref(false)
 const commentBody = ref('')
-const replyTo = ref<string | undefined>()
+const replyingTo = ref<PicstagramComment | null>(null)
 const actionsOpen = ref(false)
 const reportOpen = ref(false)
 const reportTarget = ref<{
@@ -122,6 +127,8 @@ const profileDraft = ref({
   handle: '',
   private: false,
 })
+const connectionsOpen = ref(false)
+const connectionsMode = ref<ConnectionMode>('followers')
 const logoutDialogOpen = ref(false)
 const logoutSubmitting = ref(false)
 const deleteDialogOpen = ref(false)
@@ -130,18 +137,43 @@ const storyViewersOpen = ref(false)
 const moderationOpen = ref(false)
 const feedback = ref('')
 const carouselIndexes = ref<Record<string, number>>({})
+const commentLikePulseId = ref<string | null>(null)
+const reactionPulse = ref<{ id: string; kind: 'like' | 'save' } | null>(null)
 let feedbackTimer: number | null = null
 let searchTimer: number | null = null
+let commentLikePulseTimer: number | null = null
+let reactionPulseTimer: number | null = null
 
 const currentProfile = computed(() => store.viewedProfile ?? store.profile)
 const unreadCount = computed(
   () => store.activities.filter((activity) => !activity.read_at).length,
+)
+const tabIndex = computed(() =>
+  ['home', 'explore', 'create', 'activity', 'profile'].indexOf(tab.value),
 )
 const profileGrid = computed(() =>
   profileSection.value === 'saved' && currentProfile.value?.is_owner
     ? store.saved
     : store.profilePosts,
 )
+const commentThreads = computed(() => {
+  const roots = store.comments.filter((comment) => !comment.parent_id)
+  return roots.map((comment) => ({
+    comment,
+    replies: store.comments
+      .filter((reply) => reply.parent_id === comment.id)
+      .map((reply) => {
+        const mention = reply.body.match(/^@([a-z0-9._-]+)\s+/i)
+        return {
+          ...reply,
+          display_body: mention
+            ? reply.body.slice(mention[0].length)
+            : reply.body,
+          display_reply_to_handle: mention?.[1] ?? reply.reply_to_handle,
+        }
+      }),
+  }))
+})
 const selectedStoryPosition = computed(() =>
   selectedStory.value
     ? store.stories.findIndex((story) => story.id === selectedStory.value?.id)
@@ -189,10 +221,6 @@ const reportReasons: PicstagramReportReason[] = [
 
 function t(key: string, replacements?: Record<string, string>): string {
   return phone.t(`Apps.picstagram.${key}`, replacements)
-}
-
-function inputValue(event: Event): string {
-  return (event.target as HTMLInputElement).value
 }
 
 function initials(value: string): string {
@@ -260,9 +288,7 @@ async function showTab(next: Tab): Promise<void> {
   tab.value = next
   selectedPost.value = null
   if (next === 'explore' && !store.explore.length) await store.loadExplore()
-  if (next === 'activity') {
-    await store.loadActivities()
-  }
+  if (next === 'activity') await store.loadActivities()
   if (next === 'profile' && store.profile) {
     await store.loadProfile({ profileId: store.profile.id })
     store.viewedProfile = null
@@ -276,9 +302,18 @@ async function openProfile(profile: PicstagramProfile | string): Promise<void> {
     notify(errorMessage('profile_not_found'))
     return
   }
+  commentsOpen.value = false
+  connectionsOpen.value = false
   selectedPost.value = null
   tab.value = 'profile'
   profileSection.value = 'photos'
+}
+
+async function openConnectionProfile(
+  profile: PicstagramProfile,
+): Promise<void> {
+  connectionsOpen.value = false
+  await openProfile(profile)
 }
 
 function goBackFromProfile(): void {
@@ -297,15 +332,25 @@ function closePost(): void {
 async function openComments(post: PicstagramPost): Promise<void> {
   selectedPost.value = post
   await store.loadComments(post.id)
+  replyingTo.value = null
   commentsOpen.value = true
+}
+
+function startReply(comment: PicstagramComment): void {
+  replyingTo.value = comment
+  commentBody.value = ''
 }
 
 async function submitComment(): Promise<void> {
   if (!selectedPost.value || !commentBody.value.trim()) return
+  const body = replyingTo.value
+    ? `@${replyingTo.value.handle} ${commentBody.value.trim()}`
+    : commentBody.value.trim()
   const response = await store.comment(
     selectedPost.value.id,
-    commentBody.value.trim(),
-    replyTo.value,
+    body,
+    replyingTo.value?.parent_id ?? replyingTo.value?.id,
+    replyingTo.value?.id,
   )
   if (!response.success) {
     notify(errorMessage(response.error))
@@ -313,16 +358,29 @@ async function submitComment(): Promise<void> {
   }
   selectedPost.value.comment_count += 1
   commentBody.value = ''
-  replyTo.value = undefined
+  replyingTo.value = null
   await store.loadComments(selectedPost.value.id)
 }
 
-function chooseComposeMedia(): void {
+async function reactComment(comment: PicstagramComment): Promise<void> {
+  if (commentLikePulseTimer !== null) window.clearTimeout(commentLikePulseTimer)
+  commentLikePulseId.value = comment.id
+  await store.reactComment(comment)
+  commentLikePulseTimer = window.setTimeout(() => {
+    commentLikePulseId.value = null
+    commentLikePulseTimer = null
+  }, 360)
+}
+
+function openComposeMedia(
+  source: MediaSource,
+  mediaType: 'photo' | 'video',
+): void {
   mediaPicker.begin(
     'picstagram:compose',
-    'photo',
+    mediaType,
     '/apps/picstagram?tab=create',
-    composeKind.value === 'post' ? 5 : 1,
+    composeKind.value === 'post' && mediaType === 'photo' ? 5 : 1,
     {
       caption: caption.value,
       commentsEnabled: commentsEnabled.value,
@@ -332,12 +390,12 @@ function chooseComposeMedia(): void {
     },
   )
   void router.push({
-    path: '/apps/photos',
-    query: { mediaAttachment: 'photo' },
+    path: `/apps/${source}`,
+    query: { mediaAttachment: mediaType },
   })
 }
 
-function chooseAvatar(): void {
+function openAvatarMedia(source: MediaSource): void {
   mediaPicker.begin(
     'picstagram:avatar',
     'photo',
@@ -346,7 +404,7 @@ function chooseAvatar(): void {
     { ...profileDraft.value },
   )
   void router.push({
-    path: '/apps/photos',
+    path: `/apps/${source}`,
     query: { mediaAttachment: 'photo' },
   })
 }
@@ -375,7 +433,8 @@ function clearAvatarSelection(): void {
 }
 
 async function publish(): Promise<void> {
-  if (!selectedMedia.value.length || publishing.value) return
+  const media = selectedMedia.value[0]
+  if (!media || publishing.value) return
   publishing.value = true
   const response =
     composeKind.value === 'post'
@@ -383,9 +442,10 @@ async function publish(): Promise<void> {
           caption: caption.value,
           commentsEnabled: commentsEnabled.value,
           location: location.value,
-          mediaIds: selectedMedia.value.map((media) => media.id),
+          mediaIds: selectedMedia.value.map((entry) => entry.id),
+          mediaType: media.mediaType,
         })
-      : await store.publishStory(selectedMedia.value[0].id, storyText.value)
+      : await store.publishStory(media.id, storyText.value, media.mediaType)
   publishing.value = false
   if (!response.success) {
     notify(errorMessage(response.error))
@@ -404,6 +464,16 @@ function updateCarousel(post: PicstagramPost, event: Event): void {
   )
 }
 
+function moveCarousel(post: PicstagramPost, direction: 1 | -1): void {
+  const current = carouselIndexes.value[post.id] ?? 0
+  const next = Math.max(0, Math.min(post.media.length - 1, current + direction))
+  const element = document.querySelector<HTMLElement>(
+    `[data-picstagram-carousel="${post.id}"]`,
+  )
+  element?.scrollTo({ behavior: 'smooth', left: next * element.clientWidth })
+  carouselIndexes.value[post.id] = next
+}
+
 async function react(
   post: PicstagramPost,
   kind: 'like' | 'save',
@@ -411,12 +481,35 @@ async function react(
   if (!(await store.react(post, kind))) notify(errorMessage())
 }
 
+async function reactWithPulse(
+  post: PicstagramPost,
+  kind: 'like' | 'save',
+): Promise<void> {
+  if (reactionPulseTimer !== null) window.clearTimeout(reactionPulseTimer)
+  reactionPulse.value = { id: post.id, kind }
+  await react(post, kind)
+  reactionPulseTimer = window.setTimeout(() => {
+    reactionPulse.value = null
+    reactionPulseTimer = null
+  }, 440)
+}
+
 function likeFromMedia(post: PicstagramPost): void {
-  if (!post.is_liked) void react(post, 'like')
+  if (!post.is_liked) void reactWithPulse(post, 'like')
 }
 
 async function follow(profile: PicstagramProfile): Promise<void> {
   if (!(await store.followProfile(profile))) notify(errorMessage())
+}
+
+async function openConnections(mode: ConnectionMode): Promise<void> {
+  if (!currentProfile.value) return
+  connectionsMode.value = mode
+  if (!(await store.loadConnections(currentProfile.value.id, mode))) {
+    notify(errorMessage())
+    return
+  }
+  connectionsOpen.value = true
 }
 
 function editProfile(): void {
@@ -452,7 +545,12 @@ async function saveProfile(): Promise<void> {
 }
 
 function showPostActions(post: PicstagramPost): void {
-  selectedPost.value = post
+  actionPost.value = post
+  actionsOpen.value = true
+}
+
+function showProfileActions(): void {
+  actionPost.value = null
   actionsOpen.value = true
 }
 
@@ -512,19 +610,14 @@ function reportCurrentProfile(): void {
   )
 }
 
-function editProfileFromActions(): void {
-  editProfile()
-  actionsOpen.value = false
-}
-
-function openModerationFromActions(): void {
-  void openModeration()
-  actionsOpen.value = false
+function reportComment(comment: PicstagramComment): void {
+  commentsOpen.value = false
+  startReport('comment', comment.id, `@${comment.handle}`)
 }
 
 function archiveSelectedPost(): void {
-  if (!selectedPost.value) return
-  void store.setPostStatus(selectedPost.value, 'archived')
+  if (!actionPost.value) return
+  void store.setPostStatus(actionPost.value, 'archived')
   actionsOpen.value = false
 }
 
@@ -545,7 +638,7 @@ async function submitReport(): Promise<void> {
 }
 
 async function confirmBlock(): Promise<void> {
-  const profileId = selectedPost.value?.profile_id ?? currentProfile.value?.id
+  const profileId = actionPost.value?.profile_id ?? currentProfile.value?.id
   if (!profileId) return
   blockDialogOpen.value = false
   actionsOpen.value = false
@@ -554,12 +647,13 @@ async function confirmBlock(): Promise<void> {
 }
 
 async function deleteSelectedPost(): Promise<void> {
-  if (!selectedPost.value) return
-  const post = selectedPost.value
+  if (!actionPost.value) return
+  const post = actionPost.value
   deleteDialogOpen.value = false
   actionsOpen.value = false
   if (await store.setPostStatus(post, 'removed')) {
-    selectedPost.value = null
+    if (selectedPost.value?.id === post.id) selectedPost.value = null
+    actionPost.value = null
     notify(t('deletePost'))
   } else notify(errorMessage())
 }
@@ -570,8 +664,7 @@ async function openStory(story: PicstagramStory): Promise<void> {
 }
 
 async function openStoryGroup(stories: PicstagramStory[]): Promise<void> {
-  const story = stories.find((item) => !item.seen) ?? stories[0]
-  await openStory(story)
+  await openStory(stories.find((item) => !item.seen) ?? stories[0])
 }
 
 async function nextStory(direction: 1 | -1): Promise<void> {
@@ -606,6 +699,14 @@ async function openModeration(): Promise<void> {
     return
   }
   moderationOpen.value = true
+  actionsOpen.value = false
+}
+
+async function resolveReport(
+  id: string,
+  action: 'dismiss' | 'hide' | 'remove' | 'restore',
+): Promise<void> {
+  if (!(await store.resolveReport(id, action))) notify(errorMessage())
 }
 
 function activityProfile(activity: PicstagramActivity): void {
@@ -635,10 +736,7 @@ onMounted(async () => {
     await openProfile(easyShareId)
   } else if (easyShareId && route.query.easyShareKind === 'post') {
     const post = await store.loadPost(easyShareId)
-    if (post) {
-      tab.value = 'home'
-      selectedPost.value = post
-    }
+    if (post) selectedPost.value = post
   }
   const composeSelection = mediaPicker.consumeMany<{
     caption?: string
@@ -679,2183 +777,2721 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
   if (searchTimer !== null) window.clearTimeout(searchTimer)
+  if (commentLikePulseTimer !== null) window.clearTimeout(commentLikePulseTimer)
+  if (reactionPulseTimer !== null) window.clearTimeout(reactionPulseTimer)
 })
 </script>
 
 <template>
-  <k-page class="picstagram-page">
-    <div v-if="store.loading && !store.feed.length" class="ps-state">
-      <k-preloader />
+  <SkyAppPage
+    class="picstagram-page"
+    :label="t('name')"
+    :dark="phone.isDarkMode"
+    accent="#ff2d55"
+    accent-soft="rgba(255, 45, 85, 0.16)"
+  >
+    <div v-if="store.loading" class="ps-loading">
+      <SkySpinner />
       <span>{{ t('loading') }}</span>
     </div>
 
-    <section v-else-if="!store.authenticated" class="ps-auth">
-      <k-navbar :title="t('name')" />
-      <div class="ps-auth__body">
-        <k-glass class="ps-auth__glass">
+    <template v-else-if="!store.authenticated">
+      <SkyNavbar :title="t('name')" variant="medium" />
+      <SkyScrollArea class="ps-auth">
+        <SkyGlass class="ps-auth-card">
           <img :src="picstagramIcon" alt="" />
-          <h1>{{ t('authTitle') }}</h1>
-          <p>{{ t(authMode === 'login' ? 'loginBody' : 'registerBody') }}</p>
-          <k-segmented strong>
-            <k-segmented-button
+          <div>
+            <h1>{{ t('authTitle') }}</h1>
+            <p>{{ t(authMode === 'login' ? 'loginBody' : 'registerBody') }}</p>
+          </div>
+          <SkySegmented strong>
+            <SkySegmentedButton
               :active="authMode === 'login'"
               @click="authMode = 'login'"
+              >{{ t('login') }}</SkySegmentedButton
             >
-              {{ t('login') }}
-            </k-segmented-button>
-            <k-segmented-button
+            <SkySegmentedButton
               :active="authMode === 'register'"
               @click="authMode = 'register'"
+              >{{ t('register') }}</SkySegmentedButton
             >
-              {{ t('register') }}
-            </k-segmented-button>
-          </k-segmented>
-          <k-list inset strong class="ps-auth__form">
-            <k-list-input
+          </SkySegmented>
+          <div class="ps-fields">
+            <SkyField
               v-if="authMode === 'register'"
+              v-model="authDisplayName"
               :label="t('displayName')"
               :placeholder="t('displayNamePlaceholder')"
-              :value="authDisplayName"
-              @input="authDisplayName = inputValue($event)"
+              outline
             />
-            <k-list-input
+            <SkyField
+              v-model="authHandle"
               :label="t('username')"
               :placeholder="t('usernamePlaceholder')"
-              :value="authHandle"
-              autocapitalize="none"
-              @input="authHandle = inputValue($event)"
+              autocomplete="username"
+              outline
             />
-            <k-list-input
+            <SkyField
+              v-model="authPassword"
               :label="t('password')"
               :placeholder="t('passwordPlaceholder')"
-              :value="authPassword"
               type="password"
-              @input="authPassword = inputValue($event)"
+              autocomplete="current-password"
+              outline
             />
-            <k-list-input
+            <SkyField
               v-if="authMode === 'register'"
+              v-model="authConfirmPassword"
               :label="t('confirmPassword')"
               :placeholder="t('confirmPasswordPlaceholder')"
-              :value="authConfirmPassword"
               type="password"
-              @input="authConfirmPassword = inputValue($event)"
+              outline
             />
-          </k-list>
-          <p v-if="authMode === 'register'" class="ps-auth__hint">
-            {{ t('registrationHint') }}
-          </p>
-          <k-button
+          </div>
+          <SkyButton
             large
             rounded
             :disabled="authSubmitting"
             @click="submitAuth"
           >
-            <k-preloader v-if="authSubmitting" />
-            <span v-else>{{
-              t(authMode === 'login' ? 'login' : 'createAccount')
-            }}</span>
-          </k-button>
-        </k-glass>
-      </div>
-    </section>
+            <SkySpinner v-if="authSubmitting" />
+            {{ t(authMode === 'login' ? 'login' : 'createAccount') }}
+          </SkyButton>
+        </SkyGlass>
+      </SkyScrollArea>
+    </template>
 
     <template v-else>
-      <k-navbar
-        v-if="!selectedPost"
-        class="ps-navbar"
-        :center-title="tab === 'profile' && Boolean(store.viewedProfile)"
-        right-class="ps-navbar__right"
-        :title="tab === 'home' ? '' : t(tab)"
-      >
-        <template v-if="tab === 'home'" #title>
-          <span class="ps-wordmark">{{ t('name') }}</span>
-        </template>
-        <template v-if="tab === 'profile' && store.viewedProfile" #left>
-          <k-navbar-back-link :text="t('explore')" @click="goBackFromProfile" />
-        </template>
-        <template #right>
-          <div v-if="tab === 'home'" class="ps-navbar__actions">
-            <k-link
+      <template v-if="selectedPost">
+        <SkyNavbar
+          :title="t('post')"
+          show-back
+          :back-label="phone.t('Common.back')"
+          back-appearance="surface"
+          variant="medium"
+          @back="closePost"
+        />
+        <SkyScrollArea with-tabbar class="ps-screen ps-post-detail">
+          <article class="ps-post-card">
+            <header class="ps-post-header">
+              <button
+                class="ps-author"
+                @click="openProfile(selectedPost.profile_id)"
+              >
+                <span class="ps-avatar ps-avatar--small">
+                  <img
+                    v-if="selectedPost.avatar_url"
+                    :src="selectedPost.avatar_url"
+                    alt=""
+                  />
+                  <template v-else>{{
+                    initials(selectedPost.display_name)
+                  }}</template>
+                </span>
+                <span
+                  ><strong
+                    >{{ selectedPost.display_name }}
+                    <Check
+                      v-if="selectedPost.verified"
+                      class="ps-verified" /></strong
+                  ><small v-if="selectedPost.location">{{
+                    selectedPost.location
+                  }}</small></span
+                >
+              </button>
+              <button
+                class="ps-icon-button"
+                :aria-label="t('more')"
+                @click="showPostActions(selectedPost)"
+              >
+                <MoreHorizontal />
+              </button>
+            </header>
+            <div class="ps-carousel-shell">
+              <div
+                :data-picstagram-carousel="selectedPost.id"
+                class="ps-carousel"
+                @scroll.passive="updateCarousel(selectedPost, $event)"
+                @dblclick="likeFromMedia(selectedPost)"
+              >
+                <template v-for="media in selectedPost.media" :key="media.id">
+                  <video
+                    v-if="media.media_type === 'video'"
+                    :src="media.url"
+                    controls
+                    playsinline
+                    preload="metadata"
+                  />
+                  <img v-else :src="media.url" alt="" />
+                </template>
+              </div>
+              <template v-if="selectedPost.media.length > 1">
+                <span class="ps-counter"
+                  >{{ (carouselIndexes[selectedPost.id] ?? 0) + 1 }}/{{
+                    selectedPost.media.length
+                  }}</span
+                >
+                <button
+                  class="ps-carousel-button ps-carousel-button--left"
+                  :disabled="(carouselIndexes[selectedPost.id] ?? 0) === 0"
+                  @click="moveCarousel(selectedPost, -1)"
+                >
+                  <ChevronLeft />
+                </button>
+                <button
+                  class="ps-carousel-button ps-carousel-button--right"
+                  :disabled="
+                    (carouselIndexes[selectedPost.id] ?? 0) ===
+                    selectedPost.media.length - 1
+                  "
+                  @click="moveCarousel(selectedPost, 1)"
+                >
+                  <ChevronRight />
+                </button>
+                <div class="ps-dots">
+                  <span
+                    v-for="(_, index) in selectedPost.media"
+                    :key="index"
+                    :class="{
+                      active: (carouselIndexes[selectedPost.id] ?? 0) === index,
+                    }"
+                  />
+                </div>
+              </template>
+            </div>
+            <div class="ps-post-actions">
+              <div>
+                <button
+                  :class="{
+                    active: selectedPost.is_liked,
+                    'reaction-pop':
+                      reactionPulse?.id === selectedPost.id &&
+                      reactionPulse.kind === 'like',
+                    'reaction-pop--like':
+                      reactionPulse?.id === selectedPost.id &&
+                      reactionPulse.kind === 'like',
+                  }"
+                  @click="reactWithPulse(selectedPost, 'like')"
+                >
+                  <Heart
+                    :fill="selectedPost.is_liked ? 'currentColor' : 'none'"
+                  />
+                </button>
+                <button @click="openComments(selectedPost)">
+                  <MessageCircle />
+                </button>
+                <button @click="sharePost(selectedPost)"><Share2 /></button>
+              </div>
+              <button
+                :class="{
+                  active: selectedPost.is_saved,
+                  'reaction-pop':
+                    reactionPulse?.id === selectedPost.id &&
+                    reactionPulse.kind === 'save',
+                  'reaction-pop--save':
+                    reactionPulse?.id === selectedPost.id &&
+                    reactionPulse.kind === 'save',
+                }"
+                @click="reactWithPulse(selectedPost, 'save')"
+              >
+                <Bookmark
+                  :fill="selectedPost.is_saved ? 'currentColor' : 'none'"
+                />
+              </button>
+            </div>
+            <div class="ps-post-copy">
+              <strong>{{
+                t('likes', { count: count(selectedPost.like_count) })
+              }}</strong>
+              <p v-if="selectedPost.caption">
+                <b>@{{ selectedPost.handle }}</b> {{ selectedPost.caption }}
+              </p>
+              <button
+                v-if="selectedPost.comments_enabled"
+                @click="openComments(selectedPost)"
+              >
+                {{
+                  t('viewComments', {
+                    count: count(selectedPost.comment_count),
+                  })
+                }}
+              </button>
+              <time>{{ relativeTime(selectedPost.created_at) }}</time>
+            </div>
+          </article>
+        </SkyScrollArea>
+      </template>
+
+      <template v-else-if="tab === 'home'">
+        <SkyNavbar :title="t('name')" variant="medium">
+          <template #right>
+            <SkyLink
               component="button"
               icon-only
-              :aria-label="t('newPost')"
-              @click="showTab('create')"
-            >
-              <span class="ps-navbar__create"><Plus /></span>
-            </k-link>
-            <k-link
+              :aria-label="t('newStory')"
+              @click="beginStoryCompose"
+              ><Plus
+            /></SkyLink>
+            <SkyLink
               component="button"
               icon-only
               :aria-label="t('activity')"
               @click="showTab('activity')"
+              ><span class="ps-badge-anchor"
+                ><Bell /><b v-if="unreadCount">{{ unreadCount }}</b></span
+              ></SkyLink
             >
-              <span class="ps-badge-icon">
-                <Heart />
-                <k-badge v-if="unreadCount">{{ unreadCount }}</k-badge>
-              </span>
-            </k-link>
+          </template>
+        </SkyNavbar>
+        <SkyScrollArea with-tabbar class="ps-screen ps-feed">
+          <div class="ps-stories" :aria-label="t('stories')">
+            <button class="ps-story-add" @click="beginStoryCompose">
+              <span class="ps-story-ring ps-story-ring--add"
+                ><span class="ps-avatar"
+                  ><img
+                    v-if="store.profile?.avatar_url"
+                    :src="store.profile.avatar_url"
+                    alt=""
+                  /><template v-else>{{
+                    initials(store.profile?.display_name ?? '')
+                  }}</template></span
+                ><Plus /></span
+              ><small>{{ t('yourStory') }}</small>
+            </button>
+            <button
+              v-for="group in storyGroups"
+              :key="group.stories[0].profile_id"
+              @click="openStoryGroup(group.stories)"
+            >
+              <span
+                class="ps-story-ring"
+                :class="{ seen: group.stories.every((story) => story.seen) }"
+                ><span class="ps-avatar"
+                  ><img
+                    v-if="group.avatar"
+                    :src="group.avatar"
+                    alt=""
+                  /><template v-else>{{
+                    initials(group.handle)
+                  }}</template></span
+                ></span
+              ><small>{{ group.handle }}</small>
+            </button>
           </div>
-          <k-link
-            v-else-if="tab === 'activity' && unreadCount"
-            component="button"
-            @click="store.markActivities()"
+          <div v-if="!store.feed.length" class="ps-empty">
+            <Images /><strong>{{ t('emptyFeed') }}</strong
+            ><span>{{ t('emptyFeedBody') }}</span
+            ><SkyButton rounded @click="showTab('explore')">{{
+              t('discoverPeople')
+            }}</SkyButton>
+          </div>
+          <article
+            v-for="post in store.feed"
+            :key="post.id"
+            class="ps-post-card"
           >
-            {{ t('markRead') }}
-          </k-link>
-          <k-link
-            v-else-if="tab === 'profile' && !store.viewedProfile"
-            component="button"
-            icon-only
-            :aria-label="t('more')"
-            @click="actionsOpen = true"
-          >
-            <MoreHorizontal />
-          </k-link>
-          <k-link
-            v-else-if="
-              tab === 'profile' &&
-              store.viewedProfile &&
-              !store.viewedProfile.is_owner
-            "
-            component="button"
-            icon-only
-            :aria-label="t('more')"
-            @click="actionsOpen = true"
-          >
-            <MoreHorizontal />
-          </k-link>
-        </template>
-      </k-navbar>
-
-      <k-navbar v-else class="ps-navbar" center-title :title="t('post')">
-        <template #left>
-          <k-navbar-back-link :text="t('done')" @click="closePost" />
-        </template>
-      </k-navbar>
-
-      <main v-if="selectedPost" class="ps-scroll ps-scroll--detail">
-        <k-card class="ps-post ps-post--detail">
-          <div class="ps-post__header">
-            <k-link
-              component="button"
-              class="ps-author"
-              @click="openProfile(selectedPost.profile_id)"
-            >
-              <span class="ps-avatar ps-avatar--small">
-                <img
-                  v-if="selectedPost.avatar_url"
-                  :src="selectedPost.avatar_url"
-                  alt=""
-                />
-                <span v-else>{{ initials(selectedPost.display_name) }}</span>
-              </span>
-              <span>
-                <span class="ps-author__name">
-                  <strong>{{ selectedPost.handle }}</strong>
-                  <Check
-                    v-if="selectedPost.verified"
-                    class="ps-verified"
-                    :stroke-width="3"
-                  />
-                </span>
-                <small v-if="selectedPost.location"
-                  ><MapPin />{{ selectedPost.location }}</small
+            <header class="ps-post-header">
+              <button class="ps-author" @click="openProfile(post.profile_id)">
+                <span class="ps-avatar ps-avatar--small"
+                  ><img
+                    v-if="post.avatar_url"
+                    :src="post.avatar_url"
+                    alt=""
+                  /><template v-else>{{
+                    initials(post.display_name)
+                  }}</template></span
+                ><span
+                  ><strong
+                    >{{ post.display_name }}
+                    <Check v-if="post.verified" class="ps-verified" /></strong
+                  ><small v-if="post.location">{{ post.location }}</small></span
                 >
-              </span>
-            </k-link>
-            <k-link
-              component="button"
-              icon-only
-              :aria-label="t('more')"
-              @click="showPostActions(selectedPost)"
-            >
-              <MoreHorizontal />
-            </k-link>
-          </div>
-          <div
-            class="ps-media"
-            @scroll.passive="updateCarousel(selectedPost, $event)"
-            @dblclick="likeFromMedia(selectedPost)"
-          >
-            <img
-              v-for="media in selectedPost.media"
-              :key="media.id"
-              :src="media.url"
-              :alt="selectedPost.caption"
-            />
-          </div>
-          <div v-if="selectedPost.media.length > 1" class="ps-dots">
-            <span
-              v-for="(_, index) in selectedPost.media"
-              :key="index"
-              :class="{
-                active: (carouselIndexes[selectedPost.id] ?? 0) === index,
-              }"
-            />
-          </div>
-          <div class="ps-post__actions">
-            <span>
-              <k-link
-                component="button"
-                icon-only
-                :aria-label="t(selectedPost.is_liked ? 'unlike' : 'like')"
-                @click="react(selectedPost, 'like')"
+              </button>
+              <button
+                class="ps-icon-button"
+                :aria-label="t('more')"
+                @click.stop="showPostActions(post)"
               >
-                <Heart
-                  :class="{ 'ps-liked': selectedPost.is_liked }"
-                  :fill="selectedPost.is_liked ? 'currentColor' : 'none'"
-                />
-              </k-link>
-              <k-link
-                component="button"
-                icon-only
-                :aria-label="t('comments')"
-                @click="openComments(selectedPost)"
-                ><MessageCircle
-              /></k-link>
-              <k-link component="button" icon-only :aria-label="phone.t('Apps.easyShare.name')" @click="sharePost(selectedPost)">
-                <Share2 />
-              </k-link>
-            </span>
-            <k-link
-              component="button"
-              icon-only
-              :aria-label="t(selectedPost.is_saved ? 'unsave' : 'save')"
-              @click="react(selectedPost, 'save')"
-            >
-              <Bookmark
-                :fill="selectedPost.is_saved ? 'currentColor' : 'none'"
-              />
-            </k-link>
-          </div>
-          <div class="ps-post__copy">
-            <strong>{{
-              t('likes', { count: count(selectedPost.like_count) })
-            }}</strong>
-            <p v-if="selectedPost.caption">
-              <b>@{{ selectedPost.handle }}</b> {{ selectedPost.caption }}
-            </p>
-            <k-link
-              v-if="selectedPost.comment_count"
-              component="button"
-              @click="openComments(selectedPost)"
-            >
-              {{
-                t('viewComments', { count: count(selectedPost.comment_count) })
-              }}
-            </k-link>
-            <small>{{ relativeTime(selectedPost.created_at) }}</small>
-          </div>
-        </k-card>
-      </main>
-
-      <main v-else-if="tab === 'home'" class="ps-scroll">
-        <section class="ps-stories" :aria-label="t('stories')">
-          <k-link
-            component="button"
-            class="ps-story-add"
-            @click="beginStoryCompose"
-          >
-            <span class="ps-story-ring ps-story-ring--add">
-              <span class="ps-avatar"><Plus /></span>
-            </span>
-            <small>{{ t('yourStory') }}</small>
-          </k-link>
-          <k-link
-            v-for="group in storyGroups"
-            :key="group.stories[0].profile_id"
-            component="button"
-            class="ps-story-link"
-            @click="openStoryGroup(group.stories)"
-          >
-            <span
-              class="ps-story-ring"
-              :class="{
-                'ps-story-ring--seen': group.stories.every(
-                  (story) => story.seen,
-                ),
-              }"
-            >
-              <span class="ps-avatar">
-                <img v-if="group.avatar" :src="group.avatar" alt="" />
-                <span v-else>{{ initials(group.handle) }}</span>
-              </span>
-            </span>
-            <small>{{ group.handle }}</small>
-          </k-link>
-        </section>
-
-        <div v-if="!store.feed.length" class="ps-state ps-state--inline">
-          <Images />
-          <strong>{{ t('emptyFeed') }}</strong>
-          <span>{{ t('emptyFeedBody') }}</span>
-          <k-button rounded @click="showTab('explore')">{{
-            t('discoverPeople')
-          }}</k-button>
-        </div>
-
-        <k-card v-for="post in store.feed" :key="post.id" class="ps-post">
-          <div class="ps-post__header">
-            <k-link
-              component="button"
-              class="ps-author"
-              @click="openProfile(post.profile_id)"
-            >
-              <span class="ps-avatar ps-avatar--small">
-                <img v-if="post.avatar_url" :src="post.avatar_url" alt="" />
-                <span v-else>{{ initials(post.display_name) }}</span>
-              </span>
-              <span>
-                <span class="ps-author__name">
-                  <strong>{{ post.handle }}</strong>
-                  <Check
-                    v-if="post.verified"
-                    class="ps-verified"
-                    :stroke-width="3"
-                  />
-                </span>
-                <small v-if="post.location"
-                  ><MapPin />{{ post.location }}</small
+                <MoreHorizontal />
+              </button>
+            </header>
+            <div class="ps-carousel-shell">
+              <div
+                :data-picstagram-carousel="post.id"
+                class="ps-carousel"
+                @scroll.passive="updateCarousel(post, $event)"
+                @dblclick="likeFromMedia(post)"
+              >
+                <template v-for="media in post.media" :key="media.id"
+                  ><video
+                    v-if="media.media_type === 'video'"
+                    :src="media.url"
+                    controls
+                    playsinline
+                    preload="metadata" /><img v-else :src="media.url" alt=""
+                /></template>
+              </div>
+              <template v-if="post.media.length > 1">
+                <span class="ps-counter"
+                  >{{ (carouselIndexes[post.id] ?? 0) + 1 }}/{{
+                    post.media.length
+                  }}</span
                 >
-              </span>
-            </k-link>
-            <k-link
-              component="button"
-              icon-only
-              :aria-label="t('more')"
-              @click="showPostActions(post)"
-              ><MoreHorizontal
-            /></k-link>
-          </div>
-          <div
-            class="ps-media"
-            @scroll.passive="updateCarousel(post, $event)"
-            @dblclick="likeFromMedia(post)"
-          >
-            <img
-              v-for="media in post.media"
-              :key="media.id"
-              :src="media.url"
-              :alt="post.caption"
-              loading="lazy"
-            />
-          </div>
-          <div v-if="post.media.length > 1" class="ps-dots">
-            <span
-              v-for="(_, index) in post.media"
-              :key="index"
-              :class="{ active: (carouselIndexes[post.id] ?? 0) === index }"
-            />
-          </div>
-          <div class="ps-post__actions">
-            <span>
-              <k-link
-                component="button"
-                icon-only
-                :aria-label="t(post.is_liked ? 'unlike' : 'like')"
-                @click="react(post, 'like')"
+                <button
+                  class="ps-carousel-button ps-carousel-button--left"
+                  :disabled="(carouselIndexes[post.id] ?? 0) === 0"
+                  @click="moveCarousel(post, -1)"
+                >
+                  <ChevronLeft />
+                </button>
+                <button
+                  class="ps-carousel-button ps-carousel-button--right"
+                  :disabled="
+                    (carouselIndexes[post.id] ?? 0) === post.media.length - 1
+                  "
+                  @click="moveCarousel(post, 1)"
+                >
+                  <ChevronRight />
+                </button>
+                <div class="ps-dots">
+                  <span
+                    v-for="(_, index) in post.media"
+                    :key="index"
+                    :class="{
+                      active: (carouselIndexes[post.id] ?? 0) === index,
+                    }"
+                  />
+                </div>
+              </template>
+            </div>
+            <div class="ps-post-actions">
+              <div>
+                <button
+                  :class="{
+                    active: post.is_liked,
+                    'reaction-pop':
+                      reactionPulse?.id === post.id &&
+                      reactionPulse.kind === 'like',
+                    'reaction-pop--like':
+                      reactionPulse?.id === post.id &&
+                      reactionPulse.kind === 'like',
+                  }"
+                  @click="reactWithPulse(post, 'like')"
+                >
+                  <Heart
+                    :fill="post.is_liked ? 'currentColor' : 'none'"
+                  /></button
+                ><button @click="openComments(post)"><MessageCircle /></button
+                ><button @click="sharePost(post)"><Share2 /></button>
+              </div>
+              <button
+                :class="{
+                  active: post.is_saved,
+                  'reaction-pop':
+                    reactionPulse?.id === post.id &&
+                    reactionPulse.kind === 'save',
+                  'reaction-pop--save':
+                    reactionPulse?.id === post.id &&
+                    reactionPulse.kind === 'save',
+                }"
+                @click="reactWithPulse(post, 'save')"
               >
-                <Heart
-                  :class="{ 'ps-liked': post.is_liked }"
-                  :fill="post.is_liked ? 'currentColor' : 'none'"
-                />
-              </k-link>
-              <k-link
-                component="button"
-                icon-only
-                :aria-label="t('comments')"
-                @click="openComments(post)"
-                ><MessageCircle
-              /></k-link>
-              <k-link component="button" icon-only :aria-label="phone.t('Apps.easyShare.name')" @click="sharePost(post)">
-                <Share2 />
-              </k-link>
-            </span>
-            <k-link
-              component="button"
-              icon-only
-              :aria-label="t(post.is_saved ? 'unsave' : 'save')"
-              @click="react(post, 'save')"
-            >
-              <Bookmark :fill="post.is_saved ? 'currentColor' : 'none'" />
-            </k-link>
-          </div>
-          <div class="ps-post__copy">
-            <strong>{{ t('likes', { count: count(post.like_count) }) }}</strong>
-            <p v-if="post.caption">
-              <b>@{{ post.handle }}</b> {{ post.caption }}
-            </p>
-            <k-link
-              v-if="post.comment_count"
-              component="button"
-              @click="openComments(post)"
-            >
-              {{ t('viewComments', { count: count(post.comment_count) }) }}
-            </k-link>
-            <small>{{ relativeTime(post.created_at) }}</small>
-          </div>
-        </k-card>
-        <k-button
-          v-if="store.feedCursor"
-          class="ps-load-more"
-          tonal
-          rounded
-          @click="store.loadFeed(true)"
-        >
-          {{ t('following') }}
-        </k-button>
-      </main>
-
-      <main v-else-if="tab === 'explore'" class="ps-scroll ps-explore">
-        <k-searchbar
-          :placeholder="t('searchPlaceholder')"
-          :value="search"
-          @input="search = inputValue($event)"
-          @clear="search = ''"
-        />
-        <k-list v-if="search && store.searchProfiles.length" inset strong>
-          <k-list-item
-            v-for="profile in store.searchProfiles"
-            :key="profile.id"
-            link
-            :title="profile.display_name"
-            :subtitle="`@${profile.handle}`"
-            :after="count(profile.followers)"
-            @click="openProfile(profile)"
+                <Bookmark :fill="post.is_saved ? 'currentColor' : 'none'" />
+              </button>
+            </div>
+            <div class="ps-post-copy">
+              <strong>{{
+                t('likes', { count: count(post.like_count) })
+              }}</strong>
+              <p v-if="post.caption">
+                <b>@{{ post.handle }}</b> {{ post.caption }}
+              </p>
+              <button v-if="post.comments_enabled" @click="openComments(post)">
+                {{
+                  t('viewComments', { count: count(post.comment_count) })
+                }}</button
+              ><time>{{ relativeTime(post.created_at) }}</time>
+            </div>
+          </article>
+          <SkyButton
+            v-if="store.feedCursor"
+            rounded
+            tonal
+            class="ps-load-more"
+            @click="store.loadFeed(true)"
+            >{{ phone.t('Common.continue') }}</SkyButton
           >
-            <template #media>
-              <span class="ps-avatar ps-avatar--list">
-                <img
+        </SkyScrollArea>
+      </template>
+
+      <template v-else-if="tab === 'explore'">
+        <SkyNavbar :title="t('explore')" variant="large">
+          <template #subnavbar
+            ><SkySearchbar
+              v-model="search"
+              :label="t('searchPlaceholder')"
+              :clear-label="phone.t('Common.clear')"
+              :placeholder="t('searchPlaceholder')"
+          /></template>
+        </SkyNavbar>
+        <SkyScrollArea with-tabbar class="ps-screen ps-explore">
+          <div
+            v-if="search && store.searchProfiles.length"
+            class="ps-profile-results"
+          >
+            <button
+              v-for="profile in store.searchProfiles"
+              :key="profile.id"
+              @click="openProfile(profile)"
+            >
+              <span class="ps-avatar"
+                ><img
                   v-if="profile.avatar_url"
                   :src="profile.avatar_url"
                   alt=""
-                />
-                <span v-else>{{ initials(profile.display_name) }}</span>
-              </span>
-            </template>
-          </k-list-item>
-        </k-list>
-        <div
-          v-if="
-            search && !store.searchProfiles.length && !store.searchPosts.length
-          "
-          class="ps-state ps-state--inline"
-        >
-          <Search />
-          <strong>{{ t('noResults') }}</strong>
-          <span>{{ t('noResultsBody') }}</span>
-        </div>
-        <div class="ps-grid">
-          <k-link
-            v-for="post in search ? store.searchPosts : store.explore"
-            :key="post.id"
-            component="button"
-            class="ps-grid__tile"
-            :aria-label="post.caption || t('post')"
-            @click="openPost(post)"
-          >
-            <img :src="post.media[0]?.url" :alt="post.caption" loading="lazy" />
-            <k-badge v-if="post.media.length > 1" class="ps-grid__badge">{{
-              post.media.length
-            }}</k-badge>
-          </k-link>
-        </div>
-        <k-button
-          v-if="!search && store.exploreCursor"
-          class="ps-load-more"
-          tonal
-          rounded
-          @click="store.loadExplore(true)"
-        >
-          {{ t('explore') }}
-        </k-button>
-      </main>
-
-      <main v-else-if="tab === 'create'" class="ps-scroll ps-compose">
-        <k-segmented strong>
-          <k-segmented-button
-            :active="composeKind === 'post'"
-            @click="setComposeKind('post')"
-          >
-            {{ t('newPost') }}
-          </k-segmented-button>
-          <k-segmented-button
-            :active="composeKind === 'story'"
-            @click="setComposeKind('story')"
-          >
-            {{ t('newStory') }}
-          </k-segmented-button>
-        </k-segmented>
-        <k-card class="ps-picker-card">
-          <div v-if="selectedMedia.length" class="ps-compose-preview">
-            <img
-              v-for="media in selectedMedia"
-              :key="media.id"
-              :src="media.url"
-              alt=""
-            />
+                /><template v-else>{{
+                  initials(profile.display_name)
+                }}</template></span
+              ><span
+                ><strong
+                  >{{ profile.display_name }}
+                  <Check v-if="profile.verified" class="ps-verified" /></strong
+                ><small>@{{ profile.handle }}</small></span
+              ><ChevronRight />
+            </button>
           </div>
-          <div v-else class="ps-picker-card__empty">
-            <Images /><span>{{
-              t(composeKind === 'post' ? 'choosePhotosHint' : 'chooseStoryHint')
-            }}</span>
-          </div>
-          <k-button rounded @click="chooseComposeMedia">
-            {{
-              t(
-                selectedMedia.length
-                  ? 'changePhotos'
-                  : composeKind === 'post'
-                    ? 'choosePhotos'
-                    : 'choosePhoto',
-              )
-            }}
-          </k-button>
-          <k-chip v-if="selectedMedia.length">
-            {{ t('selectedPhotos', { count: String(selectedMedia.length) }) }}
-          </k-chip>
-        </k-card>
-        <k-list inset strong>
-          <k-list-input
-            v-if="composeKind === 'post'"
-            type="textarea"
-            :label="t('caption')"
-            :placeholder="t('captionPlaceholder')"
-            :maxlength="800"
-            :value="caption"
-            @input="caption = inputValue($event)"
-          />
-          <k-list-input
-            v-if="composeKind === 'post'"
-            :label="t('location')"
-            :placeholder="t('locationPlaceholder')"
-            :maxlength="80"
-            :value="location"
-            @input="location = inputValue($event)"
-          />
-          <k-list-input
-            v-else
-            type="textarea"
-            :label="t('story')"
-            :placeholder="t('storyTextPlaceholder')"
-            :maxlength="160"
-            :value="storyText"
-            @input="storyText = inputValue($event)"
-          />
-          <k-list-item
-            v-if="composeKind === 'post'"
-            :title="t('allowComments')"
-          >
-            <template #after
-              ><k-toggle
-                :checked="commentsEnabled"
-                @change="commentsEnabled = !commentsEnabled"
-            /></template>
-          </k-list-item>
-        </k-list>
-        <k-button
-          large
-          rounded
-          :disabled="!selectedMedia.length || publishing"
-          @click="publish"
-        >
-          <k-preloader v-if="publishing" />
-          <span v-else>{{ t(composeKind) }}</span>
-        </k-button>
-      </main>
-
-      <main v-else-if="tab === 'activity'" class="ps-scroll ps-activity">
-        <div v-if="!store.activities.length" class="ps-state ps-state--inline">
-          <Bell />
-          <strong>{{ t('noActivity') }}</strong>
-        </div>
-        <k-list v-else inset strong>
-          <k-list-item
-            v-for="activity in store.activities"
-            :key="activity.id"
-            :class="{ 'ps-activity--unread': !activity.read_at }"
-            link
-            :title="activity.display_name"
-            :subtitle="t(`activityKinds.${activity.kind}`)"
-            :after="relativeTime(activity.created_at)"
-            @click="activityProfile(activity)"
-          >
-            <template #media>
-              <span class="ps-avatar ps-avatar--list">
-                <img
-                  v-if="activity.avatar_url"
-                  :src="activity.avatar_url"
-                  alt=""
-                />
-                <span v-else>{{ initials(activity.display_name) }}</span>
-              </span>
-            </template>
-            <template v-if="activity.kind === 'follow_request'" #footer>
-              <div class="ps-request-actions">
-                <k-button
-                  small
-                  rounded
-                  @click.stop="store.respondFollow(activity.profile_id, true)"
-                  >{{ t('accept') }}</k-button
-                >
-                <k-button
-                  small
-                  rounded
-                  tonal
-                  @click.stop="store.respondFollow(activity.profile_id, false)"
-                  >{{ t('decline') }}</k-button
-                >
-              </div>
-            </template>
-          </k-list-item>
-        </k-list>
-      </main>
-
-      <main
-        v-else-if="tab === 'profile' && currentProfile"
-        class="ps-scroll ps-profile"
-      >
-        <section class="ps-profile__header">
-          <span class="ps-avatar ps-avatar--profile">
-            <img
-              v-if="currentProfile.avatar_url"
-              :src="currentProfile.avatar_url"
-              alt=""
-            />
-            <span v-else>{{ initials(currentProfile.display_name) }}</span>
-          </span>
-          <h1>
-            {{ currentProfile.display_name }}
-            <Check
-              v-if="currentProfile.verified"
-              class="ps-verified"
-              :stroke-width="3"
-            />
-          </h1>
-          <p>@{{ currentProfile.handle }}</p>
-          <div class="ps-profile__stats">
-            <span
-              ><strong>{{ count(currentProfile.post_count) }}</strong
-              ><small>{{ t('posts') }}</small></span
-            >
-            <span
-              ><strong>{{ count(currentProfile.followers) }}</strong
-              ><small>{{ t('followers') }}</small></span
-            >
-            <span
-              ><strong>{{ count(currentProfile.following) }}</strong
-              ><small>{{ t('following') }}</small></span
-            >
-          </div>
-          <p class="ps-profile__bio">
-            {{ currentProfile.bio || t('emptyBio') }}
-          </p>
-          <k-button
-            v-if="currentProfile.is_owner"
-            rounded
-            @click="editProfile"
-            >{{ t('editProfile') }}</k-button
-          >
-          <k-button
-            v-else
-            rounded
-            :tonal="currentProfile.is_following || currentProfile.is_requested"
-            @click="follow(currentProfile)"
-          >
-            {{
-              t(
-                currentProfile.is_following
-                  ? 'unfollow'
-                  : currentProfile.is_requested
-                    ? 'requested'
-                    : 'follow',
-              )
-            }}
-          </k-button>
-        </section>
-        <k-block v-if="currentProfile.locked" class="ps-private">
-          <LockKeyhole />
-          <strong>{{ t('privateProfile') }}</strong>
-          <p>{{ t('privateProfileBody') }}</p>
-        </k-block>
-        <template v-else>
-          <k-segmented
-            v-if="currentProfile.is_owner"
-            strong
-            class="ps-profile__segments"
-          >
-            <k-segmented-button
-              :active="profileSection === 'photos'"
-              @click="profileSection = 'photos'"
-            >
-              <Images /> {{ t('photos') }}
-            </k-segmented-button>
-            <k-segmented-button
-              :active="profileSection === 'saved'"
-              @click="profileSection = 'saved'"
-            >
-              <Bookmark /> {{ t('saved') }}
-            </k-segmented-button>
-          </k-segmented>
           <div class="ps-grid">
-            <k-link
-              v-for="post in profileGrid"
+            <button
+              v-for="post in search ? store.searchPosts : store.explore"
               :key="post.id"
-              component="button"
-              class="ps-grid__tile"
               @click="openPost(post)"
             >
-              <img
-                :src="post.media[0]?.url"
-                :alt="post.caption"
-                loading="lazy"
+              <video
+                v-if="post.media[0]?.media_type === 'video'"
+                :src="post.media[0].url"
+                muted
+                preload="metadata"
+              /><img
+                v-else-if="post.media[0]"
+                :src="post.media[0].url"
+                alt=""
+              /><span v-if="post.media.length > 1"
+                ><Images />{{ post.media.length }}</span
+              ><Video
+                v-else-if="post.media[0]?.media_type === 'video'"
+                class="ps-grid-video"
               />
-              <k-badge v-if="post.media.length > 1" class="ps-grid__badge">{{
-                post.media.length
-              }}</k-badge>
-            </k-link>
+            </button>
           </div>
-        </template>
-      </main>
+          <div
+            v-if="
+              search &&
+              !store.searchProfiles.length &&
+              !store.searchPosts.length
+            "
+            class="ps-empty"
+          >
+            <Search /><strong>{{ t('noResults') }}</strong
+            ><span>{{ t('noResultsBody') }}</span>
+          </div>
+        </SkyScrollArea>
+      </template>
 
-      <k-tabbar
-        v-if="!selectedPost"
-        class="ps-tabbar"
-        inner-class="ps-tabbar__inner"
-        labels
-        icons
-      >
-        <k-toolbar-pane>
-          <k-tabbar-link
+      <template v-else-if="tab === 'create'">
+        <SkyNavbar
+          :title="t(composeKind === 'post' ? 'newPost' : 'newStory')"
+          variant="large"
+        />
+        <SkyScrollArea with-tabbar class="ps-screen ps-create">
+          <SkySegmented strong>
+            <SkySegmentedButton
+              :active="composeKind === 'post'"
+              @click="setComposeKind('post')"
+              >{{ t('newPost') }}</SkySegmentedButton
+            >
+            <SkySegmentedButton
+              :active="composeKind === 'story'"
+              @click="setComposeKind('story')"
+              >{{ t('newStory') }}</SkySegmentedButton
+            >
+          </SkySegmented>
+          <SkyCard class="ps-create-card">
+            <div v-if="selectedMedia.length" class="ps-selection-preview">
+              <template v-for="media in selectedMedia" :key="media.id"
+                ><video
+                  v-if="media.mediaType === 'video'"
+                  :src="media.url"
+                  autoplay
+                  loop
+                  muted
+                  playsinline /><img v-else :src="media.url" alt=""
+              /></template>
+              <button
+                :aria-label="t('changePhotos')"
+                @click="selectedMedia = []"
+              >
+                <X />
+              </button>
+              <SkyChip>{{
+                t('selectedPhotos', { count: String(selectedMedia.length) })
+              }}</SkyChip>
+              <span
+                v-if="selectedMedia[0]?.mediaType === 'video'"
+                class="ps-video-preview-badge"
+                ><Video />{{ t('video') }}</span
+              >
+            </div>
+            <template v-else>
+              <div class="ps-create-intro">
+                <span><ImagePlus /></span
+                ><strong>{{
+                  t(composeKind === 'post' ? 'newPost' : 'newStory')
+                }}</strong>
+                <p>
+                  {{
+                    t(
+                      composeKind === 'post'
+                        ? 'choosePhotosHint'
+                        : 'chooseStoryHint',
+                    )
+                  }}
+                </p>
+              </div>
+              <div class="ps-source-grid">
+                <button @click="openComposeMedia('photos', 'photo')">
+                  <Images /><span
+                    ><strong>{{ t('photo') }}</strong
+                    ><small>{{ t('gallery') }}</small></span
+                  >
+                </button>
+                <button @click="openComposeMedia('camera', 'photo')">
+                  <Camera /><span
+                    ><strong>{{ t('photo') }}</strong
+                    ><small>{{ t('camera') }}</small></span
+                  >
+                </button>
+                <button @click="openComposeMedia('photos', 'video')">
+                  <Video /><span
+                    ><strong>{{ t('video') }}</strong
+                    ><small>{{ t('gallery') }}</small></span
+                  >
+                </button>
+                <button @click="openComposeMedia('camera', 'video')">
+                  <Camera /><span
+                    ><strong>{{ t('video') }}</strong
+                    ><small>{{ t('camera') }}</small></span
+                  >
+                </button>
+              </div>
+            </template>
+          </SkyCard>
+          <div class="ps-compose-fields">
+            <SkyField
+              v-if="composeKind === 'post'"
+              v-model="caption"
+              :label="t('caption')"
+              :placeholder="t('captionPlaceholder')"
+              type="textarea"
+              :rows="4"
+              outline
+            />
+            <SkyField
+              v-else
+              v-model="storyText"
+              :label="t('story')"
+              :placeholder="t('storyTextPlaceholder')"
+              type="textarea"
+              :rows="4"
+              outline
+            />
+            <SkyField
+              v-if="composeKind === 'post'"
+              v-model="location"
+              :label="t('location')"
+              :placeholder="t('locationPlaceholder')"
+              outline
+              ><template #media><MapPin /></template
+            ></SkyField>
+            <label v-if="composeKind === 'post'" class="ps-toggle-row"
+              ><span
+                ><strong>{{ t('allowComments') }}</strong
+                ><small>{{ t('comments') }}</small></span
+              ><SkyToggle v-model="commentsEnabled"
+            /></label>
+          </div>
+          <SkyButton
+            large
+            rounded
+            class="ps-publish"
+            :disabled="!selectedMedia.length || publishing"
+            @click="publish"
+            ><SkySpinner v-if="publishing" />{{
+              t(
+                publishing
+                  ? 'publishing'
+                  : composeKind === 'post'
+                    ? 'newPost'
+                    : 'newStory',
+              )
+            }}</SkyButton
+          >
+        </SkyScrollArea>
+      </template>
+
+      <template v-else-if="tab === 'activity'">
+        <SkyNavbar :title="t('activity')" variant="large"
+          ><template v-if="store.isAdmin" #right
+            ><SkyLink
+              component="button"
+              icon-only
+              :aria-label="t('moderation')"
+              @click="openModeration"
+              ><ShieldAlert /></SkyLink></template
+        ></SkyNavbar>
+        <SkyScrollArea with-tabbar class="ps-screen ps-activity">
+          <button
+            v-for="activity in store.activities"
+            :key="activity.id"
+            class="ps-activity-row"
+            @click="activityProfile(activity)"
+          >
+            <span class="ps-avatar"
+              ><img
+                v-if="activity.avatar_url"
+                :src="activity.avatar_url"
+                alt=""
+              /><template v-else>{{
+                initials(activity.display_name)
+              }}</template></span
+            ><span
+              ><strong
+                >{{ activity.display_name }}
+                <Check v-if="activity.verified" class="ps-verified" /></strong
+              ><small
+                >{{ t(`activityKinds.${activity.kind}`) }} ·
+                {{ relativeTime(activity.created_at) }}</small
+              ></span
+            >
+            <div
+              v-if="activity.kind === 'follow_request'"
+              class="ps-request-actions"
+              @click.stop
+            >
+              <SkyButton
+                small
+                rounded
+                @click="store.respondFollow(activity.profile_id, true)"
+                >{{ t('accept') }}</SkyButton
+              ><SkyButton
+                small
+                rounded
+                tonal
+                @click="store.respondFollow(activity.profile_id, false)"
+                >{{ t('decline') }}</SkyButton
+              >
+            </div>
+          </button>
+          <div v-if="!store.activities.length" class="ps-empty">
+            <Bell /><strong>{{ t('noActivity') }}</strong>
+          </div>
+        </SkyScrollArea>
+      </template>
+
+      <template v-else-if="tab === 'profile'">
+        <SkyNavbar
+          :title="currentProfile ? `@${currentProfile.handle}` : t('profile')"
+          :show-back="Boolean(store.viewedProfile)"
+          :back-label="phone.t('Common.back')"
+          back-appearance="surface"
+          variant="medium"
+          @back="goBackFromProfile"
+          ><template #right
+            ><SkyLink
+              component="button"
+              icon-only
+              :aria-label="t('more')"
+              @click="showProfileActions"
+              ><MoreHorizontal /></SkyLink></template
+        ></SkyNavbar>
+        <SkyScrollArea
+          v-if="currentProfile"
+          with-tabbar
+          class="ps-screen ps-profile"
+        >
+          <section class="ps-profile-header">
+            <span class="ps-avatar ps-avatar--profile"
+              ><img
+                v-if="currentProfile.avatar_url"
+                :src="currentProfile.avatar_url"
+                alt=""
+              /><template v-else>{{
+                initials(currentProfile.display_name)
+              }}</template></span
+            >
+            <div class="ps-profile-stats">
+              <button>
+                <strong>{{ count(currentProfile.post_count) }}</strong
+                ><small>{{ t('posts') }}</small></button
+              ><button @click="openConnections('followers')">
+                <strong>{{ count(currentProfile.followers) }}</strong
+                ><small>{{ t('followers') }}</small></button
+              ><button @click="openConnections('following')">
+                <strong>{{ count(currentProfile.following) }}</strong
+                ><small>{{ t('following') }}</small>
+              </button>
+            </div>
+            <div class="ps-profile-copy">
+              <strong
+                >{{ currentProfile.display_name }}
+                <Check v-if="currentProfile.verified" class="ps-verified"
+              /></strong>
+              <p>{{ currentProfile.bio || t('emptyBio') }}</p>
+            </div>
+            <div v-if="!currentProfile.is_owner" class="ps-profile-buttons">
+              <SkyButton
+                rounded
+                :tonal="
+                  currentProfile.is_following || currentProfile.is_requested
+                "
+                @click="follow(currentProfile)"
+                >{{
+                  t(
+                    currentProfile.is_requested
+                      ? 'requested'
+                      : currentProfile.is_following
+                        ? 'unfollow'
+                        : 'follow',
+                  )
+                }}</SkyButton
+              >
+            </div>
+          </section>
+          <div v-if="currentProfile.locked" class="ps-empty ps-private">
+            <LockKeyhole /><strong>{{ t('privateProfile') }}</strong
+            ><span>{{ t('privateProfileBody') }}</span>
+          </div>
+          <template v-else>
+            <SkySegmented
+              v-if="currentProfile.is_owner"
+              strong
+              class="ps-profile-segments"
+              ><SkySegmentedButton
+                :active="profileSection === 'photos'"
+                @click="profileSection = 'photos'"
+                ><Images />{{ t('photos') }}</SkySegmentedButton
+              ><SkySegmentedButton
+                :active="profileSection === 'saved'"
+                @click="profileSection = 'saved'"
+                ><Bookmark />{{ t('saved') }}</SkySegmentedButton
+              ></SkySegmented
+            >
+            <div class="ps-grid">
+              <button
+                v-for="post in profileGrid"
+                :key="post.id"
+                @click="openPost(post)"
+              >
+                <video
+                  v-if="post.media[0]?.media_type === 'video'"
+                  :src="post.media[0].url"
+                  muted
+                  preload="metadata"
+                /><img
+                  v-else-if="post.media[0]"
+                  :src="post.media[0].url"
+                  alt=""
+                /><span v-if="post.media.length > 1"
+                  ><Images />{{ post.media.length }}</span
+                ><Video
+                  v-else-if="post.media[0]?.media_type === 'video'"
+                  class="ps-grid-video"
+                />
+              </button>
+            </div>
+          </template>
+        </SkyScrollArea>
+      </template>
+
+      <SkyPillNavigation class="ps-navigation" :label="t('name')" layout="full">
+        <SkySegmented
+          class="ps-navigation-segments"
+          :active-index="tabIndex"
+          :item-count="5"
+          :aria-label="t('name')"
+          navigation
+        >
+          <SkySegmentedButton
             :active="tab === 'home'"
-            :label="t('home')"
+            class="ps-nav-button"
             @click="showTab('home')"
-            ><template #icon><Home /></template
-          ></k-tabbar-link>
-          <k-tabbar-link
+          >
+            <Home /><small>{{ t('home') }}</small>
+          </SkySegmentedButton>
+          <SkySegmentedButton
             :active="tab === 'explore'"
-            :label="t('explore')"
+            class="ps-nav-button"
             @click="showTab('explore')"
-            ><template #icon><Compass /></template
-          ></k-tabbar-link>
-          <k-tabbar-link
+          >
+            <Compass /><small>{{ t('explore') }}</small>
+          </SkySegmentedButton>
+          <SkySegmentedButton
             :active="tab === 'create'"
-            :label="t('create')"
+            class="ps-nav-button ps-create-tab"
             @click="showTab('create')"
-            ><template #icon
-              ><span class="ps-create-icon"><Plus /></span></template
-          ></k-tabbar-link>
-          <k-tabbar-link
+          >
+            <span class="ps-create-icon"><Plus /></span
+            ><small>{{ t('create') }}</small>
+          </SkySegmentedButton>
+          <SkySegmentedButton
             :active="tab === 'activity'"
-            :label="t('activity')"
+            class="ps-nav-button"
             @click="showTab('activity')"
           >
-            <template #icon
-              ><span class="ps-badge-icon"
-                ><Bell /><k-badge v-if="unreadCount">{{
-                  unreadCount
-                }}</k-badge></span
-              ></template
-            >
-          </k-tabbar-link>
-          <k-tabbar-link
+            <span class="ps-badge-anchor"
+              ><Bell /><b v-if="unreadCount">{{ unreadCount }}</b></span
+            ><small>{{ t('activity') }}</small>
+          </SkySegmentedButton>
+          <SkySegmentedButton
             :active="tab === 'profile'"
-            :label="t('profile')"
+            class="ps-nav-button"
             @click="showTab('profile')"
-            ><template #icon><UserRound /></template
-          ></k-tabbar-link>
-        </k-toolbar-pane>
-      </k-tabbar>
+          >
+            <UserRound /><small>{{ t('profile') }}</small>
+          </SkySegmentedButton>
+        </SkySegmented>
+      </SkyPillNavigation>
     </template>
 
-    <k-sheet :opened="commentsOpen" @backdropclick="commentsOpen = false">
-      <div class="ps-sheet ps-sheet--comments">
-        <div class="ps-sheet__handle" />
-        <k-toolbar top class="ps-sheet__toolbar">
-          <k-toolbar-pane class="ps-sheet__toolbar-pane">
-            <strong>{{ t('comments') }}</strong>
-            <k-link component="button" @click="commentsOpen = false">
-              {{ t('done') }}
-            </k-link>
-          </k-toolbar-pane>
-        </k-toolbar>
-        <div class="ps-comments">
-          <div class="ps-comments__body">
-            <div
-              v-if="!store.comments.length"
-              class="ps-state ps-state--inline"
-            >
-              <MessageCircle /><span>{{ t('noComments') }}</span>
-            </div>
-            <k-list v-else inset strong>
-              <k-list-item
-                v-for="comment in store.comments"
-                :key="comment.id"
-                :title="comment.display_name"
-                :subtitle="comment.body"
-                :after="relativeTime(comment.created_at)"
-              >
-                <template #media>
-                  <span class="ps-avatar ps-avatar--comment">
-                    <img
-                      v-if="comment.avatar_url"
-                      :src="comment.avatar_url"
-                      alt=""
-                    />
-                    <span v-else>{{ initials(comment.display_name) }}</span>
-                  </span>
-                </template>
-                <template #footer>
-                  <div class="ps-comment-actions">
-                    <k-link
-                      component="button"
-                      @click="replyTo = comment.parent_id ?? comment.id"
-                      >{{ t('reply') }}</k-link
-                    >
-                    <k-link
-                      v-if="comment.is_owner || selectedPost?.is_owner"
-                      component="button"
-                      class="ps-danger"
-                      @click="store.removeComment(comment.id)"
-                      >{{ t('removeComment') }}</k-link
-                    >
-                    <k-link
-                      v-else
-                      component="button"
-                      class="ps-danger"
-                      @click="startReport('comment', comment.id, t('comment'))"
-                      >{{ t('report') }}</k-link
-                    >
-                  </div>
-                </template>
-              </k-list-item>
-            </k-list>
-          </div>
-          <k-chip
-            v-if="replyTo"
-            class="ps-reply-chip"
-            delete-button
-            @delete="replyTo = undefined"
-            >{{ t('reply') }}</k-chip
-          >
-          <k-messagebar
-            class="ps-comment-composer"
-            :placeholder="t('addComment')"
-            right-class="ps-comment-composer__right"
-            :value="commentBody"
-            @input="commentBody = inputValue($event).slice(0, 300)"
-          >
-            <template #right>
-              <k-link
-                component="button"
-                icon-only
-                :aria-label="t('post')"
-                :disabled="!commentBody.trim()"
-                @click="submitComment"
-              >
-                <Send />
-              </k-link>
-            </template>
-          </k-messagebar>
-        </div>
-      </div>
-    </k-sheet>
-
-    <k-sheet :opened="profileEditOpen" @backdropclick="profileEditOpen = false">
-      <div class="ps-sheet ps-sheet--tall">
-        <div class="ps-sheet__handle" />
-        <k-toolbar top class="ps-sheet__toolbar">
-          <k-toolbar-pane class="ps-sheet__toolbar-pane">
-            <strong>{{ t('editProfile') }}</strong>
-            <k-link component="button" @click="profileEditOpen = false">
-              {{ t('done') }}
-            </k-link>
-          </k-toolbar-pane>
-        </k-toolbar>
-        <div class="ps-edit">
-          <span class="ps-avatar ps-avatar--profile">
-            <img v-if="selectedAvatar" :src="selectedAvatar.url" alt="" />
-            <img
-              v-else-if="!removeAvatar && store.profile?.avatar_url"
-              :src="store.profile.avatar_url"
-              alt=""
-            />
-            <span v-else>{{ initials(profileDraft.displayName) }}</span>
-          </span>
-          <div class="ps-edit__avatar-actions">
-            <k-button small rounded tonal @click="chooseAvatar">{{
-              t('chooseAvatar')
-            }}</k-button>
-            <k-button small rounded tonal @click="clearAvatarSelection">{{
-              t('removeAvatar')
-            }}</k-button>
-          </div>
-          <k-list inset strong>
-            <k-list-input
-              :label="t('displayName')"
-              :value="profileDraft.displayName"
-              :maxlength="40"
-              @input="profileDraft.displayName = inputValue($event)"
-            />
-            <k-list-input
-              :label="t('username')"
-              :value="profileDraft.handle"
-              :maxlength="24"
-              autocapitalize="none"
-              @input="profileDraft.handle = inputValue($event)"
-            />
-            <k-list-input
-              type="textarea"
-              :label="t('bio')"
-              :value="profileDraft.bio"
-              :maxlength="160"
-              @input="profileDraft.bio = inputValue($event)"
-            />
-            <k-list-item
-              :title="t('privateProfileSetting')"
-              :subtitle="t('privacyHint')"
-            >
-              <template #after
-                ><k-toggle
-                  :checked="profileDraft.private"
-                  @change="profileDraft.private = !profileDraft.private"
-              /></template>
-            </k-list-item>
-          </k-list>
-          <k-button large rounded @click="saveProfile">{{
-            t('saveProfile')
-          }}</k-button>
-        </div>
-      </div>
-    </k-sheet>
-
-    <k-sheet
-      :opened="Boolean(selectedStory)"
-      @backdropclick="selectedStory = null"
+    <SkySheet
+      :opened="commentsOpen"
+      class="ps-sheet"
+      :aria-label="t('comments')"
+      @backdropclick="commentsOpen = false"
+      @escape="commentsOpen = false"
     >
-      <div v-if="selectedStory" class="ps-story-viewer">
-        <img :src="selectedStory.url" :alt="selectedStory.body" />
-        <div class="ps-story-viewer__progress" aria-hidden="true">
+      <div class="ps-sheet-handle" />
+      <section class="ps-comments-sheet">
+        <header>
+          <strong>{{ t('comments') }}</strong
+          ><button @click="commentsOpen = false"><X /></button>
+        </header>
+        <div class="ps-comments-list">
+          <div v-if="!store.comments.length" class="ps-empty">
+            <MessageCircle /><strong>{{ t('noComments') }}</strong>
+          </div>
+          <div
+            v-for="thread in commentThreads"
+            :key="thread.comment.id"
+            class="ps-comment-thread"
+          >
+            <article class="ps-comment-row">
+              <button
+                class="ps-avatar ps-avatar--comment"
+                @click="openProfile(thread.comment.profile_id)"
+              >
+                <img
+                  v-if="thread.comment.avatar_url"
+                  :src="thread.comment.avatar_url"
+                  alt=""
+                /><template v-else>{{
+                  initials(thread.comment.display_name)
+                }}</template>
+              </button>
+              <div class="ps-comment-copy">
+                <header>
+                  <button @click="openProfile(thread.comment.profile_id)">
+                    {{ thread.comment.display_name }}
+                    <Check
+                      v-if="thread.comment.verified"
+                      class="ps-verified"
+                    /></button
+                  ><time>{{ relativeTime(thread.comment.created_at) }}</time>
+                </header>
+                <p>{{ thread.comment.body }}</p>
+                <footer>
+                  <button @click="startReply(thread.comment)">
+                    <Reply />{{ t('reply') }}</button
+                  ><button
+                    v-if="thread.comment.is_owner"
+                    @click="store.removeComment(thread.comment.id)"
+                  >
+                    <Trash2 />{{ t('remove') }}</button
+                  ><button v-else @click="reportComment(thread.comment)">
+                    {{ t('report') }}
+                  </button>
+                </footer>
+              </div>
+              <button
+                class="ps-comment-like"
+                :class="{
+                  active: thread.comment.is_liked,
+                  pulse: commentLikePulseId === thread.comment.id,
+                }"
+                @click="reactComment(thread.comment)"
+              >
+                <Heart
+                  :fill="thread.comment.is_liked ? 'currentColor' : 'none'"
+                /><small>{{ thread.comment.like_count || '' }}</small>
+              </button>
+            </article>
+            <article
+              v-for="reply in thread.replies"
+              :key="reply.id"
+              class="ps-comment-row ps-comment-row--reply"
+            >
+              <button
+                class="ps-avatar ps-avatar--reply"
+                @click="openProfile(reply.profile_id)"
+              >
+                <img
+                  v-if="reply.avatar_url"
+                  :src="reply.avatar_url"
+                  alt=""
+                /><template v-else>{{ initials(reply.display_name) }}</template>
+              </button>
+              <div class="ps-comment-copy">
+                <header>
+                  <button @click="openProfile(reply.profile_id)">
+                    {{ reply.display_name }}
+                    <Check v-if="reply.verified" class="ps-verified" /></button
+                  ><time>{{ relativeTime(reply.created_at) }}</time>
+                </header>
+                <p>
+                  <b v-if="reply.display_reply_to_handle"
+                    >@{{ reply.display_reply_to_handle }}</b
+                  >
+                  {{ reply.display_body }}
+                </p>
+                <footer>
+                  <button @click="startReply(reply)">
+                    <Reply />{{ t('reply') }}</button
+                  ><button
+                    v-if="reply.is_owner"
+                    @click="store.removeComment(reply.id)"
+                  >
+                    <Trash2 />{{ t('remove') }}</button
+                  ><button v-else @click="reportComment(reply)">
+                    {{ t('report') }}
+                  </button>
+                </footer>
+              </div>
+              <button
+                class="ps-comment-like"
+                :class="{
+                  active: reply.is_liked,
+                  pulse: commentLikePulseId === reply.id,
+                }"
+                @click="reactComment(reply)"
+              >
+                <Heart
+                  :fill="reply.is_liked ? 'currentColor' : 'none'"
+                /><small>{{ reply.like_count || '' }}</small>
+              </button>
+            </article>
+          </div>
+        </div>
+        <div
+          class="ps-comment-composer"
+          :class="{ 'ps-comment-composer--replying': replyingTo }"
+        >
+          <div v-if="replyingTo" class="ps-replying">
+            <span>{{
+              t('replyingTo', { handle: `@${replyingTo.handle}` })
+            }}</span
+            ><button :aria-label="t('cancel')" @click="replyingTo = null">
+              <X />
+            </button>
+          </div>
+          <SkyMessagebar
+            v-model="commentBody"
+            :placeholder="t(replyingTo ? 'replyPlaceholder' : 'addComment')"
+            @keydown.enter.prevent="submitComment"
+            ><template #right
+              ><button :disabled="!commentBody.trim()" @click="submitComment">
+                <Send /></button></template
+          ></SkyMessagebar>
+        </div>
+      </section>
+    </SkySheet>
+
+    <SkySheet
+      :opened="profileEditOpen"
+      class="ps-sheet"
+      :aria-label="t('editProfile')"
+      @backdropclick="profileEditOpen = false"
+      @escape="profileEditOpen = false"
+    >
+      <div class="ps-sheet-handle" />
+      <section class="ps-edit-sheet">
+        <header>
+          <button @click="profileEditOpen = false">{{ t('cancel') }}</button
+          ><strong>{{ t('editProfile') }}</strong
+          ><button class="ps-save-link" @click="saveProfile">
+            {{ t('done') }}
+          </button>
+        </header>
+        <div class="ps-edit-avatar">
+          <span class="ps-avatar ps-avatar--edit"
+            ><img
+              v-if="
+                selectedAvatar?.url ||
+                (!removeAvatar && store.profile?.avatar_url)
+              "
+              :src="selectedAvatar?.url ?? store.profile?.avatar_url ?? ''"
+              alt=""
+            /><template v-else>{{
+              initials(profileDraft.displayName)
+            }}</template></span
+          ><strong>{{ t('avatar') }}</strong>
+          <div>
+            <SkyButton small rounded tonal @click="openAvatarMedia('photos')"
+              ><Images />{{ t('gallery') }}</SkyButton
+            ><SkyButton small rounded tonal @click="openAvatarMedia('camera')"
+              ><Camera />{{ t('camera') }}</SkyButton
+            >
+          </div>
+          <button class="ps-danger-link" @click="clearAvatarSelection">
+            {{ t('removeAvatar') }}
+          </button>
+        </div>
+        <div class="ps-edit-fields">
+          <SkyField
+            v-model="profileDraft.displayName"
+            :label="t('displayName')"
+            outline
+          /><SkyField
+            v-model="profileDraft.handle"
+            :label="t('username')"
+            outline
+          /><SkyField
+            v-model="profileDraft.bio"
+            :label="t('bio')"
+            type="textarea"
+            :rows="6"
+            outline
+          /><label class="ps-toggle-row"
+            ><span
+              ><strong>{{ t('privateProfileSetting') }}</strong
+              ><small>{{ t('privacyHint') }}</small></span
+            ><SkyToggle v-model="profileDraft.private"
+          /></label>
+        </div>
+      </section>
+    </SkySheet>
+
+    <SkySheet
+      :opened="connectionsOpen"
+      class="ps-sheet"
+      :aria-label="t(connectionsMode)"
+      @backdropclick="connectionsOpen = false"
+      @escape="connectionsOpen = false"
+    >
+      <div class="ps-sheet-handle" />
+      <section class="ps-connections-sheet">
+        <header>
           <span
-            v-for="(story, index) in selectedStoryGroup"
-            :key="story.id"
+            ><UsersRound /><strong>{{ t(connectionsMode) }}</strong></span
+          ><button @click="connectionsOpen = false"><X /></button>
+        </header>
+        <div>
+          <article v-for="profile in store.connections" :key="profile.id">
+            <button
+              class="ps-connection-profile"
+              @click="openConnectionProfile(profile)"
+            >
+              <span class="ps-avatar"
+                ><img
+                  v-if="profile.avatar_url"
+                  :src="profile.avatar_url"
+                  alt=""
+                /><template v-else>{{
+                  initials(profile.display_name)
+                }}</template></span
+              ><span
+                ><strong
+                  >{{ profile.display_name }}
+                  <Check v-if="profile.verified" class="ps-verified" /></strong
+                ><small>@{{ profile.handle }}</small></span
+              ></button
+            ><SkyButton
+              v-if="!profile.is_owner"
+              small
+              rounded
+              :tonal="profile.is_following || profile.is_requested"
+              @click="follow(profile)"
+              >{{
+                t(
+                  profile.is_requested
+                    ? 'requested'
+                    : profile.is_following
+                      ? 'unfollow'
+                      : 'follow',
+                )
+              }}</SkyButton
+            >
+          </article>
+          <div v-if="!store.connections.length" class="ps-empty">
+            <UsersRound /><strong>{{ t('noConnections') }}</strong>
+          </div>
+        </div>
+      </section>
+    </SkySheet>
+
+    <SkySheet
+      :opened="Boolean(selectedStory)"
+      class="ps-story-sheet"
+      :aria-label="t('story')"
+      @backdropclick="selectedStory = null"
+      @escape="selectedStory = null"
+    >
+      <section v-if="selectedStory" class="ps-story-viewer">
+        <div class="ps-story-progress">
+          <span
+            v-for="(_, index) in selectedStoryGroup"
+            :key="index"
             :class="{ active: index <= selectedStoryGroupPosition }"
           />
         </div>
-        <k-glass class="ps-story-viewer__header">
-          <span class="ps-avatar ps-avatar--small">
-            <img
+        <SkyGlass class="ps-story-header"
+          ><span class="ps-avatar ps-avatar--small"
+            ><img
               v-if="selectedStory.avatar_url"
               :src="selectedStory.avatar_url"
               alt=""
-            />
-            <span v-else>{{ initials(selectedStory.display_name) }}</span>
-          </span>
-          <strong>@{{ selectedStory.handle }}</strong>
-          <small>{{ relativeTime(selectedStory.created_at) }}</small>
-          <k-link
-            component="button"
-            icon-only
-            :aria-label="t('closeStory')"
-            @click="selectedStory = null"
-            ><Plus class="ps-close"
-          /></k-link>
-        </k-glass>
-        <p v-if="selectedStory.body" class="ps-story-viewer__text">
-          {{ selectedStory.body }}
-        </p>
-        <div class="ps-story-viewer__nav">
-          <k-link
-            component="button"
-            icon-only
-            :aria-label="t('nextStory')"
-            @click="nextStory(-1)"
-            ><ChevronLeft
-          /></k-link>
-          <k-link
-            component="button"
-            icon-only
-            :aria-label="t('nextStory')"
-            @click="nextStory(1)"
-            ><ChevronRight
-          /></k-link>
-        </div>
-        <div class="ps-story-viewer__actions">
-          <k-button
+            /><template v-else>{{
+              initials(selectedStory.display_name)
+            }}</template></span
+          ><span
+            ><strong>@{{ selectedStory.handle }}</strong
+            ><small>{{ relativeTime(selectedStory.created_at) }}</small></span
+          ><button @click="selectedStory = null"><X /></button
+        ></SkyGlass>
+        <video
+          v-if="selectedStory.media_type === 'video'"
+          :src="selectedStory.url"
+          autoplay
+          controls
+          playsinline
+        /><img v-else :src="selectedStory.url" alt="" />
+        <p v-if="selectedStory.body">{{ selectedStory.body }}</p>
+        <button class="ps-story-nav ps-story-nav--left" @click="nextStory(-1)">
+          <ChevronLeft /></button
+        ><button class="ps-story-nav ps-story-nav--right" @click="nextStory(1)">
+          <ChevronRight />
+        </button>
+        <div class="ps-story-actions">
+          <SkyButton
             v-if="selectedStory.is_owner"
             rounded
             tonal
             @click="showStoryViewers(selectedStory)"
-          >
-            <Eye />
-            {{ t('seenBy', { count: count(selectedStory.view_count) }) }}
-          </k-button>
-          <k-button
+            ><Eye />{{
+              t('seenBy', { count: count(selectedStory.view_count) })
+            }}</SkyButton
+          ><SkyButton
             v-if="selectedStory.is_owner"
             rounded
             tonal
             @click="removeSelectedStory"
-          >
-            <Trash2 /> {{ t('removeStory') }}
-          </k-button>
-          <k-button v-else rounded tonal @click="reportSelectedStory">
-            <ShieldAlert /> {{ t('report') }}
-          </k-button>
+            ><Trash2 />{{ t('removeStory') }}</SkyButton
+          ><SkyButton v-else rounded tonal @click="reportSelectedStory">{{
+            t('report')
+          }}</SkyButton>
         </div>
-      </div>
-    </k-sheet>
+      </section>
+    </SkySheet>
 
-    <k-sheet
+    <SkySheet
       :opened="storyViewersOpen"
+      class="ps-sheet"
+      :aria-label="t('storyViewers')"
       @backdropclick="storyViewersOpen = false"
+      @escape="storyViewersOpen = false"
+      ><div class="ps-sheet-handle" />
+      <section class="ps-connections-sheet">
+        <header>
+          <span
+            ><Eye /><strong>{{ t('storyViewers') }}</strong></span
+          ><button @click="storyViewersOpen = false"><X /></button>
+        </header>
+        <div>
+          <article v-for="viewer in store.storyViewers" :key="viewer.id">
+            <button class="ps-connection-profile">
+              <span class="ps-avatar"
+                ><img
+                  v-if="viewer.avatar_url"
+                  :src="viewer.avatar_url"
+                  alt=""
+                /><template v-else>{{
+                  initials(viewer.display_name)
+                }}</template></span
+              ><span
+                ><strong>{{ viewer.display_name }}</strong
+                ><small>@{{ viewer.handle }}</small></span
+              >
+            </button>
+          </article>
+        </div>
+      </section></SkySheet
     >
-      <div class="ps-sheet">
-        <div class="ps-sheet__handle" />
-        <k-toolbar top class="ps-sheet__toolbar">
-          <k-toolbar-pane class="ps-sheet__toolbar-pane">
-            <strong>{{ t('storyViewers') }}</strong>
-            <k-link component="button" @click="storyViewersOpen = false">
-              {{ t('done') }}
-            </k-link>
-          </k-toolbar-pane>
-        </k-toolbar>
-        <div class="ps-comments ps-comments--viewers">
-          <k-list inset strong>
-            <k-list-item
-              v-for="viewer in store.storyViewers"
-              :key="viewer.id"
-              :title="viewer.display_name"
-              :subtitle="`@${viewer.handle}`"
-              :after="relativeTime(viewer.created_at)"
-            >
-              <template #media
-                ><span class="ps-avatar ps-avatar--list"
-                  ><img
-                    v-if="viewer.avatar_url"
-                    :src="viewer.avatar_url"
-                    alt=""
-                  /><span v-else>{{ initials(viewer.display_name) }}</span></span
-                ></template
-              >
-            </k-list-item>
-          </k-list>
-        </div>
-      </div>
-    </k-sheet>
 
-    <k-sheet :opened="reportOpen" @backdropclick="reportOpen = false">
-      <div class="ps-sheet ps-sheet--tall">
-        <div class="ps-sheet__handle" />
-        <k-toolbar top class="ps-sheet__toolbar">
-          <k-toolbar-pane class="ps-sheet__toolbar-pane">
-            <strong>{{
-              t('reportTarget', {
-                target: reportTarget?.label ?? t('post'),
-              })
-            }}</strong>
-            <k-link component="button" @click="reportOpen = false">
-              {{ t('cancel') }}
-            </k-link>
-          </k-toolbar-pane>
-        </k-toolbar>
-        <div class="ps-report">
-          <k-list inset strong>
-            <k-list-item
-              v-for="reason in reportReasons"
-              :key="reason"
-              link
-              :title="t(`reportReasons.${reason}`)"
-              :after="reportReason === reason ? '✓' : ''"
-              @click="reportReason = reason"
-            />
-            <k-list-input
-              type="textarea"
-              :label="t('reportDetails')"
-              :value="reportDetails"
-              :maxlength="500"
-              @input="reportDetails = inputValue($event)"
-            />
-          </k-list>
-          <k-button large rounded @click="submitReport">{{
-            t('submitReport')
-          }}</k-button>
-        </div>
-      </div>
-    </k-sheet>
+    <SkySheet
+      :opened="reportOpen"
+      class="ps-sheet"
+      :aria-label="t('report')"
+      @backdropclick="reportOpen = false"
+      @escape="reportOpen = false"
+      ><div class="ps-sheet-handle" />
+      <section class="ps-report-sheet">
+        <header>
+          <strong>{{
+            t('reportTarget', { target: reportTarget?.label ?? '' })
+          }}</strong
+          ><button @click="reportOpen = false"><X /></button>
+        </header>
+        <SkyList inset strong
+          ><SkyListItem
+            v-for="reason in reportReasons"
+            :key="reason"
+            link
+            link-component="button"
+            :chevron="false"
+            :title="t(`reportReasons.${reason}`)"
+            @click="reportReason = reason"
+            ><template #after
+              ><Check
+                v-if="reportReason === reason"
+                class="ps-selection-check" /></template></SkyListItem></SkyList
+        ><SkyField
+          v-model="reportDetails"
+          :label="t('reportDetails')"
+          type="textarea"
+          :rows="5"
+          outline
+        /><SkyButton large rounded @click="submitReport">{{
+          t('submitReport')
+        }}</SkyButton>
+      </section></SkySheet
+    >
 
-    <k-sheet :opened="moderationOpen" @backdropclick="moderationOpen = false">
-      <div class="ps-sheet ps-sheet--tall">
-        <div class="ps-sheet__handle" />
-        <k-toolbar top class="ps-sheet__toolbar">
-          <k-toolbar-pane class="ps-sheet__toolbar-pane">
-            <strong>{{ t('moderation') }}</strong>
-            <k-link component="button" @click="moderationOpen = false">
-              {{ t('done') }}
-            </k-link>
-          </k-toolbar-pane>
-        </k-toolbar>
-        <div class="ps-moderation">
-          <div v-if="!store.reports.length" class="ps-state ps-state--inline">
-            <ShieldAlert /><span>{{ t('noReports') }}</span>
-          </div>
-          <k-card
-            v-for="report in store.reports"
-            :key="report.id"
-            class="ps-report-card"
+    <SkySheet
+      :opened="moderationOpen"
+      class="ps-sheet"
+      :aria-label="t('moderation')"
+      @backdropclick="moderationOpen = false"
+      @escape="moderationOpen = false"
+      ><div class="ps-sheet-handle" />
+      <section class="ps-moderation-sheet">
+        <header>
+          <strong>{{ t('moderation') }}</strong
+          ><button @click="moderationOpen = false"><X /></button>
+        </header>
+        <div v-if="!store.reports.length" class="ps-empty">
+          <ShieldAlert /><strong>{{ t('noReports') }}</strong>
+        </div>
+        <SkyCard
+          v-for="report in store.reports"
+          :key="report.id"
+          class="ps-report-card"
+          ><strong
+            >{{ t(`reportTargets.${report.target_type}`) }} ·
+            {{ t(`reportReasons.${report.reason}`) }}</strong
           >
-            <strong
-              >{{ t(`reportTargets.${report.target_type}`) }} ·
-              {{ t(`reportReasons.${report.reason}`) }}</strong
+          <p>
+            @{{ report.reporter_handle }} ·
+            {{ report.details || t('noDetails') }}
+          </p>
+          <div>
+            <SkyButton
+              small
+              rounded
+              tonal
+              @click="resolveReport(report.id, 'dismiss')"
+              >{{ t('dismiss') }}</SkyButton
+            ><SkyButton
+              small
+              rounded
+              tonal
+              @click="resolveReport(report.id, 'hide')"
+              >{{ t('hide') }}</SkyButton
+            ><SkyButton
+              small
+              rounded
+              tonal
+              @click="resolveReport(report.id, 'remove')"
+              >{{ t('remove') }}</SkyButton
             >
-            <p>
-              @{{ report.reporter_handle }} ·
-              {{ report.details || t('noDetails') }}
-            </p>
-            <div class="ps-report-card__actions">
-              <k-button
-                small
-                rounded
-                tonal
-                @click="store.resolveReport(report.id, 'dismiss')"
-                >{{ t('dismiss') }}</k-button
-              >
-              <k-button
-                small
-                rounded
-                tonal
-                @click="store.resolveReport(report.id, 'hide')"
-                >{{ t('hide') }}</k-button
-              >
-              <k-button
-                small
-                rounded
-                @click="store.resolveReport(report.id, 'remove')"
-                >{{ t('remove') }}</k-button
-              >
-            </div>
-          </k-card>
-        </div>
-      </div>
-    </k-sheet>
-
-    <k-actions :opened="actionsOpen" @backdropclick="actionsOpen = false">
-      <k-actions-group v-if="selectedPost">
-        <template v-if="selectedPost.is_owner">
-          <k-actions-button @click="archiveSelectedPost">{{
-            t('archive')
-          }}</k-actions-button>
-          <k-actions-button @click="deleteDialogOpen = true">{{
-            t('deletePost')
-          }}</k-actions-button>
-        </template>
-        <template v-else>
-          <k-actions-button
-            @click="startReport('post', selectedPost.id, t('post'))"
-            >{{ t('report') }}</k-actions-button
-          >
-          <k-actions-button @click="blockDialogOpen = true">{{
-            t('block')
-          }}</k-actions-button>
-        </template>
-      </k-actions-group>
-      <k-actions-group v-else-if="currentProfile && !currentProfile.is_owner">
-        <k-actions-button @click="shareCurrentProfile">{{ phone.t('Apps.easyShare.name') }}</k-actions-button>
-        <k-actions-button @click="reportCurrentProfile">{{
-          t('report')
-        }}</k-actions-button>
-        <k-actions-button @click="blockDialogOpen = true">{{
-          t('block')
-        }}</k-actions-button>
-      </k-actions-group>
-      <k-actions-group v-else-if="currentProfile?.is_owner">
-        <k-actions-button @click="shareCurrentProfile">{{ phone.t('Apps.easyShare.name') }}</k-actions-button>
-        <k-actions-button @click="editProfileFromActions">{{
-          t('editProfile')
-        }}</k-actions-button>
-        <k-actions-button
-          v-if="store.isAdmin"
-          @click="openModerationFromActions"
-          >{{ t('moderation') }}</k-actions-button
+          </div></SkyCard
         >
-        <k-actions-button @click="logoutDialogOpen = true">{{
-          t('logout')
-        }}</k-actions-button>
-      </k-actions-group>
-      <k-actions-group
-        ><k-actions-button bold @click="actionsOpen = false">{{
-          t('cancel')
-        }}</k-actions-button></k-actions-group
+      </section></SkySheet
+    >
+
+    <SkyActionSheet
+      :opened="actionsOpen"
+      :label="t('more')"
+      @backdropclick="actionsOpen = false"
+      @escape="actionsOpen = false"
+    >
+      <SkyActionGroup v-if="actionPost"
+        ><SkyActionButton
+          v-if="actionPost.is_owner"
+          @click="archiveSelectedPost"
+          >{{ t('archive') }}</SkyActionButton
+        ><SkyActionButton
+          v-if="actionPost.is_owner"
+          @click="((deleteDialogOpen = true), (actionsOpen = false))"
+          >{{ t('deletePost') }}</SkyActionButton
+        ><SkyActionButton
+          v-else
+          @click="startReport('post', actionPost.id, t('post'))"
+          >{{ t('report') }}</SkyActionButton
+        ><SkyActionButton
+          v-if="!actionPost.is_owner"
+          @click="((blockDialogOpen = true), (actionsOpen = false))"
+          >{{ t('block') }}</SkyActionButton
+        ></SkyActionGroup
       >
-    </k-actions>
+      <SkyActionGroup v-else-if="currentProfile"
+        ><SkyActionButton @click="shareCurrentProfile">{{
+          t('shareProfile')
+        }}</SkyActionButton
+        ><SkyActionButton v-if="currentProfile.is_owner" @click="editProfile">{{
+          t('editProfile')
+        }}</SkyActionButton
+        ><SkyActionButton
+          v-if="currentProfile.is_owner && store.isAdmin"
+          @click="openModeration"
+          >{{ t('moderation') }}</SkyActionButton
+        ><SkyActionButton
+          v-if="currentProfile.is_owner"
+          @click="logoutDialogOpen = true"
+          >{{ t('logout') }}</SkyActionButton
+        ><SkyActionButton
+          v-if="!currentProfile.is_owner"
+          @click="reportCurrentProfile"
+          >{{ t('report') }}</SkyActionButton
+        ><SkyActionButton
+          v-if="!currentProfile.is_owner"
+          @click="blockDialogOpen = true"
+          >{{ t('block') }}</SkyActionButton
+        ></SkyActionGroup
+      >
+      <SkyActionGroup
+        ><SkyActionButton bold @click="actionsOpen = false">{{
+          t('cancel')
+        }}</SkyActionButton></SkyActionGroup
+      >
+    </SkyActionSheet>
 
-    <k-dialog
+    <SkyDialog
       :opened="logoutDialogOpen"
-      :title="t('signOutTitle')"
-      :content="t('signOutBody')"
-      @backdropclick="logoutDialogOpen = false"
+      @backdropclick="!logoutSubmitting && (logoutDialogOpen = false)"
+      ><template #title>{{ t('signOutTitle') }}</template>
+      <p>{{ t('signOutBody') }}</p>
+      <template #buttons
+        ><SkyDialogButton
+          :disabled="logoutSubmitting"
+          @click="logoutDialogOpen = false"
+          >{{ t('cancel') }}</SkyDialogButton
+        ><SkyDialogButton
+          strong
+          :disabled="logoutSubmitting"
+          @click="signOut"
+          >{{ t(logoutSubmitting ? 'signingOut' : 'logout') }}</SkyDialogButton
+        ></template
+      ></SkyDialog
     >
-      <template #buttons>
-        <k-dialog-button @click="logoutDialogOpen = false">{{
-          t('cancel')
-        }}</k-dialog-button>
-        <k-dialog-button strong :disabled="logoutSubmitting" @click="signOut">{{
-          t(logoutSubmitting ? 'signingOut' : 'logout')
-        }}</k-dialog-button>
-      </template>
-    </k-dialog>
-
-    <k-dialog
+    <SkyDialog
       :opened="deleteDialogOpen"
-      :title="t('deletePostTitle')"
-      :content="t('deletePostBody')"
       @backdropclick="deleteDialogOpen = false"
-    >
-      <template #buttons>
-        <k-dialog-button @click="deleteDialogOpen = false">{{
+      ><template #title>{{ t('deletePostTitle') }}</template>
+      <p>{{ t('deletePostBody') }}</p>
+      <template #buttons
+        ><SkyDialogButton @click="deleteDialogOpen = false">{{
           t('cancel')
-        }}</k-dialog-button>
-        <k-dialog-button strong @click="deleteSelectedPost">{{
+        }}</SkyDialogButton
+        ><SkyDialogButton strong @click="deleteSelectedPost">{{
           t('deletePost')
-        }}</k-dialog-button>
-      </template>
-    </k-dialog>
-
-    <k-dialog
-      :opened="blockDialogOpen"
-      :title="
-        t('blockTitle', {
-          handle: selectedPost?.handle ?? currentProfile?.handle ?? '',
-        })
-      "
-      :content="t('blockBody')"
-      @backdropclick="blockDialogOpen = false"
+        }}</SkyDialogButton></template
+      ></SkyDialog
     >
-      <template #buttons>
-        <k-dialog-button @click="blockDialogOpen = false">{{
+    <SkyDialog
+      :opened="blockDialogOpen"
+      @backdropclick="blockDialogOpen = false"
+      ><template #title>{{
+        t('blockTitle', {
+          handle: actionPost?.handle ?? currentProfile?.handle ?? '',
+        })
+      }}</template>
+      <p>{{ t('blockBody') }}</p>
+      <template #buttons
+        ><SkyDialogButton @click="blockDialogOpen = false">{{
           t('cancel')
-        }}</k-dialog-button>
-        <k-dialog-button strong @click="confirmBlock">{{
+        }}</SkyDialogButton
+        ><SkyDialogButton strong @click="confirmBlock">{{
           t('block')
-        }}</k-dialog-button>
-      </template>
-    </k-dialog>
-
-    <k-toast :opened="Boolean(feedback)" position="center">{{
-      feedback
-    }}</k-toast>
-  </k-page>
+        }}</SkyDialogButton></template
+      ></SkyDialog
+    >
+    <SkyToast
+      :opened="Boolean(feedback)"
+      position="center"
+      vertical-position="center"
+      >{{ feedback }}</SkyToast
+    >
+  </SkyAppPage>
 </template>
 
 <style scoped>
 .picstagram-page {
-  --ps-accent: #8b5cf6;
-  --ps-coral: #fb7185;
-  --ps-bg: #f7f7fb;
-  --ps-surface: #ffffff;
-  --ps-surface-raised: rgb(255 255 255 / 94%);
-  --ps-text: #17121f;
-  --ps-muted: #716b78;
-  --ps-border: rgb(23 18 31 / 11%);
-  --ps-avatar-border: #ffffff;
-  background: var(--ps-bg);
-  color: var(--ps-text);
-  color-scheme: light;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  --ps-accent: var(--sky-app-accent);
+  --ps-accent-soft: var(--sky-app-accent-soft);
+  background: var(--sky-bg);
+  color: var(--sky-text);
 }
 
-:global(.dark .picstagram-page) {
-  --ps-bg: #070609;
-  --ps-surface: #111014;
-  --ps-surface-raised: rgb(26 24 30 / 96%);
-  --ps-text: #faf8fc;
-  --ps-muted: #aaa4b0;
-  --ps-border: rgb(255 255 255 / 12%);
-  --ps-avatar-border: #111014;
-  background: var(--ps-bg);
-  color: var(--ps-text);
-  color-scheme: dark;
+button {
+  color: inherit;
+  font: inherit;
 }
-
-.ps-navbar,
-.ps-tabbar {
-  backdrop-filter: blur(24px) saturate(160%);
-  flex: 0 0 auto;
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-}
-
-.ps-navbar {
-  --k-safe-area-top: 32px;
-  z-index: 30;
-}
-
-.ps-navbar :deep(.ps-navbar__right) {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.ps-navbar :deep(.ps-navbar__right .k-link) {
-  color: var(--ps-text);
-}
-
-.ps-navbar__actions {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
-
-.ps-navbar__actions svg {
-  height: 22px;
-  width: 22px;
-}
-
-.ps-navbar__create {
-  border: 2px solid currentColor;
-  border-radius: 7px;
+.ps-loading,
+.ps-empty {
   display: grid;
-  height: 21px;
   place-items: center;
-  width: 21px;
-}
-
-.ps-navbar__create svg {
-  height: 15px;
-  width: 15px;
-}
-
-.ps-wordmark {
-  font-family: "Segoe Script", "Brush Script MT", cursive;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.8px;
-}
-
-.ps-tabbar {
-  z-index: 30;
-}
-
-.ps-tabbar :deep(.ps-tabbar__inner) {
-  width: 100% !important;
-}
-
-.ps-tabbar :deep(.k-toolbar-pane) {
-  border: 1px solid var(--ps-border);
-  margin-bottom: 2px;
-  width: 100% !important;
-}
-
-.ps-tabbar :deep(.k-toolbar-pane > .k-link) {
-  flex: 1 1 20%;
-  min-width: 0 !important;
-  padding-left: 6px;
-  padding-right: 6px;
-}
-
-.ps-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  padding: 0 0 12px;
-  scrollbar-width: none;
-}
-
-.ps-scroll::-webkit-scrollbar,
-.ps-media::-webkit-scrollbar,
-.ps-stories::-webkit-scrollbar {
-  display: none;
-}
-
-.ps-state {
-  align-items: center;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  height: 100%;
-  justify-content: center;
-  opacity: 0.72;
-  padding: 28px;
+  gap: var(--sky-space-2);
   text-align: center;
+  color: var(--sky-muted);
 }
-
-.ps-state svg {
-  height: 36px;
-  width: 36px;
+.ps-loading {
+  min-height: 100%;
+  align-content: center;
 }
-
-.ps-state--inline {
-  height: auto;
-  min-height: 190px;
+.ps-loading svg,
+.ps-empty > svg {
+  width: 34px;
+  height: 34px;
+}
+.ps-empty strong {
+  color: var(--sky-text);
+  font-size: 17px;
+}
+.ps-empty span {
+  max-width: 270px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.ps-screen {
+  padding: var(--sky-space-3) 0
+    calc(
+      var(--sky-safe-area-bottom) + var(--sky-tabbar-height) +
+        var(--sky-space-5)
+    );
 }
 
 .ps-auth {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
+  padding: var(--sky-space-5) var(--sky-page-gutter);
 }
-
-.ps-auth__body {
-  align-items: center;
-  background:
-    radial-gradient(circle at 82% 16%, #fb718555, transparent 32%),
-    radial-gradient(circle at 15% 85%, #22d3ee3d, transparent 35%),
-    linear-gradient(145deg, #2e1065, #581c87 45%, #9f1239);
-  display: flex;
-  flex: 1 1 auto;
-  justify-content: center;
-  min-height: 0;
-  padding: 14px 16px 24px;
+.ps-auth-card {
+  display: grid;
+  gap: var(--sky-space-4);
+  padding: var(--sky-space-5);
+  border-radius: var(--sky-radius-sheet);
 }
-
-.ps-auth__glass {
-  background: rgb(255 255 255 / 82%);
-  border: 1px solid rgb(255 255 255 / 50%);
-  border-radius: 28px;
-  box-shadow: 0 24px 70px rgb(12 4 31 / 34%);
-  padding: 20px 14px;
+.ps-auth-card > img {
+  width: 74px;
+  height: 74px;
+  margin: 0 auto;
+  border-radius: 22px;
+}
+.ps-auth-card h1 {
+  margin: 0;
   text-align: center;
-  width: 100%;
+  font-size: 25px;
 }
-
-:global(.dark .ps-auth__glass) {
-  background: rgb(20 15 28 / 82%);
-}
-
-.ps-auth__glass > img {
-  border-radius: 24px;
-  box-shadow: 0 12px 30px rgb(58 18 97 / 35%);
-  height: 78px;
-  width: 78px;
-}
-
-.ps-auth__glass h1 {
-  font-size: 21px;
-  font-weight: 750;
-  margin: 10px 0 4px;
-}
-
-.ps-auth__glass > p {
+.ps-auth-card p {
+  margin: 6px 0 0;
+  text-align: center;
+  color: var(--sky-muted);
   font-size: 13px;
   line-height: 1.4;
-  margin: 0 auto 14px;
-  max-width: 280px;
-  opacity: 0.72;
+}
+.ps-fields,
+.ps-compose-fields,
+.ps-edit-fields {
+  display: grid;
+  gap: var(--sky-space-3);
 }
 
-.ps-auth__form {
-  margin: 12px 0;
-  text-align: left;
+.ps-navigation {
+  position: absolute !important;
+  z-index: 30;
+  right: calc(var(--sky-safe-area-right) + var(--sky-page-gutter));
+  bottom: calc(var(--sky-safe-area-bottom) + 10px);
+  left: calc(var(--sky-safe-area-left) + var(--sky-page-gutter));
+  min-height: 56px;
+  padding: 0 !important;
+  background: transparent !important;
+  color: var(--sky-text) !important;
 }
-
-.ps-auth__hint {
-  font-size: 11px !important;
+.ps-navigation-segments {
+  width: 100%;
+}
+.ps-nav-button {
+  min-width: 0;
+  padding-inline: var(--sky-space-1) !important;
+}
+.ps-nav-button svg {
+  width: 19px;
+  height: 19px;
+}
+.ps-nav-button small {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ps-create-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 22px;
+  color: white;
+  border-radius: 8px;
+  background: var(--ps-accent);
+}
+.ps-create-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.ps-badge-anchor {
+  position: relative;
+  display: inline-flex;
+}
+.ps-badge-anchor b {
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  color: white;
+  border-radius: var(--sky-radius-pill);
+  background: var(--ps-accent);
+  font-size: 9px;
+  line-height: 16px;
 }
 
 .ps-stories {
-  background: var(--ps-surface);
-  border-bottom: 1px solid var(--ps-border);
   display: flex;
-  gap: 12px;
+  gap: 14px;
   overflow-x: auto;
-  padding: 13px 12px 11px;
+  padding: 2px var(--sky-page-gutter) var(--sky-space-4);
+  scrollbar-width: none;
 }
-
-.ps-story-link,
+.ps-stories::-webkit-scrollbar,
+.ps-carousel::-webkit-scrollbar {
+  display: none;
+}
+.ps-stories button,
 .ps-story-add {
-  align-items: center;
-  color: inherit;
-  display: flex;
+  display: grid;
   flex: 0 0 66px;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+  justify-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
-
-.ps-story-link small,
-.ps-story-add small {
-  color: var(--ps-text);
-  max-width: 66px;
+.ps-stories small {
   overflow: hidden;
+  width: 66px;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .ps-story-ring {
-  background: conic-gradient(
-    from 180deg,
-    #22d3ee,
-    #8b5cf6,
-    #fb7185,
-    #fbbf24,
-    #22d3ee
-  );
-  border-radius: 50%;
   display: grid;
-  height: 62px;
-  padding: 3px;
   place-items: center;
   width: 62px;
-}
-
-.ps-story-ring--seen {
-  background: #9ca3af;
-}
-
-.ps-story-ring--add {
-  background: linear-gradient(135deg, #8b5cf6, #22d3ee);
-}
-
-.ps-avatar {
-  align-items: center;
-  background: linear-gradient(145deg, #ede9fe, #fecdd3);
-  border: 2px solid var(--ps-avatar-border);
+  height: 62px;
+  padding: 3px;
   border-radius: 50%;
-  color: #4c1d95;
-  display: flex;
-  font-size: 14px;
-  font-weight: 800;
-  height: 100%;
-  justify-content: center;
-  overflow: hidden;
-  width: 100%;
+  background: linear-gradient(140deg, #ffcc00, #ff2d55 50%, #af52de);
 }
-
+.ps-story-ring.seen {
+  background: var(--sky-hairline);
+}
+.ps-story-ring--add {
+  position: relative;
+  background: var(--sky-surface-variant);
+}
+.ps-story-ring--add > svg {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 19px;
+  height: 19px;
+  padding: 3px;
+  color: white;
+  border: 2px solid var(--sky-bg);
+  border-radius: 50%;
+  background: var(--ps-accent);
+}
+.ps-avatar {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: 50px;
+  height: 50px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--sky-surface-variant);
+  color: var(--sky-text);
+  font-size: 14px;
+  font-weight: 750;
+}
 .ps-avatar img {
+  width: 100%;
   height: 100%;
   object-fit: cover;
-  width: 100%;
 }
-
+.ps-story-ring .ps-avatar {
+  width: 56px;
+  height: 56px;
+  border: 2px solid var(--sky-bg);
+}
 .ps-avatar--small {
-  border-width: 1px;
-  flex: 0 0 36px;
-  height: 36px;
   width: 36px;
+  height: 36px;
+  font-size: 11px;
 }
-
-.ps-avatar--list {
-  border-width: 1px;
-  height: 42px;
-  width: 42px;
-}
-
 .ps-avatar--comment {
-  border-width: 1px;
-  height: 34px;
-  width: 34px;
+  width: 38px;
+  height: 38px;
+  border: 0;
 }
-
+.ps-avatar--reply {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  font-size: 9px;
+}
 .ps-avatar--profile {
-  border: 3px solid var(--ps-avatar-border);
-  box-shadow: 0 0 0 3px var(--ps-accent);
+  width: 88px;
+  height: 88px;
   font-size: 24px;
-  height: 92px;
-  width: 92px;
+}
+.ps-avatar--edit {
+  width: 96px;
+  height: 96px;
+  font-size: 26px;
 }
 
-.ps-post {
-  background: var(--ps-surface);
-  border-bottom: 1px solid var(--ps-border);
-  border-radius: 0;
-  box-shadow: none;
-  color: var(--ps-text);
-  margin: 0;
-  padding: 0 0 13px;
+.ps-feed {
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: var(--sky-space-3);
 }
-
-.ps-post__header,
-.ps-post__actions {
-  align-items: center;
+.ps-feed > .ps-empty {
+  min-height: 320px;
+  padding: var(--sky-space-6);
+}
+.ps-post-card {
+  overflow: hidden;
+  background: var(--sky-surface);
+  border-block: 1px solid var(--sky-hairline);
+}
+.ps-feed > .ps-post-card {
+  margin-inline: 8px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: 14px;
+}
+.ps-post-detail {
+  padding-inline: var(--sky-page-gutter);
+}
+.ps-post-detail .ps-post-card {
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-card);
+}
+.ps-post-header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  min-height: 52px;
-  padding: 8px 12px;
+  min-height: 58px;
+  padding: 9px var(--sky-page-gutter);
 }
-
 .ps-author {
-  align-items: center;
-  color: inherit;
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   text-align: left;
 }
-
-.ps-author > span:nth-child(2) {
-  display: flex;
-  flex-direction: column;
+.ps-author > span:last-child {
+  display: grid;
   min-width: 0;
 }
-
-.ps-author__name {
+.ps-author strong {
+  display: flex;
   align-items: center;
-  display: flex;
-  gap: 4px;
-  min-width: 0;
-}
-
-.ps-author strong,
-.ps-author small {
+  gap: 3px;
   overflow: hidden;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .ps-author small {
-  align-items: center;
-  display: flex;
-  font-size: 10px;
-  opacity: 0.66;
+  color: var(--sky-muted);
+  font-size: 11px;
 }
-
-.ps-author small svg {
-  height: 11px;
-  width: 11px;
-}
-
 .ps-verified {
-  background: #0787ff;
-  border-radius: 50%;
-  color: #fff;
-  filter: drop-shadow(0 0 4px rgb(7 135 255 / 48%));
-  flex: 0 0 auto;
-  height: 15px;
+  display: inline;
+  width: 14px;
+  height: 14px;
   padding: 2px;
-  width: 15px;
+  color: white;
+  border-radius: 50%;
+  background: var(--ps-accent);
+  stroke-width: 3;
 }
-
-.ps-media {
+.ps-icon-button {
+  display: grid;
+  place-items: center;
+  width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.ps-icon-button svg {
+  width: 22px;
+}
+.ps-carousel-shell {
+  position: relative;
+}
+.ps-carousel {
   display: flex;
   overflow-x: auto;
+  aspect-ratio: 1 / 1;
   scroll-snap-type: x mandatory;
-  width: 100%;
+  background: #060606;
 }
-
-.ps-media img {
-  aspect-ratio: 1;
+.ps-carousel img,
+.ps-carousel video {
+  width: 100%;
+  height: 100%;
   flex: 0 0 100%;
   object-fit: cover;
   scroll-snap-align: start;
-  width: 100%;
 }
-
-.ps-dots {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-  margin: 7px 0 -5px;
+.ps-counter {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 5px 9px;
+  color: white;
+  border-radius: var(--sky-radius-pill);
+  background: rgba(0, 0, 0, 0.62);
+  font-size: 11px;
+  font-weight: 700;
 }
-
-.ps-dots span {
-  background: #a1a1aa;
+.ps-carousel-button {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
-  height: 5px;
-  width: 5px;
+  background: rgba(0, 0, 0, 0.58);
+  color: white;
+  transform: translateY(-50%);
 }
-
-.ps-dots span.active {
-  background: var(--ps-accent);
-  width: 12px;
+.ps-carousel-button:disabled {
+  opacity: 0;
+  pointer-events: none;
 }
-
-.ps-post__actions {
-  min-height: auto;
-  padding-bottom: 2px;
+.ps-carousel-button--left {
+  left: 8px;
 }
-
-.ps-post__actions > span {
+.ps-carousel-button--right {
+  right: 8px;
+}
+.ps-carousel-button svg {
+  width: 20px;
+}
+.ps-dots {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
   display: flex;
-  gap: 7px;
-}
-
-.ps-post__actions svg {
-  height: 24px;
-  width: 24px;
-}
-
-.ps-liked,
-.ps-danger {
-  color: #f43f5e;
-}
-
-.ps-post__copy {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
   gap: 4px;
-  padding: 0 13px;
+  padding: 5px 7px;
+  border-radius: var(--sky-radius-pill);
+  background: rgba(0, 0, 0, 0.45);
+  transform: translateX(-50%);
 }
-
-.ps-post__copy p {
-  line-height: 1.45;
+.ps-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.48);
+}
+.ps-dots span.active {
+  background: white;
+  transform: scale(1.25);
+}
+.ps-post-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 9px 2px;
+}
+.ps-post-actions > div {
+  display: flex;
+}
+.ps-post-actions button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.ps-post-actions button.active {
+  color: var(--ps-accent);
+}
+.ps-post-actions svg {
+  width: 25px;
+  height: 25px;
+  stroke-width: 1.8;
+}
+.ps-post-actions button.reaction-pop svg {
+  animation: ps-reaction-pop 0.44s var(--sky-ease-out);
+}
+.ps-post-actions button.reaction-pop--like {
+  color: var(--ps-accent);
+}
+.ps-post-actions button.reaction-pop--save svg {
+  filter: drop-shadow(0 0 7px var(--ps-accent));
+}
+@keyframes ps-reaction-pop {
+  0% {
+    transform: scale(0.82);
+  }
+  45% {
+    transform: scale(1.38) rotate(-7deg);
+  }
+  72% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.ps-post-copy {
+  display: grid;
+  gap: 6px;
+  padding: 0 var(--sky-page-gutter) 14px;
+  font-size: 13px;
+}
+.ps-post-copy p {
   margin: 0;
-  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
-
-.ps-post__copy small {
-  opacity: 0.5;
-  text-transform: uppercase;
+.ps-post-copy > button,
+.ps-post-copy time {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sky-muted);
+  font-size: 12px;
+}
+.ps-load-more,
+.ps-publish {
+  margin: var(--sky-space-3) var(--sky-page-gutter);
 }
 
 .ps-explore {
-  padding-left: 8px;
-  padding-right: 8px;
+  padding-inline: 2px;
 }
-
+.ps-profile-results {
+  margin: var(--sky-space-2) var(--sky-page-gutter) var(--sky-space-3);
+  overflow: hidden;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-card);
+  background: var(--sky-surface);
+}
+.ps-profile-results > button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--sky-hairline);
+  background: transparent;
+  text-align: left;
+}
+.ps-profile-results > button:last-child {
+  border-bottom: 0;
+}
+.ps-profile-results > button > span:nth-child(2),
+.ps-connection-profile > span:last-child {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ps-profile-results small,
+.ps-connection-profile small {
+  color: var(--sky-muted);
+}
+.ps-profile-results > button > svg {
+  width: 17px;
+  color: var(--sky-muted);
+}
 .ps-grid {
   display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 2px;
-  grid-template-columns: repeat(3, 1fr);
-  margin-top: 8px;
 }
-
-.ps-grid__tile {
-  aspect-ratio: 1;
-  display: block;
-  overflow: hidden;
+.ps-grid button {
   position: relative;
-}
-
-.ps-grid__tile img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.ps-grid__badge {
-  position: absolute;
-  right: 5px;
-  top: 5px;
-}
-
-.ps-compose {
-  padding-left: 12px;
-  padding-right: 12px;
-}
-
-.ps-picker-card {
-  align-items: center;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 14px 0;
-}
-
-.ps-picker-card__empty {
-  align-items: center;
-  aspect-ratio: 1.8;
-  background: linear-gradient(145deg, #ede9fe, #ffe4e6);
-  border-radius: 18px;
-  color: #6d28d9;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  justify-content: center;
-  padding: 18px;
-  text-align: center;
-  width: 100%;
-}
-
-:global(.dark .ps-picker-card__empty) {
-  background: linear-gradient(145deg, #251a38, #311820);
-  color: #c4b5fd;
-}
-
-.ps-compose-preview {
-  display: flex;
-  gap: 4px;
-  overflow-x: auto;
-  width: 100%;
-}
-
-.ps-compose-preview img {
-  aspect-ratio: 1;
-  border-radius: 12px;
-  object-fit: cover;
-  width: 68%;
-}
-
-.ps-activity--unread {
-  background: color-mix(in srgb, var(--ps-accent) 10%, transparent);
-}
-
-.ps-request-actions,
-.ps-edit__avatar-actions {
-  display: flex;
-  gap: 8px;
-  padding-top: 8px;
-}
-
-.ps-edit__avatar-actions {
-  flex-direction: column;
-  width: 100%;
-}
-
-.ps-edit__avatar-actions :deep(.k-button) {
-  white-space: nowrap;
-}
-
-.ps-report-card__actions {
-  display: grid;
-  gap: 6px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding-top: 8px;
-}
-
-.ps-report-card__actions :deep(.k-button) {
-  min-width: 0;
-  padding-left: 4px;
-  padding-right: 4px;
-  width: 100%;
-}
-
-.ps-profile__header {
-  align-items: center;
-  background: var(--ps-surface);
-  display: flex;
-  flex-direction: column;
-  padding: 22px 18px 16px;
-  text-align: center;
-}
-
-.ps-profile__header h1 {
-  align-items: center;
-  display: flex;
-  font-size: 20px;
-  gap: 5px;
-  margin: 14px 0 2px;
-}
-
-.ps-profile__header > p {
-  margin: 0;
-  opacity: 0.64;
-}
-
-.ps-profile__stats {
-  display: grid;
-  gap: 20px;
-  grid-template-columns: repeat(3, 1fr);
-  margin: 18px 0 12px;
-  width: 100%;
-}
-
-.ps-profile__stats span {
-  display: flex;
-  flex-direction: column;
-}
-
-.ps-profile__stats strong {
-  font-size: 18px;
-}
-
-.ps-profile__stats small {
-  opacity: 0.62;
-}
-
-.ps-profile__bio {
-  line-height: 1.45;
-  margin-bottom: 14px !important;
-  white-space: pre-wrap;
-}
-
-.ps-profile__segments {
-  margin: 0 12px 10px;
-}
-
-.ps-private {
-  align-items: center;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 34px;
-  text-align: center;
-}
-
-.ps-load-more {
-  margin: 16px auto;
-}
-
-.ps-create-icon {
-  background: linear-gradient(135deg, #8b5cf6, #fb7185);
-  border-radius: 9px;
-  color: #fff;
-  display: grid;
-  padding: 2px 8px;
-  place-items: center;
-}
-
-.ps-badge-icon {
-  display: inline-flex;
-  position: relative;
-}
-
-.ps-badge-icon > :last-child:not(:first-child) {
-  position: absolute;
-  right: -9px;
-  top: -7px;
-}
-
-.ps-sheet {
-  background: var(--ps-surface-raised);
-  color: var(--ps-text);
-  display: flex;
-  flex-direction: column;
-  max-height: 78vh;
   overflow: hidden;
-}
-
-.ps-sheet--tall {
-  max-height: 86vh;
-}
-
-.ps-sheet--comments {
-  height: min(68vh, 560px);
-}
-
-.ps-sheet__handle {
-  background: var(--ps-muted);
-  border-radius: 4px;
-  flex: 0 0 auto;
-  height: 5px;
-  margin: 8px auto;
-  opacity: 0.6;
-  width: 38px;
-}
-
-.ps-sheet__toolbar {
-  color: var(--ps-text);
-  flex: 0 0 auto;
-  padding-bottom: 6px;
-}
-
-.ps-sheet__toolbar-pane {
-  min-width: 100%;
-  padding: 0 14px;
-}
-
-.ps-sheet__toolbar-pane strong {
-  font-size: 16px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ps-comments,
-.ps-edit,
-.ps-report,
-.ps-moderation {
-  color: var(--ps-text);
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0 12px max(18px, var(--k-safe-area-bottom));
-}
-
-.ps-comments {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  overflow: hidden;
+  aspect-ratio: 1 / 1;
   padding: 0;
+  border: 0;
+  background: var(--sky-surface-variant);
 }
-
-.ps-comments__body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.ps-comments--viewers {
-  overflow-y: auto;
-  padding-bottom: max(18px, var(--k-safe-area-bottom));
-}
-
-.ps-comment-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.ps-reply-chip {
-  align-self: flex-start;
-  margin: 6px 12px;
-}
-
-.ps-comment-composer {
-  bottom: auto;
-  flex: 0 0 auto;
-  position: relative;
-}
-
-.ps-comment-composer :deep(.k-toolbar) {
-  padding-bottom: calc(max(8px, var(--k-safe-area-bottom)) + 6px);
-}
-
-.ps-comment-composer :deep(.ps-comment-composer__right) {
-  align-items: center;
-  display: flex;
-  line-height: 0;
-}
-
-.ps-comment-composer svg {
-  height: 21px;
-  width: 21px;
-}
-
-.ps-edit {
-  align-items: center;
-  display: flex;
-  flex-direction: column;
-  padding-top: 8px;
-}
-
-.ps-edit :deep(.k-list),
-.ps-edit > :deep(ul) {
+.ps-grid img,
+.ps-grid video {
   width: 100%;
-}
-
-.ps-edit > :deep(.k-button),
-.ps-report > :deep(.k-button) {
-  width: 100%;
-}
-
-.ps-report,
-.ps-moderation {
-  padding-top: 4px;
-}
-
-.ps-story-viewer {
-  background: #050509;
-  height: 100vh;
-  max-height: 100%;
-  overflow: hidden;
-  position: relative;
-}
-
-.ps-story-viewer > img {
   height: 100%;
-  object-fit: contain;
-  width: 100%;
+  object-fit: cover;
 }
-
-.ps-story-viewer__progress {
-  display: flex;
-  gap: 4px;
-  left: 12px;
+.ps-grid button > span {
   position: absolute;
-  right: 12px;
-  top: 12px;
-  z-index: 2;
-}
-
-.ps-story-viewer__progress span {
-  background: rgb(255 255 255 / 38%);
-  border-radius: 999px;
-  flex: 1 1 auto;
-  height: 3px;
-}
-
-.ps-story-viewer__progress span.active {
-  background: #fff;
-}
-
-.ps-story-viewer__header {
+  top: 6px;
+  right: 6px;
+  display: flex;
   align-items: center;
-  background: rgb(12 10 16 / 48%);
-  border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 18px;
-  color: #fff;
-  display: flex;
-  gap: 8px;
-  left: 8px;
-  padding: 8px;
+  gap: 2px;
+  padding: 3px 6px;
+  color: white;
+  border-radius: var(--sky-radius-pill);
+  background: rgba(0, 0, 0, 0.52);
+  font-size: 9px;
+}
+.ps-grid button > span svg,
+.ps-grid-video {
+  width: 13px;
+  height: 13px;
+}
+.ps-grid-video {
   position: absolute;
-  right: 8px;
-  top: 24px;
+  top: 7px;
+  right: 7px;
+  color: white;
+  filter: drop-shadow(0 1px 2px #000);
 }
 
-.ps-story-viewer__header small {
-  opacity: 0.7;
+.ps-create {
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: var(--sky-space-4);
+  padding-inline: var(--sky-page-gutter);
 }
-
-.ps-story-viewer__header > :last-child {
-  margin-left: auto;
-}
-
-.ps-close {
-  transform: rotate(45deg);
-}
-
-.ps-story-viewer__text {
-  background: rgb(0 0 0 / 46%);
-  border-radius: 14px;
-  bottom: 78px;
-  color: #fff;
-  left: 22px;
+.ps-create-card {
   margin: 0;
-  padding: 10px 12px;
-  position: absolute;
-  right: 22px;
+  padding: 0;
+  border: 1px solid var(--sky-hairline);
+  border-radius: calc(var(--sky-radius-card) + var(--sky-space-1));
+  background: var(--sky-surface);
+}
+.ps-create-card :deep(.sky-card__content) {
+  padding: 12px;
+}
+.ps-create-intro {
+  display: grid;
+  place-items: center;
+  padding: 8px 4px 12px;
   text-align: center;
 }
-
-.ps-story-viewer__nav {
+.ps-create-intro > span {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  margin-bottom: 8px;
+  color: var(--ps-accent);
+  border-radius: 17px;
+  background: var(--ps-accent-soft);
+}
+.ps-create-intro svg {
+  width: 29px;
+}
+.ps-create-intro p {
+  margin: 5px 0 0;
+  color: var(--sky-muted);
+  font-size: 12px;
+}
+.ps-source-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+.ps-source-grid button {
   display: flex;
-  justify-content: space-between;
-  left: 4px;
+  align-items: center;
+  gap: 9px;
+  min-height: 50px;
+  padding: 8px 10px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: calc(var(--sky-radius-control) + 10px);
+  background: var(--sky-surface-muted);
+  text-align: left;
+}
+.ps-source-grid button > svg {
+  width: 23px;
+  color: var(--ps-accent);
+}
+.ps-source-grid button > span {
+  display: grid;
+}
+.ps-source-grid small {
+  color: var(--sky-muted);
+  font-size: 10px;
+}
+.ps-selection-preview {
+  position: relative;
+  display: flex;
+  overflow-x: auto;
+  gap: 3px;
+  height: 240px;
+  border-radius: calc(var(--sky-radius-control) + 10px);
+  background: #050505;
+  scroll-snap-type: x mandatory;
+}
+.ps-selection-preview img,
+.ps-selection-preview video {
+  width: 100%;
+  height: 100%;
+  flex: 0 0 100%;
+  object-fit: cover;
+  scroll-snap-align: start;
+}
+.ps-selection-preview > button {
   position: absolute;
-  right: 4px;
-  top: 48%;
-}
-
-.ps-story-viewer__nav :deep(button) {
-  background: rgb(0 0 0 / 35%);
+  top: 9px;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
   border-radius: 50%;
-  color: #fff;
-  padding: 8px;
+  background: rgba(0, 0, 0, 0.65);
+  color: white;
+}
+.ps-selection-preview > :deep(.sky-chip) {
+  position: absolute;
+  bottom: 9px;
+  left: 9px;
+}
+.ps-video-preview-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border-radius: var(--sky-radius-pill);
+  background: rgba(0, 0, 0, 0.65);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+}
+.ps-video-preview-badge svg {
+  width: 14px;
+  height: 14px;
+}
+.ps-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sky-space-4);
+  padding: 13px 14px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-control);
+  background: var(--sky-surface);
+}
+.ps-toggle-row > span {
+  display: grid;
+}
+.ps-toggle-row small {
+  margin-top: 2px;
+  color: var(--sky-muted);
+  font-size: 11px;
 }
 
-.ps-story-viewer__actions {
+.ps-activity {
+  padding-inline: var(--sky-page-gutter);
+}
+.ps-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 68px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--sky-hairline);
+  background: transparent;
+  text-align: left;
+}
+.ps-activity-row > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ps-activity-row small {
+  color: var(--sky-muted);
+  line-height: 1.35;
+}
+.ps-request-actions {
+  display: grid;
+  gap: 4px;
+}
+.ps-activity > .ps-empty {
+  min-height: 360px;
+}
+
+.ps-profile {
+  padding-inline: var(--sky-page-gutter);
+}
+.ps-profile-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--sky-space-4);
+  padding: var(--sky-space-3) 0 var(--sky-space-5);
+}
+.ps-profile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.ps-profile-stats button {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 2px;
+  border: 0;
+  background: transparent;
+}
+.ps-profile-stats strong {
+  font-size: 17px;
+}
+.ps-profile-stats small {
+  color: var(--sky-muted);
+  font-size: 10px;
+}
+.ps-profile-copy,
+.ps-profile-buttons,
+.ps-profile-segments {
+  grid-column: 1 / -1;
+}
+.ps-profile-copy > strong {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ps-profile-copy p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.ps-profile-buttons {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+.ps-profile-buttons :deep(.sky-button) {
+  min-width: 0;
+}
+.ps-profile-buttons svg {
+  width: 17px;
+}
+.ps-profile-segments {
+  margin-bottom: var(--sky-space-3);
+}
+.ps-profile-segments svg {
+  width: 17px;
+}
+.ps-private {
+  min-height: 300px;
+}
+
+.ps-sheet :deep(.sky-sheet__panel) {
+  max-height: calc(100% - var(--sky-safe-area-top) - 34px);
+  border-radius: var(--sky-radius-sheet) var(--sky-radius-sheet) 0 0;
+  background: var(--sky-bg);
+}
+.ps-sheet-handle {
+  width: 38px;
+  height: 5px;
+  margin: 8px auto 6px;
+  border-radius: var(--sky-radius-pill);
+  background: var(--sky-hairline);
+}
+.ps-comments-sheet,
+.ps-edit-sheet,
+.ps-connections-sheet,
+.ps-report-sheet,
+.ps-moderation-sheet {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--sky-safe-area-top) - 48px);
+}
+.ps-comments-sheet > header,
+.ps-edit-sheet > header,
+.ps-connections-sheet > header,
+.ps-report-sheet > header,
+.ps-moderation-sheet > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 var(--sky-page-gutter);
+  border-bottom: 1px solid var(--sky-hairline);
+}
+.ps-comments-sheet > header > button,
+.ps-connections-sheet > header > button,
+.ps-report-sheet > header > button,
+.ps-moderation-sheet > header > button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sky-surface-variant);
+}
+.ps-comments-sheet > header svg,
+.ps-connections-sheet > header svg,
+.ps-report-sheet > header svg,
+.ps-moderation-sheet > header svg {
+  width: 18px;
+}
+.ps-comments-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 260px;
+  margin: 8px var(--sky-page-gutter) 12px;
+  padding: 4px 10px 12px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-card);
+  background: var(--sky-surface);
+}
+.ps-comments-list > .ps-empty {
+  min-height: 250px;
+}
+.ps-comment-thread {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--sky-hairline);
+}
+.ps-comment-thread:last-child {
+  border-bottom: 0;
+}
+.ps-comment-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 9px;
+  padding: 6px 0;
+}
+.ps-comment-row--reply {
+  margin: 5px 0 0 30px;
+  padding: 8px 9px;
+  border-radius: var(--sky-radius-control);
+  background: var(--sky-surface-muted);
+}
+.ps-comment-copy {
+  min-width: 0;
+}
+.ps-comment-copy > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ps-comment-copy > header button {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 750;
+}
+.ps-comment-copy time {
+  color: var(--sky-muted);
+  font-size: 10px;
+}
+.ps-comment-copy p {
+  margin: 3px 0 5px;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.ps-comment-copy p b {
+  color: var(--ps-accent);
+}
+.ps-comment-copy footer {
+  display: flex;
+  gap: 12px;
+}
+.ps-comment-copy footer button {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sky-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.ps-comment-copy footer svg {
+  width: 12px;
+  height: 12px;
+}
+.ps-comment-like {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  width: 34px;
+  padding: 7px 0;
+  border: 0;
+  background: transparent;
+  color: var(--sky-muted);
+}
+.ps-comment-like svg {
+  width: 16px;
+  height: 16px;
+}
+.ps-comment-like small {
+  font-size: 9px;
+}
+.ps-comment-like.active {
+  color: var(--ps-accent);
+}
+.ps-comment-like.pulse svg {
+  animation: ps-heart 0.36s var(--sky-ease-out);
+}
+@keyframes ps-heart {
+  45% {
+    transform: scale(1.45) rotate(-8deg);
+  }
+}
+.ps-comment-composer {
+  margin: 8px var(--sky-page-gutter) calc(var(--sky-safe-area-bottom) + 8px);
+  padding: 5px 6px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-pill);
+  background: var(--sky-surface);
+  box-shadow: var(--sky-shadow-glass);
+}
+.ps-comment-composer--replying {
+  border-radius: calc(var(--sky-radius-card) + var(--sky-space-1));
+}
+.ps-replying {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 7px 5px 10px;
+  color: var(--sky-muted);
+  font-size: 11px;
+}
+.ps-replying button {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sky-surface-variant);
+}
+.ps-replying svg {
+  width: 13px;
+}
+.ps-comment-composer :deep(.sky-messagebar) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.ps-comment-composer :deep(.sky-messagebar textarea) {
+  background: var(--sky-surface-muted);
+}
+.ps-comment-composer :deep(.sky-messagebar) button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ps-accent);
+  color: white;
+}
+.ps-comment-composer :deep(.sky-messagebar) button:disabled {
+  opacity: 0.4;
+}
+.ps-comment-composer :deep(.sky-messagebar) svg {
+  width: 18px;
+}
+
+.ps-edit-sheet > header button {
+  padding: 7px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ps-accent);
+}
+.ps-save-link {
+  font-weight: 750;
+}
+.ps-edit-sheet {
+  overflow-y: auto;
+  padding-bottom: calc(var(--sky-safe-area-bottom) + var(--sky-space-4));
+}
+.ps-edit-avatar {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: var(--sky-space-4);
+}
+.ps-edit-avatar > div {
   display: flex;
   gap: 8px;
-  bottom: 18px;
-  left: 50%;
-  position: absolute;
-  transform: translateX(-50%);
 }
-
-.ps-story-viewer__actions svg {
-  height: 16px;
+.ps-edit-avatar svg {
   width: 16px;
 }
-
-.ps-report-card {
-  margin: 10px 0;
-}
-
-.ps-report-card p {
+.ps-danger-link {
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--sky-danger);
   font-size: 12px;
-  opacity: 0.7;
+}
+.ps-edit-fields {
+  padding: 0 var(--sky-page-gutter);
+}
+.ps-fields :deep(.sky-field),
+.ps-compose-fields :deep(.sky-field),
+.ps-edit-fields :deep(.sky-field) {
+  overflow: hidden;
+  padding: 12px 14px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-card);
+  background: var(--sky-surface);
+}
+.ps-fields :deep(.sky-field__control),
+.ps-compose-fields :deep(.sky-field__control),
+.ps-edit-fields :deep(.sky-field__control) {
+  border-radius: calc(var(--sky-radius-control) + 10px);
+  background: var(--sky-surface-muted);
+}
+.ps-compose-fields :deep(.sky-field__textarea),
+.ps-edit-fields :deep(.sky-field__textarea) {
+  padding-inline: 4px;
+}
+.ps-compose-fields > .ps-toggle-row,
+.ps-edit-fields > .ps-toggle-row {
+  border-radius: var(--sky-radius-card);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .ps-liked {
-    animation: ps-heart 240ms ease-out;
-  }
+.ps-connections-sheet > header > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ps-connections-sheet > div {
+  overflow-y: auto;
+  min-height: 280px;
+  padding: 5px var(--sky-page-gutter) calc(var(--sky-safe-area-bottom) + 12px);
+}
+.ps-connections-sheet article {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 66px;
+  border-bottom: 1px solid var(--sky-hairline);
+}
+.ps-connection-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  padding: 7px 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.ps-connections-sheet .ps-empty {
+  min-height: 260px;
 }
 
-@keyframes ps-heart {
-  50% {
-    transform: scale(1.28);
-  }
+.ps-story-sheet :deep(.sky-sheet__panel) {
+  inset: 0;
+  max-height: none;
+  border-radius: 0;
+  background: #000;
+}
+.ps-story-viewer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: white;
+}
+.ps-story-viewer > img,
+.ps-story-viewer > video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.ps-story-progress {
+  position: absolute;
+  z-index: 4;
+  top: calc(var(--sky-safe-area-top) + 7px);
+  right: 10px;
+  left: 10px;
+  display: flex;
+  gap: 3px;
+}
+.ps-story-progress span {
+  height: 3px;
+  flex: 1;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.ps-story-progress span.active {
+  background: white;
+}
+.ps-story-header {
+  position: absolute;
+  z-index: 4;
+  top: calc(var(--sky-safe-area-top) + 18px);
+  right: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: var(--sky-radius-pill);
+}
+.ps-story-header > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+}
+.ps-story-header small {
+  color: rgba(255, 255, 255, 0.65);
+}
+.ps-story-header button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: white;
+}
+.ps-story-viewer > p {
+  position: absolute;
+  right: var(--sky-page-gutter);
+  bottom: 95px;
+  left: var(--sky-page-gutter);
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--sky-radius-control);
+  background: rgba(0, 0, 0, 0.58);
+  text-align: center;
+}
+.ps-story-nav {
+  position: absolute;
+  z-index: 3;
+  top: 25%;
+  bottom: 25%;
+  width: 42%;
+  border: 0;
+  background: transparent;
+  color: transparent;
+}
+.ps-story-nav--left {
+  left: 0;
+}
+.ps-story-nav--right {
+  right: 0;
+}
+.ps-story-actions {
+  position: absolute;
+  z-index: 4;
+  right: 12px;
+  bottom: calc(var(--sky-safe-area-bottom) + 12px);
+  left: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
 }
 
-@supports not (color: color-mix(in srgb, white, black)) {
-  .ps-activity--unread {
-    background: rgb(10 132 255 / 10%);
-  }
+.ps-report-sheet,
+.ps-moderation-sheet {
+  gap: var(--sky-space-3);
+  overflow-y: auto;
+  padding-bottom: calc(var(--sky-safe-area-bottom) + var(--sky-space-4));
+}
+.ps-report-sheet > :deep(.sky-list),
+.ps-report-sheet > :deep(.sky-field),
+.ps-report-sheet > :deep(.sky-button) {
+  margin-inline: var(--sky-page-gutter);
+}
+.ps-selection-check {
+  width: 18px;
+  color: var(--ps-accent);
+}
+.ps-moderation-sheet {
+  padding-inline: var(--sky-page-gutter);
+}
+.ps-moderation-sheet > header {
+  margin-inline: calc(var(--sky-page-gutter) * -1);
+}
+.ps-report-card {
+  margin: 0;
+  padding: 14px;
+}
+.ps-report-card p {
+  color: var(--sky-muted);
+  font-size: 12px;
+}
+.ps-report-card > div {
+  display: flex;
+  gap: 6px;
 }
 </style>

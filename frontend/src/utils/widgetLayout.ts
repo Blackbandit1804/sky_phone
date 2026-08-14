@@ -6,12 +6,17 @@ import type {
   WidgetSettings,
   WidgetSize,
 } from '@/types/widgets'
+import {
+  HOME_GRID_COLUMNS,
+  HOME_GRID_ROWS,
+  MAX_HOME_GRID_PAGES,
+} from '@/utils/homeLayout'
 import type { ReorderDirection } from '@/utils/keyboard'
 
-export const WIDGET_GRID_COLUMNS = 4
-export const WIDGET_HOME_ROWS = 6
+export const WIDGET_GRID_COLUMNS = HOME_GRID_COLUMNS
+export const WIDGET_HOME_ROWS = HOME_GRID_ROWS
 export const WIDGET_PAGE_ROWS = 10
-const MAX_WIDGET_HOME_PAGES = 5
+export const MAX_WIDGET_HOME_PAGES = MAX_HOME_GRID_PAGES
 
 export const WIDGET_SPANS: Record<
   WidgetSize,
@@ -24,6 +29,13 @@ export const WIDGET_SPANS: Record<
 
 function rowsForPage(page: number): number {
   return page === 0 ? WIDGET_PAGE_ROWS : WIDGET_HOME_ROWS
+}
+
+function normalizePage(page: number): number {
+  return Math.max(
+    0,
+    Math.min(Math.floor(Number(page) || 0), MAX_WIDGET_HOME_PAGES),
+  )
 }
 
 function overlaps(left: WidgetInstance, right: WidgetInstance): boolean {
@@ -221,7 +233,7 @@ export function parseWidgetLayout(value: unknown): WidgetLayout {
       column: Math.floor(Number(candidate.column) || 0),
       id: candidate.id,
       kind: candidate.kind as WidgetKind,
-      page: Math.max(0, Math.floor(Number(candidate.page) || 0)),
+      page: normalizePage(Number(candidate.page)),
       row: Math.floor(Number(candidate.row) || 0),
       settings: normalizeSettings(candidate.settings),
       size,
@@ -248,7 +260,7 @@ export function addWidget(
     column: 0,
     id: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     kind,
-    page,
+    page: normalizePage(page),
     row: 0,
     settings: {
       ...(kind === 'clock' ? { showDate: true } : {}),
@@ -256,7 +268,7 @@ export function addWidget(
     },
     size,
   }
-  const positioned = findPosition(instance, layout.instances, page)
+  const positioned = findPosition(instance, layout.instances, instance.page)
   if (!positioned) return layout
   return { instances: [...layout.instances, positioned], version: 1 }
 }
@@ -278,11 +290,12 @@ export function moveWidget(
   const moving = layout.instances.find((instance) => instance.id === id)
   if (!moving) return layout
   const span = WIDGET_SPANS[moving.size]
+  const targetPage = normalizePage(page)
   const requested: WidgetInstance = {
     ...moving,
     column: Math.max(0, Math.min(column, WIDGET_GRID_COLUMNS - span.columns)),
-    page,
-    row: Math.max(0, Math.min(row, rowsForPage(page) - span.rows)),
+    page: targetPage,
+    row: Math.max(0, Math.min(row, rowsForPage(targetPage) - span.rows)),
   }
   const placed: WidgetInstance[] = [requested]
   for (const instance of layout.instances) {
@@ -309,8 +322,7 @@ export function widgetKeyboardTarget(
       instance.column +
       (direction === 'left' ? -1 : direction === 'right' ? 1 : 0),
     row:
-      instance.row +
-      (direction === 'up' ? -1 : direction === 'down' ? 1 : 0),
+      instance.row + (direction === 'up' ? -1 : direction === 'down' ? 1 : 0),
   }
   if (
     target.column < 0 ||

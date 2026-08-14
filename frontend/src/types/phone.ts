@@ -49,6 +49,8 @@ export type PhoneCall = {
   direction: CallDirection
   id: string
   otherNumber: string
+  speakerEnabled?: boolean
+  speakerSupported?: boolean
   startedAt: number
   state: CallState
 }

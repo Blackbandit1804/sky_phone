@@ -416,6 +416,14 @@ button {
   background: var(--phone-performance-glass);
   box-shadow: none;
 }
+.phone-app--performance .sky-segmented--navbar {
+  background: var(--phone-performance-glass);
+  box-shadow: none;
+}
+.phone-app--performance .sky-tabbar__pane {
+  background: var(--phone-performance-glass);
+  box-shadow: none;
+}
 .phone-app--performance .control-center__backdrop {
   background: rgb(20 20 24 / 92%);
 }
@@ -637,21 +645,367 @@ button {
 }
 .wallpaper--midnight {
   background:
-    radial-gradient(circle at 70% 18%, #5a397eaa, transparent 35%),
-    radial-gradient(circle at 20% 72%, #164e7daa, transparent 37%),
-    linear-gradient(155deg, #080714, #111126 50%, #02040b);
+    radial-gradient(circle at 76% 17%, #ffffff 0 0.7px, transparent 1.2px),
+    radial-gradient(circle at 28% 8%, #9fceff 0 0.6px, transparent 1px),
+    radial-gradient(circle at 82% 48%, #d8c8ff 0 0.8px, transparent 1.3px),
+    radial-gradient(
+      circle at 69% 19%,
+      #faf7ff 0 3%,
+      #a57be74d 8%,
+      transparent 23%
+    ),
+    conic-gradient(
+      from 214deg at 63% 35%,
+      transparent 0 29%,
+      #7352a51f 36%,
+      transparent 44%
+    ),
+    radial-gradient(ellipse at 10% 84%, #1767999e 0, transparent 45%),
+    linear-gradient(158deg, #050511 0%, #11132d 42%, #120a25 68%, #02040c 100%);
+  background-size:
+    43px 47px,
+    67px 71px,
+    89px 83px,
+    auto,
+    auto,
+    auto,
+    auto;
 }
 .wallpaper--aurora {
   background:
-    radial-gradient(circle at 72% 20%, #31e2b288, transparent 33%),
-    radial-gradient(circle at 15% 68%, #246fe099, transparent 42%),
-    linear-gradient(145deg, #07191b, #132147 55%, #081019);
+    radial-gradient(circle at 17% 14%, #dfffff 0 0.6px, transparent 1.1px),
+    radial-gradient(circle at 78% 9%, #c6e7ff 0 0.7px, transparent 1.2px),
+    conic-gradient(
+      from 218deg at 84% 8%,
+      transparent 0 18%,
+      #4effbf70 27%,
+      #6bf5e220 35%,
+      transparent 43%
+    ),
+    conic-gradient(
+      from 224deg at 62% 26%,
+      transparent 0 20%,
+      #27cfd46b 28%,
+      #695eff42 38%,
+      transparent 47%
+    ),
+    radial-gradient(ellipse at 12% 80%, #1860bb9c 0%, transparent 48%),
+    radial-gradient(ellipse at 76% 20%, #2adfbb6e 0%, transparent 38%),
+    linear-gradient(155deg, #031715 0%, #08293a 43%, #151643 68%, #040914 100%);
+  background-size:
+    59px 61px,
+    83px 79px,
+    auto,
+    auto,
+    auto,
+    auto,
+    auto;
 }
 .wallpaper--ember {
   background:
-    radial-gradient(circle at 70% 22%, #ff764f99, transparent 32%),
-    radial-gradient(circle at 15% 65%, #9a306f88, transparent 44%),
-    linear-gradient(150deg, #21090b, #29142e 58%, #080810);
+    radial-gradient(
+      circle at 80% 18%,
+      #fff4ca 0 1.7%,
+      #ffbd67 5%,
+      #ff62335c 17%,
+      transparent 31%
+    ),
+    repeating-radial-gradient(
+      ellipse at 78% 21%,
+      transparent 0 16px,
+      #ffb15e12 18px 20px
+    ),
+    conic-gradient(
+      from 196deg at 12% 78%,
+      transparent 0 18%,
+      #ff3d4c66 28%,
+      #f3943a29 38%,
+      transparent 48%
+    ),
+    conic-gradient(
+      from 22deg at 78% 90%,
+      transparent 0 22%,
+      #b52a755e 31%,
+      transparent 44%
+    ),
+    radial-gradient(ellipse at 8% 71%, #c8205c91 0, transparent 46%),
+    linear-gradient(152deg, #20080a 0%, #4b171d 37%, #3c1537 66%, #090710 100%);
+}
+.wallpaper--ocean {
+  background:
+    linear-gradient(116deg, transparent 43%, #c7fbff1c 47%, transparent 51%),
+    linear-gradient(64deg, transparent 44%, #8defff17 48%, transparent 52%),
+    radial-gradient(
+      ellipse at 18% 12%,
+      #d7ffff 0 1%,
+      #70e7ff85 12%,
+      transparent 34%
+    ),
+    repeating-radial-gradient(
+      ellipse at 48% 107%,
+      transparent 0 24px,
+      #73e8ff2e 27px 30px,
+      transparent 33px 49px
+    ),
+    radial-gradient(ellipse at 87% 70%, #056bd1ce 0, transparent 48%),
+    linear-gradient(
+      172deg,
+      #b5f4f8 0%,
+      #148eb0 22%,
+      #075b91 54%,
+      #03284d 78%,
+      #020c20 100%
+    );
+  background-size:
+    82px 82px,
+    82px 82px,
+    auto,
+    auto,
+    auto,
+    auto;
+}
+.wallpaper--sunrise {
+  background:
+    linear-gradient(18deg, #281c46 0 13%, transparent 13.3%),
+    linear-gradient(-22deg, #51304a 0 18%, transparent 18.3%),
+    radial-gradient(
+      circle at 58% 69%,
+      #fffbd7 0 5.5%,
+      #ffd28d 6%,
+      #ff9f666e 18%,
+      transparent 35%
+    ),
+    repeating-linear-gradient(0deg, transparent 0 16px, #ffe2ae0d 17px 18px),
+    radial-gradient(ellipse at 20% 44%, #f888a360 0, transparent 42%),
+    linear-gradient(
+      178deg,
+      #342b78 0%,
+      #8a477f 35%,
+      #ed706f 57%,
+      #ffc277 72%,
+      #672e50 100%
+    );
+}
+.wallpaper--violet {
+  background:
+    radial-gradient(
+      circle at 78% 14%,
+      transparent 0 9%,
+      #e0b6ff35 9.5% 10.3%,
+      transparent 11%
+    ),
+    radial-gradient(
+      circle at 18% 74%,
+      transparent 0 16%,
+      #a1a2ff29 16.5% 17.2%,
+      transparent 18%
+    ),
+    conic-gradient(
+      from 202deg at 83% 25%,
+      transparent 0 17%,
+      #e48dff91 25%,
+      #8d63ff32 35%,
+      transparent 45%
+    ),
+    linear-gradient(122deg, transparent 36%, #f0c9ff13 39%, transparent 42%),
+    radial-gradient(circle at 13% 81%, #5555e5c4 0, transparent 46%),
+    radial-gradient(circle at 72% 28%, #a53dcc70 0, transparent 41%),
+    linear-gradient(148deg, #11072b 0%, #391164 48%, #20103f 72%, #080519 100%);
+}
+.wallpaper--forest {
+  background:
+    radial-gradient(
+      ellipse at 82% 12%,
+      transparent 0 7%,
+      #c8f49c2c 7.5% 8.2%,
+      transparent 9%
+    ),
+    repeating-radial-gradient(
+      ellipse at -8% 108%,
+      transparent 0 34px,
+      #c1e6a218 36px 39px
+    ),
+    linear-gradient(
+      135deg,
+      transparent 42%,
+      #bfe8a31c 45% 47%,
+      transparent 50%
+    ),
+    conic-gradient(
+      from 55deg at 85% 24%,
+      transparent 0 24%,
+      #8dcf7361 31%,
+      transparent 39%
+    ),
+    radial-gradient(ellipse at 76% 16%, #b7df8675 0, transparent 36%),
+    radial-gradient(ellipse at 10% 78%, #0b8b70b8 0, transparent 49%),
+    linear-gradient(162deg, #061713 0%, #144833 45%, #123326 68%, #040d0b 100%);
+  background-size:
+    auto,
+    auto,
+    auto,
+    auto,
+    auto,
+    auto,
+    100% 100%;
+}
+.wallpaper--cobalt {
+  background:
+    linear-gradient(
+      145deg,
+      transparent 0 47%,
+      #c4ddff18 48% 49%,
+      transparent 50%
+    ),
+    linear-gradient(
+      35deg,
+      transparent 0 47%,
+      #70a5ff12 48% 49%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 76% 25%,
+      transparent 0 12%,
+      #62b8ff45 12.5% 13.2%,
+      transparent 14%
+    ),
+    conic-gradient(
+      from 215deg at 80% 28%,
+      transparent 0 22%,
+      #52b5ff85 30%,
+      #5457d62e 41%,
+      transparent 48%
+    ),
+    radial-gradient(circle at 14% 78%, #134ed1a3 0, transparent 43%),
+    linear-gradient(152deg, #041438 0%, #0b3182 43%, #172d82 64%, #030a25 100%);
+  background-size:
+    58px 58px,
+    58px 58px,
+    auto,
+    auto,
+    auto,
+    auto;
+}
+.wallpaper--rose {
+  background:
+    radial-gradient(
+      circle at 16% 18%,
+      #fff6f3 0 1.5%,
+      #ffd9df9e 8%,
+      transparent 27%
+    ),
+    repeating-radial-gradient(
+      ellipse at 108% 8%,
+      transparent 0 24px,
+      #ffd5e121 26px 28px
+    ),
+    conic-gradient(
+      from 214deg at 86% 72%,
+      transparent 0 18%,
+      #f078aa8c 27%,
+      #8d3d7b38 39%,
+      transparent 48%
+    ),
+    linear-gradient(138deg, transparent 38%, #fff0f217 43%, transparent 48%),
+    radial-gradient(circle at 87% 77%, #e84e92a8 0, transparent 43%),
+    linear-gradient(148deg, #40132f 0%, #8e3159 39%, #b64b70 59%, #351128 100%);
+}
+.wallpaper--sand {
+  background:
+    radial-gradient(
+      circle at 76% 16%,
+      #fffce7 0 2.5%,
+      #ffe5a5a8 9%,
+      transparent 25%
+    ),
+    repeating-radial-gradient(
+      ellipse at -2% 110%,
+      transparent 0 28px,
+      #fff3d12b 31px 34px,
+      transparent 37px 52px
+    ),
+    conic-gradient(
+      from 82deg at 110% 76%,
+      transparent 0 24%,
+      #ecc37e52 32%,
+      transparent 43%
+    ),
+    linear-gradient(115deg, transparent 41%, #fff6d21a 44%, transparent 47%),
+    radial-gradient(ellipse at 15% 78%, #9f654b9e 0, transparent 48%),
+    linear-gradient(163deg, #8b5c45 0%, #d4a262 43%, #b87950 68%, #4f302b 100%);
+}
+.wallpaper--graphite {
+  background:
+    radial-gradient(circle at 77% 17%, #ffffff42 0 0.8%, transparent 12%),
+    linear-gradient(
+      125deg,
+      transparent 39%,
+      #ffffff12 40% 42%,
+      transparent 43%
+    ),
+    linear-gradient(35deg, transparent 39%, #ffffff0a 40% 42%, transparent 43%),
+    repeating-linear-gradient(
+      92deg,
+      transparent 0 3px,
+      #ffffff09 4px,
+      transparent 5px 9px
+    ),
+    conic-gradient(
+      from 215deg at 79% 24%,
+      transparent 0 25%,
+      #b7c1d045 32%,
+      transparent 43%
+    ),
+    radial-gradient(circle at 17% 78%, #51596c73 0, transparent 44%),
+    linear-gradient(157deg, #06070a 0%, #242832 43%, #171920 67%, #030405 100%);
+  background-size:
+    auto,
+    54px 54px,
+    54px 54px,
+    100% 100%,
+    auto,
+    auto,
+    auto;
+}
+.wallpaper--prism {
+  background:
+    linear-gradient(
+      132deg,
+      transparent 0 32%,
+      #ffffff36 32.5% 33.2%,
+      transparent 34%
+    ),
+    linear-gradient(
+      42deg,
+      transparent 0 56%,
+      #bffcff25 56.5% 57.2%,
+      transparent 58%
+    ),
+    conic-gradient(
+      from 218deg at 70% 29%,
+      #ff527ca1,
+      #ffc75f91,
+      #4cead2a6,
+      #4f72ffae,
+      #c64deaa3,
+      #ff527ca1
+    ),
+    conic-gradient(
+      from 38deg at 16% 78%,
+      transparent 0 19%,
+      #4ae3d8a1 28%,
+      #596cff48 39%,
+      transparent 48%
+    ),
+    radial-gradient(circle at 16% 76%, #35d8d399 0, transparent 38%),
+    linear-gradient(152deg, #120d35 0%, #47205f 46%, #10205a 70%, #041321 100%);
+  background-blend-mode: screen, screen, screen, screen, screen, normal;
+}
+.wallpaper--custom {
+  background-color: #090a0d;
+  background-image: var(--phone-wallpaper-image);
+  background-position: center;
+  background-size: cover;
 }
 .phone-screen--app .springboard {
   transform: scale(0.91);
@@ -662,6 +1016,12 @@ button {
   animation: springboard-unlock 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .lock-screen {
+  --lock-notification-background: rgb(38 36 40 / 76%);
+  --lock-notification-clear-background: rgb(28 28 32 / 72%);
+  --lock-notification-color: #fff;
+  --lock-notification-muted: rgb(255 255 255 / 65%);
+  --lock-notification-focus: #fff;
+  --lock-notification-text-shadow: 0 1px 3px #0009;
   position: absolute;
   z-index: 80;
   inset: 0;
@@ -674,6 +1034,17 @@ button {
   transform: translateY(var(--lock-drag));
   transition: transform 0.42s cubic-bezier(0.2, 0.9, 0.24, 1);
   will-change: transform, opacity, filter;
+}
+.phone-app--light .lock-screen {
+  --lock-notification-background: rgb(247 247 248 / 82%);
+  --lock-notification-clear-background: rgb(247 247 248 / 88%);
+  --lock-notification-color: #111;
+  --lock-notification-muted: rgb(0 0 0 / 55%);
+  --lock-notification-focus: #007aff;
+  --lock-notification-text-shadow: none;
+}
+.phone-app--performance .lock-screen {
+  --lock-notification-clear-background: var(--phone-performance-glass);
 }
 .lock-screen--dragging {
   transition: none;
@@ -774,8 +1145,8 @@ button {
   border: 0;
   border-radius: 999px;
   padding: 5px 10px;
-  color: #fff;
-  background: #1c1c20b8;
+  color: var(--lock-notification-color);
+  background: var(--lock-notification-clear-background);
   box-shadow: 0 2px 10px #0004;
   font-size: 11px;
   font-weight: 600;
@@ -830,9 +1201,9 @@ button {
   min-height: 76px;
   border-radius: 18px;
   padding: 11px;
-  color: #fff;
-  background-color: rgb(38 36 40 / 76%);
-  text-shadow: 0 1px 3px #0009;
+  color: var(--lock-notification-color);
+  background-color: var(--lock-notification-background);
+  text-shadow: var(--lock-notification-text-shadow);
   touch-action: pan-y;
   transform: translate3d(var(--notification-swipe), 0, 0);
   transition: transform 0.28s cubic-bezier(0.22, 0.78, 0.24, 1);
@@ -850,7 +1221,7 @@ button {
   cursor: pointer;
 }
 .lock-screen__notification.is-actionable:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--lock-notification-focus);
   outline-offset: 2px;
 }
 .lock-screen__notification-icon {
@@ -878,7 +1249,7 @@ button {
 }
 .lock-screen__notification-heading span,
 .lock-screen__notification-copy small {
-  color: #ffffffa6;
+  color: var(--lock-notification-muted);
   font-size: 10px;
   line-height: 14px;
 }
@@ -2356,6 +2727,26 @@ button {
 .springboard--widget-dragging .springboard-widget-page-scroll {
   overflow: visible;
 }
+.home-drag-layer {
+  position: absolute;
+  z-index: 70;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.home-drag-layer * {
+  pointer-events: none !important;
+}
+.home-drag-ghost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  opacity: 1;
+  transition: none !important;
+  animation: none !important;
+  will-change: transform;
+}
 .app-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -2385,9 +2776,12 @@ button {
 }
 .app-icon-item--dragging {
   z-index: 20;
-  opacity: 0.35;
+  opacity: 1;
   transition: transform var(--springboard-page-duration)
     var(--springboard-page-easing);
+}
+.app-icon-item--drag-source {
+  opacity: 0;
 }
 .app-icon-remove {
   position: absolute;
@@ -6757,7 +7151,10 @@ button {
   display: none;
 }
 .app-grid {
-  grid-template-rows: repeat(6, var(--springboard-grid-row));
+  grid-template-rows: repeat(
+    var(--home-grid-rows, 6),
+    var(--springboard-grid-row)
+  );
   gap: var(--springboard-grid-row-gap) var(--springboard-grid-column-gap);
 }
 .app-grid-slot {

@@ -1,5 +1,7 @@
 export type FlipTokProfile = {
   account_type: 'person' | 'business' | 'organization' | 'media' | 'event'
+  avatar_media_id: number | null
+  avatar_url: string | null
   bio: string
   display_name: string
   followers: number
@@ -13,6 +15,7 @@ export type FlipTokProfile = {
 }
 
 export type FlipTokVideo = {
+  avatar_url: string | null
   caption: string
   comment_count: number
   comments_enabled: boolean
@@ -28,9 +31,11 @@ export type FlipTokVideo = {
   location: string
   cover_time_ms: number
   music_artist: string
+  music_source: '' | 'audio' | 'youtube'
   music_title: string
   music_track: string
   music_url: string
+  music_video_id: string
   music_volume: number
   original_volume: number
   profile_id: number
@@ -69,16 +74,22 @@ export type FlipTokProfilePage = {
 }
 
 export type FlipTokComment = {
+  avatar_url: string | null
   body: string
   created_at: number
   display_name: string
   handle: string
   id: string
+  is_liked: boolean
+  like_count: number
+  parent_id: string | null
   profile_id: number
+  reply_to_handle: string | null
   verified: boolean
 }
 
 export type FlipTokActivity = {
+  avatar_url: string | null
   created_at: number
   display_name: string
   handle: string

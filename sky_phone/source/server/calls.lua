@@ -91,6 +91,10 @@ end
 
 local function send_state(call, source, state, channel)
     local outgoing = source == call.caller_source
+    local speaker_supported = Bridge.Speaker.IsEnabled() and (
+        call.voice_provider == "saltychat"
+        or (not call.voice_provider and Bridge.Calls.SupportsSpeaker())
+    )
     local payload = {
         id = call.id,
         state = state,
@@ -99,6 +103,8 @@ local function send_state(call, source, state, channel)
         startedAt = call.started_at,
         answeredAt = call.answered_at,
         channel = channel,
+        speakerEnabled = call.speakers and call.speakers[source] == true or false,
+        speakerSupported = speaker_supported,
     }
     if call.payphone and outgoing then
         payload.elapsedSeconds = call.payphone.elapsed_seconds or 0
@@ -216,6 +222,17 @@ local function finish_call(call, status)
         return
     end
     call.ended = true
+    if call.voice_started then
+        local player_handles = { call.caller_source, call.callee_source }
+        for _, player_source in ipairs(player_handles) do
+            if call.speakers and call.speakers[player_source] then
+                Bridge.Calls.SetSpeaker(player_source, false, call.voice_provider)
+            end
+        end
+        Bridge.Calls.Stop(call.id, player_handles, call.voice_provider)
+        call.speakers = {}
+        call.voice_started = false
+    end
     local ended_at = os.time()
     local duration = call.answered_at and math.max(0, ended_at - call.answered_at) or 0
     if call.payphone and call.answered_at and not settle_payphone_call(call, duration)
@@ -1199,9 +1216,19 @@ Bridge.Callbacks.Register("sky_phone:calls:answer", function(source, data)
         finish_call(call, "unavailable")
         return { success = false, error = "phone_not_owned" }
     end
-    if Config.Calls.VoiceProvider ~= "pma" or GetResourceState("pma-voice") ~= "started" then
+    if not Bridge.Calls.IsAvailable() then
         return { success = false, error = "voice_unavailable" }
     end
+    local voice_started, voice_provider = Bridge.Calls.Start(call.id, {
+        call.caller_source,
+        call.callee_source,
+    })
+    if not voice_started then
+        return { success = false, error = "voice_unavailable" }
+    end
+    call.voice_provider = voice_provider
+    call.voice_started = true
+    call.speakers = {}
     call.answered_at = os.time()
     call.channel = next_voice_channel
     next_voice_channel = next_voice_channel + 1
@@ -1221,6 +1248,40 @@ Bridge.Callbacks.Register("sky_phone:calls:answer", function(source, data)
     send_state(call, call.caller_source, "connected", call.channel)
     send_state(call, call.callee_source, "connected", call.channel)
     return { success = true }
+end)
+
+Bridge.Callbacks.Register("sky_phone:calls:set-speaker", function(source, data)
+    if type(data) ~= "table" or type(data.id) ~= "string" or type(data.enabled) ~= "boolean" then
+        return { success = false, error = "invalid_request" }
+    end
+    if not SkyPhone.AllowOperation(source, "call_speaker", 30, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+
+    local call_id = active_by_source[source]
+    local call = call_id and calls[call_id] or nil
+    if not call or call.id ~= data.id or not call.answered_at or call.ended or not call.voice_started then
+        return { success = false, error = "call_not_found" }
+    end
+    if call.voice_provider ~= "saltychat" then
+        return { success = false, error = "speaker_unsupported" }
+    end
+    if not Bridge.Speaker.IsEnabled() then
+        return { success = false, error = "speaker_unsupported" }
+    end
+    if not Bridge.Calls.SetSpeaker(source, data.enabled, call.voice_provider) then
+        return { success = false, error = "voice_unavailable" }
+    end
+
+    call.speakers[source] = data.enabled
+    send_state(call, source, "connected", call.channel)
+    return {
+        success = true,
+        data = {
+            speakerEnabled = data.enabled,
+            speakerSupported = true,
+        },
+    }
 end)
 
 Bridge.Callbacks.Register("sky_phone:calls:decline", function(source, data)

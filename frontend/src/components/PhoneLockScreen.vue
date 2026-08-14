@@ -73,9 +73,15 @@ const time = computed(() =>
     .join('')
     .trim(),
 )
-const dragStyle = computed(() => ({
-  '--lock-drag': `${dragOffset.value}px`,
-}))
+const dragStyle = computed<Record<string, string>>(() => {
+  const imageUrl = preferences.value.settings.wallpaperImageUrl
+  return {
+    '--lock-drag': `${dragOffset.value}px`,
+    ...(preferences.value.settings.wallpaper === 'custom' && imageUrl
+      ? { '--phone-wallpaper-image': `url(${JSON.stringify(imageUrl)})` }
+      : {}),
+  }
+})
 const flashlightShortcutColors = computed(() =>
   flashlightActive.value
     ? {

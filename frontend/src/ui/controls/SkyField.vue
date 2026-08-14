@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, useId, useSlots, type CSSProperties } from 'vue'
+import { computed, ref, useId, useSlots, type CSSProperties } from 'vue'
 
 import { useComposedFieldValue } from '@/ui/controls/useComposedFieldValue'
 
 defineOptions({ inheritAttrs: false })
 
 type FieldValue = number | string
+type FieldOption = {
+  disabled?: boolean
+  label: string
+  value: FieldValue
+}
 
 const props = withDefaults(
   defineProps<{
@@ -23,6 +28,7 @@ const props = withDefaults(
     clearLabel?: string
     disabled?: boolean
     error?: string
+    floatingLabel?: boolean
     help?: string
     id?: string
     inputMode?:
@@ -43,6 +49,7 @@ const props = withDefaults(
     modelValue?: FieldValue
     name?: string
     outline?: boolean
+    options?: readonly FieldOption[]
     pattern?: string
     placeholder?: string
     readonly?: boolean
@@ -51,11 +58,13 @@ const props = withDefaults(
     spellcheck?: boolean
     step?: number | string
     type?:
+      | 'date'
       | 'datetime-local'
       | 'email'
       | 'number'
       | 'password'
       | 'search'
+      | 'select'
       | 'tel'
       | 'text'
       | 'textarea'
@@ -72,6 +81,7 @@ const props = withDefaults(
     clearLabel: '',
     disabled: false,
     error: '',
+    floatingLabel: false,
     help: '',
     id: undefined,
     inputMode: undefined,
@@ -84,6 +94,7 @@ const props = withDefaults(
     modelValue: undefined,
     name: undefined,
     outline: false,
+    options: () => [],
     pattern: undefined,
     placeholder: '',
     readonly: false,
@@ -107,6 +118,7 @@ const emit = defineEmits<{
 
 const generatedId = useId()
 const slots = useSlots()
+const isFocused = ref(false)
 const inputId = computed(() => props.id || generatedId)
 const helpId = computed(() => `${inputId.value}-help`)
 const errorId = computed(() => `${inputId.value}-error`)
@@ -126,6 +138,12 @@ const hasClearButton = computed(
     Boolean(props.clearLabel) &&
     localValue.value.length > 0,
 )
+const isFloatingRaised = computed(
+  () =>
+    Boolean(props.label) &&
+    props.floatingLabel &&
+    (isFocused.value || localValue.value.length > 0),
+)
 
 const describedBy = computed(() => {
   const ids: string[] = []
@@ -138,6 +156,7 @@ function fieldValue(event: Event): string {
   const target = event.target
   if (
     !(target instanceof HTMLInputElement) &&
+    !(target instanceof HTMLSelectElement) &&
     !(target instanceof HTMLTextAreaElement)
   ) {
     return ''
@@ -155,6 +174,16 @@ function handleCompositionEnd(event: CompositionEvent): void {
   endComposition(fieldValue(event))
 }
 
+function handleFocus(event: FocusEvent): void {
+  isFocused.value = true
+  emit('focus', event)
+}
+
+function handleBlur(event: FocusEvent): void {
+  isFocused.value = false
+  emit('blur', event)
+}
+
 function clear(): void {
   if (props.disabled || props.readonly) return
   clearValue()
@@ -169,6 +198,8 @@ function clear(): void {
     :class="{
       'sky-field--disabled': disabled,
       'sky-field--error': Boolean(error),
+      'sky-field--floating-label': Boolean(label) && floatingLabel,
+      'sky-field--floating-raised': isFloatingRaised,
       'sky-field--inline': layout === 'inline',
       'sky-field--outline': outline,
       'sky-field--has-leading': Boolean(slots.leading),
@@ -200,13 +231,43 @@ function clear(): void {
         :spellcheck="spellcheck"
         :style="inputStyle"
         :value="localValue"
-        @blur="emit('blur', $event)"
+        @blur="handleBlur"
         @change="emit('change', $event)"
         @compositionend="handleCompositionEnd"
         @compositionstart="startComposition"
-        @focus="emit('focus', $event)"
+        @focus="handleFocus"
         @input="handleInput"
       />
+      <select
+        v-else-if="type === 'select'"
+        :id="inputId"
+        class="sky-field__input sky-field__select"
+        :aria-describedby="describedBy"
+        :aria-invalid="error ? true : undefined"
+        :aria-label="ariaLabel || undefined"
+        :disabled="disabled"
+        :name="name"
+        :required="required"
+        :style="inputStyle"
+        :value="localValue"
+        @blur="handleBlur"
+        @change="emit('change', $event)"
+        @focus="handleFocus"
+        @input="handleInput"
+      >
+        <option v-if="placeholder" disabled value="">
+          {{ placeholder }}
+        </option>
+        <option
+          v-for="(option, index) in options"
+          :key="`${typeof option.value}:${String(option.value)}:${index}`"
+          :disabled="option.disabled"
+          :value="option.value"
+        >
+          {{ option.label }}
+        </option>
+        <slot />
+      </select>
       <input
         v-else
         :id="inputId"
@@ -232,11 +293,11 @@ function clear(): void {
         :style="inputStyle"
         :type="type"
         :value="localValue"
-        @blur="emit('blur', $event)"
+        @blur="handleBlur"
         @change="emit('change', $event)"
         @compositionend="handleCompositionEnd"
         @compositionstart="startComposition"
-        @focus="emit('focus', $event)"
+        @focus="handleFocus"
         @input="handleInput"
       />
       <span v-if="$slots.trailing" class="sky-field__trailing">

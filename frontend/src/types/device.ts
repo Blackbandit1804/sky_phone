@@ -14,6 +14,11 @@ export type PhoneDevice = {
   sim: PhoneSim | null
 }
 
+export type PhonePlayerIdentity = {
+  firstName: string
+  lastName: string
+}
+
 export type PhoneNotificationDevicePayload = {
   imei: string
   name: string
@@ -45,6 +50,7 @@ export type DeviceBootstrap = {
   device: PhoneDevice
   memos: MemoDto[]
   notes: Note[]
+  player: PhonePlayerIdentity
   security: DeviceSecurity
   token: string
 }

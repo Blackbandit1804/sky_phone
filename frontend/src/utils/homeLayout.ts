@@ -3,10 +3,12 @@ import type { ReorderDirection } from '@/utils/keyboard'
 
 export const HOME_DOCK_CAPACITY = 4
 export const HOME_GRID_COLUMNS = 4
-export const HOME_GRID_PAGE_SIZE = 24
+export const HOME_GRID_ROWS = 6
+export const HOME_GRID_PAGE_SIZE = HOME_GRID_COLUMNS * HOME_GRID_ROWS
 export const HOME_FOLDER_PAGE_SIZE = 9
 export const HOME_FOLDER_NAME_MAX_LENGTH = 32
 export const MAX_HOME_GRID_PAGES = 5
+export const HOME_LAYOUT_VERSION = 5
 const LEGACY_HOME_GRID_PAGE_SIZE = 20
 
 export type HomeArea = 'dock' | 'grid'
@@ -25,8 +27,10 @@ export type HomeLayout = {
   dock: HomeSlot[]
   grid: HomeSlot[]
   hidden: LaunchablePhoneAppId[]
-  version: 5
+  version: typeof HOME_LAYOUT_VERSION
 }
+
+export type HomeGridPageCapacities = readonly number[]
 
 export function isHomeFolder(value: unknown): value is HomeFolder {
   if (!value || typeof value !== 'object') return false
@@ -77,11 +81,6 @@ function getGridCapacity(itemCount: number): number {
   )
 }
 
-function migrateLegacyGrid(value: unknown): unknown[] {
-  if (!Array.isArray(value)) return []
-  return value.slice(0, LEGACY_HOME_GRID_PAGE_SIZE * MAX_HOME_GRID_PAGES)
-}
-
 function cloneItem(item: HomeSlot): HomeSlot {
   return isHomeFolder(item) ? { ...item, apps: [...item.apps] } : item
 }
@@ -91,7 +90,7 @@ function cloneLayout(layout: HomeLayout): HomeLayout {
     dock: layout.dock.map(cloneItem),
     grid: layout.grid.map(cloneItem),
     hidden: [...layout.hidden],
-    version: 5,
+    version: HOME_LAYOUT_VERSION,
   }
 }
 
@@ -105,6 +104,7 @@ function readItem(
   value: unknown,
   availableIds: Set<LaunchablePhoneAppId>,
   folderIds: Set<string>,
+  allowFolders: boolean,
 ): HomeSlot {
   if (
     typeof value === 'string' &&
@@ -112,8 +112,14 @@ function readItem(
   ) {
     return value as LaunchablePhoneAppId
   }
-  if (!isHomeFolder(value) || !isPersistableFolderId(value.id)) return null
-  if (folderIds.has(value.id)) return null
+  if (
+    !allowFolders ||
+    !isHomeFolder(value) ||
+    !isPersistableFolderId(value.id) ||
+    folderIds.has(value.id)
+  ) {
+    return null
+  }
 
   const apps = readAppIds(value.apps, availableIds)
   if (apps.length === 0) return null
@@ -132,12 +138,45 @@ function readSlots(
   availableIds: Set<LaunchablePhoneAppId>,
   length: number,
   folderIds: Set<string>,
+  allowFolders: boolean,
 ): HomeSlot[] {
   const slots = createSlots(length)
   if (!Array.isArray(value)) return slots
 
   for (let index = 0; index < Math.min(value.length, length); index += 1) {
-    slots[index] = readItem(value[index], availableIds, folderIds)
+    slots[index] = readItem(value[index], availableIds, folderIds, allowFolders)
+  }
+  return slots
+}
+
+function migrateLegacyGrid(
+  value: unknown,
+  availableIds: Set<LaunchablePhoneAppId>,
+): HomeSlot[] {
+  if (!Array.isArray(value)) return createSlots(HOME_GRID_PAGE_SIZE)
+
+  const legacyLength = Math.min(
+    value.length,
+    LEGACY_HOME_GRID_PAGE_SIZE * MAX_HOME_GRID_PAGES,
+  )
+  const pageCount = Math.max(
+    1,
+    Math.ceil(legacyLength / LEGACY_HOME_GRID_PAGE_SIZE),
+  )
+  const slots = createSlots(pageCount * HOME_GRID_PAGE_SIZE)
+  for (let index = 0; index < legacyLength; index += 1) {
+    const valueId = value[index]
+    if (
+      typeof valueId !== 'string' ||
+      !availableIds.has(valueId as LaunchablePhoneAppId)
+    ) {
+      continue
+    }
+
+    const page = Math.floor(index / LEGACY_HOME_GRID_PAGE_SIZE)
+    const pageIndex = index % LEGACY_HOME_GRID_PAGE_SIZE
+    slots[page * HOME_GRID_PAGE_SIZE + pageIndex] =
+      valueId as LaunchablePhoneAppId
   }
   return slots
 }
@@ -151,6 +190,42 @@ function placeInFirstEmptySlot(slots: HomeSlot[], item: HomeItem): void {
 
   slots.push(...createSlots(HOME_GRID_PAGE_SIZE))
   slots[slots.length - HOME_GRID_PAGE_SIZE] = cloneItem(item)
+}
+
+function insertIntoSlot(
+  slots: HomeSlot[],
+  targetIndex: number,
+  item: HomeItem,
+): HomeSlot {
+  if (slots[targetIndex] === null) {
+    slots[targetIndex] = cloneItem(item)
+    return null
+  }
+
+  const emptyAfter = slots.indexOf(null, targetIndex + 1)
+  if (emptyAfter !== -1) {
+    for (let index = emptyAfter; index > targetIndex; index -= 1) {
+      slots[index] = slots[index - 1]
+    }
+    slots[targetIndex] = cloneItem(item)
+    return null
+  }
+
+  const emptyBefore = slots.lastIndexOf(null, targetIndex - 1)
+  if (emptyBefore !== -1) {
+    for (let index = emptyBefore; index < targetIndex; index += 1) {
+      slots[index] = slots[index + 1]
+    }
+    slots[targetIndex] = cloneItem(item)
+    return null
+  }
+
+  const displacedItem = cloneItem(slots.at(-1) ?? null)
+  for (let index = slots.length - 1; index > targetIndex; index -= 1) {
+    slots[index] = slots[index - 1]
+  }
+  slots[targetIndex] = cloneItem(item)
+  return displacedItem
 }
 
 function itemContainsApp(item: HomeSlot, appId: LaunchablePhoneAppId): boolean {
@@ -180,6 +255,177 @@ export function getHomeFolder(
   return isHomeFolder(item) ? item : null
 }
 
+function readPageItems(slots: HomeSlot[], pageStart: number): HomeItem[] {
+  return slots
+    .slice(pageStart, pageStart + HOME_GRID_PAGE_SIZE)
+    .filter((item): item is HomeItem => item !== null)
+    .map((item) => cloneItem(item) as HomeItem)
+}
+
+function writePageItems(
+  slots: HomeSlot[],
+  pageStart: number,
+  items: HomeItem[],
+): void {
+  for (let offset = 0; offset < HOME_GRID_PAGE_SIZE; offset += 1) {
+    slots[pageStart + offset] = cloneItem(items[offset] ?? null)
+  }
+}
+
+function compactGridPages(slots: HomeSlot[]): HomeSlot[] {
+  const compacted = slots.map(cloneItem)
+  for (
+    let pageStart = 0;
+    pageStart < compacted.length;
+    pageStart += HOME_GRID_PAGE_SIZE
+  ) {
+    writePageItems(compacted, pageStart, readPageItems(compacted, pageStart))
+  }
+  return compacted
+}
+
+type IndexedHomeItem = {
+  item: HomeItem
+  sourceIndex: number
+}
+
+function gridPageCapacity(
+  capacities: HomeGridPageCapacities,
+  page: number,
+): number {
+  const capacity = capacities[page - 1]
+  return Number.isFinite(capacity)
+    ? Math.max(0, Math.min(HOME_GRID_PAGE_SIZE, Math.trunc(capacity)))
+    : HOME_GRID_PAGE_SIZE
+}
+
+function distributeGridPages(
+  slots: readonly HomeSlot[],
+  capacities: HomeGridPageCapacities,
+  minimumPageCount: number,
+): IndexedHomeItem[][] | null {
+  const persistedPageCount = Math.max(
+    1,
+    Math.ceil(slots.length / HOME_GRID_PAGE_SIZE),
+  )
+  const pages: IndexedHomeItem[][] = []
+  let incoming: IndexedHomeItem[] = []
+  let pageCount = Math.max(persistedPageCount, minimumPageCount)
+
+  for (let page = 1; page <= pageCount; page += 1) {
+    const pageStart = (page - 1) * HOME_GRID_PAGE_SIZE
+    const persisted = slots
+      .slice(pageStart, pageStart + HOME_GRID_PAGE_SIZE)
+      .flatMap((item, offset) =>
+        item === null
+          ? []
+          : [
+              {
+                item: cloneItem(item) as HomeItem,
+                sourceIndex: pageStart + offset,
+              },
+            ],
+      )
+    const available = [...incoming, ...persisted]
+    const capacity = gridPageCapacity(capacities, page)
+    pages.push(available.slice(0, capacity))
+    incoming = available.slice(capacity)
+
+    if (
+      page === pageCount &&
+      incoming.length &&
+      pageCount < MAX_HOME_GRID_PAGES
+    ) {
+      pageCount += 1
+    }
+  }
+
+  return incoming.length ? null : pages
+}
+
+function serializeGridPages(pages: readonly IndexedHomeItem[][]): HomeSlot[] {
+  const slots = createSlots(Math.max(1, pages.length) * HOME_GRID_PAGE_SIZE)
+  for (const [pageIndex, entries] of pages.entries()) {
+    const pageStart = pageIndex * HOME_GRID_PAGE_SIZE
+    for (const [offset, entry] of entries.entries()) {
+      slots[pageStart + offset] = cloneItem(entry.item)
+    }
+  }
+  return slots
+}
+
+export function moveHomeAppToGridPage(
+  layout: HomeLayout,
+  from: HomeArea,
+  sourceIndex: number,
+  targetPage: number,
+  targetOffset: number,
+  capacities: HomeGridPageCapacities = [],
+): HomeLayout {
+  const sourceSlots = layout[from]
+  const sourceItem = sourceSlots[sourceIndex]
+  if (
+    sourceItem === null ||
+    sourceItem === undefined ||
+    sourceIndex < 0 ||
+    sourceIndex >= sourceSlots.length ||
+    !Number.isInteger(targetPage) ||
+    targetPage < 1 ||
+    targetPage > MAX_HOME_GRID_PAGES ||
+    !Number.isFinite(targetOffset) ||
+    gridPageCapacity(capacities, targetPage) === 0
+  ) {
+    return layout
+  }
+
+  const pages = distributeGridPages(layout.grid, capacities, targetPage)
+  if (!pages) return layout
+
+  let sourcePage = -1
+  if (from === 'grid') {
+    for (const [pageIndex, entries] of pages.entries()) {
+      const entryIndex = entries.findIndex(
+        (entry) => entry.sourceIndex === sourceIndex,
+      )
+      if (entryIndex !== -1) {
+        sourcePage = pageIndex + 1
+        entries.splice(entryIndex, 1)
+        break
+      }
+    }
+    if (sourcePage === -1) return layout
+  }
+
+  while (pages.length < targetPage) pages.push([])
+  const targetEntries = pages[targetPage - 1]
+  const requestedOffset = Math.max(0, Math.trunc(targetOffset))
+  targetEntries.splice(Math.min(requestedOffset, targetEntries.length), 0, {
+    item: cloneItem(sourceItem) as HomeItem,
+    sourceIndex,
+  })
+
+  for (let page = targetPage; page <= pages.length; page += 1) {
+    const entries = pages[page - 1]
+    const capacity = gridPageCapacity(capacities, page)
+    if (entries.length <= capacity) continue
+    const overflow = entries.splice(capacity)
+    if (page >= MAX_HOME_GRID_PAGES) return layout
+    if (!pages[page]) pages.push([])
+    pages[page].unshift(...overflow)
+  }
+
+  const next = cloneLayout(layout)
+  next.grid = serializeGridPages(pages)
+  if (from === 'dock') next.dock[sourceIndex] = null
+  if (
+    JSON.stringify(next.grid) === JSON.stringify(layout.grid) &&
+    JSON.stringify(next.dock) === JSON.stringify(layout.dock)
+  ) {
+    return layout
+  }
+  return next
+}
+
 export function createDefaultHomeLayout(
   installedIds: LaunchablePhoneAppId[],
   defaultGridIds: LaunchablePhoneAppId[],
@@ -200,19 +446,23 @@ export function createDefaultHomeLayout(
     dock[index] = id
   }
 
-  return { dock, grid, hidden: [], version: 5 }
+  return { dock, grid, hidden: [], version: HOME_LAYOUT_VERSION }
 }
 
 export function parseHomeLayout(
   value: unknown,
   defaults: HomeLayout,
   installedIds: LaunchablePhoneAppId[],
+  preservePersistedIds = true,
 ): HomeLayout {
   if (!value || typeof value !== 'object') return defaults
 
   const source = value as Partial<Record<keyof HomeLayout, unknown>>
   const availableIds = new Set(installedIds)
-  if (source.version === 3 || source.version === 4 || source.version === 5) {
+  if (
+    preservePersistedIds &&
+    (source.version === 3 || source.version === 4 || source.version === 5)
+  ) {
     for (const collection of [source.dock, source.grid, source.hidden]) {
       if (!Array.isArray(collection)) continue
       for (const item of collection) {
@@ -227,12 +477,16 @@ export function parseHomeLayout(
   }
   const hidden = readAppIds(source.hidden, availableIds)
   const hiddenIds = new Set(hidden)
-  const persistedGrid =
-    source.version === 2 || source.version === 3
-      ? migrateLegacyGrid(source.grid)
-      : source.grid
-  const persistedGridLength = Array.isArray(persistedGrid)
-    ? Math.min(persistedGrid.length, HOME_GRID_PAGE_SIZE * MAX_HOME_GRID_PAGES)
+  const isLegacyVersionedLayout = source.version === 2 || source.version === 3
+  const persistedGridLength = Array.isArray(source.grid)
+    ? isLegacyVersionedLayout
+      ? Math.ceil(
+          Math.min(
+            source.grid.length,
+            LEGACY_HOME_GRID_PAGE_SIZE * MAX_HOME_GRID_PAGES,
+          ) / LEGACY_HOME_GRID_PAGE_SIZE,
+        ) * HOME_GRID_PAGE_SIZE
+      : Math.min(source.grid.length, HOME_GRID_PAGE_SIZE * MAX_HOME_GRID_PAGES)
     : 0
   const gridLength = Math.max(
     defaults.grid.length,
@@ -241,15 +495,35 @@ export function parseHomeLayout(
   let grid: HomeSlot[]
   let dock: HomeSlot[]
 
-  if (
-    source.version === 2 ||
-    source.version === 3 ||
-    source.version === 4 ||
-    source.version === 5
-  ) {
+  if (isLegacyVersionedLayout) {
+    grid = migrateLegacyGrid(source.grid, availableIds)
+    if (grid.length < gridLength) {
+      grid.push(...createSlots(gridLength - grid.length))
+    }
+    dock = readSlots(
+      source.dock,
+      availableIds,
+      HOME_DOCK_CAPACITY,
+      new Set(),
+      false,
+    )
+  } else if (source.version === 4 || source.version === 5) {
     const folderIds = new Set<string>()
-    grid = readSlots(persistedGrid, availableIds, gridLength, folderIds)
-    dock = readSlots(source.dock, availableIds, HOME_DOCK_CAPACITY, folderIds)
+    const allowFolders = source.version === 5
+    grid = readSlots(
+      source.grid,
+      availableIds,
+      gridLength,
+      folderIds,
+      allowFolders,
+    )
+    dock = readSlots(
+      source.dock,
+      availableIds,
+      HOME_DOCK_CAPACITY,
+      folderIds,
+      allowFolders,
+    )
   } else {
     grid = createSlots(gridLength)
     for (const id of readAppIds(source.grid, availableIds)) {
@@ -271,8 +545,9 @@ export function parseHomeLayout(
       apps: item.apps.filter((appId) => !hiddenIds.has(appId)),
     })
   }
-  grid = grid.map(removeHidden)
+  grid = compactGridPages(grid.map(removeHidden))
   dock = dock.map(removeHidden)
+
   const placedIds = new Set<LaunchablePhoneAppId>(hidden)
   for (const item of [...grid, ...dock]) {
     if (typeof item === 'string') placedIds.add(item)
@@ -288,7 +563,12 @@ export function parseHomeLayout(
     }
   }
 
-  return { dock, grid, hidden, version: 5 }
+  return {
+    dock: dock.map(cloneItem),
+    grid: compactGridPages(grid),
+    hidden,
+    version: HOME_LAYOUT_VERSION,
+  }
 }
 
 export function removeHomeApp(
@@ -297,7 +577,7 @@ export function removeHomeApp(
 ): HomeLayout {
   const removeFromItem = (item: HomeSlot): HomeSlot => {
     if (item === appId) return null
-    if (!isHomeFolder(item)) return item
+    if (!isHomeFolder(item)) return cloneItem(item)
     return normalizeFolder({
       ...item,
       apps: item.apps.filter((folderAppId) => folderAppId !== appId),
@@ -305,11 +585,11 @@ export function removeHomeApp(
   }
   return {
     dock: layout.dock.map(removeFromItem),
-    grid: layout.grid.map(removeFromItem),
+    grid: compactGridPages(layout.grid.map(removeFromItem)),
     hidden: layout.hidden.includes(appId)
       ? [...layout.hidden]
       : [...layout.hidden, appId],
-    version: 5,
+    version: HOME_LAYOUT_VERSION,
   }
 }
 
@@ -327,9 +607,9 @@ export function restoreHomeApp(
   placeInFirstEmptySlot(grid, appId)
   return {
     dock: layout.dock.map(cloneItem),
-    grid,
+    grid: compactGridPages(grid),
     hidden: layout.hidden.filter((id) => id !== appId),
-    version: 5,
+    version: HOME_LAYOUT_VERSION,
   }
 }
 
@@ -342,7 +622,7 @@ export function addHomePage(layout: HomeLayout): HomeLayout {
     dock: layout.dock.map(cloneItem),
     grid: [...layout.grid.map(cloneItem), ...createSlots(HOME_GRID_PAGE_SIZE)],
     hidden: [...layout.hidden],
-    version: 5,
+    version: HOME_LAYOUT_VERSION,
   }
 }
 
@@ -362,9 +642,9 @@ export function deleteHomePage(layout: HomeLayout, page: number): HomeLayout {
 
   return {
     dock: layout.dock.map(cloneItem),
-    grid,
+    grid: compactGridPages(grid),
     hidden: [...layout.hidden],
-    version: 5,
+    version: HOME_LAYOUT_VERSION,
   }
 }
 
@@ -375,23 +655,46 @@ export function moveHomeApp(
   to: HomeArea,
   targetIndex: number,
 ): HomeLayout {
-  const next = cloneLayout(layout)
-  const source = next[from]
-  const target = next[to]
-  const item = source[sourceIndex]
+  const sourceSlots = layout[from]
+  const item = sourceSlots[sourceIndex]
+  const maximumTargetIndex =
+    to === 'grid'
+      ? HOME_GRID_PAGE_SIZE * MAX_HOME_GRID_PAGES
+      : HOME_DOCK_CAPACITY
   if (
-    !item ||
+    item === null ||
+    item === undefined ||
     sourceIndex < 0 ||
-    sourceIndex >= source.length ||
+    sourceIndex >= sourceSlots.length ||
     targetIndex < 0 ||
-    targetIndex >= target.length
+    targetIndex >= maximumTargetIndex ||
+    (from === to && sourceIndex === targetIndex)
   ) {
     return layout
   }
 
-  if (from === to && sourceIndex === targetIndex) return layout
-  source[sourceIndex] = cloneItem(target[targetIndex])
-  target[targetIndex] = item
+  if (to === 'grid') {
+    return moveHomeAppToGridPage(
+      layout,
+      from,
+      sourceIndex,
+      Math.floor(targetIndex / HOME_GRID_PAGE_SIZE) + 1,
+      targetIndex % HOME_GRID_PAGE_SIZE,
+    )
+  }
+
+  const next = cloneLayout(layout)
+  const source = next[from]
+  const target = next[to]
+
+  if (from === to) {
+    source[sourceIndex] = null
+    insertIntoSlot(source, targetIndex, item)
+    return next
+  }
+
+  source[sourceIndex] = insertIntoSlot(target, targetIndex, item)
+  next.grid = compactGridPages(next.grid)
   return next
 }
 
@@ -404,8 +707,9 @@ export function createHomeFolder(
   folderId: string,
   name: string,
 ): HomeLayout {
-  if (!isPersistableFolderId(folderId)) return layout
-  if (folderLocation(layout, folderId)) return layout
+  if (!isPersistableFolderId(folderId) || folderLocation(layout, folderId)) {
+    return layout
+  }
   const sourceItem = layout[from][sourceIndex]
   const targetItem = layout[to][targetIndex]
   if (
@@ -424,6 +728,7 @@ export function createHomeFolder(
     name: name.trim().slice(0, HOME_FOLDER_NAME_MAX_LENGTH),
     type: 'folder',
   }
+  next.grid = compactGridPages(next.grid)
   return next
 }
 
@@ -443,6 +748,7 @@ export function addHomeAppToFolder(
   if (!isHomeFolder(folder)) return layout
   next[from][sourceIndex] = null
   folder.apps.push(sourceItem)
+  next.grid = compactGridPages(next.grid)
   return next
 }
 
@@ -522,6 +828,7 @@ export function extractHomeFolderApp(
   const [appId] = nextFolder.apps.splice(sourceIndex, 1)
   next[to][targetIndex] = appId
   next[location.area][location.index] = normalizeFolder(nextFolder)
+  next.grid = compactGridPages(next.grid)
   return next
 }
 

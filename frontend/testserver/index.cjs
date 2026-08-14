@@ -68,9 +68,11 @@ const radioData = {
     { primary: 42.1, secondary: 0 },
   ],
   members: [],
-  provider: 'yaca',
+  provider: 'saltychat',
   secondaryFrequency: 0,
   secondarySupported: true,
+  speakerEnabled: false,
+  speakerSupported: true,
   settings: { autoRejoin: false, notifications: true },
   volume: 50,
 }
@@ -413,6 +415,8 @@ function crewLinkBootstrap(testScenario = '') {
 }
 const flipTokProfile = {
   id: 1,
+  avatar_media_id: null,
+  avatar_url: null,
   handle: 'skyline',
   display_name: 'Skyline',
   bio: 'Life around Los Santos.',
@@ -433,8 +437,97 @@ const flipTokMusicTracks = [
     url: 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga',
   },
 ]
+const flipTokMusicExtensions = new Set([
+  'aac',
+  'm4a',
+  'mp3',
+  'oga',
+  'ogg',
+  'opus',
+  'wav',
+  'webm',
+])
+function validFlipTokMusicUrl(value) {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > 2048 ||
+    /[\s\u0000-\u001f\u007f]/.test(value)
+  ) {
+    return false
+  }
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase()
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      url.port ||
+      !host.includes('.') ||
+      host === 'localhost' ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal') ||
+      /^\d+\.\d+\.\d+\.\d+$/.test(host) ||
+      !/^[a-z0-9.-]+$/.test(host) ||
+      host
+        .split('.')
+        .some(
+          (label) =>
+            !label ||
+            label.length > 63 ||
+            label.startsWith('-') ||
+            label.endsWith('-'),
+        )
+    ) {
+      return false
+    }
+    const extension = url.pathname.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase()
+    return Boolean(extension && flipTokMusicExtensions.has(extension))
+  } catch {
+    return false
+  }
+}
+function parseFlipTokYoutubeId(value) {
+  if (typeof value !== 'string' || value.length > 500) return ''
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) {
+      return ''
+    }
+    const host = url.hostname.toLowerCase()
+    let videoId = ''
+    if (host === 'youtu.be' || host === 'www.youtu.be') {
+      videoId = url.pathname.split('/')[1] || ''
+    } else if (
+      [
+        'youtube.com',
+        'www.youtube.com',
+        'm.youtube.com',
+        'music.youtube.com',
+        'youtube-nocookie.com',
+        'www.youtube-nocookie.com',
+      ].includes(host)
+    ) {
+      videoId =
+        url.searchParams.get('v') ||
+        url.pathname.match(/^\/(?:shorts|embed|live)\/([a-z0-9_-]+)/i)?.[1] ||
+        ''
+    }
+    return /^[a-z0-9_-]{11}$/i.test(videoId) ? videoId : ''
+  } catch {
+    return ''
+  }
+}
+function mockYoutubeMetadata(videoId) {
+  if (videoId === 'dQw4w9WgXcQ') {
+    return { artist: 'Rick Astley', title: 'Never Gonna Give You Up' }
+  }
+  return { artist: 'YouTube', title: `YouTube ${videoId}` }
+}
 let flipTokVideos = [
   {
+    avatar_url: null,
     id: 'fliptok-1',
     profile_id: 2,
     handle: 'novals',
@@ -450,7 +543,9 @@ let flipTokVideos = [
     music_track: '',
     music_title: '',
     music_artist: '',
+    music_source: '',
     music_url: '',
+    music_video_id: '',
     url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
     comments_enabled: true,
     is_liked: false,
@@ -464,6 +559,7 @@ let flipTokVideos = [
     created_at: Date.now() - 3600000,
   },
   {
+    avatar_url: null,
     id: 'fliptok-2',
     profile_id: 1,
     handle: 'skyline',
@@ -479,7 +575,9 @@ let flipTokVideos = [
     music_track: 'night-drive',
     music_title: 'Night Drive',
     music_artist: 'Los Santos Radio',
+    music_source: 'audio',
     music_url: flipTokMusicTracks[0].url,
+    music_video_id: '',
     url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
     comments_enabled: true,
     is_liked: true,
@@ -495,8 +593,13 @@ let flipTokVideos = [
 ]
 let flipTokComments = [
   {
+    avatar_url: null,
     id: 'comment-1',
+    is_liked: false,
+    like_count: 7,
+    parent_id: null,
     profile_id: 2,
+    reply_to_handle: null,
     handle: 'nova',
     display_name: 'Nova',
     verified: true,
@@ -506,6 +609,7 @@ let flipTokComments = [
 ]
 let flipTokActivities = [
   {
+    avatar_url: null,
     id: 'activity-1',
     profile_id: 2,
     handle: 'nova',
@@ -612,11 +716,13 @@ let picstagramPosts = [
     media: [
       {
         id: 8101,
+        media_type: 'photo',
         position: 0,
         url: 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=900&q=85',
       },
       {
         id: 8102,
+        media_type: 'photo',
         position: 1,
         url: 'https://images.unsplash.com/photo-1444723121867-7a241cacace9?auto=format&fit=crop&w=900&q=85',
       },
@@ -642,6 +748,7 @@ let picstagramPosts = [
     media: [
       {
         id: 8103,
+        media_type: 'photo',
         position: 0,
         url: 'https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=900&q=85',
       },
@@ -659,9 +766,12 @@ let picstagramComments = [
     display_name: picstagramProfiles[1].display_name,
     handle: picstagramProfiles[1].handle,
     id: 'pic-comment-1',
+    is_liked: false,
     is_owner: false,
+    like_count: 4,
     parent_id: null,
     profile_id: picstagramProfiles[1].id,
+    reply_to_handle: null,
     verified: true,
   },
 ]
@@ -675,6 +785,7 @@ let picstagramStories = [
     handle: picstagramProfiles[1].handle,
     id: 'pic-story-1',
     is_owner: false,
+    media_type: 'photo',
     profile_id: picstagramProfiles[1].id,
     seen: false,
     url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=85',
@@ -1666,6 +1777,7 @@ const darkChatProfile = {
   activityVisible: false,
   createdAt: '2026-08-01 21:20:00',
 }
+let darkChatProfileActive = true
 const darkChatPeers = [
   {
     id: 2,
@@ -1758,6 +1870,9 @@ const darkChatMessages = [
 ]
 
 function darkChatBootstrap() {
+  if (!darkChatProfileActive) {
+    return { profile: null, contacts: [], conversations: [] }
+  }
   return {
     profile: darkChatProfile,
     contacts: darkChatPeers
@@ -2364,38 +2479,155 @@ let recentCalls = [
     status: 'missed',
   },
 ]
+function mockGalleryImage(title, sky, landscape, accent) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="${sky}"/><stop offset="1" stop-color="${accent}"/></linearGradient><linearGradient id="land" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${landscape}"/><stop offset="1" stop-color="#101114"/></linearGradient></defs><rect width="900" height="1200" fill="url(#sky)"/><circle cx="690" cy="260" r="105" fill="#fff" opacity=".72"/><path d="M0 690 210 440 390 650 585 360 900 720V1200H0Z" fill="${landscape}" opacity=".84"/><path d="M0 790 230 620 410 765 650 525 900 770V1200H0Z" fill="url(#land)"/><path d="M360 1200 475 690 560 690 690 1200Z" fill="${accent}" opacity=".48"/><text x="54" y="1100" fill="#fff" font-family="system-ui,sans-serif" font-size="62" font-weight="700">${title}</text><text x="57" y="1160" fill="#fff" opacity=".72" font-family="system-ui,sans-serif" font-size="30">Sky Phone test media</text></svg>`
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+}
+
 let mockMedia = [
   {
-    createdAt: Date.now() - 60_000,
+    createdAt: Date.now() - 4 * 60_000,
+    favorite: false,
     id: 1,
     mediaType: 'photo',
-    url: 'https://picsum.photos/seed/sky-phone-1/600/800',
+    url: mockGalleryImage('City Night', '#172554', '#111827', '#7c3aed'),
   },
   {
-    createdAt: Date.now() - 120_000,
+    createdAt: Date.now() - 18 * 60_000,
+    favorite: true,
     id: 2,
     mediaType: 'video',
+    thumbnailUrl: mockGalleryImage(
+      'Flower Video',
+      '#7f1d1d',
+      '#365314',
+      '#fb7185',
+    ),
     url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
   },
   {
-    createdAt: Date.now() - 180_000,
+    createdAt: Date.now() - 47 * 60_000,
+    favorite: true,
     id: 3,
     mediaType: 'photo',
-    url: 'https://picsum.photos/seed/sky-phone-3/800/600',
+    url: mockGalleryImage('Beach Drive', '#0369a1', '#164e63', '#fbbf24'),
   },
   {
-    createdAt: Date.now() - 240_000,
+    createdAt: Date.now() - 2 * 60 * 60_000,
+    favorite: false,
     id: 4,
     mediaType: 'photo',
-    url: 'https://picsum.photos/seed/sky-phone-4/800/600',
+    url: mockGalleryImage('Mountain Road', '#475569', '#334155', '#e2e8f0'),
   },
   {
-    createdAt: Date.now() - 300_000,
+    createdAt: Date.now() - 5 * 60 * 60_000,
+    favorite: false,
     id: 5,
     mediaType: 'photo',
-    url: 'https://picsum.photos/seed/sky-phone-5/800/600',
+    url: mockGalleryImage('Downtown', '#312e81', '#1e293b', '#f472b6'),
+  },
+  {
+    createdAt: Date.now() - 8 * 60 * 60_000,
+    favorite: false,
+    id: 6,
+    mediaType: 'video',
+    thumbnailUrl: mockGalleryImage(
+      'Sintel Video',
+      '#9a3412',
+      '#431407',
+      '#fdba74',
+    ),
+    url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+  },
+  {
+    createdAt: Date.now() - 12 * 60 * 60_000,
+    favorite: false,
+    id: 7,
+    mediaType: 'photo',
+    url: mockGalleryImage('Palm Sunset', '#c2410c', '#422006', '#facc15'),
+  },
+  {
+    createdAt: Date.now() - 26 * 60 * 60_000,
+    favorite: true,
+    id: 8,
+    mediaType: 'photo',
+    url: mockGalleryImage('Sports Car', '#1f2937', '#111827', '#ef4444'),
+  },
+  {
+    createdAt: Date.now() - 31 * 60 * 60_000,
+    favorite: false,
+    id: 9,
+    mediaType: 'photo',
+    url: mockGalleryImage('Boardwalk', '#0e7490', '#713f12', '#67e8f9'),
+  },
+  {
+    createdAt: Date.now() - 46 * 60 * 60_000,
+    favorite: false,
+    id: 10,
+    mediaType: 'video',
+    thumbnailUrl: mockGalleryImage(
+      'Bunny Video',
+      '#166534',
+      '#14532d',
+      '#86efac',
+    ),
+    url: 'https://www.w3schools.com/html/mov_bbb.mp4',
+  },
+  {
+    createdAt: Date.now() - 3 * 86_400_000,
+    favorite: false,
+    id: 11,
+    mediaType: 'photo',
+    url: mockGalleryImage('Vinewood', '#1d4ed8', '#166534', '#f8fafc'),
+  },
+  {
+    createdAt: Date.now() - 5 * 86_400_000,
+    favorite: true,
+    id: 12,
+    mediaType: 'photo',
+    url: mockGalleryImage('Friends', '#7e22ce', '#4c1d95', '#f0abfc'),
   },
 ]
+mockMedia.push(
+  ...[
+    ['Airport Lights', '#172554', '#1e3a8a', '#38bdf8'],
+    ['Desert Route', '#fb923c', '#7c2d12', '#fde047'],
+    ['Harbor Morning', '#0e7490', '#164e63', '#a5f3fc'],
+    ['Forest Trail', '#166534', '#14532d', '#bef264'],
+    ['Neon Alley', '#581c87', '#1e1b4b', '#f472b6'],
+    ['Lake House', '#0369a1', '#3f6212', '#fef08a'],
+    ['Snow Pass', '#94a3b8', '#334155', '#f8fafc'],
+    ['Night Drive', '#111827', '#312e81', '#22d3ee'],
+    ['Canyon View', '#b45309', '#78350f', '#fdba74'],
+    ['Green Hills', '#15803d', '#365314', '#86efac'],
+    ['Purple Sky', '#6b21a8', '#312e81', '#e879f9'],
+    ['Ocean Road', '#0284c7', '#0f766e', '#67e8f9'],
+    ['City Park', '#4d7c0f', '#14532d', '#facc15'],
+    ['Sunrise Pier', '#ea580c', '#7c2d12', '#fef3c7'],
+    ['Rainy Street', '#334155', '#0f172a', '#60a5fa'],
+    ['Golden Fields', '#ca8a04', '#713f12', '#fef08a'],
+    ['Metro Station', '#1f2937', '#374151', '#f43f5e'],
+    ['Island Bay', '#0891b2', '#115e59', '#f0fdfa'],
+    ['Cliff Road', '#7c3aed', '#3f3f46', '#c4b5fd'],
+    ['Old Town', '#9a3412', '#451a03', '#fed7aa'],
+    ['Racing Night', '#991b1b', '#111827', '#fb7185'],
+    ['Quiet Beach', '#0ea5e9', '#155e75', '#fde68a'],
+    ['Hilltop', '#65a30d', '#3f6212', '#d9f99d'],
+    ['Downtown Rain', '#3730a3', '#1e293b', '#93c5fd'],
+    ['Coastal Sunset', '#be123c', '#7c2d12', '#fbbf24'],
+    ['Country Road', '#854d0e', '#365314', '#fde047'],
+    ['Blue Mountains', '#1d4ed8', '#334155', '#bfdbfe'],
+    ['Palm Beach', '#0d9488', '#166534', '#fcd34d'],
+    ['Skyline', '#4338ca', '#111827', '#a78bfa'],
+    ['Campfire', '#c2410c', '#431407', '#fef08a'],
+  ].map(([title, sky, landscape, accent], index) => ({
+    createdAt: Date.now() - (6 + index) * 86_400_000,
+    favorite: index % 7 === 0,
+    id: 13 + index,
+    mediaType: 'photo',
+    url: mockGalleryImage(title, sky, landscape, accent),
+  })),
+)
 const weazelNewsCategoryIds = ['official', 'events', 'jobs', 'news', 'business']
 let weazelNewsSequence = 8
 let weazelNewsArticles = [
@@ -5743,12 +5975,25 @@ app.post('/api/:endpoint', (request, response) => {
     radioData.frequency = 0
     radioData.secondaryFrequency = 0
     radioData.members = []
+    radioData.speakerEnabled = false
     response.json({ success: true })
     return
   }
   if (endpoint === 'radio:set-volume') {
     radioData.volume = Math.max(0, Math.min(100, Number(request.body.volume)))
     response.json({ success: true, data: { volume: radioData.volume } })
+    return
+  }
+  if (endpoint === 'radio:set-speaker') {
+    if (!radioData.connected || !radioData.speakerSupported) {
+      response.json({ success: false, error: 'speaker_unavailable' })
+      return
+    }
+    radioData.speakerEnabled = request.body.enabled === true
+    response.json({
+      success: true,
+      data: { speakerEnabled: radioData.speakerEnabled },
+    })
     return
   }
   if (endpoint === 'radio:save-settings') {
@@ -6085,6 +6330,14 @@ app.post('/api/:endpoint', (request, response) => {
     })
     return
   }
+  if (endpoint === 'picstagram:connections') {
+    const targetId = request.body.profileId
+    const profiles = picstagramProfiles.filter(
+      (profile) => profile.id !== targetId,
+    )
+    response.json({ success: true, data: profiles })
+    return
+  }
   if (endpoint === 'picstagram:update-profile') {
     Object.assign(picstagramProfiles[0], {
       bio: request.body.bio,
@@ -6098,7 +6351,7 @@ app.post('/api/:endpoint', (request, response) => {
   if (endpoint === 'picstagram:publish-post') {
     const media = request.body.mediaIds
       .map((id) => mockMedia.find((item) => item.id === id))
-      .filter((item) => item?.mediaType === 'photo')
+      .filter((item) => item?.mediaType === request.body.mediaType)
     if (!media.length) {
       response.json({ success: false, error: 'invalid_media' })
       return
@@ -6119,6 +6372,7 @@ app.post('/api/:endpoint', (request, response) => {
       location: request.body.location,
       media: media.map((item, position) => ({
         id: item.id,
+        media_type: item.mediaType,
         position,
         url: item.url,
       })),
@@ -6200,6 +6454,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'picstagram:comment') {
+    const replyTarget = request.body.replyToId
+      ? picstagramComments.find((entry) => entry.id === request.body.replyToId)
+      : null
     const comment = {
       avatar_url: picstagramProfiles[0].avatar_url,
       body: request.body.body,
@@ -6207,13 +6464,41 @@ app.post('/api/:endpoint', (request, response) => {
       display_name: picstagramProfiles[0].display_name,
       handle: picstagramProfiles[0].handle,
       id: `pic-comment-${Date.now()}`,
+      is_liked: false,
       is_owner: true,
-      parent_id: request.body.parentId ?? null,
+      like_count: 0,
+      parent_id:
+        replyTarget?.parent_id ??
+        replyTarget?.id ??
+        request.body.parentId ??
+        null,
       profile_id: picstagramProfiles[0].id,
+      reply_to_handle: replyTarget
+        ? replyTarget.handle
+        : request.body.parentId
+          ? (picstagramComments.find(
+              (entry) => entry.id === request.body.parentId,
+            )?.handle ?? null)
+          : null,
       verified: picstagramProfiles[0].verified,
     }
     picstagramComments.push(comment)
     response.json({ success: true, data: { id: comment.id } })
+    return
+  }
+  if (endpoint === 'picstagram:comment-react') {
+    const comment = picstagramComments.find(
+      (item) => item.id === request.body.id,
+    )
+    if (comment) {
+      const changed = comment.is_liked !== request.body.active
+      comment.is_liked = request.body.active
+      if (changed) comment.like_count += request.body.active ? 1 : -1
+    }
+    response.json({
+      success: Boolean(comment),
+      error: comment ? undefined : 'invalid_comment',
+    })
     return
   }
   if (endpoint === 'picstagram:remove-comment') {
@@ -6229,7 +6514,7 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'picstagram:publish-story') {
     const media = mockMedia.find((item) => item.id === request.body.mediaId)
-    if (!media || media.mediaType !== 'photo') {
+    if (!media || media.mediaType !== request.body.mediaType) {
       response.json({ success: false, error: 'invalid_media' })
       return
     }
@@ -6242,6 +6527,7 @@ app.post('/api/:endpoint', (request, response) => {
       handle: picstagramProfiles[0].handle,
       id: `pic-story-${Date.now()}`,
       is_owner: true,
+      media_type: media.mediaType,
       profile_id: picstagramProfiles[0].id,
       seen: true,
       url: media.url,
@@ -6429,15 +6715,33 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'fliptok:comment') {
-    flipTokComments.unshift({
+    const comment = {
+      avatar_url: flipTokProfile.avatar_url,
       id: `comment-${Date.now()}`,
+      is_liked: false,
+      like_count: 0,
+      parent_id: request.body.parentId || null,
       profile_id: 1,
+      reply_to_handle: request.body.parentId
+        ? flipTokComments.find((item) => item.id === request.body.parentId)
+            ?.handle || null
+        : null,
       handle: flipTokProfile.handle,
       display_name: flipTokProfile.display_name,
       verified: flipTokProfile.verified,
       body: request.body.body,
       created_at: Date.now(),
-    })
+    }
+    flipTokComments.push(comment)
+    response.json({ success: true, data: { id: comment.id } })
+    return
+  }
+  if (endpoint === 'fliptok:comment-react') {
+    const comment = flipTokComments.find((item) => item.id === request.body.id)
+    if (comment) {
+      comment.is_liked = request.body.active === true
+      comment.like_count += comment.is_liked ? 1 : -1
+    }
     response.json({ success: true })
     return
   }
@@ -6512,6 +6816,8 @@ app.post('/api/:endpoint', (request, response) => {
               display_name: first.display_name,
               bio: 'Creator in Los Santos.',
               account_type: 'person',
+              avatar_media_id: null,
+              avatar_url: first.avatar_url ?? null,
               verified: first.verified,
               is_following: first.is_following,
               is_owner: false,
@@ -6521,6 +6827,38 @@ app.post('/api/:endpoint', (request, response) => {
             },
         videos,
       },
+    })
+    return
+  }
+  if (endpoint === 'fliptok:connections') {
+    const creatorVideo = flipTokVideos.find((video) => !video.is_owner)
+    const creator = creatorVideo
+      ? {
+          account_type: 'person',
+          avatar_media_id: null,
+          avatar_url: creatorVideo.avatar_url ?? null,
+          bio: 'Creator in Los Santos.',
+          display_name: creatorVideo.display_name,
+          followers: 12840,
+          following: 91,
+          handle: creatorVideo.handle,
+          id: creatorVideo.profile_id,
+          is_following: creatorVideo.is_following,
+          is_owner: false,
+          verified: creatorVideo.verified,
+          video_count: 1,
+        }
+      : null
+    response.json({
+      success: true,
+      data:
+        request.body.mode === 'followers'
+          ? creator
+            ? [creator]
+            : []
+          : creator
+            ? [creator, { ...flipTokProfile }]
+            : [{ ...flipTokProfile }],
     })
     return
   }
@@ -6564,8 +6902,28 @@ app.post('/api/:endpoint', (request, response) => {
       display_name: request.body.displayName,
       bio: request.body.bio,
       account_type: request.body.accountType,
+      avatar_media_id: request.body.avatarMediaId || null,
+      avatar_url:
+        mockMedia.find((item) => item.id === request.body.avatarMediaId)?.url ||
+        null,
     })
     response.json({ success: true, data: flipTokProfile })
+    return
+  }
+  if (endpoint === 'fliptok:music-metadata') {
+    const videoId = parseFlipTokYoutubeId(String(request.body.url || '').trim())
+    if (!videoId) {
+      response.json({ success: false, error: 'invalid_music_url' })
+      return
+    }
+    response.json({
+      success: true,
+      data: {
+        ...mockYoutubeMetadata(videoId),
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        videoId,
+      },
+    })
     return
   }
   if (endpoint === 'fliptok:publish') {
@@ -6576,7 +6934,26 @@ app.post('/api/:endpoint', (request, response) => {
       response.json({ success: false, error: 'invalid_media' })
       return
     }
+    const musicTrack = String(request.body.musicTrack || '')
+    const configuredTrack = flipTokMusicTracks.find(
+      (track) => track.id === musicTrack,
+    )
+    const customMusicUrl = String(request.body.customMusicUrl || '').trim()
+    const youtubeVideoId = parseFlipTokYoutubeId(customMusicUrl)
+    const youtubeMetadata = youtubeVideoId
+      ? mockYoutubeMetadata(youtubeVideoId)
+      : null
+    if (
+      (musicTrack && !configuredTrack) ||
+      (customMusicUrl &&
+        (configuredTrack ||
+          (!youtubeVideoId && !validFlipTokMusicUrl(customMusicUrl))))
+    ) {
+      response.json({ success: false, error: 'invalid_music_url' })
+      return
+    }
     flipTokVideos.unshift({
+      avatar_url: flipTokProfile.avatar_url,
       id: `fliptok-${Date.now()}`,
       profile_id: 1,
       handle: flipTokProfile.handle,
@@ -6589,16 +6966,18 @@ app.post('/api/:endpoint', (request, response) => {
       cover_time_ms: request.body.coverTimeMs || 0,
       original_volume: request.body.originalVolume ?? 100,
       music_volume: request.body.musicVolume || 0,
-      music_track: request.body.musicTrack || '',
-      music_title:
-        flipTokMusicTracks.find((track) => track.id === request.body.musicTrack)
-          ?.title || '',
-      music_artist:
-        flipTokMusicTracks.find((track) => track.id === request.body.musicTrack)
-          ?.artist || '',
-      music_url:
-        flipTokMusicTracks.find((track) => track.id === request.body.musicTrack)
-          ?.url || '',
+      music_track: configuredTrack?.id || '',
+      music_title: configuredTrack?.title || youtubeMetadata?.title || '',
+      music_artist: configuredTrack?.artist || youtubeMetadata?.artist || '',
+      music_source: configuredTrack
+        ? 'audio'
+        : youtubeVideoId
+          ? 'youtube'
+          : customMusicUrl
+            ? 'audio'
+            : '',
+      music_url: youtubeVideoId ? '' : configuredTrack?.url || customMusicUrl,
+      music_video_id: youtubeVideoId,
       url: media.url,
       comments_enabled: request.body.commentsEnabled,
       is_liked: false,
@@ -7314,6 +7693,16 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: darkChatBootstrap() })
     return
   }
+  if (endpoint === 'darkchat:create-profile') {
+    darkChatProfileActive = true
+    response.json({ success: true, data: darkChatBootstrap() })
+    return
+  }
+  if (endpoint === 'darkchat:delete-profile') {
+    darkChatProfileActive = false
+    response.json({ success: true })
+    return
+  }
   if (endpoint === 'darkchat:update-profile') {
     darkChatProfile.alias = String(
       request.body.alias ?? darkChatProfile.alias,
@@ -7653,12 +8042,14 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'development:bootstrap') {
-    authenticated = true
-    linkedAccount = {
-      devices: accountDevices,
-      email: 'demo@ifruit.com',
-      id: 1,
-    }
+    authenticated = testScenario !== 'setup-account-unlinked'
+    linkedAccount = authenticated
+      ? {
+          devices: accountDevices,
+          email: 'demo@ifruit.com',
+          id: 1,
+        }
+      : null
     if (
       testScenario === 'feather-onboarding' ||
       testScenario === 'feather-register'
@@ -7772,7 +8163,7 @@ app.post('/api/:endpoint', (request, response) => {
                           testScenario === 'citymarkt-local-pages-missing'
                             ? ['local-pages']
                             : [],
-                        version: 3,
+                        version: 4,
                       },
                     },
                   },
@@ -7809,6 +8200,10 @@ app.post('/api/:endpoint', (request, response) => {
         },
         memos: mockMemos,
         notes: mockNotes,
+        player: {
+          firstName: 'Alex',
+          lastName: 'Morgan',
+        },
         security: mockSecurity,
         token: 'development',
       },
@@ -8051,6 +8446,7 @@ app.post('/api/:endpoint', (request, response) => {
     const fallbackVideo = mockMedia.find((item) => item.mediaType === 'video')
     const media = {
       createdAt: Date.now(),
+      favorite: false,
       id,
       mediaType,
       url:
@@ -8139,6 +8535,24 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: media })
     return
   }
+  if (endpoint === 'gallery:counts') {
+    response.json({
+      success: true,
+      data: {
+        all: mockMedia.length,
+        favoritePhotos: mockMedia.filter(
+          (item) => item.mediaType === 'photo' && item.favorite,
+        ).length,
+        favorites: mockMedia.filter((item) => item.favorite).length,
+        favoriteVideos: mockMedia.filter(
+          (item) => item.mediaType === 'video' && item.favorite,
+        ).length,
+        photos: mockMedia.filter((item) => item.mediaType === 'photo').length,
+        videos: mockMedia.filter((item) => item.mediaType === 'video').length,
+      },
+    })
+    return
+  }
   if (endpoint === 'gallery:list') {
     if (request.body.mockState === 'error') {
       response.json({ success: false, error: 'service_unavailable' })
@@ -8148,9 +8562,12 @@ app.post('/api/:endpoint', (request, response) => {
       response.json({ success: true, data: [] })
       return
     }
-    const filtered = request.body.mediaType
+    const typeFiltered = request.body.mediaType
       ? mockMedia.filter((item) => item.mediaType === request.body.mediaType)
       : mockMedia
+    const filtered = request.body.favoriteOnly
+      ? typeFiltered.filter((item) => item.favorite)
+      : typeFiltered
     const offset = Number(request.body.offset) || 0
     const limit = Number(request.body.limit) || 30
     response.json({
@@ -8171,6 +8588,37 @@ app.post('/api/:endpoint', (request, response) => {
   if (endpoint === 'gallery:delete') {
     mockMedia = mockMedia.filter((item) => item.id !== Number(request.body.id))
     response.json({ success: true })
+    return
+  }
+  if (endpoint === 'gallery:favorite') {
+    const item = mockMedia.find((entry) => entry.id === Number(request.body.id))
+    if (!item || typeof request.body.favorite !== 'boolean') {
+      response.json({ success: false, error: 'media_not_found' })
+      return
+    }
+    item.favorite = request.body.favorite
+    response.json({
+      success: true,
+      data: { favorite: item.favorite, id: item.id },
+    })
+    return
+  }
+  if (endpoint === 'gallery:delete-many') {
+    const ids = Array.isArray(request.body.ids)
+      ? request.body.ids.map(Number).filter(Number.isInteger)
+      : []
+    const deletedIds = mockMedia
+      .filter((item) => ids.includes(item.id))
+      .map((item) => item.id)
+    mockMedia = mockMedia.filter((item) => !deletedIds.includes(item.id))
+    response.json({
+      success: true,
+      data: {
+        correlationId: request.body.correlationId,
+        deletedIds,
+        success: true,
+      },
+    })
     return
   }
   if (endpoint === 'account:login' || endpoint === 'account:register') {
@@ -8307,6 +8755,8 @@ app.post('/api/:endpoint', (request, response) => {
         direction: 'outgoing',
         id,
         otherNumber: phoneNumber,
+        speakerEnabled: false,
+        speakerSupported: true,
         startedAt,
         state: 'ringing',
       },
@@ -8324,6 +8774,13 @@ app.post('/api/:endpoint', (request, response) => {
     }
     blockedCallNumbers.add(phoneNumber)
     response.json({ success: true, data: { blocked: true, phoneNumber } })
+    return
+  }
+  if (endpoint === 'calls:set-speaker') {
+    response.json({
+      success: true,
+      data: { speakerEnabled: request.body.enabled === true },
+    })
     return
   }
   if (

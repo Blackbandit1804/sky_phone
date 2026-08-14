@@ -183,7 +183,7 @@ and restart the resource after updating the configuration.
 - An inventory item named `phone`. It must be non-stackable when `Config.Phone.Unique = true` and may be stackable when it is `false`.
 - When `Config.Sim.Enabled = true`, two unique, non-stackable inventory items named `sky_phone_sim_registered` and `sky_phone_sim_anonymous`. Their metadata is initialized automatically on first use, so shops and crafting recipes add plain items without supplying a number. These item definitions are not required when SIM cards are disabled.
 - `oxmysql` with MySQL/MariaDB.
-- `pma-voice` when `Config.Calls.VoiceProvider` is set to `"pma"`.
+- `pma-voice` when `Config.Calls.VoiceProvider` is set to `"pma"` (the alias `"pma-voice"` selects the same adapter), or SaltyChat when it is set to `"saltychat"` (alias `"salty"`). SaltyChat additionally enables the in-call speaker control; PMA Voice keeps that control unavailable instead of simulating a local-only state. Set `Config.Speaker.Enabled = false` to disable the SaltyChat phone and radio speaker system globally; the controls then stay unavailable and server callbacks reject attempts to enable them.
 - A FiveManage V3 Media API token for Camera photo/video uploads, Voice Memo audio uploads, and Gallery deletion. Set it in the
   server-only `sky_phone/config/media.lua`; the token is never sent to NUI because clients receive
   temporary presigned upload URLs instead:
@@ -243,7 +243,7 @@ deletion is retained as an audit-safe soft delete. Runtime migration creates
 
 ## Radio app
 
-The built-in Radio app supports a primary frequency, volume, recent channels, participant lists, automatic rejoin, join/leave notifications, and an optional service number. YACA and SaltyChat support the configured secondary frequency; PMA Voice exposes one radio channel, so the secondary input is hidden automatically.
+The built-in Radio app supports a primary frequency, volume, recent channels, participant lists, automatic rejoin, join/leave notifications, and an optional service number. YACA and SaltyChat support the configured secondary frequency; PMA Voice exposes one radio channel, so the secondary input is hidden automatically. SaltyChat also exposes the provider-backed radio speaker control when `Config.Speaker.Enabled` is enabled. The control is omitted when the global speaker system is disabled and for YACA or PMA Voice because those adapters do not provide an equivalent speaker API.
 
 Configure frequency bounds and precision, restricted channel ranges and allowed jobs, history length, defaults, badge validation, radio display-name permissions, and the built-in speaker HUD under `Config.Radio`. `Config.Radio.DisplayName.AllowedJobs` maps authoritative framework job names to their minimum grade. Unlisted jobs cannot change the name; an empty name restores the normal player or character name. Channel and display-name access are always checked server-side. `Config.Radio.Hud` controls the phone-owned overlay, its screen edge, offsets, and recent-speaker duration without depending on another HUD resource. Active-speaker highlighting uses the YACA radio events; the Radio app itself continues to support every configured voice provider.
 
@@ -301,6 +301,7 @@ The browser bootstrap includes contacts, calls, messages, mail, invoices, transa
 
 System overlays are available through dedicated preview parameters:
 
+- Lock screen: `http://localhost:5174/?apiPort=3002&lockScreenPreview=1`
 - SIM picker: `http://localhost:5174/?apiPort=3002&simPickerPreview=1`
 - Payphone: `http://localhost:5174/?apiPort=3002&payphonePreview=1` (dial `5551110001` for a connected call or `5550000000` for a busy line)
 

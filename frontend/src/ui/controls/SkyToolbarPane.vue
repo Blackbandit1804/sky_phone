@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SkyGlass from './SkyGlass.vue'
+
 defineOptions({ inheritAttrs: false })
 
 withDefaults(
@@ -12,7 +14,7 @@ withDefaults(
 </script>
 
 <template>
-  <component :is="component" v-bind="$attrs" class="sky-toolbar-pane">
+  <SkyGlass :component="component" v-bind="$attrs" class="sky-toolbar-pane">
     <slot />
-  </component>
+  </SkyGlass>
 </template>

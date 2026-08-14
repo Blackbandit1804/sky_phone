@@ -45,6 +45,27 @@ async function renderNavigation(activeIndex = 1): Promise<string> {
 }
 
 describe('SkySegmented navigation', () => {
+  it('keeps ordinary iOS segments at Konsta height and Strong colors', () => {
+    expect(controls).toMatch(
+      /\.sky-segmented\s*\{[^}]*height:\s*34px[^}]*min-height:\s*34px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-segmented-button\s*\{[^}]*height:\s*34px[^}]*min-height:\s*34px[^}]*padding:\s*0 8px[^}]*font-size:\s*15px[^}]*font-weight:\s*500/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-segmented--strong:not\(\.sky-segmented--navigation\):not\([\s\S]*?height:\s*38px[^}]*padding:\s*2px[^}]*background:\s*rgba\(0, 0, 0, 0\.05\)/,
+    )
+    expect(controls).toMatch(
+      /\.sky-segmented--strong:not\(\.sky-segmented--navigation\):not\([\s\S]*?\.sky-segmented-button\s*\{[^}]*color:\s*var\(--sky-text, #000000\)/,
+    )
+    expect(controls).toMatch(
+      /\.sky-segmented--strong:not\(\.sky-segmented--navigation\):not\([\s\S]*?\.sky-segmented-button--active\s*\{[^}]*color:\s*#000000[^}]*0 1px 3px rgba\(0, 0, 0, 0\.1\)[^}]*0 1px 2px -1px rgba\(0, 0, 0, 0\.1\)/,
+    )
+    expect(controls).toMatch(
+      /\.sky-segmented--rounded:not\(\.sky-segmented--outline\):not\([\s\S]*?\.sky-segmented-button--active\s*\{[^}]*border-radius:\s*var\(--sky-radius-pill, 999px\)/,
+    )
+  })
+
   it('renders the Konsta iOS glass stack and one moving highlight', async () => {
     const html = await renderNavigation()
 
@@ -141,6 +162,21 @@ describe('SkySegmented navigation', () => {
   it('lets subnavbar search controls fill the available Konsta row', () => {
     expect(controls).toMatch(
       /\.sky-searchbar\s*\{[^}]*width:\s*100%[^}]*flex:\s*1 1 auto/s,
+    )
+  })
+
+  it('keeps Navbar segmented visuals at Konsta size with 44px targets', () => {
+    expect(controls).toMatch(
+      /\.sky-glass\.sky-segmented--navbar\s*\{[^}]*height:\s*var\(--sky-touch-target, 44px\)[^}]*gap:\s*4px[^}]*padding:\s*0 4px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-segmented--navbar \.sky-segmented-button\s*\{[^}]*min-height:\s*var\(--sky-touch-target, 44px\)[^}]*padding:\s*0 8px[^}]*font-size:\s*15px[^}]*font-weight:\s*500/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-segmented--navbar \.sky-segmented__highlight\s*\{[^}]*top:\s*5px[^}]*bottom:\s*5px[^}]*background:\s*#ffffff/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-app-page--dark \.sky-segmented--navbar \.sky-segmented__highlight\s*\{[^}]*background:\s*rgba\(255, 255, 255, 0\.75\)/s,
     )
   })
 

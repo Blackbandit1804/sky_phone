@@ -115,19 +115,19 @@ local function leave_call_voice()
     if call_channel == 0 then
         return
     end
-    if Config.Calls.VoiceProvider == "pma" and GetResourceState("pma-voice") == "started" then
-        exports["pma-voice"]:setCallChannel(0)
-    end
+    Bridge.Calls.Leave()
     call_channel = 0
 end
 
 local function join_call_voice(channel)
-    if Config.Calls.VoiceProvider ~= "pma" or GetResourceState("pma-voice") ~= "started" then
-        Bridge.Debug("error", "[sky_phone] The payphone call could not join the configured voice provider.")
+    local next_channel = tonumber(channel) or 0
+    if not Bridge.Calls.Join(next_channel) then
+        Bridge.Debug("error", "[sky_phone] The payphone call could not join the configured voice provider.", {
+            always = true,
+        })
         return false
     end
-    call_channel = tonumber(channel) or 0
-    exports["pma-voice"]:setCallChannel(call_channel)
+    call_channel = next_channel
     return call_channel > 0
 end
 

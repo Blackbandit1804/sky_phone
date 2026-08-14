@@ -22,17 +22,36 @@ export const PHONE_FRAME_IDS = [
 ] as const
 export const RINGTONE_IDS = ['skyline', 'horizon', 'pulse'] as const
 export const NOTIFICATION_SOUND_IDS = ['chime', 'signal', 'soft'] as const
-export const WALLPAPER_IDS = ['midnight', 'aurora', 'ember'] as const
+export const WALLPAPER_IDS = [
+  'midnight',
+  'aurora',
+  'ember',
+  'ocean',
+  'sunrise',
+  'violet',
+  'forest',
+  'cobalt',
+  'rose',
+  'sand',
+  'graphite',
+  'prism',
+] as const
 export const PHONE_SCALE_MIN = 75
 export const PHONE_SCALE_MAX = 150
 export const PHONE_SCALE_STEP = 5
+export const PHONE_SETUP_LAST_STEP = 9
 
 export type AppearanceMode = (typeof APPEARANCE_MODE_IDS)[number]
 export type GraphicsMode = (typeof GRAPHICS_MODE_IDS)[number]
 export type PhoneFrameId = (typeof PHONE_FRAME_IDS)[number]
 export type RingtoneId = (typeof RINGTONE_IDS)[number]
 export type NotificationSoundId = (typeof NOTIFICATION_SOUND_IDS)[number]
-export type WallpaperId = (typeof WALLPAPER_IDS)[number]
+export type BuiltInWallpaperId = (typeof WALLPAPER_IDS)[number]
+export type WallpaperId = BuiltInWallpaperId | 'custom'
+export type WallpaperHistoryEntry = {
+  imageUrl: string | null
+  wallpaper: WallpaperId
+}
 export type AppNotificationPreferences = {
   enabled: boolean
   sounds: boolean
@@ -61,8 +80,12 @@ export type PhonePreferencesV1 = {
     ringtone: RingtoneId
     ringtoneVolume: number
     screenBrightness: number
+    setupCompleted: boolean
+    setupStep: number
     streamerMode: boolean
     wallpaper: WallpaperId
+    wallpaperHistory: WallpaperHistoryEntry[]
+    wallpaperImageUrl: string | null
     wifiEnabled: boolean
   }
   version: 1
@@ -129,8 +152,12 @@ export const DEFAULT_PHONE_PREFERENCES: PhonePreferencesV1 = {
     ringtone: 'skyline',
     ringtoneVolume: 80,
     screenBrightness: 100,
+    setupCompleted: false,
+    setupStep: 0,
     streamerMode: false,
     wallpaper: 'midnight',
+    wallpaperHistory: [{ imageUrl: null, wallpaper: 'midnight' }],
+    wallpaperImageUrl: null,
     wifiEnabled: true,
   },
   version: 1,
@@ -159,6 +186,39 @@ function readChoice<T extends string>(
   return typeof value === 'string' && choices.includes(value as T)
     ? (value as T)
     : fallback
+}
+
+function readWallpaperImageUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const imageUrl = value.trim()
+  return imageUrl.length > 0 && imageUrl.length <= 2_000_000 ? imageUrl : null
+}
+
+function readWallpaperHistory(value: unknown): WallpaperHistoryEntry[] {
+  if (!Array.isArray(value)) return []
+
+  const history: WallpaperHistoryEntry[] = []
+  for (const rawEntry of value.slice(0, 4)) {
+    if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) {
+      continue
+    }
+    const entry = rawEntry as Partial<WallpaperHistoryEntry>
+    const imageUrl = readWallpaperImageUrl(entry.imageUrl)
+    if (entry.wallpaper === 'custom' && imageUrl) {
+      history.push({ imageUrl, wallpaper: 'custom' })
+      continue
+    }
+    if (
+      typeof entry.wallpaper === 'string' &&
+      WALLPAPER_IDS.includes(entry.wallpaper as BuiltInWallpaperId)
+    ) {
+      history.push({
+        imageUrl: null,
+        wallpaper: entry.wallpaper as BuiltInWallpaperId,
+      })
+    }
+  }
+  return history
 }
 
 function readNotifications(
@@ -214,6 +274,13 @@ export function parsePhonePreferences(raw: string | null): PhonePreferencesV1 {
     }
 
     const defaults = DEFAULT_PHONE_PREFERENCES.settings
+    const wallpaperImageUrl = readWallpaperImageUrl(settings.wallpaperImageUrl)
+    const wallpaper =
+      settings.wallpaper === 'custom' && wallpaperImageUrl
+        ? 'custom'
+        : readChoice(settings.wallpaper, WALLPAPER_IDS, defaults.wallpaper)
+    const wallpaperHistory = readWallpaperHistory(settings.wallpaperHistory)
+
     return {
       settings: {
         airplaneMode: readBoolean(settings.airplaneMode, defaults.airplaneMode),
@@ -280,12 +347,32 @@ export function parsePhonePreferences(raw: string | null): PhonePreferencesV1 {
           10,
           100,
         ),
-        streamerMode: readBoolean(settings.streamerMode, defaults.streamerMode),
-        wallpaper: readChoice(
-          settings.wallpaper,
-          WALLPAPER_IDS,
-          defaults.wallpaper,
+        setupCompleted:
+          typeof settings.setupCompleted === 'boolean'
+            ? settings.setupCompleted
+            : true,
+        setupStep: Math.floor(
+          readNumber(
+            settings.setupStep,
+            typeof settings.setupCompleted === 'boolean'
+              ? defaults.setupStep
+              : PHONE_SETUP_LAST_STEP,
+            0,
+            PHONE_SETUP_LAST_STEP,
+          ),
         ),
+        streamerMode: readBoolean(settings.streamerMode, defaults.streamerMode),
+        wallpaper,
+        wallpaperHistory:
+          wallpaperHistory.length > 0
+            ? wallpaperHistory
+            : [
+                {
+                  imageUrl: wallpaper === 'custom' ? wallpaperImageUrl : null,
+                  wallpaper,
+                },
+              ],
+        wallpaperImageUrl: wallpaper === 'custom' ? wallpaperImageUrl : null,
         wifiEnabled: readBoolean(settings.wifiEnabled, defaults.wifiEnabled),
       },
       version: 1,

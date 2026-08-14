@@ -43,6 +43,7 @@ withDefaults(
     :aria-orientation="tabbar ? undefined : 'horizontal'"
     :role="tabbar ? 'tablist' : 'toolbar'"
   >
+    <span class="sky-toolbar__blur" aria-hidden="true" />
     <span class="sky-toolbar__background" :class="bgClass" aria-hidden="true" />
     <div class="sky-toolbar__inner" :class="innerClass">
       <slot />

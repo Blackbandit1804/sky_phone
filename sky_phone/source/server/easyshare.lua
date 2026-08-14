@@ -7,6 +7,7 @@ local valid_kinds = {
     document = true,
     link = true,
     location = true,
+    media = true,
     note = true,
     photo = true,
     playlist = true,
@@ -671,6 +672,45 @@ local function sanitize_payload(source, device, data)
         payload.title = note.title ~= "" and note.title or title
         payload.copyText = plain_note_body(note.body)
         payload.meta = { body = note.body, title = note.title }
+    elseif data.kind == "media" and app_id == "photos" and type(data.meta) == "table" and type(data.meta.mediaIds) == "table" then
+        local media_ids = {}
+        local seen_ids = {}
+        for _, value in ipairs(data.meta.mediaIds) do
+            local media_id = tonumber(value)
+            if media_id and media_id > 0 and media_id == math.floor(media_id) and not seen_ids[media_id] then
+                seen_ids[media_id] = true
+                media_ids[#media_ids + 1] = media_id
+            end
+        end
+        if #media_ids < 1 or #media_ids > 50 then
+            return nil, "invalid_payload"
+        end
+        local placeholders = {}
+        local media_params = {}
+        for _, media_id in ipairs(media_ids) do
+            placeholders[#placeholders + 1] = "?"
+            media_params[#media_params + 1] = media_id
+        end
+        append_params(media_params, owner_params)
+        local media_rows = Bridge.Database.Query(([[
+            SELECT `id`, `url`, `media_type` AS `mediaType`
+            FROM `sky_phone_media`
+            WHERE `id` IN (%s) AND %s AND `media_type` IN ('photo', 'video')
+            ORDER BY `created_at` ASC, `id` ASC
+        ]]):format(table.concat(placeholders, ", "), condition), media_params)
+        if #media_rows ~= #media_ids then
+            return nil, "not_owned"
+        end
+        local items = {}
+        for _, row in ipairs(media_rows) do
+            items[#items + 1] = {
+                id = tonumber(row.id),
+                mediaType = row.mediaType,
+                url = row.url,
+            }
+        end
+        payload.imageUrl = items[1].url
+        payload.meta = { items = items }
     elseif data.kind == "photo" or data.kind == "video" then
         local url, media_error = SkyPhoneMedia.ResolveOwnedMedia(source, payload.id, data.kind)
         if not url then

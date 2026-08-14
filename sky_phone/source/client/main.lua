@@ -91,14 +91,17 @@ local server_callbacks = {
     "fliptok:feed",
     "fliptok:video",
     "fliptok:discover",
+    "fliptok:music-metadata",
     "fliptok:publish",
     "fliptok:react",
     "fliptok:follow",
     "fliptok:comments",
     "fliptok:comment",
+    "fliptok:comment-react",
     "fliptok:view",
     "fliptok:share",
     "fliptok:profile",
+    "fliptok:connections",
     "fliptok:update-profile",
     "fliptok:activities",
     "fliptok:mark-activities",
@@ -117,6 +120,7 @@ local server_callbacks = {
     "picstagram:search",
     "picstagram:saved",
     "picstagram:profile",
+    "picstagram:connections",
     "picstagram:update-profile",
     "picstagram:publish-post",
     "picstagram:update-post",
@@ -126,6 +130,7 @@ local server_callbacks = {
     "picstagram:respond-follow",
     "picstagram:comments",
     "picstagram:comment",
+    "picstagram:comment-react",
     "picstagram:remove-comment",
     "picstagram:publish-story",
     "picstagram:stories",
@@ -219,6 +224,7 @@ local server_callbacks = {
     "calls:recents",
     "calls:dial",
     "calls:answer",
+    "calls:set-speaker",
     "calls:decline",
     "calls:hangup",
     "calls:block",
@@ -246,6 +252,8 @@ local server_callbacks = {
     "easyshare:respond",
     "easyshare:cancel",
     "darkchat:bootstrap",
+    "darkchat:create-profile",
+    "darkchat:delete-profile",
     "darkchat:update-profile",
     "darkchat:start",
     "darkchat:thread",
@@ -268,6 +276,8 @@ local server_callbacks = {
     "flare:thread",
     "flare:send",
     "gallery:list",
+    "gallery:counts",
+    "gallery:favorite",
     "media:config",
     "media:import:sources",
     "media:import:list",
@@ -371,23 +381,16 @@ local function leave_call_voice()
     if call_channel == 0 then
         return
     end
-    if Config.Calls.VoiceProvider == "pma" and GetResourceState("pma-voice") == "started" then
-        exports["pma-voice"]:setCallChannel(0)
-    end
+    Bridge.Calls.Leave()
     call_channel = 0
 end
 
 local function join_call_voice(channel)
-    if Config.Calls.VoiceProvider ~= "pma" then
-        Bridge.Debug("error", "[sky_phone] Unsupported voice provider '%s'.", tostring(Config.Calls.VoiceProvider))
+    local next_channel = tonumber(channel) or 0
+    if not Bridge.Calls.Join(next_channel) then
         return false
     end
-    if GetResourceState("pma-voice") ~= "started" then
-        Bridge.Debug("error", "[sky_phone] Configured pma-voice provider is not started.")
-        return false
-    end
-    call_channel = tonumber(channel) or 0
-    exports["pma-voice"]:setCallChannel(call_channel)
+    call_channel = next_channel
     return true
 end
 

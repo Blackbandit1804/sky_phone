@@ -17,6 +17,7 @@ export const useFlipTokStore = defineStore('fliptok', {
     activities: [] as FlipTokActivity[],
     authenticated: false,
     comments: [] as FlipTokComment[],
+    connections: [] as FlipTokProfile[],
     feed: [] as FlipTokVideo[],
     isAdmin: false,
     loading: false,
@@ -211,8 +212,35 @@ export const useFlipTokStore = defineStore('fliptok', {
       })
       this.comments = response.success && response.data ? response.data : []
     },
-    async comment(id: string, body: string): Promise<NuiResponse> {
-      return nuiCall('fliptok:comment', { body, id })
+    async comment(
+      id: string,
+      body: string,
+      parentId?: string,
+    ): Promise<NuiResponse> {
+      return nuiCall('fliptok:comment', { body, id, parentId })
+    },
+    async reactComment(comment: FlipTokComment): Promise<void> {
+      const active = !comment.is_liked
+      comment.is_liked = active
+      comment.like_count += active ? 1 : -1
+      const response = await nuiCall('fliptok:comment-react', {
+        active,
+        id: comment.id,
+      })
+      if (response.success) return
+      comment.is_liked = !active
+      comment.like_count += active ? -1 : 1
+    },
+    async loadConnections(
+      profileId: number,
+      mode: 'followers' | 'following',
+    ): Promise<boolean> {
+      const response = await nuiCall<FlipTokProfile[]>('fliptok:connections', {
+        mode,
+        profileId,
+      })
+      this.connections = response.success && response.data ? response.data : []
+      return response.success
     },
     async loadActivities(): Promise<void> {
       const response = await nuiCall<FlipTokActivity[]>('fliptok:activities')

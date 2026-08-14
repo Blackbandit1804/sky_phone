@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 
 import {
+  DEFAULT_INSTALLED_PHONE_APP_IDS,
   getPhoneApp,
   isExternalPhoneApp,
   isPhoneAppId,
@@ -20,6 +21,7 @@ import {
   extractHomeFolderApp,
   moveHomeFolderApp,
   moveHomeApp,
+  moveHomeAppToGridPage,
   parseHomeLayout,
   renameHomeFolder,
   removeHomeApp,
@@ -29,6 +31,7 @@ import {
 import { nuiCall } from '@/utils/nui'
 
 const INSTALL_DURATION_MS = 3000
+const UPDATE_DURATION_MS = 1800
 
 type PendingInstallation = {
   deviceImei: string
@@ -36,9 +39,18 @@ type PendingInstallation = {
   token: symbol
 }
 
+type PendingUpdate = {
+  deviceImei: string
+  timer: ReturnType<typeof globalThis.setTimeout>
+}
+
 const pendingInstallations = new WeakMap<
   object,
   Map<LaunchablePhoneAppId, PendingInstallation>
+>()
+const pendingUpdates = new WeakMap<
+  object,
+  Map<LaunchablePhoneAppId, PendingUpdate>
 >()
 
 function getDefaultGridIds(): LaunchablePhoneAppId[] {
@@ -55,7 +67,9 @@ function getDefaultDockIds(): LaunchablePhoneAppId[] {
 
 function getDefaultInstalledIds(): LaunchablePhoneAppId[] {
   return PHONE_APPS.filter((app) =>
-    isExternalPhoneApp(app) ? app.defaultInstalled : app.category !== 'games',
+    isExternalPhoneApp(app)
+      ? app.defaultInstalled
+      : DEFAULT_INSTALLED_PHONE_APP_IDS.has(app.id),
   ).map((app) => app.id)
 }
 
@@ -66,9 +80,39 @@ function isProtectedHomeApp(appId: LaunchablePhoneAppId): boolean {
     : NON_REMOVABLE_PHONE_APP_IDS.has(appId)
 }
 
+function hasUninstalledBuiltinApp(
+  layout: unknown,
+  installedIds: readonly LaunchablePhoneAppId[],
+): boolean {
+  if (!layout || typeof layout !== 'object') return false
+  const installed = new Set(installedIds)
+  const source = layout as {
+    dock?: unknown
+    grid?: unknown
+    hidden?: unknown
+  }
+  const items = [source.dock, source.grid, source.hidden]
+    .filter(Array.isArray)
+    .flat(2)
+
+  return items.some((item) => {
+    const ids =
+      item && typeof item === 'object' && Array.isArray(item.apps)
+        ? item.apps
+        : [item]
+    return ids.some((id: unknown) => {
+      if (typeof id !== 'string') return false
+      const app = getPhoneApp(id)
+      return !!app && !installed.has(app.id) && !isExternalPhoneApp(app)
+    })
+  })
+}
+
 export const useAppStoreStore = defineStore('app-store', {
   state: () => ({
     claimedApps: [] as LaunchablePhoneAppId[],
+    uninstalledApps: [] as LaunchablePhoneAppId[],
+    updatedAppReleases: {} as Partial<Record<LaunchablePhoneAppId, string>>,
     homeLayout: createDefaultHomeLayout(
       getDefaultInstalledIds(),
       getDefaultGridIds(),
@@ -76,6 +120,7 @@ export const useAppStoreStore = defineStore('app-store', {
     ),
     hydrated: false,
     installingApps: {} as Partial<Record<LaunchablePhoneAppId, boolean>>,
+    updatingApps: {} as Partial<Record<LaunchablePhoneAppId, boolean>>,
     launchCounts: {} as Partial<Record<LaunchablePhoneAppId, number>>,
   }),
   actions: {
@@ -94,6 +139,9 @@ export const useAppStoreStore = defineStore('app-store', {
       return true
     },
     claimApp(id: LaunchablePhoneAppId): void {
+      this.uninstalledApps = this.uninstalledApps.filter(
+        (appId) => appId !== id,
+      )
       if (!this.claimedApps.includes(id)) {
         this.claimedApps.push(id)
         this.homeLayout = restoreHomeApp(this.homeLayout, id)
@@ -109,6 +157,14 @@ export const useAppStoreStore = defineStore('app-store', {
         pendingInstallations.delete(this)
       }
       this.installingApps = {}
+      const updates = pendingUpdates.get(this)
+      if (updates) {
+        for (const update of updates.values()) {
+          globalThis.clearTimeout(update.timer)
+        }
+        pendingUpdates.delete(this)
+      }
+      this.updatingApps = {}
     },
     installApp(id: LaunchablePhoneAppId): void {
       const installed = this.isInstalled(id)
@@ -187,25 +243,58 @@ export const useAppStoreStore = defineStore('app-store', {
         claimedApps?: unknown
         homeLayout?: unknown
         launchCounts?: unknown
+        uninstalledApps?: unknown
+        updatedAppReleases?: unknown
       } | null
       const layoutVersion =
         data?.homeLayout && typeof data.homeLayout === 'object'
           ? (data.homeLayout as { version?: unknown }).version
           : undefined
+      const supportsPersistedExternalApps =
+        layoutVersion === 3 || layoutVersion === 4 || layoutVersion === 5
       this.claimedApps = Array.isArray(data?.claimedApps)
         ? data.claimedApps.filter(
             (id): id is LaunchablePhoneAppId =>
               typeof id === 'string' &&
               (isPhoneAppId(id) ||
-                ((layoutVersion === 3 ||
-                  layoutVersion === 4 ||
-                  layoutVersion === 5) &&
+                (supportsPersistedExternalApps &&
                   isValidExternalPhoneAppId(id))),
           )
         : []
+      this.uninstalledApps = Array.isArray(data?.uninstalledApps)
+        ? data.uninstalledApps.filter((id): id is LaunchablePhoneAppId => {
+            if (typeof id !== 'string' || !isPhoneAppId(id)) return false
+            const app = getPhoneApp(id)
+            return !!app && isPhoneAppRemovable(app)
+          })
+        : []
+      this.updatedAppReleases = {}
+      if (
+        data?.updatedAppReleases &&
+        typeof data.updatedAppReleases === 'object'
+      ) {
+        for (const [id, release] of Object.entries(data.updatedAppReleases)) {
+          if (
+            isPhoneAppId(id) &&
+            typeof release === 'string' &&
+            release.length <= 32
+          ) {
+            this.updatedAppReleases[id] = release
+          }
+        }
+      }
       const installedIds = [
         ...new Set([...getDefaultInstalledIds(), ...this.claimedApps]),
-      ]
+      ].filter((id) => !this.uninstalledApps.includes(id))
+      for (const appId of Object.keys(this.updatedAppReleases)) {
+        if (!isPhoneAppId(appId) || !installedIds.includes(appId)) {
+          delete this.updatedAppReleases[appId as LaunchablePhoneAppId]
+        }
+      }
+      const removedLegacyDefaults = hasUninstalledBuiltinApp(
+        data?.homeLayout,
+        installedIds,
+      )
       const defaults = createDefaultHomeLayout(
         installedIds,
         getDefaultGridIds(),
@@ -215,6 +304,7 @@ export const useAppStoreStore = defineStore('app-store', {
         data?.homeLayout,
         defaults,
         installedIds,
+        false,
       )
       const protectedHiddenAppIds =
         this.homeLayout.hidden.filter(isProtectedHomeApp)
@@ -226,9 +316,7 @@ export const useAppStoreStore = defineStore('app-store', {
         for (const [appId, count] of Object.entries(data.launchCounts)) {
           if (
             (isPhoneAppId(appId) ||
-              ((layoutVersion === 3 ||
-                layoutVersion === 4 ||
-                layoutVersion === 5) &&
+              (supportsPersistedExternalApps &&
                 isValidExternalPhoneAppId(appId))) &&
             typeof count === 'number' &&
             Number.isFinite(count) &&
@@ -239,27 +327,41 @@ export const useAppStoreStore = defineStore('app-store', {
         }
       }
       this.hydrated = true
-      if (protectedHiddenAppIds.length) this.persist()
+      if (
+        protectedHiddenAppIds.length ||
+        removedLegacyDefaults ||
+        layoutVersion === 2 ||
+        layoutVersion === 3 ||
+        layoutVersion === 4
+      ) {
+        this.persist()
+      }
     },
     isInstalled(appId: LaunchablePhoneAppId): boolean {
+      if (this.uninstalledApps.includes(appId)) return false
       if (this.claimedApps.includes(appId)) return true
       const app = getPhoneApp(appId)
       if (!app) return false
       return isExternalPhoneApp(app)
         ? app.defaultInstalled
-        : app.category !== 'games'
+        : DEFAULT_INSTALLED_PHONE_APP_IDS.has(app.id)
     },
     reconcileCatalog(): void {
       const installedIds = [
         ...new Set([...getDefaultInstalledIds(), ...this.claimedApps]),
-      ]
+      ].filter((id) => !this.uninstalledApps.includes(id))
       const defaults = createDefaultHomeLayout(
         installedIds,
         getDefaultGridIds(),
         getDefaultDockIds(),
       )
       const previous = JSON.stringify(this.homeLayout)
-      this.homeLayout = parseHomeLayout(this.homeLayout, defaults, installedIds)
+      this.homeLayout = parseHomeLayout(
+        this.homeLayout,
+        defaults,
+        installedIds,
+        false,
+      )
 
       for (const appId of [...this.homeLayout.hidden]) {
         if (isProtectedHomeApp(appId)) {
@@ -280,15 +382,38 @@ export const useAppStoreStore = defineStore('app-store', {
       sourceIndex: number,
       to: HomeArea,
       targetIndex: number,
-    ): void {
-      this.homeLayout = moveHomeApp(
+    ): boolean {
+      const next = moveHomeApp(
         this.homeLayout,
         from,
         sourceIndex,
         to,
         targetIndex,
       )
+      if (next === this.homeLayout) return false
+      this.homeLayout = next
       this.persist()
+      return true
+    },
+    moveHomeAppToGridPage(
+      from: HomeArea,
+      sourceIndex: number,
+      targetPage: number,
+      targetOffset: number,
+      capacities: readonly number[],
+    ): boolean {
+      const next = moveHomeAppToGridPage(
+        this.homeLayout,
+        from,
+        sourceIndex,
+        targetPage,
+        targetOffset,
+        capacities,
+      )
+      if (next === this.homeLayout) return false
+      this.homeLayout = next
+      this.persist()
+      return true
     },
     createHomeFolder(
       from: HomeArea,
@@ -377,11 +502,73 @@ export const useAppStoreStore = defineStore('app-store', {
       this.homeLayout = restoreHomeApp(this.homeLayout, appId)
       this.persist()
     },
+    uninstallApp(appId: LaunchablePhoneAppId): boolean {
+      const app = getPhoneApp(appId)
+      if (!app || !this.isInstalled(appId) || !isPhoneAppRemovable(app)) {
+        return false
+      }
+
+      this.claimedApps = this.claimedApps.filter((id) => id !== appId)
+      if (!this.uninstalledApps.includes(appId)) {
+        this.uninstalledApps.push(appId)
+      }
+      delete this.updatedAppReleases[appId]
+      this.homeLayout = removeHomeApp(this.homeLayout, appId)
+      this.persist()
+
+      return true
+    },
+    updateApp(appId: LaunchablePhoneAppId, release: string): void {
+      if (
+        !this.isInstalled(appId) ||
+        this.updatingApps[appId] ||
+        !release.trim()
+      ) {
+        return
+      }
+
+      const phone = usePhoneStore()
+      const deviceImei = phone.device?.imei
+      if (!phone.isOpen || !deviceImei) {
+        console.error(
+          `[App store] Update cancelled because no phone device is open for ${appId}.`,
+        )
+        return
+      }
+
+      const updates =
+        pendingUpdates.get(this) ??
+        new Map<LaunchablePhoneAppId, PendingUpdate>()
+      this.updatingApps[appId] = true
+      const timer = globalThis.setTimeout(() => {
+        updates.delete(appId)
+        if (!updates.size) pendingUpdates.delete(this)
+        delete this.updatingApps[appId]
+        const activePhone = usePhoneStore()
+        if (!activePhone.isOpen || activePhone.device?.imei !== deviceImei) {
+          console.error(
+            `[App store] Update cancelled because the active phone changed for ${appId}.`,
+          )
+          return
+        }
+        if (!this.isInstalled(appId)) return
+        this.updatedAppReleases[appId] = release
+        this.persist()
+      }, UPDATE_DURATION_MS)
+      updates.set(appId, { deviceImei, timer })
+      pendingUpdates.set(this, updates)
+    },
     persist(): void {
       usePhoneStore().saveDeviceNamespace('apps', {
         claimedApps: this.claimedApps,
         homeLayout: this.homeLayout,
         launchCounts: this.launchCounts,
+        ...(this.uninstalledApps.length
+          ? { uninstalledApps: this.uninstalledApps }
+          : {}),
+        ...(Object.keys(this.updatedAppReleases).length
+          ? { updatedAppReleases: this.updatedAppReleases }
+          : {}),
       })
     },
   },

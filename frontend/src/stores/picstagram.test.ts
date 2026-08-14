@@ -49,7 +49,14 @@ const post: PicstagramPost = {
   is_saved: false,
   like_count: 2,
   location: 'Downtown',
-  media: [{ id: 1, position: 0, url: 'https://example.com/photo.webp' }],
+  media: [
+    {
+      id: 1,
+      media_type: 'photo',
+      position: 0,
+      url: 'https://example.com/photo.webp',
+    },
+  ],
   private: false,
   profile_id: profile.id,
   verified: false,
@@ -62,9 +69,12 @@ const comment: PicstagramComment = {
   display_name: 'Nova',
   handle: 'nova',
   id: 'comment-1',
+  is_liked: false,
   is_owner: true,
+  like_count: 0,
   parent_id: null,
   profile_id: profile.id,
+  reply_to_handle: null,
   verified: false,
 }
 
@@ -91,6 +101,7 @@ const story: PicstagramStory = {
   handle: 'nova',
   id: 'story-1',
   is_owner: true,
+  media_type: 'photo',
   profile_id: profile.id,
   seen: true,
   url: 'https://example.com/story.webp',

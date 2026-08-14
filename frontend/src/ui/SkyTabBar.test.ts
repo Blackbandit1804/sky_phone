@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 import { createSSRApp } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { describe, expect, it } from 'vitest'
@@ -5,20 +8,75 @@ import { describe, expect, it } from 'vitest'
 import SkyTabBar from '@/ui/SkyTabBar.vue'
 
 describe('SkyTabBar', () => {
-  it('keeps the docked tab bar as the default', async () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('./SkyTabBar.vue', import.meta.url)),
+    'utf8',
+  )
+  const foundation = readFileSync(
+    fileURLToPath(new URL('./foundation.css', import.meta.url)),
+    'utf8',
+  )
+  const controls = readFileSync(
+    fileURLToPath(new URL('./controls.css', import.meta.url)),
+    'utf8',
+  )
+  const mainCss = readFileSync(
+    fileURLToPath(new URL('../assets/main.css', import.meta.url)),
+    'utf8',
+  )
+
+  it('uses the Konsta-style floating glass capsule by default', async () => {
     const html = await renderToString(
       createSSRApp(SkyTabBar, { label: 'Navigation' }),
     )
 
-    expect(html).toContain('class="sky-tabbar"')
-    expect(html).not.toContain('sky-tabbar--floating')
+    expect(html).toContain('sky-tabbar sky-tabbar--floating')
+    expect(html).toContain('sky-tabbar--icons')
+    expect(html).toContain('sky-tabbar--labels')
+    expect(html).toContain('sky-glass')
+    expect(html).toContain('sky-tabbar__blur')
+    expect(html).toContain('sky-tabbar__background')
   })
 
-  it('exposes the shared floating capsule variant', async () => {
+  it('keeps icon and label density explicit', async () => {
     const html = await renderToString(
-      createSSRApp(SkyTabBar, { floating: true, label: 'Navigation' }),
+      createSSRApp(SkyTabBar, {
+        icons: false,
+        label: 'Navigation',
+        labels: true,
+      }),
     )
 
-    expect(html).toContain('sky-tabbar sky-tabbar--floating')
+    expect(html).not.toContain('sky-tabbar--icons')
+    expect(html).toContain('sky-tabbar--labels')
+  })
+
+  it('matches the Konsta iOS glass, density, and moving highlight contract', () => {
+    expect(foundation).toMatch(
+      /\.sky-tabbar\s*\{[^}]*--sky-tabbar-pane-height:\s*48px[^}]*padding-right:\s*calc\(var\(--sky-safe-area-right\) \+ 16px\)[^}]*padding-bottom:\s*calc\(var\(--sky-safe-area-bottom\) \+ 16px\)/s,
+    )
+    expect(foundation).toMatch(
+      /\.sky-tabbar--icons\.sky-tabbar--labels\s*\{[^}]*--sky-tabbar-pane-height:\s*64px/s,
+    )
+    expect(foundation).toMatch(
+      /\.sky-tabbar__highlight-inner,[\s\S]*?inset:\s*4px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-tab-button__icon\s*\{[^}]*width:\s*28px[^}]*height:\s*28px/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-tab-button__label\s*\{[^}]*font-size:\s*12px[^}]*font-weight:\s*500/s,
+    )
+    expect(source).toContain("attributeFilter: ['class']")
+    expect(source).toContain(
+      "button.classList.contains('sky-tab-button--active')",
+    )
+  })
+
+  it('keeps Performance solid while Ultimate retains shared Glass', () => {
+    expect(mainCss).toMatch(
+      /\.phone-app--performance \.sky-tabbar__pane\s*\{[^}]*background:\s*var\(--phone-performance-glass\)[^}]*box-shadow:\s*none/s,
+    )
+    expect(source).toContain('<SkyGlass class="sky-tabbar__pane">')
   })
 })

@@ -1,9 +1,16 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { NON_REMOVABLE_PHONE_APP_IDS } from '@/config/apps'
+import {
+  DEFAULT_INSTALLED_PHONE_APP_IDS,
+  NON_REMOVABLE_PHONE_APP_IDS,
+} from '@/config/apps'
 import { useAppStoreStore } from '@/stores/app-store'
-import { getHomeFolder, removeHomeApp } from '@/utils/homeLayout'
+import {
+  getHomeFolder,
+  HOME_GRID_PAGE_SIZE,
+  removeHomeApp,
+} from '@/utils/homeLayout'
 
 const mocks = vi.hoisted(() => ({
   phone: {
@@ -28,6 +35,53 @@ describe('app store', () => {
     vi.useRealTimers()
   })
 
+  it('installs only the fourteen standard built-in apps by default', () => {
+    const apps = useAppStoreStore()
+
+    apps.hydrate(null)
+
+    expect([...DEFAULT_INSTALLED_PHONE_APP_IDS]).toEqual([
+      'phone',
+      'messages',
+      'calculator',
+      'camera',
+      'clock',
+      'weather',
+      'mail',
+      'notes',
+      'memos',
+      'photos',
+      'app-store',
+      'settings',
+      'map',
+      'calendar',
+    ])
+    for (const appId of DEFAULT_INSTALLED_PHONE_APP_IDS) {
+      expect(apps.isInstalled(appId)).toBe(true)
+    }
+    expect(apps.isInstalled('banking')).toBe(false)
+    expect(apps.isInstalled('feather')).toBe(false)
+    expect(apps.isInstalled('snake')).toBe(false)
+  })
+
+  it('removes old automatic apps unless the player installed them', () => {
+    const apps = useAppStoreStore()
+
+    apps.hydrate({
+      claimedApps: ['feather'],
+      homeLayout: {
+        dock: [],
+        grid: ['banking', 'feather', 'phone'],
+        hidden: [],
+        version: 5,
+      },
+    })
+
+    expect(apps.homeLayout.grid).not.toContain('banking')
+    expect(apps.homeLayout.grid).toContain('feather')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
+  })
+
   it('hydrates valid launch counts and persists launches with claimed apps', () => {
     const apps = useAppStoreStore()
 
@@ -43,6 +97,64 @@ describe('app store', () => {
       homeLayout: apps.homeLayout,
       launchCounts: { mail: 4 },
     })
+  })
+
+  it('keeps external app state while migrating version 4 layouts', () => {
+    const apps = useAppStoreStore()
+    const grid = Array.from({ length: 24 }, () => null as string | null)
+    grid[20] = 'external-radio'
+
+    apps.hydrate({
+      claimedApps: ['external-radio'],
+      homeLayout: { dock: [], grid, hidden: [], version: 4 },
+      launchCounts: { 'external-radio': 3 },
+    })
+
+    expect(apps.claimedApps).toEqual(['external-radio'])
+    expect(apps.homeLayout.version).toBe(5)
+    expect(apps.homeLayout.grid).toContain('external-radio')
+    const pageAppCount = apps.homeLayout.grid
+      .slice(0, HOME_GRID_PAGE_SIZE)
+      .filter((appId) => appId !== null).length
+    expect(apps.homeLayout.grid.slice(0, pageAppCount)).not.toContain(null)
+    expect(apps.launchCounts).toEqual({ 'external-radio': 3 })
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps external app state from current version 5 layouts', () => {
+    const apps = useAppStoreStore()
+
+    apps.hydrate({
+      claimedApps: ['external-radio'],
+      homeLayout: {
+        dock: [],
+        grid: ['external-radio'],
+        hidden: [],
+        version: 5,
+      },
+      launchCounts: { 'external-radio': 3 },
+    })
+
+    expect(apps.claimedApps).toEqual(['external-radio'])
+    expect(apps.homeLayout.grid).toContain('external-radio')
+    expect(apps.launchCounts).toEqual({ 'external-radio': 3 })
+    expect(mocks.phone.saveDeviceNamespace).not.toHaveBeenCalled()
+  })
+
+  it('persists a page-aware version 3 to version 5 migration once', () => {
+    const apps = useAppStoreStore()
+    const grid = Array.from({ length: 40 }, () => null as string | null)
+    grid[20] = 'external-page-two'
+
+    apps.hydrate({
+      claimedApps: ['external-page-two'],
+      homeLayout: { dock: [], grid, hidden: [], version: 3 },
+    })
+
+    expect(apps.homeLayout.version).toBe(5)
+    expect(apps.homeLayout.grid[20]).not.toBe('external-page-two')
+    expect(apps.homeLayout.grid[24]).toBe('external-page-two')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
   })
 
   it('installs an app after showing a three second loading state', () => {
@@ -64,6 +176,79 @@ describe('app store', () => {
       claimedApps: ['snake'],
       homeLayout: apps.homeLayout,
       launchCounts: {},
+    })
+  })
+
+  it('fully uninstalls removable apps and allows downloading them again', () => {
+    vi.useFakeTimers()
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+    mocks.phone.saveDeviceNamespace.mockClear()
+
+    expect(apps.uninstallApp('calculator')).toBe(true)
+    expect(apps.isInstalled('calculator')).toBe(false)
+    expect(apps.uninstalledApps).toEqual(['calculator'])
+    expect(apps.homeLayout.hidden).toContain('calculator')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenLastCalledWith('apps', {
+      claimedApps: [],
+      homeLayout: apps.homeLayout,
+      launchCounts: {},
+      uninstalledApps: ['calculator'],
+    })
+
+    apps.installApp('calculator')
+    vi.advanceTimersByTime(3000)
+
+    expect(apps.isInstalled('calculator')).toBe(true)
+    expect(apps.uninstalledApps).toEqual([])
+    expect(apps.homeLayout.hidden).not.toContain('calculator')
+  })
+
+  it('hydrates persisted removals while rejecting protected and invalid ids', () => {
+    const apps = useAppStoreStore()
+
+    apps.hydrate({
+      uninstalledApps: ['calculator', 'phone', 'not-an-app'],
+      updatedAppReleases: {
+        calculator: '2026-08-14',
+        phone: '2026-08-14',
+        snake: 'x'.repeat(64),
+      },
+    })
+
+    expect(apps.uninstalledApps).toEqual(['calculator'])
+    expect(apps.isInstalled('calculator')).toBe(false)
+    expect(apps.isInstalled('phone')).toBe(true)
+    expect(apps.updatedAppReleases).toEqual({ phone: '2026-08-14' })
+  })
+
+  it('protects system apps from full uninstallation', () => {
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+    mocks.phone.saveDeviceNamespace.mockClear()
+
+    expect(apps.uninstallApp('phone')).toBe(false)
+    expect(apps.isInstalled('phone')).toBe(true)
+    expect(mocks.phone.saveDeviceNamespace).not.toHaveBeenCalled()
+  })
+
+  it('updates installed apps and persists the current release', () => {
+    vi.useFakeTimers()
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+
+    apps.updateApp('phone', '2026-08-14')
+    expect(apps.updatingApps.phone).toBe(true)
+
+    vi.advanceTimersByTime(1800)
+
+    expect(apps.updatingApps.phone).toBeUndefined()
+    expect(apps.updatedAppReleases.phone).toBe('2026-08-14')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenLastCalledWith('apps', {
+      claimedApps: [],
+      homeLayout: apps.homeLayout,
+      launchCounts: {},
+      updatedAppReleases: { phone: '2026-08-14' },
     })
   })
 
@@ -160,6 +345,23 @@ describe('app store', () => {
     })
   })
 
+  it('persists a cross-page drop exactly once', () => {
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+    mocks.phone.saveDeviceNamespace.mockClear()
+    const sourceIndex = apps.homeLayout.grid.indexOf('phone')
+    expect(sourceIndex).toBeGreaterThanOrEqual(0)
+
+    expect(
+      apps.moveHomeAppToGridPage('grid', sourceIndex, 2, 0, [
+        HOME_GRID_PAGE_SIZE,
+        HOME_GRID_PAGE_SIZE,
+      ]),
+    ).toBe(true)
+    expect(apps.homeLayout.grid[HOME_GRID_PAGE_SIZE]).toBe('phone')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
+  })
+
   it('persists the complete folder lifecycle through store actions', () => {
     const apps = useAppStoreStore()
     apps.hydrate(null)
@@ -167,7 +369,6 @@ describe('app store', () => {
 
     const notesIndex = apps.homeLayout.grid.indexOf('notes')
     const clockIndex = apps.homeLayout.grid.indexOf('clock')
-    const mailIndex = apps.homeLayout.grid.indexOf('mail')
     const folderId = apps.createHomeFolder(
       'grid',
       notesIndex,
@@ -181,6 +382,7 @@ describe('app store', () => {
       'clock',
       'notes',
     ])
+    const mailIndex = apps.homeLayout.grid.indexOf('mail')
     expect(apps.addHomeAppToFolder('grid', mailIndex, folderId!)).toBe(true)
     apps.moveHomeFolderApp(folderId!, 2, 0)
     apps.renameHomeFolder(folderId!, 'Work')
@@ -190,10 +392,10 @@ describe('app store', () => {
     })
 
     const emptyIndex = apps.homeLayout.grid.indexOf(null)
-    expect(
-      apps.extractHomeFolderApp(folderId!, 0, 'grid', emptyIndex),
-    ).toBe(true)
-    expect(apps.homeLayout.grid[emptyIndex]).toBe('mail')
+    expect(apps.extractHomeFolderApp(folderId!, 0, 'grid', emptyIndex)).toBe(
+      true,
+    )
+    expect(apps.homeLayout.grid).toContain('mail')
     expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(5)
   })
 

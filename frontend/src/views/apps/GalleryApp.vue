@@ -16,9 +16,14 @@ import {
   kToast,
 } from 'konsta/vue'
 import {
+  Check,
+  ChevronLeft,
   ChevronRight,
+  Download,
   Globe2,
+  Heart,
   Link2,
+  ListFilter,
   Play,
   RotateCcw,
   Share2,
@@ -32,26 +37,44 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import { useEasyShareStore } from '@/stores/easyshare'
+import {
+  SkyActionButton,
+  SkyActionGroup,
+  SkyActionSheet,
+  SkyActionsLabel,
+  SkyButton,
+  SkyNavbar,
+  SkyToolbar,
+  SkyToolbarPane,
+} from '@/ui'
 import type {
+  DeleteManyResult,
   DeleteResult,
+  FavoriteResult,
+  GalleryCounts,
   GalleryFilter,
+  GallerySortOrder,
   MediaImportSource,
   MediaImportSources,
   PhoneMedia,
 } from '@/types/media'
 import {
+  bottomRightGridPosition,
   hasNextMediaPage,
   MEDIA_PAGE_SIZE,
   mediaErrorKey,
   mergeMedia,
+  orderMedia,
 } from '@/utils/media'
 import { nuiCall } from '@/utils/nui'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 const isDevelopment = import.meta.env.DEV
-const developmentGalleryState = isDevelopment
-  ? new URLSearchParams(window.location.search).get('galleryMock')
+const developmentParameters = isDevelopment
+  ? new URLSearchParams(window.location.search)
   : null
+const developmentApiEnabled = Boolean(developmentParameters?.has('apiPort'))
+const developmentGalleryState = developmentParameters?.get('galleryMock') ?? null
 const filterItems = [
   { id: 'all', label: 'all' },
   { id: 'photo', label: 'photos' },
@@ -72,8 +95,20 @@ const multipleSelection = computed(
     (messageMedia.request?.maxSelection ?? 1) > 1,
 )
 const selectedMediaIds = ref<number[]>([])
+const selectionMode = ref(false)
 const media = ref<PhoneMedia[]>([])
+const counts = ref<GalleryCounts>({
+  all: 0,
+  favoritePhotos: 0,
+  favorites: 0,
+  favoriteVideos: 0,
+  photos: 0,
+  videos: 0,
+})
 const filter = ref<GalleryFilter>(requestedMessageMedia.value ?? 'all')
+const favoritesOnly = ref(false)
+const sortOrder = ref<GallerySortOrder>('oldest')
+const sortMenuOpened = ref(false)
 const loading = ref(true)
 const fetching = ref(false)
 const hasMore = ref(true)
@@ -86,6 +121,7 @@ const importUrl = ref('')
 const importError = ref('')
 const importing = ref(false)
 const deleteDialogOpened = ref(false)
+const deleteManyDialogOpened = ref(false)
 const cancelButtonColors = {
   fillBgIos: 'bg-[#8e8e93] active:bg-[#7a7a7f]',
   fillBgMaterial: 'bg-[#8e8e93] active:bg-[#7a7a7f]',
@@ -102,18 +138,21 @@ const filterBarColors = {
   strongHighlightBgIos: 'bg-[#63636680]',
 }
 const deleting = ref(false)
+const deletingMany = ref(false)
+const favoriting = ref(false)
 const toastOpened = ref(false)
 const toastText = ref('')
 const loadTrigger = ref<HTMLElement | null>(null)
+const galleryContent = ref<HTMLElement | null>(null)
 const imageZoom = ref(1)
 const imagePan = ref({ x: 0, y: 0 })
-const landscapeViewer = ref(false)
 const dragging = ref(false)
 const videoPlaybackError = ref(false)
 const dragStart = ref({ panX: 0, panY: 0, x: 0, y: 0 })
 let observer: IntersectionObserver | null = null
 let toastTimer: number | undefined
 let pendingDeleteCorrelation = ''
+let pendingDeleteManyCorrelation = ''
 let dragTarget: HTMLElement | null = null
 let dragPointerId: number | null = null
 
@@ -122,47 +161,237 @@ const imageStyle = computed(() => ({
     imageZoom.value > 1 ? (dragging.value ? 'grabbing' : 'grab') : 'zoom-in',
   transform: `translate3d(${imagePan.value.x}px, ${imagePan.value.y}px, 0) scale(${imageZoom.value})`,
 }))
-
-function buildMockPhoto(
-  id: number,
-  label: string,
-  first: string,
-  second: string,
-  landscape = false,
-): PhoneMedia {
-  const width = landscape ? 1600 : 900
-  const height = landscape ? 900 : 1200
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${first}"/><stop offset="1" stop-color="${second}"/></linearGradient></defs><rect width="${width}" height="${height}" fill="url(#g)"/><circle cx="${width * 0.76}" cy="${height * 0.24}" r="${height * 0.15}" fill="#ffffff20"/><path d="M0 ${height * 0.82} ${width * 0.26} ${height * 0.56}l${width * 0.2} ${height * 0.18} ${width * 0.14}-${height * 0.11} ${width * 0.4} ${height * 0.27}v${height * 0.18}H0z" fill="#08131d66"/><text x="${width * 0.08}" y="${height * 0.9}" fill="white" font-size="${height * 0.05}" font-family="sans-serif">${label}</text></svg>`
-  return {
-    createdAt: Date.now() - id * 3_600_000,
-    id,
-    mediaType: 'photo',
-    url: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+const orderedMedia = computed(() => orderMedia(media.value, sortOrder.value))
+const countText = computed(() => {
+  if (favoritesOnly.value) {
+    const favoriteCount =
+      filter.value === 'photo'
+        ? counts.value.favoritePhotos
+        : filter.value === 'video'
+          ? counts.value.favoriteVideos
+          : counts.value.favorites
+    return phone.t(
+      `Apps.photos.counts.${favoriteCount === 1 ? 'favorite' : 'favorites'}`,
+      { count: new Intl.NumberFormat(phone.lang).format(favoriteCount) },
+    )
   }
+  const countKey = filter.value === 'all' ? 'all' : `${filter.value}s`
+  const count = counts.value[countKey as keyof GalleryCounts]
+  const translationKey =
+    count === 1
+      ? filter.value === 'all'
+        ? 'allOne'
+        : filter.value
+      : countKey
+  return phone.t(`Apps.photos.counts.${translationKey}`, {
+    count: new Intl.NumberFormat(phone.lang).format(count),
+  })
+})
+const selectedMedia = computed(() =>
+  selectedMediaIds.value.flatMap((id) => {
+    const entry = media.value.find((item) => item.id === id)
+    return entry ? [entry] : []
+  }),
+)
+const selectedCountText = computed(() =>
+  phone.t('Apps.photos.selection.selected', {
+    count: new Intl.NumberFormat(phone.lang).format(selectedMediaIds.value.length),
+  }),
+)
+const selectedCaptureDay = computed(() => {
+  if (!selected.value) return ''
+  const captured = new Date(selected.value.createdAt)
+  const today = new Date()
+  const capturedDay = new Date(
+    captured.getFullYear(),
+    captured.getMonth(),
+    captured.getDate(),
+  ).getTime()
+  const todayStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  ).getTime()
+  const difference = Math.round((capturedDay - todayStart) / 86_400_000)
+  if (difference === 0) return phone.t('Apps.photos.today')
+  if (difference === -1) return phone.t('Apps.photos.yesterday')
+  return new Intl.DateTimeFormat(phone.lang, {
+    day: 'numeric',
+    month: 'long',
+    weekday: 'long',
+  }).format(captured)
+})
+const selectedCaptureTime = computed(() =>
+  selected.value
+    ? new Intl.DateTimeFormat(phone.lang, {
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(selected.value.createdAt))
+    : '',
+)
+
+function mockGalleryImage(
+  title: string,
+  sky: string,
+  landscape: string,
+  accent: string,
+): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="${sky}"/><stop offset="1" stop-color="${accent}"/></linearGradient><linearGradient id="land" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${landscape}"/><stop offset="1" stop-color="#101114"/></linearGradient></defs><rect width="900" height="1200" fill="url(#sky)"/><circle cx="690" cy="260" r="105" fill="#fff" opacity=".72"/><path d="M0 690 210 440 390 650 585 360 900 720V1200H0Z" fill="${landscape}" opacity=".84"/><path d="M0 790 230 620 410 765 650 525 900 770V1200H0Z" fill="url(#land)"/><path d="M360 1200 475 690 560 690 690 1200Z" fill="${accent}" opacity=".48"/><text x="54" y="1100" fill="#fff" font-family="system-ui,sans-serif" font-size="62" font-weight="700">${title}</text><text x="57" y="1160" fill="#fff" opacity=".72" font-family="system-ui,sans-serif" font-size="30">Sky Phone test media</text></svg>`
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
 }
 
 function mockMedia(): PhoneMedia[] {
-  const photos = [
-    buildMockPhoto(1, 'Vespucci', '#23567b', '#e08d5c', true),
-    buildMockPhoto(2, 'Downtown', '#442c69', '#c86a77'),
-    buildMockPhoto(3, 'Paleto Bay', '#1f6653', '#d1a85b'),
-    buildMockPhoto(4, 'Mirror Park', '#355c7d', '#6c5b7b'),
-    buildMockPhoto(5, 'Del Perro', '#b06ab3', '#4568dc'),
-    buildMockPhoto(6, 'Sandy Shores', '#7b4f35', '#d2a35f'),
-    buildMockPhoto(7, 'Rockford', '#203a43', '#2c5364'),
-    buildMockPhoto(8, 'Little Seoul', '#8e2de2', '#4a00e0'),
-  ]
-  return [
-    photos[0],
+  const media: PhoneMedia[] = [
     {
-      createdAt: Date.now() - 1_800_000,
-      id: 100,
+      createdAt: Date.now() - 4 * 60_000,
+      favorite: false,
+      id: 1,
+      mediaType: 'photo',
+      url: mockGalleryImage('City Night', '#172554', '#111827', '#7c3aed'),
+    },
+    {
+      createdAt: Date.now() - 18 * 60_000,
+      favorite: true,
+      id: 2,
       mediaType: 'video',
+      thumbnailUrl: mockGalleryImage(
+        'Flower Video',
+        '#7f1d1d',
+        '#365314',
+        '#fb7185',
+      ),
       url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
     },
-    ...photos.slice(1),
+    {
+      createdAt: Date.now() - 47 * 60_000,
+      favorite: true,
+      id: 3,
+      mediaType: 'photo',
+      url: mockGalleryImage('Beach Drive', '#0369a1', '#164e63', '#fbbf24'),
+    },
+    {
+      createdAt: Date.now() - 2 * 60 * 60_000,
+      favorite: false,
+      id: 4,
+      mediaType: 'photo',
+      url: mockGalleryImage('Mountain Road', '#475569', '#334155', '#e2e8f0'),
+    },
+    {
+      createdAt: Date.now() - 5 * 60 * 60_000,
+      favorite: false,
+      id: 5,
+      mediaType: 'photo',
+      url: mockGalleryImage('Downtown', '#312e81', '#1e293b', '#f472b6'),
+    },
+    {
+      createdAt: Date.now() - 8 * 60 * 60_000,
+      favorite: false,
+      id: 6,
+      mediaType: 'video',
+      thumbnailUrl: mockGalleryImage(
+        'Sintel Video',
+        '#9a3412',
+        '#431407',
+        '#fdba74',
+      ),
+      url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+    },
+    {
+      createdAt: Date.now() - 12 * 60 * 60_000,
+      favorite: false,
+      id: 7,
+      mediaType: 'photo',
+      url: mockGalleryImage('Palm Sunset', '#c2410c', '#422006', '#facc15'),
+    },
+    {
+      createdAt: Date.now() - 26 * 60 * 60_000,
+      favorite: true,
+      id: 8,
+      mediaType: 'photo',
+      url: mockGalleryImage('Sports Car', '#1f2937', '#111827', '#ef4444'),
+    },
+    {
+      createdAt: Date.now() - 31 * 60 * 60_000,
+      favorite: false,
+      id: 9,
+      mediaType: 'photo',
+      url: mockGalleryImage('Boardwalk', '#0e7490', '#713f12', '#67e8f9'),
+    },
+    {
+      createdAt: Date.now() - 46 * 60 * 60_000,
+      favorite: false,
+      id: 10,
+      mediaType: 'video',
+      thumbnailUrl: mockGalleryImage(
+        'Bunny Video',
+        '#166534',
+        '#14532d',
+        '#86efac',
+      ),
+      url: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    },
+    {
+      createdAt: Date.now() - 3 * 86_400_000,
+      favorite: false,
+      id: 11,
+      mediaType: 'photo',
+      url: mockGalleryImage('Vinewood', '#1d4ed8', '#166534', '#f8fafc'),
+    },
+    {
+      createdAt: Date.now() - 5 * 86_400_000,
+      favorite: true,
+      id: 12,
+      mediaType: 'photo',
+      url: mockGalleryImage('Friends', '#7e22ce', '#4c1d95', '#f0abfc'),
+    },
+  ]
+
+  const additionalPhotos = [
+    ['Airport Lights', '#172554', '#1e3a8a', '#38bdf8'],
+    ['Desert Route', '#fb923c', '#7c2d12', '#fde047'],
+    ['Harbor Morning', '#0e7490', '#164e63', '#a5f3fc'],
+    ['Forest Trail', '#166534', '#14532d', '#bef264'],
+    ['Neon Alley', '#581c87', '#1e1b4b', '#f472b6'],
+    ['Lake House', '#0369a1', '#3f6212', '#fef08a'],
+    ['Snow Pass', '#94a3b8', '#334155', '#f8fafc'],
+    ['Night Drive', '#111827', '#312e81', '#22d3ee'],
+    ['Canyon View', '#b45309', '#78350f', '#fdba74'],
+    ['Green Hills', '#15803d', '#365314', '#86efac'],
+    ['Purple Sky', '#6b21a8', '#312e81', '#e879f9'],
+    ['Ocean Road', '#0284c7', '#0f766e', '#67e8f9'],
+    ['City Park', '#4d7c0f', '#14532d', '#facc15'],
+    ['Sunrise Pier', '#ea580c', '#7c2d12', '#fef3c7'],
+    ['Rainy Street', '#334155', '#0f172a', '#60a5fa'],
+    ['Golden Fields', '#ca8a04', '#713f12', '#fef08a'],
+    ['Metro Station', '#1f2937', '#374151', '#f43f5e'],
+    ['Island Bay', '#0891b2', '#115e59', '#f0fdfa'],
+    ['Cliff Road', '#7c3aed', '#3f3f46', '#c4b5fd'],
+    ['Old Town', '#9a3412', '#451a03', '#fed7aa'],
+    ['Racing Night', '#991b1b', '#111827', '#fb7185'],
+    ['Quiet Beach', '#0ea5e9', '#155e75', '#fde68a'],
+    ['Hilltop', '#65a30d', '#3f6212', '#d9f99d'],
+    ['Downtown Rain', '#3730a3', '#1e293b', '#93c5fd'],
+    ['Coastal Sunset', '#be123c', '#7c2d12', '#fbbf24'],
+    ['Country Road', '#854d0e', '#365314', '#fde047'],
+    ['Blue Mountains', '#1d4ed8', '#334155', '#bfdbfe'],
+    ['Palm Beach', '#0d9488', '#166534', '#fcd34d'],
+    ['Skyline', '#4338ca', '#111827', '#a78bfa'],
+    ['Campfire', '#c2410c', '#431407', '#fef08a'],
+  ] as const
+
+  return [
+    ...media,
+    ...additionalPhotos.map(([title, sky, landscape, accent], index) => ({
+      createdAt: Date.now() - (6 + index) * 86_400_000,
+      favorite: index % 7 === 0,
+      id: 13 + index,
+      mediaType: 'photo' as const,
+      url: mockGalleryImage(title, sky, landscape, accent),
+    })),
   ]
 }
+
+const developmentMedia = isDevelopment ? mockMedia() : []
 
 function showToast(text: string): void {
   if (toastTimer !== undefined) window.clearTimeout(toastTimer)
@@ -174,6 +403,7 @@ function showToast(text: string): void {
 }
 
 async function loadImportSources(): Promise<void> {
+  if (isDevelopment && !developmentApiEnabled) return
   const response = await nuiCall<MediaImportSources>('media:import:sources')
   if (!response.success || !response.data) return
   importSources.value = response.data.sources
@@ -234,6 +464,7 @@ async function commitUrlImport(): Promise<void> {
     return
   }
   media.value = mergeMedia(media.value, [response.data])
+  await fetchCounts()
   closeImport()
   showToast(phone.t('Apps.photos.import.linkCompleted'))
 }
@@ -249,8 +480,21 @@ async function fetchMore(): Promise<void> {
   if (fetching.value || !hasMore.value) return
   fetching.value = true
   const offset = media.value.length
+  if (isDevelopment && !developmentApiEnabled) {
+    media.value = developmentMedia.filter(
+      (entry) =>
+        (filter.value === 'all' || entry.mediaType === filter.value) &&
+        (!favoritesOnly.value || entry.favorite),
+    )
+    hasMore.value = false
+    fetching.value = false
+    return
+  }
+  const previousScrollHeight = galleryContent.value?.scrollHeight ?? 0
+  const previousScrollTop = galleryContent.value?.scrollTop ?? 0
   const response = await nuiCall<PhoneMedia[]>('gallery:list', {
     limit: MEDIA_PAGE_SIZE,
+    favoriteOnly: favoritesOnly.value || undefined,
     mediaType: filter.value === 'all' ? undefined : filter.value,
     mockState: developmentGalleryState ?? undefined,
     offset,
@@ -258,13 +502,24 @@ async function fetchMore(): Promise<void> {
   if (response.success && Array.isArray(response.data)) {
     media.value = mergeMedia(media.value, response.data)
     hasMore.value = hasNextMediaPage(response.data.length)
+    if (offset > 0) {
+      await nextTick()
+      if (galleryContent.value) {
+        galleryContent.value.scrollTop =
+          previousScrollTop +
+          galleryContent.value.scrollHeight -
+          previousScrollHeight
+      }
+    }
   } else if (
     isDevelopment &&
     developmentGalleryState !== 'error' &&
     offset === 0
   ) {
-    const mock = mockMedia().filter(
-      (entry) => filter.value === 'all' || entry.mediaType === filter.value,
+    const mock = developmentMedia.filter(
+      (entry) =>
+        (filter.value === 'all' || entry.mediaType === filter.value) &&
+        (!favoritesOnly.value || entry.favorite),
     )
     media.value = mock
     hasMore.value = false
@@ -279,15 +534,81 @@ async function fetchMore(): Promise<void> {
   fetching.value = false
 }
 
+async function fetchCounts(): Promise<void> {
+  if (isDevelopment && !developmentApiEnabled) {
+    counts.value = {
+      all: developmentMedia.length,
+      favoritePhotos: developmentMedia.filter(
+        (entry) => entry.mediaType === 'photo' && entry.favorite,
+      ).length,
+      favorites: developmentMedia.filter((entry) => entry.favorite).length,
+      favoriteVideos: developmentMedia.filter(
+        (entry) => entry.mediaType === 'video' && entry.favorite,
+      ).length,
+      photos: developmentMedia.filter((entry) => entry.mediaType === 'photo')
+        .length,
+      videos: developmentMedia.filter((entry) => entry.mediaType === 'video')
+        .length,
+    }
+    return
+  }
+  const response = await nuiCall<GalleryCounts>('gallery:counts')
+  if (response.success && response.data) {
+    counts.value = response.data
+    return
+  }
+  if (isDevelopment && developmentGalleryState !== 'error') {
+    counts.value = {
+      all: developmentMedia.length,
+      favoritePhotos: developmentMedia.filter(
+        (entry) => entry.mediaType === 'photo' && entry.favorite,
+      ).length,
+      favorites: developmentMedia.filter((entry) => entry.favorite).length,
+      favoriteVideos: developmentMedia.filter(
+        (entry) => entry.mediaType === 'video' && entry.favorite,
+      ).length,
+      photos: developmentMedia.filter((entry) => entry.mediaType === 'photo')
+        .length,
+      videos: developmentMedia.filter((entry) => entry.mediaType === 'video')
+        .length,
+    }
+    return
+  }
+  loadError.value = phone.t(
+    `Apps.photos.errors.${mediaErrorKey(response.error)}`,
+  )
+}
+
 async function loadGallery(): Promise<void> {
   media.value = []
   hasMore.value = true
   loadError.value = ''
   loading.value = true
-  await fetchMore()
+  await Promise.all([fetchMore(), fetchCounts()])
   loading.value = false
   await nextTick()
+  if (galleryContent.value) {
+    galleryContent.value.scrollTop =
+      sortOrder.value === 'oldest' ? galleryContent.value.scrollHeight : 0
+  }
   observeMore()
+}
+
+async function selectSortOrder(value: GallerySortOrder): Promise<void> {
+  sortOrder.value = value
+  sortMenuOpened.value = false
+  await nextTick()
+  if (galleryContent.value) {
+    galleryContent.value.scrollTop =
+      value === 'oldest' ? galleryContent.value.scrollHeight : 0
+  }
+  observeMore()
+}
+
+async function selectFavoritesOnly(value: boolean): Promise<void> {
+  favoritesOnly.value = value
+  sortMenuOpened.value = false
+  await loadGallery()
 }
 
 function observeMore(): void {
@@ -298,26 +619,46 @@ function observeMore(): void {
     (entries) => {
       if (entries.some((entry) => entry.isIntersecting)) void fetchMore()
     },
-    { rootMargin: '180px' },
+    { root: galleryContent.value, rootMargin: '180px 0px 0px' },
   )
   observer.observe(loadTrigger.value)
 }
 
+function enterSelectionMode(): void {
+  selectedMediaIds.value = []
+  selectionMode.value = true
+}
+
+function exitSelectionMode(): void {
+  selectedMediaIds.value = []
+  selectionMode.value = false
+  deleteManyDialogOpened.value = false
+}
+
+function toggleMediaSelection(entry: PhoneMedia, maximum = 50): void {
+  const index = selectedMediaIds.value.indexOf(entry.id)
+  if (index >= 0) {
+    selectedMediaIds.value.splice(index, 1)
+    return
+  }
+  if (selectedMediaIds.value.length >= maximum) {
+    showToast(phone.t('Apps.photos.selection.limit'))
+    return
+  }
+  selectedMediaIds.value.push(entry.id)
+}
+
 function openMedia(entry: PhoneMedia): void {
+  if (selectionMode.value) {
+    toggleMediaSelection(entry)
+    return
+  }
   if (requestedMessageMedia.value) {
     if (multipleSelection.value) {
-      const index = selectedMediaIds.value.indexOf(entry.id)
-      if (index >= 0) selectedMediaIds.value.splice(index, 1)
-      else if (
-        selectedMediaIds.value.length <
-        (messageMedia.request?.maxSelection ?? 1)
-      ) {
-        selectedMediaIds.value.push(entry.id)
-      }
+      toggleMediaSelection(entry, messageMedia.request?.maxSelection ?? 1)
       return
     }
   }
-  landscapeViewer.value = false
   phone.setCameraLandscape(false)
   selected.value = entry
   videoPlaybackError.value = false
@@ -345,7 +686,6 @@ function cancelMessageSelection(): void {
 }
 
 function closeMedia(): void {
-  landscapeViewer.value = false
   phone.setCameraLandscape(false)
   selected.value = null
   videoPlaybackError.value = false
@@ -368,16 +708,124 @@ function shareSelected(): void {
   })
 }
 
-function orientToMedia(event: Event): void {
-  const mediaElement = event.currentTarget as
-    | HTMLImageElement
-    | HTMLVideoElement
-  const landscape =
-    mediaElement instanceof HTMLVideoElement
-      ? mediaElement.videoWidth > mediaElement.videoHeight
-      : mediaElement.naturalWidth > mediaElement.naturalHeight
-  landscapeViewer.value = landscape
-  phone.setCameraLandscape(landscape)
+async function toggleFavorite(): Promise<void> {
+  if (!selected.value || favoriting.value) return
+  favoriting.value = true
+  const nextFavorite = !selected.value.favorite
+  if (isDevelopment && !developmentApiEnabled) {
+    selected.value.favorite = nextFavorite
+    const developmentItem = developmentMedia.find(
+      (entry) => entry.id === selected.value?.id,
+    )
+    if (developmentItem) developmentItem.favorite = nextFavorite
+    if (favoritesOnly.value && !nextFavorite) {
+      media.value = media.value.filter((entry) => entry.id !== selected.value?.id)
+    }
+    favoriting.value = false
+    await fetchCounts()
+    return
+  }
+  const response = await nuiCall<FavoriteResult>('gallery:favorite', {
+    favorite: nextFavorite,
+    id: selected.value.id,
+  })
+  favoriting.value = false
+  if (!response.success || !response.data) {
+    if (isDevelopment && developmentGalleryState !== 'error') {
+      selected.value.favorite = nextFavorite
+      const developmentItem = developmentMedia.find(
+        (entry) => entry.id === selected.value?.id,
+      )
+      if (developmentItem) developmentItem.favorite = nextFavorite
+      if (favoritesOnly.value && !nextFavorite) {
+        media.value = media.value.filter((entry) => entry.id !== selected.value?.id)
+      }
+      await fetchCounts()
+      return
+    }
+    showToast(phone.t(`Apps.photos.errors.${mediaErrorKey(response.error)}`))
+    return
+  }
+  selected.value.favorite = response.data.favorite
+  const item = media.value.find((entry) => entry.id === response.data?.id)
+  if (item) item.favorite = response.data.favorite
+  if (favoritesOnly.value && !response.data.favorite) {
+    media.value = media.value.filter((entry) => entry.id !== response.data?.id)
+  }
+  await fetchCounts()
+}
+
+function shareSelection(): void {
+  if (!selectedMedia.value.length) return
+  const count = String(selectedMedia.value.length)
+  easyShare.open({
+    appId: 'photos',
+    copyText: phone.t('Apps.photos.selection.shareCopy', { count }),
+    imageUrl: selectedMedia.value[0].url,
+    kind: 'media',
+    meta: { mediaIds: selectedMedia.value.map((entry) => entry.id) },
+    subtitle: selectedCountText.value,
+    title: phone.t('Apps.photos.selection.shareTitle', { count }),
+  })
+}
+
+async function deleteSelection(): Promise<void> {
+  if (!selectedMediaIds.value.length || deletingMany.value) return
+  deletingMany.value = true
+  deleteManyDialogOpened.value = false
+  pendingDeleteManyCorrelation = `${Date.now()}-${crypto.randomUUID()}`
+  const ids = [...selectedMediaIds.value]
+  if (isDevelopment) {
+    if (!developmentApiEnabled) {
+      for (const id of ids) {
+        const index = developmentMedia.findIndex((entry) => entry.id === id)
+        if (index >= 0) developmentMedia.splice(index, 1)
+      }
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            data: {
+              correlationId: pendingDeleteManyCorrelation,
+              deletedIds: ids,
+              success: true,
+            },
+            type: 'media:deleteManyResult',
+          },
+        }),
+      )
+      return
+    }
+    const response = await nuiCall<DeleteManyResult>('gallery:delete-many', {
+      correlationId: pendingDeleteManyCorrelation,
+      ids,
+    })
+    const fallbackDeletedIds =
+      !response.success && developmentGalleryState !== 'error'
+        ? ids.filter((id) => developmentMedia.some((entry) => entry.id === id))
+        : []
+    for (const id of fallbackDeletedIds) {
+      const index = developmentMedia.findIndex((entry) => entry.id === id)
+      if (index >= 0) developmentMedia.splice(index, 1)
+    }
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          data: response.data ?? {
+            correlationId: pendingDeleteManyCorrelation,
+            deletedIds: fallbackDeletedIds,
+            error: fallbackDeletedIds.length ? undefined : response.error,
+            success: fallbackDeletedIds.length > 0,
+          },
+          type: 'media:deleteManyResult',
+        },
+      }),
+    )
+    return
+  }
+  await nuiCall('gallery:delete-many', {
+    correlationId: pendingDeleteManyCorrelation,
+    ids,
+  })
 }
 
 function setZoom(value: number): void {
@@ -443,7 +891,6 @@ function moveImageWithKeyboard(event: KeyboardEvent): void {
 }
 
 async function initializeVideo(event: Event): Promise<void> {
-  orientToMedia(event)
   videoPlaybackError.value = false
   try {
     await (event.currentTarget as HTMLVideoElement).play()
@@ -458,6 +905,10 @@ async function deleteSelected(): Promise<void> {
   deleteDialogOpened.value = false
   pendingDeleteCorrelation = `${Date.now()}-${crypto.randomUUID()}`
   if (isDevelopment) {
+    const developmentIndex = developmentMedia.findIndex(
+      (entry) => entry.id === selected.value?.id,
+    )
+    if (developmentIndex >= 0) developmentMedia.splice(developmentIndex, 1)
     window.setTimeout(() => {
       window.dispatchEvent(
         new MessageEvent('message', {
@@ -482,9 +933,37 @@ async function deleteSelected(): Promise<void> {
 
 function onMessage(event: MessageEvent): void {
   if (!isTrustedRootMessageSource(event.source, window)) return
-  const message = event.data as { data?: DeleteResult; type?: string }
+  const message = event.data as {
+    data?: DeleteManyResult | DeleteResult
+    type?: string
+  }
   if (message.type === 'gallery:changed') {
     void loadGallery()
+    return
+  }
+  if (message.type === 'media:deleteManyResult') {
+    const result = message.data as DeleteManyResult | undefined
+    if (result?.correlationId !== pendingDeleteManyCorrelation) return
+    deletingMany.value = false
+    const deletedIds = result.deletedIds ?? []
+    if (deletedIds.length) {
+      const deleted = new Set(deletedIds)
+      media.value = media.value.filter((entry) => !deleted.has(entry.id))
+      void fetchCounts()
+    }
+    if (result.success) {
+      showToast(
+        phone.t('Apps.photos.selection.deleted', {
+          count: String(deletedIds.length),
+        }),
+      )
+      exitSelectionMode()
+    } else {
+      selectedMediaIds.value = selectedMediaIds.value.filter(
+        (id) => !deletedIds.includes(id),
+      )
+      showToast(phone.t(`Apps.photos.errors.${mediaErrorKey(result.error)}`))
+    }
     return
   }
   if (
@@ -493,14 +972,16 @@ function onMessage(event: MessageEvent): void {
   ) {
     return
   }
+  const result = message.data as DeleteResult
   deleting.value = false
-  if (message.data.success && message.data.id) {
-    media.value = media.value.filter((entry) => entry.id !== message.data?.id)
+  if (result.success && result.id) {
+    media.value = media.value.filter((entry) => entry.id !== result.id)
+    void fetchCounts()
     closeMedia()
     showToast(phone.t('Apps.photos.deleted'))
   } else {
     showToast(
-      phone.t(`Apps.photos.errors.${mediaErrorKey(message.data.error)}`),
+      phone.t(`Apps.photos.errors.${mediaErrorKey(result.error)}`),
     )
   }
 }
@@ -616,7 +1097,8 @@ onBeforeUnmount(() => {
 
   <k-page
     v-else-if="!selected"
-    class="gallery-page !pt-[44px]"
+    class="gallery-page"
+    :class="{ '!pt-[44px]': requestedMessageMedia }"
     :aria-label="phone.t('Apps.photos.name')"
   >
     <k-navbar
@@ -640,19 +1122,69 @@ onBeforeUnmount(() => {
         </k-link>
       </template>
     </k-navbar>
-    <k-navbar
+    <SkyNavbar
       v-else
-      :title="phone.t('Apps.photos.name')"
-      right-class="!ms-auto"
+      class="gallery-library-navbar"
+      :scroll-el="null"
+      :subtitle="countText"
+      :title="phone.t('Apps.photos.library')"
+      transparent
+      variant="large"
     >
-      <template v-if="importSources.length" #right>
-        <k-link component="button" @click="openImport">
-          {{ phone.t('Apps.photos.import.action') }}
-        </k-link>
+      <template #right>
+        <div
+          v-if="selectionMode"
+          class="gallery-header-actions sky-ui-provider sky-ui-provider--dark"
+        >
+          <SkyToolbarPane class="gallery-header-tool gallery-header-tool--text">
+            <SkyButton clear class="gallery-header-action" @click="exitSelectionMode">
+              {{ phone.t('Common.cancel') }}
+            </SkyButton>
+          </SkyToolbarPane>
+        </div>
+        <div
+          v-else
+          class="gallery-header-actions sky-ui-provider sky-ui-provider--dark"
+        >
+          <SkyToolbarPane class="gallery-header-tool gallery-header-tool--icon">
+            <SkyButton
+              clear
+              icon-only
+              rounded
+              class="gallery-header-action"
+              :aria-label="phone.t('Apps.photos.sorting.action')"
+              :title="phone.t('Apps.photos.sorting.action')"
+              @click="sortMenuOpened = true"
+            >
+              <ListFilter :size="21" aria-hidden="true" />
+            </SkyButton>
+          </SkyToolbarPane>
+          <SkyToolbarPane
+            v-if="importSources.length"
+            class="gallery-header-tool gallery-header-tool--icon"
+          >
+            <SkyButton
+              clear
+              icon-only
+              rounded
+              class="gallery-header-action"
+              :aria-label="phone.t('Apps.photos.import.action')"
+              :title="phone.t('Apps.photos.import.action')"
+              @click="openImport"
+            >
+              <Download :size="21" aria-hidden="true" />
+            </SkyButton>
+          </SkyToolbarPane>
+          <SkyToolbarPane class="gallery-header-tool gallery-header-tool--text">
+            <SkyButton clear class="gallery-header-action" @click="enterSelectionMode">
+              {{ phone.t('Apps.photos.selection.action') }}
+            </SkyButton>
+          </SkyToolbarPane>
+        </div>
       </template>
-    </k-navbar>
+    </SkyNavbar>
 
-    <div class="gallery-content">
+    <div ref="galleryContent" class="gallery-content">
       <div v-if="loading" class="gallery-state">
         <k-preloader />
         <span>{{ phone.t('Apps.photos.loading') }}</span>
@@ -669,14 +1201,36 @@ onBeforeUnmount(() => {
         class="gallery-grid"
         :class="{ 'gallery-grid--fill': media.length >= 13 }"
       >
+        <span
+          v-if="hasMore && sortOrder === 'oldest'"
+          ref="loadTrigger"
+          class="gallery-load-trigger"
+        ></span>
         <button
-          v-for="entry in media"
+          v-for="(entry, index) in orderedMedia"
           :key="entry.id"
           class="gallery-tile"
           :class="{
             'gallery-tile--selected': selectedMediaIds.includes(entry.id),
           }"
+          :style="
+            {
+              gridColumnStart: bottomRightGridPosition(
+                index,
+                orderedMedia.length,
+              ).column,
+              gridRowStart: bottomRightGridPosition(
+                index,
+                orderedMedia.length,
+              ).row,
+            }
+          "
           type="button"
+          :aria-pressed="
+            selectionMode || multipleSelection
+              ? selectedMediaIds.includes(entry.id)
+              : undefined
+          "
           :aria-label="
             phone.t(
               entry.mediaType === 'video'
@@ -695,6 +1249,7 @@ onBeforeUnmount(() => {
           <video
             v-else
             :src="entry.url"
+            :poster="entry.thumbnailUrl"
             muted
             playsinline
             preload="metadata"
@@ -703,14 +1258,17 @@ onBeforeUnmount(() => {
             <Play :size="16" fill="currentColor" />
           </span>
           <span
-            v-if="multipleSelection && selectedMediaIds.includes(entry.id)"
+            v-if="
+              (selectionMode || multipleSelection) &&
+              selectedMediaIds.includes(entry.id)
+            "
             class="gallery-selection-badge"
           >
             {{ selectedMediaIds.indexOf(entry.id) + 1 }}
           </span>
         </button>
         <span
-          v-if="hasMore"
+          v-if="hasMore && sortOrder === 'newest'"
           ref="loadTrigger"
           class="gallery-load-trigger"
         ></span>
@@ -718,7 +1276,7 @@ onBeforeUnmount(() => {
     </div>
 
     <k-navbar
-      v-if="!requestedMessageMedia"
+      v-if="!requestedMessageMedia && !selectionMode"
       component="nav"
       class="gallery-filter-navbar"
       :aria-label="phone.t('Apps.photos.name')"
@@ -744,59 +1302,75 @@ onBeforeUnmount(() => {
         </k-segmented>
       </template>
     </k-navbar>
+
+    <SkyToolbar
+      v-if="selectionMode"
+      :aria-label="phone.t('Apps.photos.selection.action')"
+      class="gallery-selection-toolbar sky-ui-provider"
+      :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+      component="nav"
+    >
+      <SkyToolbarPane class="gallery-selection-count">
+        {{ selectedCountText }}
+      </SkyToolbarPane>
+      <SkyToolbarPane class="gallery-selection-actions">
+        <SkyButton
+          icon-only
+          rounded
+          tonal
+          :aria-label="phone.t('Apps.photos.selection.share')"
+          :disabled="!selectedMediaIds.length"
+          @click="shareSelection"
+        >
+          <Share2 :size="20" aria-hidden="true" />
+        </SkyButton>
+        <SkyButton
+          icon-only
+          rounded
+          tonal
+          variant="danger"
+          :aria-label="phone.t('Apps.photos.selection.delete')"
+          :disabled="!selectedMediaIds.length || deletingMany"
+          @click="deleteManyDialogOpened = true"
+        >
+          <Trash2 :size="20" aria-hidden="true" />
+        </SkyButton>
+      </SkyToolbarPane>
+    </SkyToolbar>
   </k-page>
 
   <k-page
     v-else
-    class="gallery-detail !pt-[44px] !pb-[25px]"
-    :class="{ 'gallery-detail--landscape': landscapeViewer }"
+    class="gallery-detail sky-ui-provider sky-ui-provider--dark"
   >
-    <k-navbar
-      :title="
-        phone.t(
-          selected.mediaType === 'video'
-            ? 'Apps.photos.video'
-            : 'Apps.photos.photo',
-        )
-      "
+    <SkyNavbar
+      class="gallery-detail-navbar"
+      :scroll-el="null"
+      :subtitle="selectedCaptureTime"
+      :title="selectedCaptureDay"
     >
       <template #left>
-        <k-navbar-back-link
-          component="button"
-          :text="phone.t('Common.back')"
+        <SkyButton
+          icon-only
+          rounded
+          tonal
+          :aria-label="phone.t('Common.back')"
           @click="closeMedia"
-        />
+        >
+          <ChevronLeft :size="24" aria-hidden="true" />
+        </SkyButton>
       </template>
       <template #right>
-        <k-link
+        <SkyButton
           v-if="requestedMessageMedia"
-          component="button"
+          rounded
+          tonal
           @click="completeSingleSelection"
         >
           {{ phone.t('Common.use') }}
-        </k-link>
-        <k-link
-          v-else
-          component="button"
-          icon-only
-          :aria-label="phone.t('Apps.easyShare.name')"
-          @click="shareSelected"
-        >
-          <Share2 :size="20" />
-        </k-link>
-        <k-link
-          v-if="!requestedMessageMedia"
-          component="button"
-          icon-only
-          class="text-red-500"
-          :aria-label="phone.t('Apps.photos.delete')"
-          :disabled="deleting"
-          @click="deleteDialogOpened = true"
-        >
-          <Trash2 :size="20" />
-        </k-link>
+        </SkyButton>
       </template>
-    </k-navbar>
+    </SkyNavbar>
 
     <div class="gallery-detail-stage">
       <div class="gallery-detail-media">
@@ -807,7 +1381,6 @@ onBeforeUnmount(() => {
           :style="imageStyle"
           draggable="false"
           tabindex="0"
-          @load="orientToMedia"
           @pointerdown="startDragging"
           @pointermove="moveImage"
           @pointerup="stopDragging"
@@ -819,6 +1392,7 @@ onBeforeUnmount(() => {
         <video
           v-else
           :src="selected.url"
+          :poster="selected.thumbnailUrl"
           controls
           playsinline
           @loadedmetadata="initializeVideo"
@@ -836,34 +1410,177 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <nav v-if="selected.mediaType === 'photo'" class="gallery-zoom-controls">
-      <k-link
-        component="button"
-        icon-only
-        :aria-label="phone.t('Apps.photos.zoomOut')"
-        :disabled="imageZoom === 1"
-        @click="setZoom(imageZoom - 0.5)"
-        ><ZoomOut :size="20"
-      /></k-link>
-      <k-link
-        component="button"
-        icon-only
-        :aria-label="phone.t('Apps.photos.resetZoom')"
-        :disabled="imageZoom === 1"
-        @click="setZoom(1)"
-        ><RotateCcw :size="19"
-      /></k-link>
-      <k-link
-        component="button"
-        icon-only
-        :aria-label="phone.t('Apps.photos.zoomIn')"
-        :disabled="imageZoom === 4"
-        @click="setZoom(imageZoom + 0.5)"
-        ><ZoomIn :size="20"
-      /></k-link>
-    </nav>
-    <div class="gallery-detail-date">{{ formatDate(selected.createdAt) }}</div>
+    <SkyToolbar
+      v-if="!requestedMessageMedia"
+      :aria-label="phone.t('Apps.photos.name')"
+      class="gallery-detail-toolbar"
+      component="nav"
+    >
+      <SkyToolbarPane>
+        <SkyButton
+          icon-only
+          rounded
+          clear
+          :aria-label="phone.t('Apps.easyShare.name')"
+          @click="shareSelected"
+        >
+          <Share2 :size="21" aria-hidden="true" />
+        </SkyButton>
+      </SkyToolbarPane>
+      <SkyToolbarPane class="gallery-detail-tools">
+        <SkyButton
+          icon-only
+          rounded
+          clear
+          :aria-label="
+            phone.t(
+              selected.favorite
+                ? 'Apps.photos.removeFavorite'
+                : 'Apps.photos.addFavorite',
+            )
+          "
+          :disabled="favoriting"
+          @click="toggleFavorite"
+        >
+          <Heart
+            :size="20"
+            :fill="selected.favorite ? 'currentColor' : 'none'"
+            aria-hidden="true"
+          />
+        </SkyButton>
+        <template v-if="selected.mediaType === 'photo'">
+          <SkyButton
+            icon-only
+            rounded
+            clear
+            :aria-label="phone.t('Apps.photos.zoomOut')"
+            :disabled="imageZoom === 1"
+            @click="setZoom(imageZoom - 0.5)"
+          >
+            <ZoomOut :size="19" aria-hidden="true" />
+          </SkyButton>
+          <SkyButton
+            icon-only
+            rounded
+            clear
+            :aria-label="phone.t('Apps.photos.resetZoom')"
+            :disabled="imageZoom === 1"
+            @click="setZoom(1)"
+          >
+            <RotateCcw :size="18" aria-hidden="true" />
+          </SkyButton>
+          <SkyButton
+            icon-only
+            rounded
+            clear
+            :aria-label="phone.t('Apps.photos.zoomIn')"
+            :disabled="imageZoom === 4"
+            @click="setZoom(imageZoom + 0.5)"
+          >
+            <ZoomIn :size="19" aria-hidden="true" />
+          </SkyButton>
+        </template>
+      </SkyToolbarPane>
+      <SkyToolbarPane>
+        <SkyButton
+          icon-only
+          rounded
+          clear
+          variant="danger"
+          :aria-label="phone.t('Apps.photos.delete')"
+          :disabled="deleting"
+          @click="deleteDialogOpened = true"
+        >
+          <Trash2 :size="21" aria-hidden="true" />
+        </SkyButton>
+      </SkyToolbarPane>
+    </SkyToolbar>
   </k-page>
+
+  <SkyActionSheet
+    class="gallery-sort-sheet sky-ui-provider"
+    :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+    :aria-label="phone.t('Apps.photos.sorting.title')"
+    :opened="sortMenuOpened"
+    @backdropclick="sortMenuOpened = false"
+    @escape="sortMenuOpened = false"
+  >
+    <SkyActionGroup>
+      <SkyActionsLabel>
+        {{ phone.t('Apps.photos.sorting.title') }}
+      </SkyActionsLabel>
+      <SkyActionButton
+        class="gallery-sort-option"
+        :bold="sortOrder === 'newest'"
+        @click="selectSortOrder('newest')"
+      >
+        <span>{{ phone.t('Apps.photos.sorting.newestFirst') }}</span>
+        <Check v-if="sortOrder === 'newest'" :size="20" aria-hidden="true" />
+      </SkyActionButton>
+      <SkyActionButton
+        class="gallery-sort-option"
+        :bold="sortOrder === 'oldest'"
+        @click="selectSortOrder('oldest')"
+      >
+        <span>{{ phone.t('Apps.photos.sorting.oldestFirst') }}</span>
+        <Check v-if="sortOrder === 'oldest'" :size="20" aria-hidden="true" />
+      </SkyActionButton>
+    </SkyActionGroup>
+    <SkyActionGroup>
+      <SkyActionsLabel>
+        {{ phone.t('Apps.photos.sorting.show') }}
+      </SkyActionsLabel>
+      <SkyActionButton
+        class="gallery-sort-option"
+        :bold="!favoritesOnly"
+        @click="selectFavoritesOnly(false)"
+      >
+        <span>{{ phone.t('Apps.photos.sorting.allItems') }}</span>
+        <Check v-if="!favoritesOnly" :size="20" aria-hidden="true" />
+      </SkyActionButton>
+      <SkyActionButton
+        class="gallery-sort-option"
+        :bold="favoritesOnly"
+        @click="selectFavoritesOnly(true)"
+      >
+        <span>{{ phone.t('Apps.photos.sorting.favorites') }}</span>
+        <Check v-if="favoritesOnly" :size="20" aria-hidden="true" />
+      </SkyActionButton>
+    </SkyActionGroup>
+    <SkyActionGroup>
+      <SkyActionButton bold @click="sortMenuOpened = false">
+        {{ phone.t('Common.cancel') }}
+      </SkyActionButton>
+    </SkyActionGroup>
+  </SkyActionSheet>
+
+  <k-dialog
+    :opened="deleteManyDialogOpened"
+    @backdropclick="deleteManyDialogOpened = false"
+  >
+    <template #title>
+      {{ phone.t('Apps.photos.selection.deleteTitle') }}
+    </template>
+    <p>{{ phone.t('Apps.photos.selection.deleteBody') }}</p>
+    <template #buttons>
+      <k-button
+        large
+        rounded
+        :colors="cancelButtonColors"
+        @click="deleteManyDialogOpened = false"
+      >
+        {{ phone.t('Common.cancel') }}
+      </k-button>
+      <k-button
+        large
+        rounded
+        :colors="deleteButtonColors"
+        @click="deleteSelection"
+      >
+        {{ phone.t('Common.delete') }}
+      </k-button>
+    </template>
+  </k-dialog>
 
   <k-dialog
     :opened="deleteDialogOpened"
@@ -963,11 +1680,75 @@ onBeforeUnmount(() => {
   top: auto !important;
   bottom: 24px;
 }
+.gallery-filter-navbar :deep(> div:nth-child(-n + 2)) {
+  display: none;
+}
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 2px;
-  padding: 8px 2px 0;
+  margin-top: auto;
+  padding: 8px 2px 98px;
+}
+.gallery-library-navbar {
+  min-height: calc(
+    var(--sky-safe-area-top) + var(--sky-navbar-height) +
+      var(--sky-navbar-large-title-height) - 30px
+  );
+}
+.gallery-library-navbar :deep(.sky-navbar__right) {
+  z-index: 2;
+  transform: translateY(calc(var(--sky-navbar-height) - 30px));
+}
+.gallery-library-navbar :deep(.sky-navbar__inner) {
+  margin-bottom: 0;
+}
+.gallery-library-navbar :deep(.sky-navbar__title-container) {
+  padding-right: calc(200px + var(--sky-safe-area-right));
+  transform: translateY(
+    calc(0px - var(--sky-navbar-collapse-offset) - 30px)
+  );
+}
+.gallery-header-actions {
+  width: max-content;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gallery-header-tool {
+  flex: none;
+}
+.gallery-header-tool--icon {
+  width: var(--sky-touch-target);
+  justify-content: center;
+}
+.gallery-header-action {
+  color: var(--sky-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.gallery-sort-option {
+  justify-content: space-between;
+  text-align: left;
+}
+.gallery-selection-toolbar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+.gallery-selection-toolbar :deep(.sky-toolbar__inner) {
+  width: 100%;
+}
+.gallery-selection-count {
+  padding: 0 14px;
+  color: var(--sky-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.gallery-selection-actions {
+  gap: var(--sky-space-2);
 }
 .gallery-grid--fill {
   flex: 1;
@@ -1052,10 +1833,23 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #000;
+  color: #fff;
+}
+.gallery-detail-navbar {
+  flex: 0 0 auto;
+}
+.gallery-detail-navbar :deep(.sky-navbar__title) {
+  color: #fff;
+  font-size: 17px;
+}
+.gallery-detail-navbar :deep(.sky-navbar__subtitle) {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
 }
 .gallery-detail-stage {
   position: relative;
-  container-type: size;
   min-height: 0;
   flex: 1;
   overflow: hidden;
@@ -1072,16 +1866,6 @@ onBeforeUnmount(() => {
   transform-origin: center;
   transition: transform 0.25s ease;
 }
-.gallery-detail--landscape .gallery-detail-media {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 720px;
-  height: 368px;
-  width: 100cqh;
-  height: 100cqw;
-  transform: translate(-50%, -50%) rotate(90deg);
-}
 .gallery-detail-media img,
 .gallery-detail-media video {
   max-width: 100%;
@@ -1093,25 +1877,20 @@ onBeforeUnmount(() => {
 .gallery-detail-media img {
   transition: transform 0.12s ease-out;
 }
-.gallery-detail :deep(svg) {
-  transition: transform 0.25s ease;
-}
-.gallery-detail--landscape :deep(svg) {
-  transform: rotate(90deg);
-}
-.gallery-zoom-controls {
-  flex: 0 0 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 30px;
-  border-bottom: 1px solid #8e8e9333;
-}
-.gallery-detail-date {
+.gallery-detail-toolbar {
   flex: 0 0 auto;
-  padding: 8px 18px 10px;
-  color: #8e8e93;
-  text-align: center;
-  font-size: 12px;
+}
+.gallery-detail-toolbar :deep(.sky-toolbar__inner) {
+  width: 100%;
+  gap: 8px;
+}
+.gallery-detail-toolbar :deep(.sky-toolbar__background) {
+  background: linear-gradient(to top, #000 72%, transparent);
+}
+.gallery-detail-tools {
+  flex: 1;
+  justify-content: center;
+  gap: 0;
+  padding: 0 2px;
 }
 </style>

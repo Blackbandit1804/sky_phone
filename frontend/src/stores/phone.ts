@@ -12,6 +12,7 @@ import { nuiCall } from '@/utils/nui'
 import type { NuiResponse } from '@/utils/nui'
 import {
   DEFAULT_PHONE_PREFERENCES,
+  PHONE_SETUP_LAST_STEP,
   clampPhoneScale,
   ensureAppNotificationPreferences,
   parsePhonePreferences,
@@ -35,6 +36,7 @@ export type PhoneOpenPayload = {
   locales?: LocaleTree
   memos?: DeviceBootstrap['memos']
   notes?: DeviceBootstrap['notes']
+  player?: DeviceBootstrap['player']
   security?: DeviceSecurity
   token?: string
 }
@@ -362,6 +364,7 @@ const defaultLocales: LocaleTree = {
         document: 'Document',
         link: 'Link',
         location: 'Location',
+        media: 'Media',
         note: 'Note',
         photo: 'Photo',
         playlist: 'Playlist',
@@ -489,7 +492,7 @@ const defaultLocales: LocaleTree = {
         category: 'Category',
         status: 'Publication Status',
         cover: 'Cover Image',
-        chooseCover: 'Choose from Gallery',
+        chooseCover: 'Choose from Photos',
         changeCover: 'Change Cover',
         removeCover: 'Remove Cover',
         coverAlt: 'Selected article cover',
@@ -561,7 +564,7 @@ const defaultLocales: LocaleTree = {
       login: 'Log in',
       register: 'Register',
       ifruitEmail: 'iFruit address',
-      gallery: 'Gallery',
+      gallery: 'Photos',
       camera: 'Camera',
       backToLogin: 'Back to CrewLink login',
       authErrors: {
@@ -783,9 +786,9 @@ const defaultLocales: LocaleTree = {
       photo: 'Profile photo',
       profilePhotos: 'Profile photos',
       profilePhotosBody:
-        'Choose up to six photos from Gallery. Your first photo is shown first.',
+        'Choose up to six photos from Photos. Your first photo is shown first.',
       addPhotos: 'Add photos',
-      choosePhotos: 'Choose from Gallery',
+      choosePhotos: 'Choose from Photos',
       primaryPhoto: 'Main',
       removePhoto: 'Remove photo {number}',
       yourName: 'Your name',
@@ -904,7 +907,7 @@ const defaultLocales: LocaleTree = {
       errors: {
         invalid_profile: 'Check your name, age and profile text.',
         invalid_profile_photos:
-          'Choose up to six photos from your own Gallery.',
+          'Choose up to six photos from your own Photos library.',
         request_failed: 'Flare could not save those changes. Try again.',
         invalid_target: 'This profile is no longer available.',
         invalid_choice: 'That swipe could not be saved.',
@@ -985,8 +988,12 @@ const defaultLocales: LocaleTree = {
       story: 'Story',
       choosePhotos: 'Choose photos',
       choosePhoto: 'Choose photo',
-      choosePhotosHint: 'Select up to five photos from Gallery',
-      chooseStoryHint: 'Select one photo from Gallery',
+      photo: 'Photo',
+      video: 'Video',
+      gallery: 'Gallery',
+      camera: 'Camera',
+      choosePhotosHint: 'Select up to five photos or one video',
+      chooseStoryHint: 'Select one photo or video',
       selectedPhotos: '{count} selected',
       changePhotos: 'Change selection',
       caption: 'Caption',
@@ -1003,6 +1010,8 @@ const defaultLocales: LocaleTree = {
       noComments: 'No comments yet',
       addComment: 'Add a comment...',
       reply: 'Reply',
+      replyPlaceholder: 'Write a reply...',
+      replyingTo: 'Replying to {handle}',
       removeComment: 'Remove comment',
       likes: '{count} likes',
       viewComments: 'View all {count} comments',
@@ -1023,6 +1032,8 @@ const defaultLocales: LocaleTree = {
       unfollow: 'Following',
       accept: 'Accept',
       decline: 'Decline',
+      noConnections: 'No profiles here yet',
+      shareProfile: 'Share profile',
       followRequests: 'Follow requests',
       noActivity: 'No activity yet',
       markRead: 'Mark as read',
@@ -1076,6 +1087,8 @@ const defaultLocales: LocaleTree = {
         request_accepted: 'accepted your follow request',
         like: 'liked your post',
         comment: 'commented on your post',
+        comment_like: 'liked your comment',
+        reply: 'replied to your comment',
         verified: 'verification changed',
       },
       notifications: {
@@ -1084,6 +1097,8 @@ const defaultLocales: LocaleTree = {
         request_accepted: '{actor} accepted your follow request.',
         like: '{actor} liked your post.',
         comment: '{actor} commented on your post.',
+        comment_like: '{actor} liked your comment.',
+        reply: '{actor} replied to your comment.',
         verified: 'Your Picstagram profile is now verified.',
         default: 'You have new Picstagram activity.',
       },
@@ -1231,7 +1246,7 @@ const defaultLocales: LocaleTree = {
       composerAudience: 'Everyone can join the conversation',
       mediaTitle: 'Add to your feather',
       mediaBody: 'Share up to four photos from your phone or take a new one.',
-      chooseGallery: 'Gallery',
+      chooseGallery: 'Photos',
       chooseGalleryBody: 'Choose one or more saved photos',
       takePhoto: 'Camera',
       takePhotoBody: 'Take a new photo now',
@@ -1344,18 +1359,24 @@ const defaultLocales: LocaleTree = {
       create: 'Create',
       activity: 'Activity',
       profile: 'Profile',
+      navigation: 'FlipTok navigation',
       emptyFeed: 'No videos yet',
       emptyFeedBody: 'Follow creators or post the first FlipTok.',
       searchPlaceholder: 'Search creators and videos',
+      clearSearch: 'Clear search',
       noActivity: 'No activity yet',
       followers: 'Followers',
       videos: 'Videos',
       emptyBio: 'No bio yet.',
       editProfile: 'Edit profile',
       newVideo: 'New FlipTok',
+      createTitle: 'Create your next FlipTok',
+      createBody:
+        'Choose a clip, set the cover and sound, then decide who can watch it.',
       chooseVideo: 'Choose a video',
-      chooseVideoHint: 'Select one from Gallery',
+      chooseVideoHint: 'Select one from Photos',
       changeVideo: 'Change',
+      caption: 'Caption',
       captionPlaceholder: 'Write a caption...',
       location: 'Add location',
       whoCanWatch: 'Who can watch',
@@ -1374,6 +1395,10 @@ const defaultLocales: LocaleTree = {
       comments: 'Comments',
       noComments: 'No comments yet',
       addComment: 'Add comment...',
+      reply: 'Reply',
+      replyPlaceholder: 'Write a reply...',
+      replyingTo: 'Replying to {handle}',
+      cancelReply: 'Cancel reply',
       report: 'Report video',
       reportReason: 'Reason',
       reportDetails: 'Additional details (optional)',
@@ -1393,6 +1418,19 @@ const defaultLocales: LocaleTree = {
       chooseSound: 'Choose music',
       originalOnly: 'Original sound only',
       noMusic: 'No music tracks are configured.',
+      customSound: 'Custom sound',
+      customSoundLink: 'YouTube or audio link',
+      customSoundHint:
+        'Paste a YouTube link or a direct HTTPS audio-file link.',
+      customSoundPlaceholder:
+        'https://youtu.be/... or https://example.com/song.mp3',
+      customSoundFormats:
+        'YouTube, YouTube Music, Shorts, MP3, M4A, AAC, OGG, OPUS, WAV, or WEBM',
+      useCustomSound: 'Use sound',
+      loadingSound: 'Loading sound',
+      invalidCustomSoundLink:
+        'Use a YouTube link or a direct public HTTPS audio-file link.',
+      customSoundLoadFailed: 'This sound could not be loaded.',
       trimAndCover: 'Trim & cover',
       trimStart: 'Start',
       trimEnd: 'End',
@@ -1410,6 +1448,12 @@ const defaultLocales: LocaleTree = {
       username: 'Username',
       bio: 'Bio',
       accountType: 'Account type',
+      profilePhoto: 'Profile photo',
+      changePhoto: 'Change photo',
+      chooseFromGallery: 'Photos',
+      takePhoto: 'Camera',
+      removePhoto: 'Remove photo',
+      noConnections: 'No profiles to show',
       authTitle: 'Your FlipTok account',
       login: 'Sign In',
       register: 'Register',
@@ -1456,10 +1500,13 @@ const defaultLocales: LocaleTree = {
       },
       errors: {
         invalid_video: 'Check the video details.',
+        invalid_music_url:
+          'Use a valid YouTube or direct HTTPS audio-file link.',
         invalid_media: 'Choose a video from this phone.',
         invalid_comment: 'Enter a valid comment.',
         comments_disabled: 'Comments are disabled.',
         invalid_profile: 'Check your profile details.',
+        invalid_profile_image: 'Choose a valid photo from this phone.',
         invalid_handle: 'Use 3–24 letters, numbers, dots, or underscores.',
         invalid_display_name: 'Enter a display name.',
         invalid_password: 'Password must be 8–72 characters.',
@@ -1483,6 +1530,9 @@ const defaultLocales: LocaleTree = {
       signInBody:
         'DarkChat identities are linked to your private Sky Cloud account.',
       signInHint: 'Sign in through Settings to continue.',
+      createIdentity: 'Create Dark Identity',
+      createIdentityBody:
+        'Create a private identity before starting a DarkChat conversation.',
       security: 'Security',
       privateNetwork: 'Private invitation-only network',
       noResults: 'No Results',
@@ -1497,6 +1547,10 @@ const defaultLocales: LocaleTree = {
       darkIdOrInvite: 'Dark-ID or invitation code',
       continue: 'Continue',
       contacts: 'DarkChat Contacts',
+      contactsHint:
+        'Saved private identities appear only on your DarkChat account.',
+      noContacts: 'No saved DarkChat contacts',
+      private: 'Private',
       shareIdentity: 'Tap to share your private identity',
       message: 'Dark message',
       activeNow: 'Activity shared',
@@ -1535,7 +1589,10 @@ const defaultLocales: LocaleTree = {
       deleteForMe: 'Delete for me',
       deleteForBoth: 'Delete for both',
       report: 'Report',
+      messageActions: 'Message actions',
       contactSecurity: 'Contact & Security',
+      chatSettings: 'Chat Settings',
+      contactActions: 'Contact Actions',
       chatSince: 'Private chat since {date}',
       notifications: 'Notifications',
       readReceipts: 'Read receipts',
@@ -1552,6 +1609,7 @@ const defaultLocales: LocaleTree = {
       chatCleared: 'Chat cleared',
       myIdentity: 'My Dark Identity',
       alias: 'Alias',
+      privacySettings: 'Privacy Settings',
       notificationPrivacy: 'Notification privacy',
       notificationFull: 'Full · alias and message',
       notificationPrivate: 'Private · generic message',
@@ -1561,6 +1619,19 @@ const defaultLocales: LocaleTree = {
       copyInvite: 'Copy Invite',
       privacyDisclaimer:
         'DarkChat stores messages on the server and does not claim end-to-end encryption.',
+      profileActions: 'Account Actions',
+      signOut: 'Sign Out',
+      signOutTitle: 'Sign out of Sky Cloud?',
+      signOutBody:
+        'This signs the whole phone out of Sky Cloud. Your DarkChat profile and messages remain stored.',
+      signingOut: 'Signing Out...',
+      signOutHint:
+        'Signing out affects every app that uses Sky Cloud on this phone.',
+      deleteProfile: 'Delete DarkChat Profile',
+      deleteProfileTitle: 'Delete DarkChat profile?',
+      deleteProfileBody:
+        'Your identity, contacts and DarkChat conversations will be permanently deleted.',
+      deletingProfile: 'Deleting...',
       unknownIdentity: 'Unknown Identity',
       unknownIdentityBody:
         'Only continue if you expected this identity. The account is not discoverable through public search.',
@@ -1588,6 +1659,7 @@ const defaultLocales: LocaleTree = {
         invalid_voice: 'This voice message is invalid.',
         invalid_attachment: 'This photo or video is unavailable.',
         invalid_profile: 'Check your alias and privacy settings.',
+        sign_out_failed: 'Sky Cloud could not sign out.',
         rate_limited: 'Too many requests. Try again shortly.',
         gif_provider_unconfigured: 'GIF search is not configured.',
         gif_provider_unauthorized: 'The GIF provider key is invalid.',
@@ -1608,6 +1680,9 @@ const defaultLocales: LocaleTree = {
       officialContact: 'Official company contact',
       messagingUnavailable: 'This company contact does not accept messages.',
       filterUnread: 'Show Unread Messages',
+      filterLabel: 'Conversation Filter',
+      allMessages: 'All',
+      unreadMessages: 'Unread',
       smsLabel: 'Text Message · SMS',
       photo: 'Photo',
       gif: 'GIF',
@@ -1695,14 +1770,115 @@ const defaultLocales: LocaleTree = {
       get: 'GET',
       open: 'OPEN',
       installing: 'Installing',
-      searchPlaceholder: 'Search apps and games',
+      player: 'Player',
+      profileLabel: '{name} profile',
+      searchPlaceholder: 'Games, apps, stories and more',
       appsTitle: 'Built-in Apps',
       gamesTitle: 'Games',
       selected: 'Apps available for your Sky Phone',
       tabs: {
+        today: 'Today',
         apps: 'Apps',
         games: 'Games',
         search: 'Search',
+      },
+      today: {
+        freshDaily: 'A fresh selection every day',
+        dailyEdition: 'Daily Edition',
+        featured: 'Featured today',
+        gameHighlight: 'Game highlight',
+        appHighlight: 'App highlight',
+        curatedForYou: 'Curated for you',
+        editorsChoice: "Editor's Choice",
+        discoverTitle: 'Discover {app}',
+        playTitle: 'Play something new with {app}',
+        description: '{app} is in the spotlight today on Sky Phone.',
+        categoryDescription: '{category} · Made for Sky Phone',
+        moreHighlights: "Today's Highlights",
+        topToday: 'Top Today',
+        topTodayDescription: 'Popular picks from today’s edition',
+        oneMoreThing: 'One more thing',
+      },
+      filters: {
+        all: 'All',
+        social: 'Social',
+        utilities: 'Utilities',
+        shopping: 'Shopping',
+        productivity: 'Productivity',
+        arcade: 'Arcade',
+        puzzle: 'Puzzle',
+        classic: 'Classics',
+      },
+      browse: {
+        categories: 'Store categories',
+        availableNow: 'Available now',
+        featureTitle: 'Discover {app}',
+        featuredPages: 'Featured apps',
+        handPicked: 'Hand-picked for you',
+        essentialApps: 'Essential Apps',
+        essentialGames: 'Essential Games',
+      },
+      search: {
+        recommended: 'Recommended',
+        discover: 'Discover',
+        results: 'Search Results',
+        noResults: 'No matching apps or games found.',
+        ad: 'Ad',
+        topApps: 'Top Apps',
+        topGames: 'Top Games',
+        bestApps: 'Bestselling Apps',
+        bestGames: 'Bestselling Games',
+        productivity: 'Productivity',
+        photoVideo: 'Photo & Video',
+      },
+      account: {
+        account: 'Account',
+        title: 'App Management',
+        skyAccount: 'Sky Phone Account',
+        apps: 'Installed Apps',
+        games: 'Games',
+        library: 'Your Library',
+        myApps: 'My Apps',
+        update: 'UPDATE',
+        uninstall: 'Uninstall',
+        uninstallApp: 'Uninstall {app}',
+        uninstallTitle: 'Uninstall this app?',
+        uninstallBody:
+          '{app} will be removed from this phone. You can download it again from the App Store.',
+      },
+      details: {
+        skyStudios: 'Sky Studios',
+        share: 'Share app',
+        openDetails: 'View {app}',
+        shareReady: 'App information is ready to share.',
+        shareCopy: 'Take a look at {app} in the App Store.',
+        ratings: '{count} ratings',
+        age: 'Age Rating',
+        years: 'Years',
+        chart: 'Chart',
+        whatsNew: "What's New",
+        version: 'Version {version}',
+        updatedToday: 'Today',
+        releaseNotes:
+          '{app} now includes fresh content, faster loading and several interface improvements.',
+        preview: 'Preview',
+        testData: 'Preview data',
+        previewLive: 'Live Preview',
+        previousPreview: 'Previous preview',
+        nextPreview: 'Next preview',
+        previewOverview: 'Everything important at a glance',
+        previewCommunity: 'Community',
+        previewInsights: 'Insights',
+        today: 'Today',
+        progress: 'Progress',
+        communityTitle: 'Together in {app}',
+        communityBody: 'Discover activity from players around Los Santos.',
+        featuredMoment: 'Featured moment from today',
+        weeklyActivity: 'Weekly Activity',
+        fromLastWeek: 'from last week',
+        about: 'About this App',
+        description:
+          '{app} is a detailed {category} experience made for Sky Phone. Explore its features, connect with the city and keep everything close at hand.',
       },
     },
     phone: {
@@ -1737,7 +1913,7 @@ const defaultLocales: LocaleTree = {
       phoneNumber: 'Phone Number',
       officialContact: 'Official company contact',
       choosePhoto: 'Choose Contact Photo',
-      chooseGallery: 'Gallery',
+      chooseGallery: 'Photos',
       takePhoto: 'Camera',
       removePhoto: 'Remove Photo',
       call: 'Call',
@@ -1808,6 +1984,11 @@ const defaultLocales: LocaleTree = {
         readonly_contact: 'Official company contacts cannot be changed.',
         rate_limited: 'Too many calls. Try again in a minute.',
         voice_unavailable: 'The configured phone voice service is unavailable.',
+        call_not_connected: 'Connect the call before enabling speaker mode.',
+        speaker_unavailable:
+          'Speaker mode is not available for the configured phone voice service.',
+        speaker_unsupported:
+          'The configured phone voice service does not support speaker mode.',
         inventory_full: 'There is no room for the ejected SIM card.',
         operation_in_progress:
           'Another phone operation is already in progress.',
@@ -1835,6 +2016,8 @@ const defaultLocales: LocaleTree = {
       volume: 'Volume',
       connect: 'Connect',
       disconnect: 'Disconnect',
+      speaker: 'Speaker',
+      speakerDescription: 'Play radio traffic through speaker mode',
       members: 'Currently connected ({count})',
       noMembers: 'No participants',
       history: 'Recently connected',
@@ -1867,6 +2050,12 @@ const defaultLocales: LocaleTree = {
         player_unavailable: 'Your player data is not available.',
         rate_limited: 'Please wait before changing channel again.',
         invalid_setting: 'This setting is invalid.',
+        radio_not_connected:
+          'Connect to a radio channel before enabling speaker mode.',
+        speaker_unavailable:
+          'Speaker mode is not available for the configured radio voice service.',
+        speaker_unsupported:
+          'The configured radio voice service does not support speaker mode.',
         badge_disabled: 'Service numbers are disabled.',
         badge_forbidden: 'This service number is not allowed.',
         display_name_disabled: 'Radio display names are disabled.',
@@ -2277,7 +2466,7 @@ const defaultLocales: LocaleTree = {
       editProfile: 'Edit Profile',
       editProfileBody: 'Change your public name and profile photo',
       profilePhoto: 'Profile photo',
-      gallery: 'Gallery',
+      gallery: 'Photos',
       camera: 'Camera',
       profileDetails: 'Profile details',
       profileName: 'Name',
@@ -2785,13 +2974,13 @@ const defaultLocales: LocaleTree = {
       publish: 'Publish',
       addPhotos: 'Add photos',
       addPhotosBody:
-        'Choose up to six photos from your gallery or take new ones. Photos are optional and the first becomes the cover.',
-      chooseGallery: 'Choose from gallery',
+        'Choose up to six photos from Photos or take new ones. Photos are optional and the first becomes the cover.',
+      chooseGallery: 'Choose from Photos',
       chooseGalleryBody: 'Use photos saved on this phone.',
       takePhotos: 'Take photos',
       takePhotosBody: 'Take several new photos for this listing.',
       selectedPhotos: 'Selected photos',
-      gallery: 'Gallery',
+      gallery: 'Photos',
       camera: 'Camera',
       takePhoto: 'Take photo',
       cameraHint:
@@ -2937,7 +3126,7 @@ const defaultLocales: LocaleTree = {
       profileBio: 'Bio',
       profileBioPlaceholder: 'Tell the city a little about yourself...',
       profilePhoto: 'Profile photo',
-      profilePhotoHint: 'Choose a photo from your Gallery or take a new one.',
+      profilePhotoHint: 'Choose a photo from Photos or take a new one.',
       removeProfilePhoto: 'Remove photo',
       profileSave: 'Save profile',
       profileCancel: 'Cancel',
@@ -2962,7 +3151,7 @@ const defaultLocales: LocaleTree = {
       photos: 'Photos',
       optional: 'optional',
       camera: 'Camera',
-      gallery: 'Gallery',
+      gallery: 'Photos',
       photoLimit: 'You can add up to six photos.',
       cityMarktShare: 'Share to Local Pages',
       cityMarktShared: 'Shared to Local Pages.',
@@ -3111,11 +3300,11 @@ const defaultLocales: LocaleTree = {
       returnHelp: 'Space to return',
       uploading: '{count} uploading',
       saving: 'Saving video...',
-      openGallery: 'Open Gallery',
+      openGallery: 'Open Photos',
       takePhoto: 'Take photo',
       startRecording: 'Start recording',
       stopRecording: 'Stop recording',
-      saved: 'Saved to Gallery.',
+      saved: 'Saved to Photos.',
       zoom: 'Set camera zoom to {zoom}',
       errors: {
         cancelled: 'Capture cancelled.',
@@ -3542,15 +3731,51 @@ const defaultLocales: LocaleTree = {
       },
     },
     photos: {
-      name: 'Gallery',
-      count: '{count} items',
-      loading: 'Loading Gallery...',
+      name: 'Photos',
+      library: 'Library',
+      counts: {
+        all: '{count} Objects',
+        allOne: '{count} Object',
+        favorite: '{count} Favorite',
+        favorites: '{count} Favorites',
+        photo: '{count} Photo',
+        photos: '{count} Photos',
+        video: '{count} Video',
+        videos: '{count} Videos',
+      },
+      sorting: {
+        action: 'Sort Photos',
+        title: 'Sort Order',
+        show: 'Show',
+        allItems: 'All Items',
+        favorites: 'Favorites',
+        newestFirst: 'Newest First',
+        oldestFirst: 'Oldest First',
+      },
+      selection: {
+        action: 'Select',
+        selected: '{count} Selected',
+        share: 'Share Selected',
+        shareTitle: '{count} Media Items',
+        shareCopy: '{count} photos and videos shared from Photos.',
+        delete: 'Delete Selected',
+        deleteTitle: 'Delete Selected Media?',
+        deleteBody:
+          'The selected photos and videos will be permanently deleted.',
+        deleted: '{count} media items deleted.',
+        limit: 'You can select up to 50 media items.',
+      },
+      loading: 'Loading Photos...',
       emptyTitle: 'No Photos or Videos',
       emptyBody: 'Captures from Camera will appear here.',
       photo: 'Photo',
       video: 'Video',
-      photoAlt: 'Gallery photo',
-      videoAlt: 'Gallery video',
+      photoAlt: 'Photo library image',
+      videoAlt: 'Photo library video',
+      today: 'Today',
+      yesterday: 'Yesterday',
+      addFavorite: 'Add to Favorites',
+      removeFavorite: 'Remove from Favorites',
       delete: 'Delete media',
       deleteTitle: 'Delete Media?',
       deleteBody: 'This photo or video will be permanently deleted.',
@@ -3585,7 +3810,7 @@ const defaultLocales: LocaleTree = {
         invalid_media_type: 'The media type is invalid.',
         invalid_upload: 'The upload could not be verified.',
         invalid_upload_token: 'The upload session is no longer valid.',
-        missing_config: 'Gallery uploads are not configured.',
+        missing_config: 'Photos uploads are not configured.',
         import_media_not_allowed: 'This media item is not allowed.',
         import_media_too_large: 'This media item is too large.',
         import_media_unavailable: 'This media item is no longer available.',
@@ -3602,7 +3827,7 @@ const defaultLocales: LocaleTree = {
           'Another media operation is already in progress.',
         owner_changed: 'The active phone account changed.',
         rate_limited: 'Too many media actions. Try again shortly.',
-        request_failed: 'The Gallery request failed.',
+        request_failed: 'The Photos request failed.',
         request_timeout: 'The media service timed out.',
         unsupported: 'This media format is not supported.',
         upload_failed: 'The media upload failed.',
@@ -3696,11 +3921,42 @@ const defaultLocales: LocaleTree = {
       removeDeviceBody:
         'Enter your Sky Cloud password to remove this device from the account.',
       signOut: 'Sign Out',
+      reset: 'Transfer or Reset Phone',
+      transferOrReset: 'Transfer or Reset Phone',
+      transferOrResetDescription: 'Prepare this phone for a fresh setup',
+      resetHeroTitle: 'A clean start, without losing what follows you',
+      resetHeroBody:
+        'Erase local content and settings from this phone. Information attached to your SIM or stored in supported accounts remains available.',
+      erasedFromPhone: 'Erased From This Phone',
+      eraseDeviceSettings: 'Passcode, preferences and Home Screen layout',
+      eraseLocalContent: 'Photos, notes and content stored only locally',
+      eraseLocalApps: 'Downloaded apps and local app sessions',
+      keptSafe: 'Kept Safe',
+      keepSimData: 'SIM Card & Phone Number',
+      keepSimDataBody:
+        'Your number and SIM-backed communication remain on the SIM.',
+      keepCloudData: 'Account & Cloud Data',
+      keepCloudDataBody:
+        'Supported information remains in its app or Sky Cloud account.',
+      resetSetupAssistant:
+        'When erasing is complete, Setup Assistant starts automatically.',
       factoryReset: 'Erase All Content and Settings',
       factoryResetBody:
-        'This removes the account and all local data from this phone. Cloud data and the IMEI remain.',
-      factoryResetProgress: 'Erasing iFruit Phone',
-      factoryResetWarning: 'Do not turn off this phone. This takes 60 seconds.',
+        'This cannot be undone. Local settings, apps and unsynced content are erased. Your SIM number and account-backed data remain available.',
+      factoryResetProgress: 'Erasing Sky Phone',
+      factoryResetWarning:
+        'Keep this phone open. Your SIM and cloud data are safe.',
+      factoryResetSystemProcess: 'Secure system process',
+      factoryResetPreparing: 'Preparing secure reset',
+      factoryResetPreparingDetail: 'Checking device data',
+      factoryResetRemoving: 'Removing personal data',
+      factoryResetRemovingDetail: 'Clearing apps and local content',
+      factoryResetSecuring: 'Protecting linked services',
+      factoryResetSecuringDetail: 'Preserving SIM and cloud data',
+      factoryResetFinishing: 'Finishing setup',
+      factoryResetFinishingDetail: 'Preparing the welcome screen',
+      factoryResetSimSafe: 'SIM protected',
+      factoryResetCloudSafe: 'Cloud protected',
       passcode: {
         description:
           'A passcode protects the contents of this phone. It stays with the device when the SIM or Sky Cloud account changes.',
@@ -3734,7 +3990,13 @@ const defaultLocales: LocaleTree = {
         default: 'The account request failed.',
       },
       back: 'Settings',
-      wallpaperPicker: 'Built-in Wallpapers',
+      wallpaperPicker: 'Sky Wallpapers',
+      wallpaperFromPhotos: 'Choose from Photos',
+      wallpaperFromPhotosDescription: 'Use one of your photos',
+      wallpaperFromCamera: 'Take Photo',
+      wallpaperFromCameraDescription: 'Create a new wallpaper',
+      wallpaperHistory: 'Recent',
+      wallpaperCustom: 'Photo wallpaper',
       toggle: {
         airplaneMode: 'Toggle Airplane Mode',
         streamerMode: 'Toggle Streamer Mode',
@@ -3773,9 +4035,18 @@ const defaultLocales: LocaleTree = {
         soft: 'Soft',
       },
       wallpapers: {
-        midnight: 'Midnight wallpaper',
-        aurora: 'Aurora wallpaper',
-        ember: 'Ember wallpaper',
+        midnight: 'Midnight',
+        aurora: 'Aurora',
+        ember: 'Ember',
+        ocean: 'Ocean',
+        sunrise: 'Sunrise',
+        violet: 'Violet',
+        forest: 'Forest',
+        cobalt: 'Cobalt',
+        rose: 'Rose',
+        sand: 'Sand',
+        graphite: 'Graphite',
+        prism: 'Prism',
       },
     },
   },
@@ -3804,11 +4075,144 @@ const defaultLocales: LocaleTree = {
     volume: 'Volume',
     wifi: 'Wi-Fi',
   },
+  Setup: {
+    title: 'Sky Phone Setup Assistant',
+    ownerFallback: 'Sky Phone Owner',
+    getStarted: 'Get Started',
+    setUpLater: 'Set Up Later',
+    welcome: {
+      title: 'Welcome to Sky Phone',
+      eyebrow: 'Designed around you',
+      hello: 'hello',
+      hallo: 'hallo',
+      bonjour: 'bonjour',
+      body: 'Hello, {name}. Let’s make this phone unmistakably yours.',
+      private: 'Private by design',
+      personal: 'Made for you',
+    },
+    connection: {
+      eyebrow: 'Mobile Connection',
+      title: 'Your connection is ready',
+      body: 'Sky Phone automatically detects the SIM installed in this device.',
+      noSim: 'No SIM installed',
+      ready: 'Connected to the Sky network',
+      offline: 'Phone works offline; calls and messages require a SIM',
+      preserved:
+        'Your SIM number and SIM-backed conversations remain with the SIM, even if this phone is erased.',
+    },
+    cloud: {
+      eyebrow: 'Sky Cloud',
+      title: 'Keep important data with you',
+      body: 'Sign in to sync supported app data and recover it on another Sky Phone.',
+      signIn: 'Sign In',
+      create: 'Create Account',
+      signInTitle: 'Sign in to Sky Cloud',
+      createTitle: 'Create your Sky Cloud account',
+      signInBody:
+        'Access your protected data, purchases and settings on this phone.',
+      createBody:
+        'Choose your personal iFruit address and keep important data available across devices.',
+      accountPreview: 'Your Sky Cloud ID',
+      accountName: 'Account name',
+      addressPlaceholder: 'alex.morgan',
+      email: 'Sky Cloud Email',
+      password: 'Password',
+      confirmPassword: 'Confirm Password',
+      passwordMismatch: 'The passwords do not match.',
+      strength0: 'At least 6 characters',
+      strength1: 'Basic password',
+      strength2: 'Good password',
+      strength3: 'Strong password',
+      strength4: 'Excellent password',
+      signInAction: 'Sign In Securely',
+      createAction: 'Create Sky Cloud Account',
+      securityNote: 'Encrypted connection · Your password stays private',
+      connected: 'Sky Cloud connected',
+      invalid: 'Enter a valid email and a password with at least 6 characters.',
+      errors: {
+        invalid_email: 'Enter a valid Sky Cloud email.',
+        invalid_password: 'Your password must contain at least 6 characters.',
+        invalid_credentials: 'Email or password is incorrect.',
+        email_taken: 'This Sky Cloud email is already registered.',
+        rate_limited: 'Too many attempts. Try again shortly.',
+        request_failed: 'Sky Cloud is temporarily unavailable.',
+      },
+    },
+    security: {
+      eyebrow: 'Privacy & Security',
+      title: 'Protect this phone',
+      body: 'Choose a four- or six-digit passcode to keep your apps and local information private.',
+      local:
+        'The passcode belongs to this physical phone and is never transferred with the SIM.',
+      create: 'Create Passcode',
+      createSelected: 'Create {count}-Digit Passcode',
+      lengthTitle: 'Choose passcode length',
+      fourDigit: '4-Digit Code',
+      sixDigit: '6-Digit Code',
+      enter: 'Create a Passcode',
+      confirm: 'Verify Your Passcode',
+      codeHint: 'Enter a memorable six-digit code.',
+      fourDigitHint: 'Enter a memorable four-digit code.',
+      sixDigitHint: 'Enter a memorable six-digit code.',
+      mismatch: 'The passcodes did not match. Try again.',
+      failed: 'The passcode could not be saved.',
+    },
+    appearance: {
+      eyebrow: 'Display',
+      title: 'Choose your appearance',
+      body: 'Automatic follows your system. You can change this at any time in Settings.',
+    },
+    performance: {
+      eyebrow: 'Performance',
+      title: 'Choose how your phone feels',
+      body: 'Balance responsiveness and visual effects for your FiveM setup.',
+      performance: 'Fastest response with optimized, blur-free glass.',
+      ultimate: 'Rich depth, live blur and the complete glass experience.',
+      changeLater: 'You can switch modes later under Settings › Appearance.',
+    },
+    wallpaper: {
+      eyebrow: 'Personalize',
+      title: 'Make it yours',
+      body: 'Choose one of twelve crafted Sky Phone backgrounds.',
+    },
+    notifications: {
+      eyebrow: 'Stay Informed',
+      title: 'Notifications your way',
+      body: 'Choose how apps may reach you. Critical alarms and calls stay available.',
+      allow: 'Allow App Notifications',
+      allowBody: 'Show banners, lock-screen updates and badges.',
+      sounds: 'Notification Sounds',
+      soundsBody: 'Play a subtle sound for incoming updates.',
+    },
+    apps: {
+      eyebrow: 'Suggested for You',
+      title: 'Start with your favorites',
+      body: 'Choose optional apps. Every essential phone app is already included.',
+      install: 'Add {count} Apps',
+      descriptions: {
+        banking: 'Secure city banking',
+        garage: 'Your vehicles at a glance',
+        skyride: 'Request a ride',
+        citymarkt: 'Shop local listings',
+        picstagram: 'Share photos',
+        snake: 'A timeless game',
+      },
+    },
+    ready: {
+      eyebrow: 'Setup Complete',
+      title: 'Welcome, {name}',
+      body: 'Your Sky Phone is configured and ready. Your choices can always be refined in Settings.',
+      localOnly: 'Stored on this phone',
+      enter: 'Enter Sky Phone',
+      review: 'Review Setup',
+    },
+  },
   Common: {
     add: 'Add',
     cancel: 'Cancel',
     clear: 'Clear',
     close: 'Close',
+    continue: 'Continue',
     back: 'Back',
     delete: 'Delete',
     done: 'Done',
@@ -3947,10 +4351,12 @@ const defaultLocales: LocaleTree = {
       weather: {
         name: 'Weather',
         description: 'Current conditions, location, and high and low.',
+        range: 'H: {high}° L: {low}°',
       },
       music: {
         name: 'Now Playing',
         description: 'Music controls and the current track.',
+        empty: 'No recently played music',
       },
       wallet: {
         name: 'Wallet',
@@ -3998,6 +4404,10 @@ export const usePhoneStore = defineStore('phone', {
     preferences: cloneJsonData(DEFAULT_PHONE_PREFERENCES),
     persistenceGeneration: 0,
     persistenceSession: ++nextPersistenceSession,
+    player: {
+      firstName: '',
+      lastName: '',
+    } as DeviceBootstrap['player'],
     security: {
       enabled: false,
       length: null,
@@ -4030,6 +4440,7 @@ export const usePhoneStore = defineStore('phone', {
       this.lang = payload.lang ?? 'en'
       this.locales = payload.locales ?? defaultLocales
       if (payload.device) this.hydrateDevice(payload.device)
+      if (payload.player) this.player = payload.player
       this.security = payload.security ?? {
         enabled: false,
         length: null,
@@ -4039,6 +4450,7 @@ export const usePhoneStore = defineStore('phone', {
     },
     endDeviceSession(): void {
       this.close()
+      this.player = { firstName: '', lastName: '' }
       if (this.deviceSessionToken !== null) {
         this.deviceSessionToken = null
         this.persistenceGeneration += 1
@@ -4146,11 +4558,55 @@ export const usePhoneStore = defineStore('phone', {
       this.preferences.settings.ringtoneVolume = volume
       this.saveDeviceNamespace('settings', this.preferences)
     },
+    setAllAppNotifications(enabled: boolean, sounds: boolean): void {
+      for (const preferences of Object.values(
+        this.preferences.settings.notifications,
+      )) {
+        preferences.enabled = enabled
+        preferences.sounds = enabled && sounds
+      }
+      this.saveDeviceNamespace('settings', this.preferences)
+    },
+    setSetupStep(step: number): void {
+      this.preferences.settings.setupStep = Math.min(
+        PHONE_SETUP_LAST_STEP,
+        Math.max(0, Math.floor(step)),
+      )
+      this.saveDeviceNamespace('settings', this.preferences)
+    },
+    completeSetup(): void {
+      this.preferences.settings.setupCompleted = true
+      this.preferences.settings.setupStep = PHONE_SETUP_LAST_STEP
+      this.saveDeviceNamespace('settings', this.preferences)
+    },
+    resetAfterFactoryReset(): void {
+      this.persistenceGeneration += 1
+      this.preferences = cloneJsonData(DEFAULT_PHONE_PREFERENCES)
+      this.deviceRevisions = {}
+      if (this.device) this.device.data = {}
+      this.security = { enabled: false, length: null, lockedUntil: 0 }
+    },
     setSystemDarkMode(value: boolean): void {
       this.systemDarkMode = value
     },
-    setWallpaper(wallpaper: WallpaperId): void {
+    setWallpaper(wallpaper: WallpaperId, imageUrl: string | null = null): void {
+      const normalizedImageUrl =
+        wallpaper === 'custom' ? imageUrl?.trim() : null
+      if (wallpaper === 'custom' && !normalizedImageUrl) {
+        throw new Error('Custom wallpapers require a photo URL.')
+      }
+
       this.preferences.settings.wallpaper = wallpaper
+      this.preferences.settings.wallpaperImageUrl = normalizedImageUrl ?? null
+      this.preferences.settings.wallpaperHistory = [
+        { imageUrl: normalizedImageUrl ?? null, wallpaper },
+        ...this.preferences.settings.wallpaperHistory.filter((entry) =>
+          wallpaper === 'custom'
+            ? entry.wallpaper !== 'custom' ||
+              entry.imageUrl !== normalizedImageUrl
+            : entry.wallpaper !== wallpaper,
+        ),
+      ].slice(0, 4)
       this.saveDeviceNamespace('settings', this.preferences)
     },
     async unlockWithPasscode(

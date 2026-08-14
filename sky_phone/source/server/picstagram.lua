@@ -154,7 +154,7 @@ local function load_post_media(posts)
         by_id[post.id] = post
     end
     local rows = Bridge.Database.Query(([[
-        SELECT pm.`post_id`, pm.`position`, m.`id`, m.`url`
+        SELECT pm.`post_id`, pm.`position`, m.`id`, m.`url`, m.`media_type`
         FROM `sky_phone_picstagram_post_media` pm
         JOIN `sky_phone_media` m ON m.`id` = pm.`media_id`
         WHERE pm.`post_id` IN (%s)
@@ -166,6 +166,7 @@ local function load_post_media(posts)
         if post then
             post.media[#post.media + 1] = {
                 id = tonumber(media.id),
+                media_type = media.media_type,
                 position = tonumber(media.position),
                 url = media.url,
             }
@@ -599,6 +600,48 @@ Bridge.Callbacks.Register("sky_phone:picstagram:profile", function(source, data)
     return { success = true, data = { profile = target, posts = posts } }
 end)
 
+Bridge.Callbacks.Register("sky_phone:picstagram:connections", function(source, data)
+    local viewer, error_response = profile_for_session(source)
+    if not viewer then
+        return error_response
+    end
+    local target_id = type(data) == "table" and data.profileId or nil
+    local mode = type(data) == "table" and data.mode or nil
+    if not valid_id(target_id) or (mode ~= "followers" and mode ~= "following") then
+        return { success = false, error = "invalid_request" }
+    end
+    if target_id ~= viewer.id and are_profiles_blocked(viewer.id, target_id) then
+        return { success = false, error = "profile_not_found" }
+    end
+    local join_column = mode == "followers" and "follow.`follower_id`" or "follow.`following_id`"
+    local filter_column = mode == "followers" and "follow.`following_id`" or "follow.`follower_id`"
+    local rows = Bridge.Database.Query(([[
+        SELECT candidate.`id`, candidate.`handle`, candidate.`display_name`, candidate.`bio`,
+            candidate.`avatar_media_id`, candidate.`private`, candidate.`verified`, candidate.`status`,
+            avatar.`url` AS `avatar_url`,
+            COALESCE((SELECT own_follow.`status` FROM `sky_phone_picstagram_follows` own_follow
+                WHERE own_follow.`follower_id` = ? AND own_follow.`following_id` = candidate.`id` LIMIT 1), '') AS `follow_status`,
+            (SELECT COUNT(*) FROM `sky_phone_picstagram_follows` followers
+                WHERE followers.`following_id` = candidate.`id` AND followers.`status` = 'accepted') AS `followers`,
+            (SELECT COUNT(*) FROM `sky_phone_picstagram_follows` following
+                WHERE following.`follower_id` = candidate.`id` AND following.`status` = 'accepted') AS `following`,
+            (SELECT COUNT(*) FROM `sky_phone_picstagram_posts` post
+                WHERE post.`profile_id` = candidate.`id` AND post.`status` = 'published') AS `post_count`
+        FROM `sky_phone_picstagram_follows` follow
+        JOIN `sky_phone_picstagram_profiles` candidate ON candidate.`id` = %s
+        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = candidate.`avatar_media_id`
+        WHERE %s = ? AND follow.`status` = 'accepted' AND candidate.`status` = 'active'
+            AND NOT EXISTS(SELECT 1 FROM `sky_phone_picstagram_blocks` block
+                WHERE (block.`blocker_id` = ? AND block.`blocked_id` = candidate.`id`)
+                    OR (block.`blocked_id` = ? AND block.`blocker_id` = candidate.`id`))
+        ORDER BY candidate.`display_name`, candidate.`handle` LIMIT 200
+    ]]):format(join_column, filter_column), { viewer.id, target_id, viewer.id, viewer.id })
+    for index = 1, #rows do
+        hydrate_profile(rows[index], viewer.id)
+    end
+    return { success = true, data = rows }
+end)
+
 Bridge.Callbacks.Register("sky_phone:picstagram:update-profile", function(source, data)
     local profile, error_response = profile_for_session(source)
     if not profile then
@@ -642,7 +685,9 @@ Bridge.Callbacks.Register("sky_phone:picstagram:publish-post", function(source, 
     if not profile then
         return error_response
     end
-    if type(data) ~= "table" or type(data.mediaIds) ~= "table" or type(data.commentsEnabled) ~= "boolean" then
+    if type(data) ~= "table" or type(data.mediaIds) ~= "table" or type(data.commentsEnabled) ~= "boolean"
+        or (data.mediaType ~= "photo" and data.mediaType ~= "video")
+    then
         return { success = false, error = "invalid_post" }
     end
     local caption = trim(data.caption) or ""
@@ -651,6 +696,7 @@ Bridge.Callbacks.Register("sky_phone:picstagram:publish-post", function(source, 
         or not valid_text(location, 0, Config.Picstagram.LocationMaxLength)
         or #data.mediaIds < 1
         or #data.mediaIds > Config.Picstagram.MaxPostMedia
+        or (data.mediaType == "video" and #data.mediaIds ~= 1)
     then
         return { success = false, error = "invalid_post" }
     end
@@ -661,7 +707,7 @@ Bridge.Callbacks.Register("sky_phone:picstagram:publish-post", function(source, 
         if not media_id or media_id < 1 or media_id ~= math.floor(media_id) or seen[media_id] then
             return { success = false, error = "invalid_media" }
         end
-        if not SkyPhoneMedia.ResolveOwnedMedia(source, tostring(media_id), "photo") then
+        if not SkyPhoneMedia.ResolveOwnedMedia(source, tostring(media_id), data.mediaType) then
             return { success = false, error = "invalid_media" }
         end
         seen[media_id] = true
@@ -864,23 +910,73 @@ Bridge.Callbacks.Register("sky_phone:picstagram:comments", function(source, data
         SELECT comment.`id`, comment.`profile_id`, comment.`parent_id`, comment.`body`,
             UNIX_TIMESTAMP(comment.`created_at`) AS `created_at_unix`, author.`handle`,
             author.`display_name`, author.`verified`, avatar.`url` AS `avatar_url`,
-            (comment.`profile_id` = ?) AS `is_owner`
+            parent_author.`handle` AS `reply_to_handle`,
+            (comment.`profile_id` = ?) AS `is_owner`,
+            EXISTS(SELECT 1 FROM `sky_phone_picstagram_comment_reactions` reaction
+                WHERE reaction.`comment_id` = comment.`id` AND reaction.`profile_id` = ?) AS `is_liked`,
+            (SELECT COUNT(*) FROM `sky_phone_picstagram_comment_reactions` reaction
+                WHERE reaction.`comment_id` = comment.`id`) AS `like_count`
         FROM `sky_phone_picstagram_comments` comment
         JOIN `sky_phone_picstagram_profiles` author ON author.`id` = comment.`profile_id`
         LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = author.`avatar_media_id`
+        LEFT JOIN `sky_phone_picstagram_comments` parent ON parent.`id` = comment.`parent_id`
+        LEFT JOIN `sky_phone_picstagram_profiles` parent_author ON parent_author.`id` = parent.`profile_id`
         WHERE comment.`post_id` = ? AND comment.`status` = 'visible' AND author.`status` = 'active'
             AND NOT EXISTS(SELECT 1 FROM `sky_phone_picstagram_blocks` block
                 WHERE (block.`blocker_id` = ? AND block.`blocked_id` = comment.`profile_id`)
                     OR (block.`blocked_id` = ? AND block.`blocker_id` = comment.`profile_id`))
-        ORDER BY comment.`created_at`, comment.`id` LIMIT ?
-    ]], { profile.id, data.id, profile.id, profile.id, Config.Picstagram.CommentPageSize })
+        ORDER BY COALESCE(parent.`created_at`, comment.`created_at`),
+            comment.`parent_id` IS NOT NULL, comment.`created_at`, comment.`id` LIMIT ?
+    ]], { profile.id, profile.id, data.id, profile.id, profile.id, Config.Picstagram.CommentPageSize })
     for index = 1, #rows do
         rows[index].verified = tonumber(rows[index].verified) == 1
         rows[index].is_owner = tonumber(rows[index].is_owner) == 1
+        rows[index].is_liked = tonumber(rows[index].is_liked) == 1
+        rows[index].like_count = tonumber(rows[index].like_count) or 0
         rows[index].created_at = (tonumber(rows[index].created_at_unix) or 0) * 1000
         rows[index].created_at_unix = nil
     end
     return { success = true, data = rows }
+end)
+
+Bridge.Callbacks.Register("sky_phone:picstagram:comment-react", function(source, data)
+    local profile, error_response = profile_for_session(source)
+    if not profile then
+        return error_response
+    end
+    if not SkyPhone.AllowOperation(source, "picstagram:comment-react", 60, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local comment_id = type(data) == "table" and data.id or nil
+    if not valid_id(comment_id) or type(data.active) ~= "boolean" then
+        return { success = false, error = "invalid_request" }
+    end
+    local comment = Bridge.Database.Query([[
+        SELECT comment.`profile_id`, comment.`post_id`
+        FROM `sky_phone_picstagram_comments` comment
+        WHERE comment.`id` = ? AND comment.`status` = 'visible' LIMIT 1
+    ]], { comment_id })[1]
+    if not comment or not find_accessible_post(comment.post_id, profile.id) then
+        return { success = false, error = "invalid_comment" }
+    end
+    if are_profiles_blocked(profile.id, comment.profile_id) then
+        return { success = false, error = "blocked" }
+    end
+    if data.active then
+        local result = Bridge.Database.Query([[
+            INSERT IGNORE INTO `sky_phone_picstagram_comment_reactions` (`comment_id`, `profile_id`)
+            VALUES (?, ?)
+        ]], { comment_id, profile.id })
+        if affected_rows(result) > 0 then
+            create_activity(comment.profile_id, profile.id, "comment_like", comment.post_id)
+        end
+    else
+        Bridge.Database.Query([[
+            DELETE FROM `sky_phone_picstagram_comment_reactions`
+            WHERE `comment_id` = ? AND `profile_id` = ?
+        ]], { comment_id, profile.id })
+    end
+    return { success = true }
 end)
 
 Bridge.Callbacks.Register("sky_phone:picstagram:comment", function(source, data)
@@ -905,16 +1001,32 @@ Bridge.Callbacks.Register("sky_phone:picstagram:comment", function(source, data)
     if tonumber(post.comments_enabled) ~= 1 then
         return { success = false, error = "comments_disabled" }
     end
-    local parent_id = valid_id(data.parentId) and data.parentId or nil
-    local parent
-    if parent_id then
-        parent = Bridge.Database.Query([[
-            SELECT `id`, `profile_id` FROM `sky_phone_picstagram_comments`
-            WHERE `id` = ? AND `post_id` = ? AND `parent_id` IS NULL AND `status` = 'visible' LIMIT 1
-        ]], { parent_id, data.id })[1]
-        if not parent then
+    if data.replyToId ~= nil and not valid_id(data.replyToId) then
+        return { success = false, error = "invalid_comment" }
+    end
+    local parent_id
+    local reply_target
+    if data.replyToId then
+        reply_target = Bridge.Database.Query([[
+            SELECT `id`, `profile_id`, `parent_id` FROM `sky_phone_picstagram_comments`
+            WHERE `id` = ? AND `post_id` = ? AND `status` = 'visible' LIMIT 1
+        ]], { data.replyToId, data.id })[1]
+        if not reply_target or are_profiles_blocked(profile.id, reply_target.profile_id) then
             return { success = false, error = "invalid_comment" }
         end
+        parent_id = reply_target.parent_id or reply_target.id
+    elseif data.parentId then
+        if not valid_id(data.parentId) then
+            return { success = false, error = "invalid_comment" }
+        end
+        reply_target = Bridge.Database.Query([[
+            SELECT `id`, `profile_id`, `parent_id` FROM `sky_phone_picstagram_comments`
+            WHERE `id` = ? AND `post_id` = ? AND `parent_id` IS NULL AND `status` = 'visible' LIMIT 1
+        ]], { data.parentId, data.id })[1]
+        if not reply_target or are_profiles_blocked(profile.id, reply_target.profile_id) then
+            return { success = false, error = "invalid_comment" }
+        end
+        parent_id = reply_target.id
     end
     local id = new_id()
     if parent_id then
@@ -928,9 +1040,11 @@ Bridge.Callbacks.Register("sky_phone:picstagram:comment", function(source, data)
             VALUES (?, ?, ?, ?)
         ]], { id, data.id, profile.id, body })
     end
-    create_activity(post.profile_id, profile.id, "comment", data.id)
-    if parent and parent.profile_id ~= post.profile_id then
-        create_activity(parent.profile_id, profile.id, "comment", data.id)
+    if reply_target then
+        create_activity(reply_target.profile_id, profile.id, "reply", data.id)
+    end
+    if not reply_target or reply_target.profile_id ~= post.profile_id then
+        create_activity(post.profile_id, profile.id, "comment", data.id)
     end
     return { success = true, data = { id = id } }
 end)
@@ -968,14 +1082,14 @@ Bridge.Callbacks.Register("sky_phone:picstagram:publish-story", function(source,
     if not profile then
         return error_response
     end
-    if type(data) ~= "table" then
+    if type(data) ~= "table" or (data.mediaType ~= "photo" and data.mediaType ~= "video") then
         return { success = false, error = "invalid_story" }
     end
     local media_id = tonumber(data.mediaId)
     local body = trim(data.body) or ""
     if not media_id or media_id < 1 or media_id ~= math.floor(media_id)
         or not valid_text(body, 0, Config.Picstagram.StoryTextMaxLength)
-        or not SkyPhoneMedia.ResolveOwnedMedia(source, tostring(media_id), "photo")
+        or not SkyPhoneMedia.ResolveOwnedMedia(source, tostring(media_id), data.mediaType)
     then
         return { success = false, error = "invalid_story" }
     end
@@ -994,7 +1108,7 @@ Bridge.Callbacks.Register("sky_phone:picstagram:stories", function(source)
         return error_response
     end
     local rows = Bridge.Database.Query([[
-        SELECT story.`id`, story.`profile_id`, story.`body`, media.`url`, author.`handle`,
+        SELECT story.`id`, story.`profile_id`, story.`body`, media.`url`, media.`media_type`, author.`handle`,
             author.`display_name`, author.`verified`, avatar.`url` AS `avatar_url`,
             UNIX_TIMESTAMP(story.`created_at`) AS `created_at_unix`,
             UNIX_TIMESTAMP(story.`expires_at`) AS `expires_at_unix`,

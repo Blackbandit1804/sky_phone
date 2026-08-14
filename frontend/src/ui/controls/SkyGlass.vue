@@ -12,6 +12,7 @@ const props = withDefaults(
       | 'button'
       | 'div'
       | 'label'
+      | 'nav'
       | 'section'
       | 'span'
     disabled?: boolean
