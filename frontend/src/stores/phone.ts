@@ -1925,6 +1925,8 @@ const defaultLocales: LocaleTree = {
         target_not_found: 'The recipient is not online.',
         self_transfer: 'You cannot send money to yourself.',
         rate_limited: 'Please wait before making another transaction.',
+        reload_cooldown:
+          'Too many refreshes. Please wait a moment before trying again.',
         transfer_failed: 'The transfer could not be completed.',
         banking_unavailable: 'Banking is currently unavailable.',
         request_failed: 'The banking request failed.',
@@ -2416,6 +2418,8 @@ const defaultLocales: LocaleTree = {
         provider_rejected: 'The housing provider rejected the request.',
         action_failed: 'The property change could not be saved.',
         rate_limited: 'Please wait before using another housing control.',
+        reload_cooldown:
+          'Too many refreshes. Please wait a moment before trying again.',
         device_not_open: 'Open the phone again to manage your homes.',
         device_locked: 'Unlock the phone to manage your homes.',
         request_failed: 'The housing request failed.',
@@ -3062,6 +3066,10 @@ const defaultLocales: LocaleTree = {
       hourly: 'Next Hours',
       unavailable: 'Weather is unavailable',
       stale: 'Showing the last available weather update.',
+      errors: {
+        reload_cooldown:
+          'Too many refreshes. Please wait a moment before trying again.',
+      },
       tryAgain: 'Try Again',
       regions: {
         los_santos: 'Los Santos',

@@ -2,6 +2,11 @@ import { defineStore } from 'pinia'
 
 import type { RawWeatherSnapshot, WeatherForecast } from '@/types/weather'
 import { nuiCall } from '@/utils/nui'
+import {
+  allowManualReload,
+  isReloadCooldownActive,
+  RELOAD_COOLDOWN_ERROR,
+} from '@/utils/reload-cooldown'
 import { buildWeatherForecast } from '@/utils/weather'
 
 const REFRESH_INTERVAL = 30_000
@@ -9,14 +14,23 @@ const REFRESH_INTERVAL = 30_000
 export const useWeatherStore = defineStore('weather', {
   state: () => ({
     error: null as string | null,
+    cooldownUntil: 0,
     forecast: null as WeatherForecast | null,
     intervalId: undefined as number | undefined,
     isLoading: false,
     lastFetchedAt: 0,
+    reloadAttempts: [] as number[],
   }),
   actions: {
-    async refresh(force = false): Promise<void> {
+    async refresh(force = false, manualReload = false): Promise<void> {
       if (this.isLoading) return
+      if (
+        isReloadCooldownActive(this) ||
+        (manualReload && !allowManualReload(this))
+      ) {
+        this.error = RELOAD_COOLDOWN_ERROR
+        return
+      }
       if (!force && Date.now() - this.lastFetchedAt < REFRESH_INTERVAL) return
       this.isLoading = true
       const response = await nuiCall<RawWeatherSnapshot>('weather:get')

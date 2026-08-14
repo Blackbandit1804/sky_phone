@@ -82,4 +82,16 @@ describe('banking store', () => {
     expect(banking.overview).toEqual(newest)
     expect(banking.isLoading).toBe(false)
   })
+
+  it('blocks every banking request while a reload cooldown is active', async () => {
+    const banking = useBankingStore()
+    banking.cooldownUntil = Date.now() + 10_000
+
+    expect(await banking.load()).toBe(false)
+    expect(await banking.perform('transfer', 100, '5551234567')).toEqual({
+      error: 'reload_cooldown',
+      success: false,
+    })
+    expect(mockNuiCall).not.toHaveBeenCalled()
+  })
 })

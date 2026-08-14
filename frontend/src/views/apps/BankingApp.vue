@@ -42,6 +42,7 @@ import type {
 import type { PhoneContact } from '@/types/phone'
 import { handleEnterAction } from '@/utils/keyboard'
 import { formatPhoneNumber, normalizePhoneNumber } from '@/utils/phone'
+import { SkyToast } from '@/ui'
 
 type BankingTab = 'home' | 'activity'
 
@@ -56,12 +57,19 @@ const formError = ref('')
 const bankingScroll = ref<HTMLElement | null>(null)
 const isRefreshing = ref(false)
 const pullDistance = ref(0)
+const cooldownToastOpened = ref(false)
 
 const pullThreshold = 56
 let pullStartY = 0
 let isPulling = false
 let wheelRefreshTimeout: ReturnType<typeof setTimeout> | undefined
+let cooldownToastTimer: ReturnType<typeof setTimeout> | undefined
 let previousFocus: HTMLElement | null = null
+
+function closeCooldownToast(): void {
+  cooldownToastOpened.value = false
+  if (banking.error === 'reload_cooldown') banking.error = ''
+}
 
 const transactionIcons: Record<BankingTransactionKind, typeof Send> = {
   deposit: ArrowDownLeft,
@@ -140,6 +148,10 @@ function transactionTitle(transaction: BankingTransaction): string {
 }
 
 function openAction(nextAction: BankingAction): void {
+  if (banking.cooldownUntil > Date.now()) {
+    banking.error = 'reload_cooldown'
+    return
+  }
   action.value = nextAction
   amount.value = ''
   target.value = ''
@@ -184,7 +196,7 @@ async function refresh(): Promise<void> {
   if (isRefreshing.value) return
   isRefreshing.value = true
   pullDistance.value = pullThreshold
-  await banking.load()
+  await banking.load(true)
   isRefreshing.value = false
   pullDistance.value = 0
 }
@@ -310,6 +322,16 @@ onMounted(() => {
   void banking.load()
 })
 
+watch(
+  () => banking.error,
+  (error) => {
+    if (error !== 'reload_cooldown') return
+    if (cooldownToastTimer) clearTimeout(cooldownToastTimer)
+    cooldownToastOpened.value = true
+    cooldownToastTimer = setTimeout(closeCooldownToast, 2800)
+  },
+)
+
 watch(action, async (currentAction) => {
   if (currentAction) {
     previousFocus =
@@ -327,6 +349,7 @@ watch(action, async (currentAction) => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleWindowKeydown)
   if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
+  if (cooldownToastTimer) clearTimeout(cooldownToastTimer)
   previousFocus?.focus()
 })
 </script>
@@ -366,7 +389,7 @@ onBeforeUnmount(() => {
       <Landmark :size="34" />
       <strong>{{ phone.t('Apps.banking.unavailable') }}</strong>
       <p>{{ errorMessage(banking.error) }}</p>
-      <k-button rounded @click="banking.load()">
+      <k-button rounded @click="banking.load(true)">
         {{ phone.t('Apps.banking.tryAgain') }}
       </k-button>
     </div>
@@ -688,5 +711,14 @@ onBeforeUnmount(() => {
         </k-button>
       </section>
     </k-sheet>
+
+    <SkyToast
+      :opened="cooldownToastOpened"
+      position="center"
+      vertical-position="bottom"
+      @click="closeCooldownToast"
+    >
+      {{ errorMessage('reload_cooldown') }}
+    </SkyToast>
   </k-page>
 </template>

@@ -12,7 +12,6 @@ import {
   kPage,
   kPreloader,
   kSheet,
-  kToast,
 } from 'konsta/vue'
 import {
   Camera,
@@ -41,6 +40,7 @@ import type {
   HousingKeyCandidate,
   HousingProperty,
 } from '@/types/housing'
+import { SkyToast } from '@/ui'
 
 const phone = usePhoneStore()
 const housing = useHousingStore()
@@ -64,6 +64,7 @@ const housePrimaryButtonColors = {
 let pullStartY = 0
 let isPulling = false
 let wheelRefreshTimeout: ReturnType<typeof setTimeout> | undefined
+let toastTimer: number | undefined
 
 const properties = computed(() => housing.overview?.properties ?? [])
 const ownedCount = computed(
@@ -88,9 +89,10 @@ function translatedError(error: string): string {
 }
 
 function showToast(message: string): void {
+  if (toastTimer) clearTimeout(toastTimer)
   toastText.value = message
   toastOpened.value = true
-  window.setTimeout(() => {
+  toastTimer = window.setTimeout(() => {
     toastOpened.value = false
   }, 2400)
 }
@@ -103,9 +105,12 @@ async function refresh(): Promise<void> {
   if (isRefreshing.value) return
   isRefreshing.value = true
   pullDistance.value = pullThreshold
-  await housing.load()
+  const loaded = await housing.load(true)
   isRefreshing.value = false
   pullDistance.value = 0
+  if (!loaded && housing.error === 'reload_cooldown') {
+    showToast(translatedError(housing.error))
+  }
 }
 
 function atTop(): boolean {
@@ -145,6 +150,7 @@ function pullWithWheel(event: WheelEvent): void {
     pullDistance.value + Math.abs(event.deltaY) * 0.18,
   )
   if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
+  if (toastTimer) clearTimeout(toastTimer)
   wheelRefreshTimeout = setTimeout(finishPull, 130)
 }
 
@@ -259,7 +265,7 @@ onBeforeUnmount(() => {
       <k-button
         rounded
         :colors="housePrimaryButtonColors"
-        @click="housing.load()"
+        @click="refresh"
       >
         {{ phone.t('Apps.house.tryAgain') }}
       </k-button>
@@ -272,7 +278,7 @@ onBeforeUnmount(() => {
       <k-button
         rounded
         :colors="housePrimaryButtonColors"
-        @click="housing.load()"
+        @click="refresh"
       >
         {{ phone.t('Apps.house.tryAgain') }}
       </k-button>
@@ -623,9 +629,14 @@ onBeforeUnmount(() => {
       </template>
     </k-dialog>
 
-    <k-toast :opened="toastOpened" class="house-toast" position="center">
+    <SkyToast
+      :opened="toastOpened"
+      position="center"
+      vertical-position="bottom"
+      @click="toastOpened = false"
+    >
       {{ toastText }}
-    </k-toast>
+    </SkyToast>
   </k-page>
 </template>
 
@@ -645,9 +656,6 @@ onBeforeUnmount(() => {
     radial-gradient(circle at 15% 4%, #ffd39b 0, transparent 32%),
     linear-gradient(165deg, #f4e9dd 0, #f3f3f7 47%, #e8edf3 100%);
   color: var(--house-text);
-}
-.house-toast {
-  pointer-events: none;
 }
 :global(.phone-app.dark .house-page) {
   --house-bg: #101114;

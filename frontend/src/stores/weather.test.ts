@@ -61,4 +61,14 @@ describe('weather store', () => {
     expect(weather.error).toBe('offline')
   })
 
+  it('does not request weather while a reload cooldown is active', async () => {
+    const weather = useWeatherStore()
+    weather.cooldownUntil = Date.now() + 10_000
+
+    await weather.refresh(true)
+
+    expect(weather.error).toBe('reload_cooldown')
+    expect(nuiCall).not.toHaveBeenCalled()
+  })
+
 })

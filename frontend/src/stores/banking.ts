@@ -2,17 +2,31 @@ import { defineStore } from 'pinia'
 
 import type { BankingAction, BankingOverview } from '@/types/banking'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
+import {
+  allowManualReload,
+  isReloadCooldownActive,
+  RELOAD_COOLDOWN_ERROR,
+} from '@/utils/reload-cooldown'
 
 export const useBankingStore = defineStore('banking', {
   state: () => ({
     error: '',
+    cooldownUntil: 0,
     isLoading: false,
     overview: null as BankingOverview | null,
     pendingRequests: 0,
     requestGeneration: 0,
+    reloadAttempts: [] as number[],
   }),
   actions: {
-    async load(): Promise<boolean> {
+    async load(manualReload = false): Promise<boolean> {
+      if (
+        isReloadCooldownActive(this) ||
+        (manualReload && !allowManualReload(this))
+      ) {
+        this.error = RELOAD_COOLDOWN_ERROR
+        return false
+      }
       const generation = ++this.requestGeneration
       this.pendingRequests += 1
       this.isLoading = true
@@ -36,6 +50,10 @@ export const useBankingStore = defineStore('banking', {
       amount: number,
       phoneNumber?: string,
     ): Promise<NuiResponse<BankingOverview>> {
+      if (isReloadCooldownActive(this)) {
+        this.error = RELOAD_COOLDOWN_ERROR
+        return { error: RELOAD_COOLDOWN_ERROR, success: false }
+      }
       const generation = ++this.requestGeneration
       this.pendingRequests += 1
       this.isLoading = true

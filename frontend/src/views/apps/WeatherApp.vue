@@ -1,45 +1,70 @@
 <script setup lang="ts">
-import { kCard, kLink, kNavbar, kPage, kPreloader } from 'konsta/vue'
 import {
   CloudSun,
   Droplets,
   Gauge,
   Navigation,
-  RefreshCw,
   ThermometerSun,
   Umbrella,
   Wind,
 } from 'lucide-vue-next'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import WeatherConditionIcon from '@/components/WeatherConditionIcon.vue'
 import { usePhoneStore } from '@/stores/phone'
 import { useWeatherStore } from '@/stores/weather'
 import type { WeatherConditionId } from '@/types/weather'
+import {
+  SkyAppPage,
+  SkyCard,
+  SkyLink,
+  SkyNavbar,
+  SkyScrollArea,
+  SkySpinner,
+  SkyToast,
+} from '@/ui'
 
 const phone = usePhoneStore()
 const weather = useWeatherStore()
 const forecast = computed(() => weather.forecast)
+const pullDistance = ref(0)
+const cooldownToastOpened = ref(false)
+const pullThreshold = 56
+let pullStartY = 0
+let isPulling = false
+let wheelRefreshTimeout: ReturnType<typeof setTimeout> | undefined
+let cooldownToastTimer: ReturnType<typeof setTimeout> | undefined
+
+function closeCooldownToast(): void {
+  cooldownToastOpened.value = false
+  if (weather.error === 'reload_cooldown') weather.error = null
+}
+const isNight = computed(() => {
+  if (!forecast.value) return false
+  const hour = new Date(forecast.value.timestamp).getUTCHours()
+  return hour < 6 || hour >= 20
+})
 const rainy = computed(
   () =>
     forecast.value?.condition === 'rain' ||
     forecast.value?.condition === 'thunder',
 )
 const rainDrops = [
-  ['4%', '17px', '1.35s', '-0.3s', '0.32'],
-  ['11%', '11px', '1.7s', '-1.1s', '0.2'],
-  ['18%', '21px', '1.45s', '-0.8s', '0.38'],
-  ['25%', '13px', '1.9s', '-1.6s', '0.24'],
-  ['33%', '18px', '1.55s', '-0.2s', '0.3'],
-  ['40%', '10px', '1.75s', '-1.35s', '0.18'],
-  ['47%', '22px', '1.4s', '-0.65s', '0.36'],
-  ['54%', '14px', '2s', '-1.8s', '0.22'],
-  ['61%', '19px', '1.6s', '-0.45s', '0.34'],
-  ['68%', '12px', '1.8s', '-1.2s', '0.2'],
-  ['75%', '20px', '1.5s', '-0.9s', '0.37'],
-  ['82%', '11px', '1.95s', '-1.55s', '0.2'],
-  ['89%', '17px', '1.45s', '-0.15s', '0.31'],
-  ['96%', '13px', '1.7s', '-1.05s', '0.24'],
+  ['3%', '11px', '1.35s', '-0.3s', '0.32'],
+  ['9%', '8px', '1.7s', '-1.1s', '0.2'],
+  ['15%', '14px', '1.45s', '-0.8s', '0.38'],
+  ['21%', '10px', '1.9s', '-1.6s', '0.24'],
+  ['28%', '13px', '1.55s', '-0.2s', '0.3'],
+  ['35%', '8px', '1.75s', '-1.35s', '0.18'],
+  ['42%', '16px', '1.4s', '-0.65s', '0.36'],
+  ['49%', '10px', '2s', '-1.8s', '0.22'],
+  ['56%', '14px', '1.6s', '-0.45s', '0.34'],
+  ['63%', '9px', '1.8s', '-1.2s', '0.2'],
+  ['70%', '15px', '1.5s', '-0.9s', '0.37'],
+  ['77%', '8px', '1.95s', '-1.55s', '0.2'],
+  ['84%', '12px', '1.45s', '-0.15s', '0.31'],
+  ['91%', '10px', '1.7s', '-1.05s', '0.24'],
+  ['97%', '14px', '1.55s', '-0.6s', '0.28'],
 ].map(([left, height, duration, delay, opacity]) => ({
   '--rain-delay': delay,
   '--rain-duration': duration,
@@ -47,11 +72,29 @@ const rainDrops = [
   '--rain-left': left,
   '--rain-opacity': opacity,
 }))
-const cardColors = {
-  bgIos: 'bg-transparent',
-  textIos: 'text-white',
-}
-
+const snowFlakes = [
+  ['4%', '1.8s', '-1.2s', '0.4'], ['12%', '2.6s', '-0.5s', '0.65'],
+  ['19%', '2.1s', '-1.7s', '0.45'], ['27%', '2.9s', '-0.9s', '0.7'],
+  ['36%', '2.3s', '-1.4s', '0.55'], ['44%', '3.1s', '-0.2s', '0.45'],
+  ['53%', '2s', '-1.8s', '0.7'], ['62%', '2.7s', '-1.1s', '0.48'],
+  ['70%', '2.2s', '-0.7s', '0.6'], ['78%', '3s', '-1.6s', '0.42'],
+  ['87%', '2.4s', '-0.3s', '0.68'], ['95%', '2.8s', '-1.3s', '0.5'],
+].map(([left, duration, delay, opacity]) => ({
+  '--snow-delay': delay,
+  '--snow-duration': duration,
+  '--snow-left': left,
+  '--snow-opacity': opacity,
+}))
+const fogLayers = [
+  ['-18s', '44s', '0.28', '12%'],
+  ['-7s', '38s', '0.18', '34%'],
+  ['-27s', '51s', '0.23', '57%'],
+].map(([delay, duration, opacity, top]) => ({
+  '--fog-delay': delay,
+  '--fog-duration': duration,
+  '--fog-opacity': opacity,
+  '--fog-top': top,
+}))
 function conditionLabel(condition: WeatherConditionId): string {
   return phone.t(`Apps.weather.conditions.${condition}`)
 }
@@ -65,36 +108,127 @@ function formatHour(timestamp: number, index: number): string {
   }).format(timestamp)
 }
 
+async function refresh(): Promise<void> {
+  if (weather.isLoading) return
+  pullDistance.value = pullThreshold
+  await weather.refresh(true, true)
+  pullDistance.value = 0
+}
+
+function atTop(event: Event): boolean {
+  return (event.currentTarget as HTMLElement | null)?.scrollTop === 0
+}
+
+function startPull(event: TouchEvent): void {
+  if (!atTop(event) || weather.isLoading) return
+  pullStartY = event.touches[0]?.clientY ?? 0
+  isPulling = true
+}
+
+function movePull(event: TouchEvent): void {
+  if (!isPulling || weather.isLoading) return
+  const distance = (event.touches[0]?.clientY ?? pullStartY) - pullStartY
+  pullDistance.value =
+    distance > 0 ? Math.min(pullThreshold + 20, distance * 0.45) : 0
+}
+
+function finishPull(): void {
+  if (!isPulling && pullDistance.value === 0) return
+  isPulling = false
+  if (pullDistance.value >= pullThreshold) {
+    void refresh()
+    return
+  }
+  pullDistance.value = 0
+}
+
+function pullWithWheel(event: WheelEvent): void {
+  if (!atTop(event) || weather.isLoading || event.deltaY >= 0) return
+  pullDistance.value = Math.min(
+    pullThreshold + 20,
+    pullDistance.value + Math.abs(event.deltaY) * 0.18,
+  )
+  if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
+  wheelRefreshTimeout = setTimeout(finishPull, 130)
+}
+
+onBeforeUnmount(() => {
+  if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
+  if (cooldownToastTimer) clearTimeout(cooldownToastTimer)
+})
+
+watch(
+  () => weather.error,
+  (error) => {
+    if (error !== 'reload_cooldown') return
+    if (cooldownToastTimer) clearTimeout(cooldownToastTimer)
+    cooldownToastOpened.value = true
+    cooldownToastTimer = setTimeout(closeCooldownToast, 2800)
+  },
+)
+
 </script>
 
 <template>
-  <k-page
-    component="main"
+  <SkyAppPage
     class="weather-app"
-    :class="forecast ? `weather-app--${forecast.condition}` : ''"
-    :colors="{ bgIos: 'bg-transparent' }"
+    :class="[
+      forecast ? `weather-app--${forecast.condition}` : '',
+      { 'weather-app--night': isNight },
+    ]"
+    :label="phone.t('Apps.weather.name')"
+    dark
   >
     <div class="weather-app__backdrop" aria-hidden="true"></div>
     <div v-if="rainy" class="weather-app__rain" aria-hidden="true">
       <i v-for="(drop, index) in rainDrops" :key="index" :style="drop"></i>
     </div>
-    <k-navbar class="weather-navbar" :title="phone.t('Apps.weather.name')">
-      <template #after>
-        <k-link
-          component="button"
-          :aria-label="phone.t('Apps.weather.refresh')"
-          :disabled="weather.isLoading"
-          @click="weather.refresh(true)"
-        >
-          <RefreshCw
-            :size="17"
-            :class="{ 'weather-spin': weather.isLoading }"
-          />
-        </k-link>
-      </template>
-    </k-navbar>
+    <div
+      v-if="forecast?.condition === 'thunder'"
+      class="weather-app__lightning"
+      aria-hidden="true"
+    ></div>
+    <div
+      v-if="forecast?.condition === 'fog'"
+      class="weather-app__fog"
+      aria-hidden="true"
+    >
+      <i v-for="(layer, index) in fogLayers" :key="index" :style="layer"></i>
+    </div>
+    <div
+      v-if="forecast?.condition === 'snow'"
+      class="weather-app__snow"
+      aria-hidden="true"
+    >
+      <i v-for="(flake, index) in snowFlakes" :key="index" :style="flake"></i>
+    </div>
+    <div
+      v-if="forecast?.condition === 'sunny'"
+      class="weather-app__sun-glow"
+      aria-hidden="true"
+    ></div>
+    <div v-if="isNight" class="weather-app__stars" aria-hidden="true"></div>
+    <SkyNavbar
+      class="weather-navbar"
+      :title="phone.t('Apps.weather.name')"
+    />
 
-    <div v-if="forecast" class="weather-scroll">
+    <SkyScrollArea
+      v-if="forecast"
+      class="weather-scroll"
+      @touchend="finishPull"
+      @touchmove.passive="movePull"
+      @touchstart.passive="startPull"
+      @wheel="pullWithWheel"
+    >
+      <div
+        class="weather-pull-refresh"
+        :class="{ 'is-visible': pullDistance > 0 }"
+        :style="{ transform: `translateY(${pullDistance - pullThreshold}px)` }"
+        aria-live="polite"
+      >
+        <SkySpinner :label="phone.t('Common.loading')" />
+      </div>
       <header class="weather-hero">
         <div class="weather-location">
           <Navigation :size="13" fill="currentColor" />
@@ -111,7 +245,11 @@ function formatHour(timestamp: number, index: number): string {
         <p>{{ phone.t(`Apps.weather.summaries.${forecast.condition}`) }}</p>
       </header>
 
-      <p v-if="weather.error" class="weather-stale">
+      <p
+        v-if="weather.error && weather.error !== 'reload_cooldown'"
+        class="weather-stale"
+        role="status"
+      >
         {{ phone.t('Apps.weather.stale') }}
       </p>
 
@@ -119,46 +257,41 @@ function formatHour(timestamp: number, index: number): string {
         class="weather-details"
         :aria-label="phone.t('Apps.weather.details')"
       >
-        <k-card
-          :colors="cardColors"
+        <SkyCard
           :content-wrap="false"
           class="weather-detail-card"
         >
           <ThermometerSun :size="18" />
           <span>{{ phone.t('Apps.weather.feelsLike') }}</span>
           <strong>{{ forecast.feelsLike }}°</strong>
-        </k-card>
-        <k-card
-          :colors="cardColors"
+        </SkyCard>
+        <SkyCard
           :content-wrap="false"
           class="weather-detail-card"
         >
           <Wind :size="18" />
           <span>{{ phone.t('Apps.weather.wind') }}</span>
           <strong>{{ forecast.windSpeed }} km/h</strong>
-        </k-card>
-        <k-card
-          :colors="cardColors"
+        </SkyCard>
+        <SkyCard
           :content-wrap="false"
           class="weather-detail-card"
         >
           <Droplets :size="18" />
           <span>{{ phone.t('Apps.weather.humidity') }}</span>
           <strong>{{ forecast.humidity }}%</strong>
-        </k-card>
-        <k-card
-          :colors="cardColors"
+        </SkyCard>
+        <SkyCard
           :content-wrap="false"
           class="weather-detail-card"
         >
           <Umbrella :size="18" />
           <span>{{ phone.t('Apps.weather.rain') }}</span>
           <strong>{{ forecast.rainChance }}%</strong>
-        </k-card>
+        </SkyCard>
       </section>
 
-      <k-card
-        :colors="cardColors"
+      <SkyCard
         :content-wrap="false"
         class="weather-panel weather-hourly-panel"
       >
@@ -178,24 +311,36 @@ function formatHour(timestamp: number, index: number): string {
             <strong>{{ hour.temperature }}°</strong>
           </div>
         </div>
-      </k-card>
-    </div>
+      </SkyCard>
+    </SkyScrollArea>
 
     <div v-else class="weather-empty">
-      <k-preloader v-if="weather.isLoading" />
+      <SkySpinner
+        v-if="weather.isLoading"
+        :label="phone.t('Common.loading')"
+      />
       <CloudSun v-else :size="52" :stroke-width="1.4" />
       <strong>{{
         phone.t(
           weather.isLoading ? 'Common.loading' : 'Apps.weather.unavailable',
         )
       }}</strong>
-      <k-link
+      <SkyLink
         v-if="!weather.isLoading"
         component="button"
-        @click="weather.refresh(true)"
+        @click="weather.refresh(true, true)"
       >
         {{ phone.t('Apps.weather.tryAgain') }}
-      </k-link>
+      </SkyLink>
     </div>
-  </k-page>
+
+    <SkyToast
+      :opened="cooldownToastOpened"
+      position="center"
+      vertical-position="bottom"
+      @click="closeCooldownToast"
+    >
+      {{ phone.t('Apps.weather.errors.reload_cooldown') }}
+    </SkyToast>
+  </SkyAppPage>
 </template>

@@ -925,7 +925,7 @@ Locales["en"] = {
                 errors = {
                     invalid_request = "Enter a valid phone number and whole amount.", insufficient_funds = "There is not enough money in this account.",
                     target_not_found = "The recipient is not online.", self_transfer = "You cannot send money to yourself.",
-                    rate_limited = "Please wait before making another transaction.", transfer_failed = "The transfer could not be completed.",
+                    rate_limited = "Please wait before making another transaction.", reload_cooldown = "Too many refreshes. Please wait a moment before trying again.", transfer_failed = "The transfer could not be completed.",
                     banking_unavailable = "Banking is currently unavailable.", request_failed = "The banking request failed.",
                     default = "The banking request failed.",
                 },
@@ -1143,7 +1143,7 @@ Locales["en"] = {
                     invalid_target = "Select a valid resident.", target_not_in_property = "That person is no longer inside the property.",
                     key_not_found = "That key no longer exists.", key_already_exists = "That person already has access to this property.", keyholder_offline = "Offline keys must be revoked through the property menu.",
                     cctv_unavailable = "The camera is unavailable for this property.", provider_rejected = "The housing provider rejected the request.",
-                    action_failed = "The property change could not be saved.", rate_limited = "Please wait before using another housing control.", device_not_open = "Open the phone again to manage your homes.",
+                    action_failed = "The property change could not be saved.", rate_limited = "Please wait before using another housing control.", reload_cooldown = "Too many refreshes. Please wait a moment before trying again.", device_not_open = "Open the phone again to manage your homes.",
                     device_locked = "Unlock the phone to manage your homes.", request_failed = "The housing request failed.", default = "The housing request failed.",
                  },
             },
@@ -1477,6 +1477,7 @@ Locales["en"] = {
                 feelsLike = "Feels Like", wind = "Wind", humidity = "Humidity", rain = "Precipitation",
                 hourly = "Next Hours", unavailable = "Weather is unavailable",
                 stale = "Showing the last available weather update.", tryAgain = "Try Again",
+                errors = { reload_cooldown = "Too many refreshes. Please wait a moment before trying again." },
                 regions = { los_santos = "Los Santos", blaine_county = "Blaine County", cayo_perico = "Cayo Perico" },
                 conditions = {
                     sunny = "Sunny", clear = "Clear", partly_cloudy = "Partly Cloudy", cloudy = "Cloudy",

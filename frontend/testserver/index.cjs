@@ -7237,16 +7237,25 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'weather:get') {
-    const rainyWeather = testScenario === 'weather-rain'
+    const weatherScenario = {
+      'weather-fog': 'fog',
+      'weather-rain': 'rain',
+      'weather-snow': 'snow',
+      'weather-sunny': 'sunny',
+      'weather-thunder': 'thunder',
+    }[testScenario]
     response.json({
       success: true,
       data: {
         clock: { year: 2026, month: 8, day: 5, hour: 17, minute: 20 },
-        condition: rainyWeather ? 'rain' : 'partly_cloudy',
-        nextCondition: 'rain',
-        rainLevel: rainyWeather ? 0.82 : 0.08,
+        condition: weatherScenario ?? 'partly_cloudy',
+        nextCondition: weatherScenario ?? 'rain',
+        rainLevel:
+          weatherScenario === 'rain' || weatherScenario === 'thunder'
+            ? 0.82
+            : 0.08,
         region: 'los_santos',
-        windSpeed: rainyWeather ? 0 : 3.2,
+        windSpeed: weatherScenario === 'rain' ? 0 : 3.2,
       },
     })
     return

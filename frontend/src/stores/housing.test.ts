@@ -94,4 +94,15 @@ describe('housing store', () => {
     expect(housing.overview).toEqual(overview)
     expect(housing.error).toBe('property_access_denied')
   })
+
+  it('blocks every housing request while a reload cooldown is active', async () => {
+    const housing = useHousingStore()
+    housing.cooldownUntil = Date.now() + 10_000
+
+    expect(await housing.load()).toBe(false)
+    expect(await housing.loadKeyCandidates('esx_property:1')).toBe(false)
+    expect(await housing.command('toggle_lock', 'esx_property:1')).toBe(false)
+    expect(housing.error).toBe('reload_cooldown')
+    expect(mockNuiCall).not.toHaveBeenCalled()
+  })
 })
