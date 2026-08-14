@@ -270,6 +270,16 @@ Config.Banking = {
     HistoryLimit = 50,
 }
 
+Config.Health = {
+    DailyStepGoal = 8000,
+    SampleIntervalMs = 500,
+    ReportIntervalSeconds = 30,
+    ReportsPerMinute = 4,
+    MaximumSpeedMetersPerSecond = 12.0,
+    EmergencyNumber = "911",
+    ProfileTextMaxLength = 500,
+}
+
 Config.Billing = {
     Enabled = true,
     Currency = "$",

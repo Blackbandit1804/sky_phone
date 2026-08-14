@@ -533,6 +533,43 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_health_daily",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "owner_identifier", type = "VARCHAR(80) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "activity_date", type = "DATE NOT NULL" },
+            { name = "steps", type = "INT UNSIGNED NOT NULL DEFAULT 0" },
+            { name = "distance_meters", type = "INT UNSIGNED NOT NULL DEFAULT 0" },
+            { name = "active_seconds", type = "INT UNSIGNED NOT NULL DEFAULT 0" },
+            { name = "energy_kcal", type = "INT UNSIGNED NOT NULL DEFAULT 0" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_health_daily", columns = "(`owner_identifier`, `activity_date`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_health_history", columns = "(`owner_identifier`, `activity_date`)" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_health_profiles",
+        columns = {
+            { name = "owner_identifier", type = "VARCHAR(80) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "blood_type", type = "VARCHAR(3) NOT NULL DEFAULT ''", characterSet = "ascii", collation = "ascii_general_ci" },
+            { name = "allergies", type = "VARCHAR(500) NOT NULL DEFAULT ''" },
+            { name = "conditions", type = "VARCHAR(500) NOT NULL DEFAULT ''" },
+            { name = "medication", type = "VARCHAR(500) NOT NULL DEFAULT ''" },
+            { name = "emergency_name", type = "VARCHAR(80) NOT NULL DEFAULT ''" },
+            { name = "emergency_relation", type = "VARCHAR(40) NOT NULL DEFAULT ''" },
+            { name = "emergency_phone", type = "VARCHAR(24) NOT NULL DEFAULT ''", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "updated_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "owner_identifier",
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_billing_invoices",
         columns = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },

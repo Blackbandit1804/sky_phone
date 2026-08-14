@@ -7,6 +7,7 @@ const browserDataRequests = [
   ['development:bootstrap', {}],
   ['account:devices', {}],
   ['banking:overview', {}],
+  ['health:overview', {}],
   ['billing:overview', {}],
   ['billing:list', { filter: 'all', limit: 20, offset: 0 }],
   ['calendar:list', { endsAt: 4_102_444_800, startsAt: 0 }],
@@ -320,6 +321,29 @@ async function verifyStatefulActions(baseUrl) {
     true,
   )
   assert.equal(bankingAfter.bank, bankingBefore.bank - 125)
+
+  const health = await expectSuccess(baseUrl, 'health:overview', {}, true)
+  assert.equal(health.dailyStepGoal, 8000)
+  assert.equal(health.days.length, 7)
+  assert.equal(health.days.at(-1).steps, 6420)
+  assert.equal(health.snapshot.healthPercent, 96)
+
+  const medicalId = await expectSuccess(
+    baseUrl,
+    'health:save-profile',
+    {
+      allergies: 'Penicillin',
+      bloodType: 'A+',
+      conditions: 'Asthma',
+      emergencyName: 'Jamie Morgan',
+      emergencyPhone: '5550102211',
+      emergencyRelation: 'Sibling',
+      medication: 'Inhaler',
+    },
+    true,
+  )
+  assert.equal(medicalId.bloodType, 'A+')
+  assert.equal(medicalId.allergies, 'Penicillin')
 
   let radio = await expectSuccess(
     baseUrl,

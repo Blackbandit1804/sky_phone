@@ -601,7 +601,11 @@ export function restoreHomeApp(
     layout.grid.some((item) => itemContainsApp(item, appId)) ||
     layout.dock.some((item) => itemContainsApp(item, appId))
   ) {
-    return layout
+    if (!layout.hidden.includes(appId)) return layout
+    return {
+      ...layout,
+      hidden: layout.hidden.filter((id) => id !== appId),
+    }
   }
   const grid = layout.grid.map(cloneItem)
   placeInFirstEmptySlot(grid, appId)
