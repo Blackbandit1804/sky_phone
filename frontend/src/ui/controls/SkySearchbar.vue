@@ -160,6 +160,9 @@ function disable(event: MouseEvent): void {
         @focus="handleFocus"
         @input="handleInput"
       />
+      <span v-if="$slots.suffix" class="sky-searchbar__suffix">
+        <slot name="suffix" />
+      </span>
       <button
         v-if="clearButton && localValue"
         class="sky-searchbar__clear"

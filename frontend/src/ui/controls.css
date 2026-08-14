@@ -1203,6 +1203,15 @@ label.sky-list-item__row {
   opacity: 0.55;
 }
 
+.sky-searchbar__suffix {
+  width: var(--sky-touch-target, 44px);
+  height: var(--sky-touch-target, 44px);
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--sky-muted, rgba(0, 0, 0, 0.55));
+}
+
 .sky-searchbar__clear {
   width: var(--sky-touch-target, 44px);
   height: var(--sky-touch-target, 44px);

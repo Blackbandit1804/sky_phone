@@ -518,6 +518,10 @@ local function bootstrap(source, security, security_loaded)
         } or nil,
         notes = SkyPhoneNotes.List(device.account_id, device.imei),
         memos = SkyPhoneMemos.List(device.account_id, device.imei),
+        player = {
+            firstName = trim(Bridge.Framework.GetFirstname(source)) or "",
+            lastName = trim(Bridge.Framework.GetLastname(source)) or "",
+        },
     }
 end
 

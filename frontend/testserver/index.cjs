@@ -8125,6 +8125,10 @@ app.post('/api/:endpoint', (request, response) => {
         },
         memos: mockMemos,
         notes: mockNotes,
+        player: {
+          firstName: 'Alex',
+          lastName: 'Morgan',
+        },
         security: mockSecurity,
         token: 'development',
       },

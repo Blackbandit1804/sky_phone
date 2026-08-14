@@ -35,6 +35,7 @@ export type PhoneOpenPayload = {
   locales?: LocaleTree
   memos?: DeviceBootstrap['memos']
   notes?: DeviceBootstrap['notes']
+  player?: DeviceBootstrap['player']
   security?: DeviceSecurity
   token?: string
 }
@@ -1756,14 +1757,115 @@ const defaultLocales: LocaleTree = {
       get: 'GET',
       open: 'OPEN',
       installing: 'Installing',
-      searchPlaceholder: 'Search apps and games',
+      player: 'Player',
+      profileLabel: '{name} profile',
+      searchPlaceholder: 'Games, apps, stories and more',
       appsTitle: 'Built-in Apps',
       gamesTitle: 'Games',
       selected: 'Apps available for your Sky Phone',
       tabs: {
+        today: 'Today',
         apps: 'Apps',
         games: 'Games',
         search: 'Search',
+      },
+      today: {
+        freshDaily: 'A fresh selection every day',
+        dailyEdition: 'Daily Edition',
+        featured: 'Featured today',
+        gameHighlight: 'Game highlight',
+        appHighlight: 'App highlight',
+        curatedForYou: 'Curated for you',
+        editorsChoice: "Editor's Choice",
+        discoverTitle: 'Discover {app}',
+        playTitle: 'Play something new with {app}',
+        description: '{app} is in the spotlight today on Sky Phone.',
+        categoryDescription: '{category} · Made for Sky Phone',
+        moreHighlights: "Today's Highlights",
+        topToday: 'Top Today',
+        topTodayDescription: 'Popular picks from today’s edition',
+        oneMoreThing: 'One more thing',
+      },
+      filters: {
+        all: 'All',
+        social: 'Social',
+        utilities: 'Utilities',
+        shopping: 'Shopping',
+        productivity: 'Productivity',
+        arcade: 'Arcade',
+        puzzle: 'Puzzle',
+        classic: 'Classics',
+      },
+      browse: {
+        categories: 'Store categories',
+        availableNow: 'Available now',
+        featureTitle: 'Discover {app}',
+        featuredPages: 'Featured apps',
+        handPicked: 'Hand-picked for you',
+        essentialApps: 'Essential Apps',
+        essentialGames: 'Essential Games',
+      },
+      search: {
+        recommended: 'Recommended',
+        discover: 'Discover',
+        results: 'Search Results',
+        noResults: 'No matching apps or games found.',
+        ad: 'Ad',
+        topApps: 'Top Apps',
+        topGames: 'Top Games',
+        bestApps: 'Bestselling Apps',
+        bestGames: 'Bestselling Games',
+        productivity: 'Productivity',
+        photoVideo: 'Photo & Video',
+      },
+      account: {
+        account: 'Account',
+        title: 'App Management',
+        skyAccount: 'Sky Phone Account',
+        apps: 'Installed Apps',
+        games: 'Games',
+        library: 'Your Library',
+        myApps: 'My Apps',
+        update: 'UPDATE',
+        uninstall: 'Uninstall',
+        uninstallApp: 'Uninstall {app}',
+        uninstallTitle: 'Uninstall this app?',
+        uninstallBody:
+          '{app} will be removed from this phone. You can download it again from the App Store.',
+      },
+      details: {
+        skyStudios: 'Sky Studios',
+        share: 'Share app',
+        openDetails: 'View {app}',
+        shareReady: 'App information is ready to share.',
+        shareCopy: 'Take a look at {app} in the App Store.',
+        ratings: '{count} ratings',
+        age: 'Age Rating',
+        years: 'Years',
+        chart: 'Chart',
+        whatsNew: "What's New",
+        version: 'Version {version}',
+        updatedToday: 'Today',
+        releaseNotes:
+          '{app} now includes fresh content, faster loading and several interface improvements.',
+        preview: 'Preview',
+        testData: 'Preview data',
+        previewLive: 'Live Preview',
+        previousPreview: 'Previous preview',
+        nextPreview: 'Next preview',
+        previewOverview: 'Everything important at a glance',
+        previewCommunity: 'Community',
+        previewInsights: 'Insights',
+        today: 'Today',
+        progress: 'Progress',
+        communityTitle: 'Together in {app}',
+        communityBody: 'Discover activity from players around Los Santos.',
+        featuredMoment: 'Featured moment from today',
+        weeklyActivity: 'Weekly Activity',
+        fromLastWeek: 'from last week',
+        about: 'About this App',
+        description:
+          '{app} is a detailed {category} experience made for Sky Phone. Explore its features, connect with the city and keep everything close at hand.',
       },
     },
     phone: {
@@ -3637,7 +3739,8 @@ const defaultLocales: LocaleTree = {
         shareCopy: '{count} photos and videos shared from Photos.',
         delete: 'Delete Selected',
         deleteTitle: 'Delete Selected Media?',
-        deleteBody: 'The selected photos and videos will be permanently deleted.',
+        deleteBody:
+          'The selected photos and videos will be permanently deleted.',
         deleted: '{count} media items deleted.',
         limit: 'You can select up to 50 media items.',
       },
@@ -4101,6 +4204,10 @@ export const usePhoneStore = defineStore('phone', {
     preferences: cloneJsonData(DEFAULT_PHONE_PREFERENCES),
     persistenceGeneration: 0,
     persistenceSession: ++nextPersistenceSession,
+    player: {
+      firstName: '',
+      lastName: '',
+    } as DeviceBootstrap['player'],
     security: {
       enabled: false,
       length: null,
@@ -4133,6 +4240,7 @@ export const usePhoneStore = defineStore('phone', {
       this.lang = payload.lang ?? 'en'
       this.locales = payload.locales ?? defaultLocales
       if (payload.device) this.hydrateDevice(payload.device)
+      if (payload.player) this.player = payload.player
       this.security = payload.security ?? {
         enabled: false,
         length: null,
@@ -4142,6 +4250,7 @@ export const usePhoneStore = defineStore('phone', {
     },
     endDeviceSession(): void {
       this.close()
+      this.player = { firstName: '', lastName: '' }
       if (this.deviceSessionToken !== null) {
         this.deviceSessionToken = null
         this.persistenceGeneration += 1
