@@ -156,6 +156,7 @@ async function submitAccount(): Promise<void> {
 }
 
 function selectAccountMode(mode: 'login' | 'register'): void {
+  if (accountMode.value === mode) return
   accountMode.value = mode
   password.value = ''
   passwordConfirm.value = ''
@@ -241,16 +242,16 @@ function finish(): void {
       <main :key="step" class="setup-assistant__page">
         <template v-if="step === 0">
           <div class="setup-welcome__hero" aria-hidden="true">
-            <div class="setup-welcome__halo setup-welcome__halo--outer"></div>
-            <div class="setup-welcome__halo setup-welcome__halo--inner"></div>
             <div class="setup-welcome__greetings">
               <span>{{ phone.t('Setup.welcome.hello') }}</span>
               <span>{{ phone.t('Setup.welcome.hallo') }}</span>
               <span>{{ phone.t('Setup.welcome.bonjour') }}</span>
             </div>
-            <div class="setup-welcome__spark setup-welcome__spark--one"></div>
-            <div class="setup-welcome__spark setup-welcome__spark--two"></div>
-            <div class="setup-welcome__spark setup-welcome__spark--three"></div>
+            <div class="setup-welcome__signature">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
           </div>
           <div class="setup-welcome__copy">
             <p class="setup-welcome__eyebrow">
@@ -320,20 +321,31 @@ function finish(): void {
           <p class="setup-assistant__eyebrow">
             {{ phone.t('Setup.cloud.eyebrow') }}
           </p>
-          <h1>{{ phone.t(accountMode === 'login' ? 'Setup.cloud.signInTitle' : 'Setup.cloud.createTitle') }}</h1>
-          <p class="setup-assistant__lead">
-            {{ phone.t(accountMode === 'login' ? 'Setup.cloud.signInBody' : 'Setup.cloud.createBody') }}
-          </p>
+          <Transition name="setup-account-copy" mode="out-in">
+            <div :key="accountMode" class="setup-cloud-heading">
+              <h1>{{ phone.t(accountMode === 'login' ? 'Setup.cloud.signInTitle' : 'Setup.cloud.createTitle') }}</h1>
+              <p class="setup-assistant__lead">
+                {{ phone.t(accountMode === 'login' ? 'Setup.cloud.signInBody' : 'Setup.cloud.createBody') }}
+              </p>
+            </div>
+          </Transition>
           <div v-if="!account.email" class="setup-cloud-form">
-            <div class="setup-assistant__selector">
+            <div class="setup-assistant__selector" role="group">
+              <span
+                class="setup-assistant__selector-indicator"
+                :class="{ 'setup-assistant__selector-indicator--register': accountMode === 'register' }"
+                aria-hidden="true"
+              ></span>
               <button
                 :class="{ active: accountMode === 'login' }"
+                :aria-pressed="accountMode === 'login'"
                 @click="selectAccountMode('login')"
               >
                 {{ phone.t('Setup.cloud.signIn') }}
               </button>
               <button
                 :class="{ active: accountMode === 'register' }"
+                :aria-pressed="accountMode === 'register'"
                 @click="selectAccountMode('register')"
               >
                 {{ phone.t('Setup.cloud.create') }}
@@ -372,26 +384,30 @@ function finish(): void {
                 :label="phone.t('Setup.cloud.password')"
                 :autocomplete="accountMode === 'login' ? 'current-password' : 'new-password'"
               />
-              <SkyField
-                v-if="accountMode === 'register'"
-                id="setup-cloud-password-confirm"
-                v-model="passwordConfirm"
-                type="password"
-                :label="phone.t('Setup.cloud.confirmPassword')"
-                autocomplete="new-password"
-              />
+              <Transition name="setup-account-field">
+                <SkyField
+                  v-if="accountMode === 'register'"
+                  id="setup-cloud-password-confirm"
+                  v-model="passwordConfirm"
+                  type="password"
+                  :label="phone.t('Setup.cloud.confirmPassword')"
+                  autocomplete="new-password"
+                />
+              </Transition>
             </div>
 
-            <div v-if="accountMode === 'register'" class="setup-cloud-strength">
-              <div>
-                <span
-                  v-for="level in 4"
-                  :key="level"
-                  :class="{ active: level <= passwordStrength }"
-                ></span>
+            <Transition name="setup-account-strength">
+              <div v-if="accountMode === 'register'" class="setup-cloud-strength">
+                <div>
+                  <span
+                    v-for="level in 4"
+                    :key="level"
+                    :class="{ active: level <= passwordStrength }"
+                  ></span>
+                </div>
+                <small>{{ phone.t(`Setup.cloud.strength${passwordStrength}`) }}</small>
               </div>
-              <small>{{ phone.t(`Setup.cloud.strength${passwordStrength}`) }}</small>
-            </div>
+            </Transition>
             <p v-if="accountError" class="setup-assistant__error" role="alert">
               {{ accountError }}
             </p>
@@ -401,7 +417,9 @@ function finish(): void {
               @click="submitAccount"
             >
               <SkySpinner v-if="accountBusy" />
-              <span v-else>{{ phone.t(accountMode === 'login' ? 'Setup.cloud.signInAction' : 'Setup.cloud.createAction') }}</span>
+              <Transition v-else name="setup-account-action" mode="out-in">
+                <span :key="accountMode">{{ phone.t(accountMode === 'login' ? 'Setup.cloud.signInAction' : 'Setup.cloud.createAction') }}</span>
+              </Transition>
             </SkyButton>
             <div class="setup-cloud-security-note">
               <LockKeyhole :size="13" />
@@ -956,44 +974,40 @@ function finish(): void {
   position: relative;
   display: grid;
   width: 286px;
-  height: 292px;
+  height: 274px;
   flex: none;
   place-items: center;
   isolation: isolate;
 }
 .setup-welcome__hero::before {
   position: absolute;
-  z-index: -3;
-  width: 224px;
-  height: 224px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgb(32 111 255 / 24%), rgb(53 49 190 / 8%) 52%, transparent 72%);
-  filter: blur(5px);
+  z-index: -1;
+  top: 48px;
+  right: 12px;
+  bottom: 44px;
+  left: 12px;
+  background:
+    linear-gradient(90deg, transparent, rgb(55 122 255 / 13%) 28%, rgb(121 91 255 / 11%) 72%, transparent),
+    linear-gradient(180deg, transparent, rgb(39 126 255 / 9%) 48%, transparent);
+  filter: blur(22px);
   content: '';
   animation: setup-welcome-breathe 5s ease-in-out infinite;
 }
-.setup-welcome__halo {
+.setup-welcome__hero::after {
   position: absolute;
-  border: 1px solid rgb(111 167 255 / 16%);
-  border-radius: 50%;
-  transform: rotateX(66deg) rotateZ(-10deg);
-}
-.setup-welcome__halo--outer {
-  width: 270px;
-  height: 270px;
-  animation: setup-welcome-orbit 13s linear infinite;
-}
-.setup-welcome__halo--inner {
-  width: 210px;
-  height: 210px;
-  border-color: rgb(184 119 255 / 16%);
-  animation: setup-welcome-orbit 9s linear infinite reverse;
+  top: 51px;
+  right: 28px;
+  bottom: 47px;
+  left: 28px;
+  border-top: 1px solid rgb(142 184 255 / 9%);
+  border-bottom: 1px solid rgb(142 184 255 / 9%);
+  content: '';
 }
 .setup-welcome__greetings {
   position: relative;
   width: 100%;
-  height: 96px;
-  filter: drop-shadow(0 14px 28px rgb(15 89 255 / 26%));
+  height: 104px;
+  filter: drop-shadow(0 16px 30px rgb(15 89 255 / 20%));
 }
 .setup-welcome__greetings span {
   position: absolute;
@@ -1001,7 +1015,7 @@ function finish(): void {
   display: grid;
   color: #ffffff;
   font-family: 'Snell Roundhand', 'Segoe Script', 'Brush Script MT', cursive;
-  font-size: 64px;
+  font-size: 68px;
   font-weight: 500;
   letter-spacing: -0.06em;
   opacity: 0;
@@ -1011,18 +1025,23 @@ function finish(): void {
 }
 .setup-welcome__greetings span:nth-child(2) { animation-delay: 3s; }
 .setup-welcome__greetings span:nth-child(3) { animation-delay: 6s; }
-.setup-welcome__spark {
+.setup-welcome__signature {
   position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #b9d8ff;
-  box-shadow: 0 0 14px 4px rgb(78 154 255 / 65%);
-  animation: setup-welcome-spark 3.6s ease-in-out infinite;
+  bottom: 66px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
-.setup-welcome__spark--one { top: 65px; left: 47px; }
-.setup-welcome__spark--two { right: 48px; bottom: 67px; animation-delay: -1.2s; }
-.setup-welcome__spark--three { top: 91px; right: 71px; animation-delay: -2.4s; }
+.setup-welcome__signature span {
+  width: 22px;
+  height: 2px;
+  background: rgb(109 170 255 / 20%);
+}
+.setup-welcome__signature span:nth-child(2) {
+  width: 42px;
+  background: linear-gradient(90deg, #4b9fff, #9677ff);
+  box-shadow: 0 0 12px rgb(73 148 255 / 34%);
+}
 .setup-welcome__copy {
   position: relative;
   z-index: 1;
@@ -1094,16 +1113,9 @@ function finish(): void {
   8%, 27% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
   34%, 100% { opacity: 0; transform: translateY(-10px) scale(1.03); filter: blur(4px); }
 }
-@keyframes setup-welcome-orbit {
-  to { transform: rotateX(66deg) rotateZ(350deg); }
-}
 @keyframes setup-welcome-breathe {
-  0%, 100% { transform: scale(0.92); opacity: 0.65; }
-  50% { transform: scale(1.08); opacity: 1; }
-}
-@keyframes setup-welcome-spark {
-  0%, 100% { transform: scale(0.55); opacity: 0.25; }
-  50% { transform: scale(1); opacity: 0.9; }
+  0%, 100% { transform: scaleX(0.92); opacity: 0.58; }
+  50% { transform: scaleX(1.04); opacity: 1; }
 }
 .setup-connectivity-card {
   position: relative;
@@ -1171,6 +1183,12 @@ function finish(): void {
   max-width: 315px;
   margin: 7px 0 6px;
   font-size: 29px;
+}
+.setup-cloud-heading {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
 }
 .setup-assistant--step-2 .setup-assistant__lead {
   max-width: 310px;
@@ -1266,6 +1284,26 @@ function finish(): void {
   border-radius: 17px;
   background: rgb(255 255 255 / 5%);
 }
+.setup-account-field-enter-active,
+.setup-account-field-leave-active {
+  overflow: hidden;
+  transition:
+    max-height 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 180ms ease,
+    transform 280ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.setup-account-field-enter-from,
+.setup-account-field-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-8px);
+}
+.setup-account-field-enter-to,
+.setup-account-field-leave-from {
+  max-height: 58px;
+  opacity: 1;
+  transform: translateY(0);
+}
 .setup-cloud-fields :deep(.sky-field) { border: 0; border-radius: 0; background: transparent; }
 .setup-cloud-fields :deep(.sky-field + .sky-field) { border-top: 1px solid rgb(255 255 255 / 8%); }
 .setup-cloud-fields :deep(.sky-field) { padding: 3px 12px; }
@@ -1287,6 +1325,17 @@ function finish(): void {
 .setup-cloud-strength > div { display: flex; flex: 1; gap: 4px; }
 .setup-cloud-strength span { height: 3px; flex: 1; border-radius: 99px; background: rgb(255 255 255 / 10%); }
 .setup-cloud-strength span.active { background: linear-gradient(90deg, #318bff, #66c0ff); box-shadow: 0 0 7px rgb(49 139 255 / 34%); }
+.setup-account-strength-enter-active,
+.setup-account-strength-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.setup-account-strength-enter-from,
+.setup-account-strength-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
+}
 .setup-cloud-security-note {
   display: flex;
   align-items: center;
@@ -1299,24 +1348,72 @@ function finish(): void {
 .setup-assistant--step-2 .setup-assistant__later { padding: 7px; }
 @keyframes setup-cloud-orbit { to { transform: rotate(360deg); } }
 .setup-assistant__selector {
+  position: relative;
   display: grid;
   padding: 3px;
   grid-template-columns: 1fr 1fr;
   border-radius: 13px;
   background: rgb(255 255 255/8%);
 }
+.setup-assistant__selector-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  border: 1px solid rgb(255 255 255 / 7%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 13%);
+  box-shadow:
+    0 3px 12px rgb(0 0 0 / 20%),
+    inset 0 1px rgb(255 255 255 / 7%);
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.setup-assistant__selector-indicator--register {
+  transform: translateX(100%);
+}
 .setup-assistant__selector button {
+  position: relative;
+  z-index: 1;
   height: 34px;
   border: 0;
   border-radius: 10px;
   color: rgb(255 255 255/55%);
   background: transparent;
   font-weight: 650;
+  transition: color 220ms ease;
 }
 .setup-assistant__selector button.active {
   color: white;
-  background: rgb(255 255 255/13%);
-  box-shadow: 0 3px 12px rgb(0 0 0/20%);
+}
+.setup-account-copy-enter-active,
+.setup-account-copy-leave-active {
+  transition:
+    opacity 170ms ease,
+    transform 230ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.setup-account-copy-enter-from {
+  opacity: 0;
+  transform: translateY(7px);
+}
+.setup-account-copy-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+.setup-account-action-enter-active,
+.setup-account-action-leave-active {
+  transition:
+    opacity 140ms ease,
+    transform 180ms ease;
+}
+.setup-account-action-enter-from {
+  opacity: 0;
+  transform: translateY(5px);
+}
+.setup-account-action-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
 }
 .setup-cloud-connected {
   align-items: center;
