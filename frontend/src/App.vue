@@ -205,7 +205,15 @@ type PicstagramVerificationData = {
 type PicstagramNotificationData = {
   actor?: string
   device?: PhoneNotificationDevicePayload
-  kind?: 'like' | 'comment' | 'follow' | 'follow_request' | 'verified'
+  kind?:
+    | 'like'
+    | 'comment'
+    | 'comment_like'
+    | 'reply'
+    | 'follow'
+    | 'follow_request'
+    | 'request_accepted'
+    | 'verified'
   postId?: string
   text?: string
   title?: string
@@ -1411,7 +1419,9 @@ onBeforeUnmount(() => {
                   <Transition :name="appTransitionName">
                     <component
                       :is="Component"
-                      v-if="!setupRequired && (isAppRoute || isDevelopmentRoute)"
+                      v-if="
+                        !setupRequired && (isAppRoute || isDevelopmentRoute)
+                      "
                       :key="
                         isDevelopmentRoute ? String(route.name) : route.path
                       "

@@ -716,11 +716,13 @@ let picstagramPosts = [
     media: [
       {
         id: 8101,
+        media_type: 'photo',
         position: 0,
         url: 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=900&q=85',
       },
       {
         id: 8102,
+        media_type: 'photo',
         position: 1,
         url: 'https://images.unsplash.com/photo-1444723121867-7a241cacace9?auto=format&fit=crop&w=900&q=85',
       },
@@ -746,6 +748,7 @@ let picstagramPosts = [
     media: [
       {
         id: 8103,
+        media_type: 'photo',
         position: 0,
         url: 'https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=900&q=85',
       },
@@ -763,9 +766,12 @@ let picstagramComments = [
     display_name: picstagramProfiles[1].display_name,
     handle: picstagramProfiles[1].handle,
     id: 'pic-comment-1',
+    is_liked: false,
     is_owner: false,
+    like_count: 4,
     parent_id: null,
     profile_id: picstagramProfiles[1].id,
+    reply_to_handle: null,
     verified: true,
   },
 ]
@@ -779,6 +785,7 @@ let picstagramStories = [
     handle: picstagramProfiles[1].handle,
     id: 'pic-story-1',
     is_owner: false,
+    media_type: 'photo',
     profile_id: picstagramProfiles[1].id,
     seen: false,
     url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=85',
@@ -2490,7 +2497,12 @@ let mockMedia = [
     favorite: true,
     id: 2,
     mediaType: 'video',
-    thumbnailUrl: mockGalleryImage('Flower Video', '#7f1d1d', '#365314', '#fb7185'),
+    thumbnailUrl: mockGalleryImage(
+      'Flower Video',
+      '#7f1d1d',
+      '#365314',
+      '#fb7185',
+    ),
     url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
   },
   {
@@ -2519,7 +2531,12 @@ let mockMedia = [
     favorite: false,
     id: 6,
     mediaType: 'video',
-    thumbnailUrl: mockGalleryImage('Sintel Video', '#9a3412', '#431407', '#fdba74'),
+    thumbnailUrl: mockGalleryImage(
+      'Sintel Video',
+      '#9a3412',
+      '#431407',
+      '#fdba74',
+    ),
     url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
   },
   {
@@ -2548,7 +2565,12 @@ let mockMedia = [
     favorite: false,
     id: 10,
     mediaType: 'video',
-    thumbnailUrl: mockGalleryImage('Bunny Video', '#166534', '#14532d', '#86efac'),
+    thumbnailUrl: mockGalleryImage(
+      'Bunny Video',
+      '#166534',
+      '#14532d',
+      '#86efac',
+    ),
     url: 'https://www.w3schools.com/html/mov_bbb.mp4',
   },
   {
@@ -6308,6 +6330,14 @@ app.post('/api/:endpoint', (request, response) => {
     })
     return
   }
+  if (endpoint === 'picstagram:connections') {
+    const targetId = request.body.profileId
+    const profiles = picstagramProfiles.filter(
+      (profile) => profile.id !== targetId,
+    )
+    response.json({ success: true, data: profiles })
+    return
+  }
   if (endpoint === 'picstagram:update-profile') {
     Object.assign(picstagramProfiles[0], {
       bio: request.body.bio,
@@ -6321,7 +6351,7 @@ app.post('/api/:endpoint', (request, response) => {
   if (endpoint === 'picstagram:publish-post') {
     const media = request.body.mediaIds
       .map((id) => mockMedia.find((item) => item.id === id))
-      .filter((item) => item?.mediaType === 'photo')
+      .filter((item) => item?.mediaType === request.body.mediaType)
     if (!media.length) {
       response.json({ success: false, error: 'invalid_media' })
       return
@@ -6342,6 +6372,7 @@ app.post('/api/:endpoint', (request, response) => {
       location: request.body.location,
       media: media.map((item, position) => ({
         id: item.id,
+        media_type: item.mediaType,
         position,
         url: item.url,
       })),
@@ -6423,6 +6454,9 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'picstagram:comment') {
+    const replyTarget = request.body.replyToId
+      ? picstagramComments.find((entry) => entry.id === request.body.replyToId)
+      : null
     const comment = {
       avatar_url: picstagramProfiles[0].avatar_url,
       body: request.body.body,
@@ -6430,13 +6464,41 @@ app.post('/api/:endpoint', (request, response) => {
       display_name: picstagramProfiles[0].display_name,
       handle: picstagramProfiles[0].handle,
       id: `pic-comment-${Date.now()}`,
+      is_liked: false,
       is_owner: true,
-      parent_id: request.body.parentId ?? null,
+      like_count: 0,
+      parent_id:
+        replyTarget?.parent_id ??
+        replyTarget?.id ??
+        request.body.parentId ??
+        null,
       profile_id: picstagramProfiles[0].id,
+      reply_to_handle: replyTarget
+        ? replyTarget.handle
+        : request.body.parentId
+          ? (picstagramComments.find(
+              (entry) => entry.id === request.body.parentId,
+            )?.handle ?? null)
+          : null,
       verified: picstagramProfiles[0].verified,
     }
     picstagramComments.push(comment)
     response.json({ success: true, data: { id: comment.id } })
+    return
+  }
+  if (endpoint === 'picstagram:comment-react') {
+    const comment = picstagramComments.find(
+      (item) => item.id === request.body.id,
+    )
+    if (comment) {
+      const changed = comment.is_liked !== request.body.active
+      comment.is_liked = request.body.active
+      if (changed) comment.like_count += request.body.active ? 1 : -1
+    }
+    response.json({
+      success: Boolean(comment),
+      error: comment ? undefined : 'invalid_comment',
+    })
     return
   }
   if (endpoint === 'picstagram:remove-comment') {
@@ -6452,7 +6514,7 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'picstagram:publish-story') {
     const media = mockMedia.find((item) => item.id === request.body.mediaId)
-    if (!media || media.mediaType !== 'photo') {
+    if (!media || media.mediaType !== request.body.mediaType) {
       response.json({ success: false, error: 'invalid_media' })
       return
     }
@@ -6465,6 +6527,7 @@ app.post('/api/:endpoint', (request, response) => {
       handle: picstagramProfiles[0].handle,
       id: `pic-story-${Date.now()}`,
       is_owner: true,
+      media_type: media.mediaType,
       profile_id: picstagramProfiles[0].id,
       seen: true,
       url: media.url,

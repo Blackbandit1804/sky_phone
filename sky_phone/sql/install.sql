@@ -725,6 +725,17 @@ CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_comments` (
     FOREIGN KEY (`parent_id`) REFERENCES `sky_phone_picstagram_comments` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_comment_reactions` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `comment_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_picstagram_comment_reaction` (`comment_id`,`profile_id`),
+    FOREIGN KEY (`comment_id`) REFERENCES `sky_phone_picstagram_comments` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`profile_id`) REFERENCES `sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_stories` (
     `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -756,7 +767,7 @@ CREATE TABLE IF NOT EXISTS `sky_phone_picstagram_activities` (
     `recipient_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `actor_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `post_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
-    `kind` ENUM('follow_request','follow','request_accepted','like','comment','verified') NOT NULL,
+    `kind` ENUM('follow_request','follow','request_accepted','like','comment','comment_like','reply','verified') NOT NULL,
     `read_at` DATETIME NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),

@@ -29,6 +29,7 @@ export const usePicstagramStore = defineStore('picstagram', {
     activities: [] as PicstagramActivity[],
     authenticated: false,
     comments: [] as PicstagramComment[],
+    connections: [] as PicstagramProfile[],
     explore: [] as PicstagramPost[],
     exploreCursor: null as string | null,
     feed: [] as PicstagramPost[],
@@ -199,6 +200,7 @@ export const usePicstagramStore = defineStore('picstagram', {
       commentsEnabled: boolean
       location: string
       mediaIds: number[]
+      mediaType: 'photo' | 'video'
     }): Promise<NuiResponse<{ id: string }>> {
       const response = await nuiCall<{ id: string }>(
         'picstagram:publish-post',
@@ -283,13 +285,37 @@ export const usePicstagramStore = defineStore('picstagram', {
       id: string,
       body: string,
       parentId?: string,
+      replyToId?: string,
     ): Promise<NuiResponse> {
-      return nuiCall('picstagram:comment', { body, id, parentId })
+      return nuiCall('picstagram:comment', { body, id, parentId, replyToId })
     },
     async removeComment(id: string): Promise<boolean> {
       const response = await nuiCall('picstagram:remove-comment', { id })
       if (response.success)
         this.comments = this.comments.filter((comment) => comment.id !== id)
+      return response.success
+    },
+    async reactComment(comment: PicstagramComment): Promise<void> {
+      const active = !comment.is_liked
+      comment.is_liked = active
+      comment.like_count += active ? 1 : -1
+      const response = await nuiCall('picstagram:comment-react', {
+        active,
+        id: comment.id,
+      })
+      if (response.success) return
+      comment.is_liked = !active
+      comment.like_count += active ? -1 : 1
+    },
+    async loadConnections(
+      profileId: string,
+      mode: 'followers' | 'following',
+    ): Promise<boolean> {
+      const response = await nuiCall<PicstagramProfile[]>(
+        'picstagram:connections',
+        { mode, profileId },
+      )
+      this.connections = response.success && response.data ? response.data : []
       return response.success
     },
     async loadStories(): Promise<boolean> {
@@ -300,10 +326,11 @@ export const usePicstagramStore = defineStore('picstagram', {
     async publishStory(
       mediaId: number,
       body: string,
+      mediaType: 'photo' | 'video',
     ): Promise<NuiResponse<{ id: string }>> {
       const response = await nuiCall<{ id: string }>(
         'picstagram:publish-story',
-        { body, mediaId },
+        { body, mediaId, mediaType },
       )
       if (response.success) await this.loadStories()
       return response

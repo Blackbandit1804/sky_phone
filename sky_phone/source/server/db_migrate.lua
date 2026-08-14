@@ -1400,6 +1400,24 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_picstagram_comment_reactions",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "comment_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "profile_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_picstagram_comment_reaction", columns = "(`comment_id`, `profile_id`)" },
+        },
+        foreignKeys = {
+            { column = "comment_id", references = "`sky_phone_picstagram_comments` (`id`) ON DELETE CASCADE" },
+            { column = "profile_id", references = "`sky_phone_picstagram_profiles` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_picstagram_stories",
         columns = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
@@ -1446,7 +1464,7 @@ local schema = {
             { name = "recipient_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "actor_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "post_id", type = "CHAR(36) NULL", characterSet = "ascii", collation = "ascii_bin" },
-            { name = "kind", type = "ENUM('follow_request', 'follow', 'request_accepted', 'like', 'comment', 'verified') NOT NULL" },
+            { name = "kind", type = "ENUM('follow_request', 'follow', 'request_accepted', 'like', 'comment', 'comment_like', 'reply', 'verified') NOT NULL" },
             { name = "read_at", type = "DATETIME NULL" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
         },
@@ -2620,6 +2638,10 @@ Bridge.Database.Query([[
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_feather_notifications`
     MODIFY COLUMN `kind` ENUM('like', 'reply', 'follow', 'quote') NOT NULL
+]], {})
+Bridge.Database.Query([[
+    ALTER TABLE `sky_phone_picstagram_activities`
+    MODIFY COLUMN `kind` ENUM('follow_request', 'follow', 'request_accepted', 'like', 'comment', 'comment_like', 'reply', 'verified') NOT NULL
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_flare_swipes`

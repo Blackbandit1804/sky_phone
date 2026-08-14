@@ -20,6 +20,7 @@ export type PicstagramProfile = {
 
 export type PicstagramPostMedia = {
   id: number
+  media_type: 'photo' | 'video'
   position: number
   url: string
 }
@@ -67,9 +68,12 @@ export type PicstagramComment = {
   display_name: string
   handle: string
   id: string
+  is_liked: boolean
   is_owner: boolean
+  like_count: number
   parent_id: string | null
   profile_id: string
+  reply_to_handle: string | null
   verified: boolean
 }
 
@@ -82,6 +86,7 @@ export type PicstagramStory = {
   handle: string
   id: string
   is_owner: boolean
+  media_type: 'photo' | 'video'
   profile_id: string
   seen: boolean
   url: string
@@ -104,6 +109,8 @@ export type PicstagramActivityKind =
   | 'request_accepted'
   | 'like'
   | 'comment'
+  | 'comment_like'
+  | 'reply'
   | 'verified'
 
 export type PicstagramActivity = {
