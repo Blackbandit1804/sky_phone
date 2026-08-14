@@ -26,7 +26,7 @@ import NotesRichTextEditor from '@/components/NotesRichTextEditor.vue'
 import { useNotesStore } from '@/stores/notes'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
-import { SkyActionButton, SkyActionGroup, SkyActionSheet } from '@/ui'
+import { SkyActionSheet, SkyButton } from '@/ui'
 import type { Note } from '@/utils/notes'
 import { noteBodyToPlainText } from '@/utils/noteRichText'
 
@@ -284,46 +284,47 @@ function shareNote(): void {
     </div>
 
     <SkyActionSheet
-      class="notes-action-sheet"
+      class="notes-action-sheet sky-ui-provider"
+      :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+      :aria-label="phone.t('Apps.notes.actions')"
       :opened="menuOpened"
-      :label="phone.t('Apps.notes.actions')"
       @backdropclick="menuOpened = false"
       @escape="menuOpened = false"
     >
-      <div class="notes-action-sheet__handle" aria-hidden="true"></div>
-      <p class="notes-action-sheet__title">
-        {{ phone.t('Apps.notes.actions') }}
-      </p>
-      <SkyActionGroup>
-        <SkyActionButton @click="shareNote">
-          <span class="notes-action-button__content">
-            <Share2 :size="18" />
+      <div class="notes-action-menu">
+        <div class="notes-action-menu__choices">
+          <SkyButton block large tonal @click="shareNote">
+            <Share2 :size="19" aria-hidden="true" />
             {{ phone.t('Apps.easyShare.name') }}
-          </span>
-        </SkyActionButton>
-        <SkyActionButton @click="togglePinned">
-          <span class="notes-action-button__content">
-            <PinOff v-if="currentNote?.pinned" :size="18" />
-            <Pin v-else :size="18" />
+          </SkyButton>
+          <SkyButton block large tonal @click="togglePinned">
+            <PinOff
+              v-if="currentNote?.pinned"
+              :size="19"
+              aria-hidden="true"
+            />
+            <Pin v-else :size="19" aria-hidden="true" />
             {{
               phone.t(
                 currentNote?.pinned ? 'Apps.notes.unpin' : 'Apps.notes.pin',
               )
             }}
-          </span>
-        </SkyActionButton>
-        <SkyActionButton class="notes-action-button--danger" @click="deleteNote">
-          <span class="notes-action-button__content">
-            <Trash2 :size="18" />
+          </SkyButton>
+          <SkyButton
+            block
+            class="notes-action-menu__danger"
+            large
+            tonal
+            @click="deleteNote"
+          >
+            <Trash2 :size="19" aria-hidden="true" />
             {{ phone.t('Apps.notes.deleteNote') }}
-          </span>
-        </SkyActionButton>
-      </SkyActionGroup>
-      <SkyActionGroup>
-        <SkyActionButton bold @click="menuOpened = false">
+          </SkyButton>
+        </div>
+        <SkyButton block clear large @click="menuOpened = false">
           {{ phone.t('Common.cancel') }}
-        </SkyActionButton>
-      </SkyActionGroup>
+        </SkyButton>
+      </div>
     </SkyActionSheet>
   </k-page>
 </template>
@@ -348,45 +349,33 @@ function shareNote(): void {
   flex: 0 0 auto;
 }
 
-.notes-action-button__content {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-}
-
-.notes-action-button--danger {
-  color: var(--sky-danger);
-}
-
-.notes-action-sheet :deep(.sky-action-sheet__panel) {
-  padding: 8px var(--sky-page-gutter)
-    calc(var(--sky-safe-area-bottom) + 10px);
+.notes-action-menu {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
   border: 1px solid var(--sky-hairline);
-  border-bottom: 0;
-  border-radius: 30px 30px 0 0;
+  border-radius: 28px 28px 0 0;
   background: var(--sky-surface);
   box-shadow: 0 -18px 50px rgb(0 0 0 / 32%);
 }
 
-.notes-action-sheet :deep(.sky-action-group) {
-  margin-top: 9px;
-  background: var(--sky-surface-muted);
+.notes-action-menu__choices {
+  display: grid;
+  gap: 8px;
 }
 
-.notes-action-sheet__handle {
-  width: 38px;
-  height: 5px;
-  margin: 0 auto 7px;
-  border-radius: 999px;
-  background: var(--sky-hairline-strong, rgb(142 142 147 / 65%));
+.notes-action-menu :deep(.sky-button) {
+  justify-content: center;
+  border-radius: var(--sky-radius-control);
 }
 
-.notes-action-sheet__title {
-  margin: 0;
-  color: var(--sky-muted);
-  font-size: 12px;
-  font-weight: 600;
-  text-align: center;
+.notes-action-menu__danger {
+  color: var(--sky-danger);
+  background: var(--sky-danger-soft);
+}
+
+.notes-action-sheet :deep(.sky-action-sheet__panel) {
+  max-height: none;
+  padding: 0;
 }
 </style>
