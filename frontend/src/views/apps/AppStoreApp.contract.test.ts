@@ -139,9 +139,7 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toMatch(
       /button:not\(\.store-ranking__detail-link\):not\(:disabled\):hover\)\s*\{[^}]*brightness\(1\.08\)[^}]*translateY\(-1px\)/s,
     )
-    expect(source).toContain(
-      '.app-store-page :deep(button:has(.app-store-action--icon):hover)',
-    )
+    expect(source).toContain('.app-store-page .store-action-button--icon:hover')
     expect(source).toContain(
       '.store-account__primary-action:not(:disabled):hover',
     )
@@ -175,9 +173,7 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toContain('@click="openAppDetail(finalHighlight)"')
     expect(source).toContain('@click.stop="handleApp(dailyHighlights[0])"')
     expect(source).toContain('@click.stop="handleApp(finalHighlight)"')
-    expect(source).toContain(
-      '.store-highlight:has(.store-highlight__detail-link:hover)',
-    )
+    expect(source).toContain('.store-highlight:hover')
   })
 
   it('opens Top Today apps while keeping their direct app actions separate', () => {
@@ -191,6 +187,12 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toContain(
       'button:not(.store-ranking__detail-link):not(:disabled):hover',
     )
+  })
+
+  it('keeps App Store actions compatible with the FiveM CEF target', () => {
+    expect(source.match(/class="store-action-button"/g)).toHaveLength(8)
+    expect(source).not.toContain(':has(')
+    expect(source).not.toContain('color-mix(')
   })
 
   it('builds clean Apps and Games pages with rotating features', () => {

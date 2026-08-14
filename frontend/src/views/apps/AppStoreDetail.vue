@@ -126,6 +126,8 @@ function updateActivePreview(): void {
         <p>{{ developer }}</p>
         <button
           type="button"
+          class="store-detail__action"
+          :class="{ 'store-detail__action--icon': action !== 'open' }"
           :disabled="action === 'installing'"
           @click="emit('action')"
         >
@@ -368,7 +370,7 @@ function updateActivePreview(): void {
   font-weight: 850;
 }
 
-.store-detail__hero button:has(.app-store-action--icon) {
+.store-detail__hero .store-detail__action--icon {
   width: var(--sky-touch-target);
   min-width: var(--sky-touch-target);
   padding: 0;

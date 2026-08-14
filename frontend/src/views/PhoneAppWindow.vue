@@ -6,10 +6,14 @@ import CustomAppFrame from '@/components/CustomAppFrame.vue'
 import { getPhoneApp, isExternalPhoneApp } from '@/config/apps'
 import { usePhoneStore } from '@/stores/phone'
 import { getCustomAppFrameKey } from '@/utils/customAppLifecycle'
+import AppStoreApp from '@/views/apps/AppStoreApp.vue'
 
 const route = useRoute()
 const phone = usePhoneStore()
 const app = computed(() => getPhoneApp(route.params.appId))
+const builtinAppComponent = computed(() =>
+  app.value?.id === 'app-store' ? AppStoreApp : app.value?.component,
+)
 const launchStyle = computed(() => {
   const origin = phone.launchOrigin
   return {
@@ -30,7 +34,7 @@ const launchStyle = computed(() => {
       :app="app"
     />
     <Suspense v-else>
-      <component :is="app.component" />
+      <component :is="builtinAppComponent" />
       <template #fallback>
         <div class="app-loading">{{ phone.t('Common.loading') }}</div>
       </template>

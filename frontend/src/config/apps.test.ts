@@ -1,16 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Newspaper } from 'lucide-vue-next'
 
-import { isPhoneAppId, loadAppStoreComponent, PHONE_APPS } from './apps'
+import { isPhoneAppId, PHONE_APPS } from './apps'
 describe('app registry', () => {
-  it('reuses the App Store module loaded by the phone shell', async () => {
-    const firstLoad = loadAppStoreComponent()
-    const secondLoad = loadAppStoreComponent()
-
-    expect(secondLoad).toBe(firstLoad)
-    expect((await firstLoad).default).toBeTruthy()
-  })
-
   it('has unique ids and routes with the reference dock order', () => {
     expect(new Set(PHONE_APPS.map((app) => app.id)).size).toBe(
       PHONE_APPS.length,

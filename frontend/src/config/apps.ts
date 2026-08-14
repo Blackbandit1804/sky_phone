@@ -86,19 +86,6 @@ import type {
   PhoneAppDefinition,
 } from '@/types/apps'
 
-let appStoreComponentPromise:
-  | ReturnType<typeof importAppStoreComponent>
-  | null = null
-
-function importAppStoreComponent() {
-  return import('@/views/apps/AppStoreApp.vue')
-}
-
-export function loadAppStoreComponent() {
-  appStoreComponentPromise ??= importAppStoreComponent()
-  return appStoreComponentPromise
-}
-
 export const PHONE_APPS = shallowReactive<PhoneAppDefinition[]>([
   {
     category: 'social',
@@ -494,7 +481,9 @@ export const PHONE_APPS = shallowReactive<PhoneAppDefinition[]>([
   },
   {
     category: 'utilities',
-    component: markRaw(defineAsyncComponent(loadAppStoreComponent)),
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/AppStoreApp.vue')),
+    ),
     dockOrder: null,
     gridOrder: 9,
     icon: markRaw(ShoppingBag),

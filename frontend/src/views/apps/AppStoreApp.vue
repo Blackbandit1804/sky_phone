@@ -484,6 +484,11 @@ watch(
             </div>
             <button
               type="button"
+              class="store-action-button"
+              :class="{
+                'store-action-button--icon':
+                  appAction(dailyHighlights[0]) !== 'open',
+              }"
               :disabled="appStore.installingApps[dailyHighlights[0].id]"
               :aria-label="`${getPhoneAppLabel(dailyHighlights[0], phone.t)} ${phone.t(
                 `Apps.appStore.${appAction(dailyHighlights[0])}`,
@@ -548,6 +553,10 @@ watch(
             </div>
             <button
               type="button"
+              class="store-action-button"
+              :class="{
+                'store-action-button--icon': appAction(app) !== 'open',
+              }"
               :disabled="appStore.installingApps[app.id]"
               :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
                 `Apps.appStore.${appAction(app)}`,
@@ -590,6 +599,10 @@ watch(
               </button>
               <button
                 type="button"
+                class="store-action-button"
+                :class="{
+                  'store-action-button--icon': appAction(app) !== 'open',
+                }"
                 :disabled="appStore.installingApps[app.id]"
                 :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
                   `Apps.appStore.${appAction(app)}`,
@@ -626,6 +639,10 @@ watch(
           <img :src="finalHighlight.iconImage" alt="" draggable="false" />
           <button
             type="button"
+            class="store-action-button"
+            :class="{
+              'store-action-button--icon': appAction(finalHighlight) !== 'open',
+            }"
             :disabled="appStore.installingApps[finalHighlight.id]"
             :aria-label="`${getPhoneAppLabel(finalHighlight, phone.t)} ${phone.t(
               `Apps.appStore.${appAction(finalHighlight)}`,
@@ -681,6 +698,11 @@ watch(
               </button>
               <button
                 type="button"
+                class="store-action-button"
+                :class="{
+                  'store-action-button--icon':
+                    appAction(featuredApp) !== 'open',
+                }"
                 :disabled="appStore.installingApps[featuredApp.id]"
                 :aria-label="`${getPhoneAppLabel(featuredApp, phone.t)} ${phone.t(
                   `Apps.appStore.${appAction(featuredApp)}`,
@@ -746,6 +768,10 @@ watch(
             </button>
             <button
               type="button"
+              class="store-action-button"
+              :class="{
+                'store-action-button--icon': appAction(app) !== 'open',
+              }"
               :disabled="appStore.installingApps[app.id]"
               :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
                 `Apps.appStore.${appAction(app)}`,
@@ -792,6 +818,10 @@ watch(
                 </button>
                 <button
                   type="button"
+                  class="store-action-button"
+                  :class="{
+                    'store-action-button--icon': appAction(app) !== 'open',
+                  }"
                   :disabled="appStore.installingApps[app.id]"
                   :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
                     `Apps.appStore.${appAction(app)}`,
@@ -857,6 +887,10 @@ watch(
               </button>
               <button
                 type="button"
+                class="store-action-button"
+                :class="{
+                  'store-action-button--icon': appAction(app) !== 'open',
+                }"
                 :disabled="appStore.installingApps[app.id]"
                 :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
                   `Apps.appStore.${appAction(app)}`,
@@ -1985,8 +2019,8 @@ watch(
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .store-highlight:has(.store-highlight__detail-link:hover),
-  .store-final-pick:has(.store-highlight__detail-link:hover) {
+  .store-highlight:hover,
+  .store-final-pick:hover {
     box-shadow: 0 17px 32px rgba(0, 0, 0, 0.24);
     transform: translateY(-1px);
   }
@@ -2599,16 +2633,12 @@ watch(
   background: var(--sky-surface-muted);
 }
 
-.store-highlight__footer :deep(button:has(.app-store-action--icon)),
-.store-ranking li > :deep(button:has(.app-store-action--icon)),
-.store-final-pick > :deep(button:has(.app-store-action--icon)),
-.store-browse-feature footer > :deep(button:has(.app-store-action--icon)),
-.store-search__recommendations
-  article
-  > :deep(button:has(.app-store-action--icon)),
-.store-list
-  article
-  > :deep(button:not(.store-list__detail-link):has(.app-store-action--icon)) {
+.store-highlight__footer .store-action-button--icon,
+.store-ranking li > .store-action-button--icon,
+.store-final-pick > .store-action-button--icon,
+.store-browse-feature footer > .store-action-button--icon,
+.store-search__recommendations article > .store-action-button--icon,
+.store-list article > .store-action-button--icon {
   width: var(--sky-touch-target);
   min-width: var(--sky-touch-target);
   padding: 0;
@@ -2643,11 +2673,8 @@ watch(
     transform: scale(0.97);
   }
 
-  .app-store-page :deep(button:has(.app-store-action--icon):hover) {
-    filter: brightness(1.16)
-      drop-shadow(
-        0 3px 7px color-mix(in srgb, var(--sky-app-accent) 28%, transparent)
-      );
+  .app-store-page .store-action-button--icon:hover {
+    filter: brightness(1.16) drop-shadow(0 3px 7px var(--sky-app-accent-soft));
   }
 
   .store-account__primary-action:not(:disabled):hover {
@@ -2655,7 +2682,7 @@ watch(
   }
 
   .store-account__remove:not(:disabled):hover {
-    background: color-mix(in srgb, var(--sky-danger) 22%, transparent);
+    background: var(--sky-danger-soft);
   }
 }
 

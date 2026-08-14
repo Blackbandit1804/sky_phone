@@ -25,5 +25,6 @@ describe('AppStoreAction contract', () => {
     expect(source).toMatch(
       /\.app-store-action__progress i\s*\{[^}]*width:\s*7px/s,
     )
+    expect(source).not.toContain('color-mix(')
   })
 })

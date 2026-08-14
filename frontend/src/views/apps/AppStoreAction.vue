@@ -50,9 +50,7 @@ const phone = usePhoneStore()
 }
 
 .app-store-action__download {
-  filter: drop-shadow(
-    0 2px 5px color-mix(in srgb, var(--sky-app-accent) 30%, transparent)
-  );
+  filter: drop-shadow(0 2px 5px var(--sky-app-accent-soft));
 }
 
 .app-store-action__progress {
@@ -74,7 +72,7 @@ const phone = usePhoneStore()
 }
 
 .app-store-action__track {
-  stroke: color-mix(in srgb, var(--sky-app-accent) 24%, transparent);
+  stroke: var(--sky-app-accent-soft);
 }
 
 .app-store-action__value {
