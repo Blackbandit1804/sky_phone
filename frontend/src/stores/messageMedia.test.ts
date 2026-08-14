@@ -6,6 +6,7 @@ import type { PhoneMedia } from '@/types/media'
 
 const photo: PhoneMedia = {
   createdAt: 1_786_035_600,
+  favorite: false,
   id: 17,
   mediaType: 'photo',
   url: 'https://media.example/photo.jpg',

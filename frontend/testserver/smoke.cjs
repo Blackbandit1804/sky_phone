@@ -31,6 +31,7 @@ const browserDataRequests = [
   ['fliptok:discover', { limit: 20 }],
   ['fliptok:activities', {}],
   ['gallery:list', {}],
+  ['gallery:counts', {}],
   ['garage:vehicles', {}],
   ['garage:valet-state', {}],
   ['housing:overview', {}],
@@ -83,6 +84,27 @@ async function expectSuccess(baseUrl, endpoint, body = {}, data = false) {
 }
 
 async function verifyStatefulActions(baseUrl) {
+  let gallery = await expectSuccess(baseUrl, 'gallery:list', {}, true)
+  assert(gallery.length >= 10, 'gallery:list did not include enough test media')
+  assert(
+    gallery.filter((item) => item.mediaType === 'video').length >= 3,
+    'gallery:list did not include enough test videos',
+  )
+  assert(
+    gallery
+      .filter((item) => item.mediaType === 'video')
+      .every((item) => typeof item.thumbnailUrl === 'string'),
+    'gallery:list returned a test video without a thumbnail',
+  )
+  await expectSuccess(
+    baseUrl,
+    'gallery:favorite',
+    { favorite: true, id: gallery[0].id },
+    true,
+  )
+  gallery = await expectSuccess(baseUrl, 'gallery:list', {}, true)
+  assert.equal(gallery.find((item) => item.id === gallery[0].id)?.favorite, true)
+
   const memoBootstrap = await expectSuccess(
     baseUrl,
     'development:bootstrap',

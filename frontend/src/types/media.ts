@@ -3,10 +3,28 @@ export type GalleryFilter = 'all' | MediaType
 
 export type PhoneMedia = {
   createdAt: number
+  favorite: boolean
   id: number
   mediaType: MediaType
+  thumbnailUrl?: string
   url: string
 }
+
+export type FavoriteResult = {
+  favorite: boolean
+  id: number
+}
+
+export type GalleryCounts = {
+  all: number
+  favoritePhotos: number
+  favorites: number
+  favoriteVideos: number
+  photos: number
+  videos: number
+}
+
+export type GallerySortOrder = 'newest' | 'oldest'
 
 export type MediaImportSource = {
   id: string
@@ -73,5 +91,12 @@ export type DeleteResult = {
   correlationId: string
   error?: string
   id?: number
+  success: boolean
+}
+
+export type DeleteManyResult = {
+  correlationId: string
+  deletedIds?: number[]
+  error?: string
   success: boolean
 }

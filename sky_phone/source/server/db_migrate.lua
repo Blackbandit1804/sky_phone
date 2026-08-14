@@ -386,6 +386,7 @@ local schema = {
                 collation = "ascii_bin",
             },
             { name = "verified_at", type = "DATETIME NULL" },
+            { name = "favorite", type = "TINYINT(1) NOT NULL DEFAULT 0" },
             { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
         },
         primaryKey = "id",
