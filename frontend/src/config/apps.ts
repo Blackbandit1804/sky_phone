@@ -627,6 +627,24 @@ export const BUILTIN_PHONE_APP_IDS: ReadonlySet<BuiltinPhoneAppId> = new Set(
   BUILTIN_PHONE_APPS.map((app) => app.id),
 )
 
+export const DEFAULT_INSTALLED_PHONE_APP_IDS: ReadonlySet<BuiltinPhoneAppId> =
+  new Set([
+    'phone',
+    'messages',
+    'calculator',
+    'camera',
+    'clock',
+    'weather',
+    'mail',
+    'notes',
+    'memos',
+    'photos',
+    'app-store',
+    'settings',
+    'map',
+    'calendar',
+  ])
+
 export const NON_REMOVABLE_PHONE_APP_IDS: ReadonlySet<LaunchablePhoneAppId> =
   new Set([
     'app-store',

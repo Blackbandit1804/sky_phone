@@ -1,7 +1,10 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { NON_REMOVABLE_PHONE_APP_IDS } from '@/config/apps'
+import {
+  DEFAULT_INSTALLED_PHONE_APP_IDS,
+  NON_REMOVABLE_PHONE_APP_IDS,
+} from '@/config/apps'
 import { useAppStoreStore } from '@/stores/app-store'
 import {
   getHomeFolder,
@@ -30,6 +33,53 @@ describe('app store', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('installs only the fourteen standard built-in apps by default', () => {
+    const apps = useAppStoreStore()
+
+    apps.hydrate(null)
+
+    expect([...DEFAULT_INSTALLED_PHONE_APP_IDS]).toEqual([
+      'phone',
+      'messages',
+      'calculator',
+      'camera',
+      'clock',
+      'weather',
+      'mail',
+      'notes',
+      'memos',
+      'photos',
+      'app-store',
+      'settings',
+      'map',
+      'calendar',
+    ])
+    for (const appId of DEFAULT_INSTALLED_PHONE_APP_IDS) {
+      expect(apps.isInstalled(appId)).toBe(true)
+    }
+    expect(apps.isInstalled('banking')).toBe(false)
+    expect(apps.isInstalled('feather')).toBe(false)
+    expect(apps.isInstalled('snake')).toBe(false)
+  })
+
+  it('removes old automatic apps unless the player installed them', () => {
+    const apps = useAppStoreStore()
+
+    apps.hydrate({
+      claimedApps: ['feather'],
+      homeLayout: {
+        dock: [],
+        grid: ['banking', 'feather', 'phone'],
+        hidden: [],
+        version: 5,
+      },
+    })
+
+    expect(apps.homeLayout.grid).not.toContain('banking')
+    expect(apps.homeLayout.grid).toContain('feather')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
   })
 
   it('hydrates valid launch counts and persists launches with claimed apps', () => {
@@ -126,6 +176,79 @@ describe('app store', () => {
       claimedApps: ['snake'],
       homeLayout: apps.homeLayout,
       launchCounts: {},
+    })
+  })
+
+  it('fully uninstalls removable apps and allows downloading them again', () => {
+    vi.useFakeTimers()
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+    mocks.phone.saveDeviceNamespace.mockClear()
+
+    expect(apps.uninstallApp('calculator')).toBe(true)
+    expect(apps.isInstalled('calculator')).toBe(false)
+    expect(apps.uninstalledApps).toEqual(['calculator'])
+    expect(apps.homeLayout.hidden).toContain('calculator')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenLastCalledWith('apps', {
+      claimedApps: [],
+      homeLayout: apps.homeLayout,
+      launchCounts: {},
+      uninstalledApps: ['calculator'],
+    })
+
+    apps.installApp('calculator')
+    vi.advanceTimersByTime(3000)
+
+    expect(apps.isInstalled('calculator')).toBe(true)
+    expect(apps.uninstalledApps).toEqual([])
+    expect(apps.homeLayout.hidden).not.toContain('calculator')
+  })
+
+  it('hydrates persisted removals while rejecting protected and invalid ids', () => {
+    const apps = useAppStoreStore()
+
+    apps.hydrate({
+      uninstalledApps: ['calculator', 'phone', 'not-an-app'],
+      updatedAppReleases: {
+        calculator: '2026-08-14',
+        phone: '2026-08-14',
+        snake: 'x'.repeat(64),
+      },
+    })
+
+    expect(apps.uninstalledApps).toEqual(['calculator'])
+    expect(apps.isInstalled('calculator')).toBe(false)
+    expect(apps.isInstalled('phone')).toBe(true)
+    expect(apps.updatedAppReleases).toEqual({ phone: '2026-08-14' })
+  })
+
+  it('protects system apps from full uninstallation', () => {
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+    mocks.phone.saveDeviceNamespace.mockClear()
+
+    expect(apps.uninstallApp('phone')).toBe(false)
+    expect(apps.isInstalled('phone')).toBe(true)
+    expect(mocks.phone.saveDeviceNamespace).not.toHaveBeenCalled()
+  })
+
+  it('updates installed apps and persists the current release', () => {
+    vi.useFakeTimers()
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+
+    apps.updateApp('phone', '2026-08-14')
+    expect(apps.updatingApps.phone).toBe(true)
+
+    vi.advanceTimersByTime(1800)
+
+    expect(apps.updatingApps.phone).toBeUndefined()
+    expect(apps.updatedAppReleases.phone).toBe('2026-08-14')
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenLastCalledWith('apps', {
+      claimedApps: [],
+      homeLayout: apps.homeLayout,
+      launchCounts: {},
+      updatedAppReleases: { phone: '2026-08-14' },
     })
   })
 

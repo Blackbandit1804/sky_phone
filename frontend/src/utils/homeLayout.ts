@@ -453,12 +453,16 @@ export function parseHomeLayout(
   value: unknown,
   defaults: HomeLayout,
   installedIds: LaunchablePhoneAppId[],
+  preservePersistedIds = true,
 ): HomeLayout {
   if (!value || typeof value !== 'object') return defaults
 
   const source = value as Partial<Record<keyof HomeLayout, unknown>>
   const availableIds = new Set(installedIds)
-  if (source.version === 3 || source.version === 4 || source.version === 5) {
+  if (
+    preservePersistedIds &&
+    (source.version === 3 || source.version === 4 || source.version === 5)
+  ) {
     for (const collection of [source.dock, source.grid, source.hidden]) {
       if (!Array.isArray(collection)) continue
       for (const item of collection) {
