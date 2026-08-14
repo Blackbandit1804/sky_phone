@@ -308,6 +308,13 @@ async function verifyStatefulActions(baseUrl) {
   assert.equal(radio.frequency, 42.5)
   radio = await expectSuccess(baseUrl, 'radio:set-volume', { volume: 44 }, true)
   assert.equal(radio.volume, 44)
+  radio = await expectSuccess(
+    baseUrl,
+    'radio:set-speaker',
+    { enabled: true },
+    true,
+  )
+  assert.equal(radio.speakerEnabled, true)
   await expectSuccess(baseUrl, 'radio:disconnect')
 
   const playlistState = await expectSuccess(

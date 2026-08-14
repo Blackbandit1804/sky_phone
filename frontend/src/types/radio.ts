@@ -52,6 +52,8 @@ export type RadioData = {
   provider: string | null
   secondaryFrequency: number
   secondarySupported: boolean
+  speakerEnabled?: boolean
+  speakerSupported?: boolean
   settings: RadioSettings
   volume: number
 }

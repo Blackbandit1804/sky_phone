@@ -89,6 +89,54 @@ describe('calls store', () => {
     expect(nuiCall).toHaveBeenCalledWith('calls:recents')
   })
 
+  it('applies the provider-authoritative speaker state for a connected call', async () => {
+    vi.mocked(nuiCall).mockResolvedValueOnce({
+      success: true,
+      data: { speakerEnabled: true },
+    })
+    const calls = useCallsStore()
+    calls.applyCallState({
+      direction: 'outgoing',
+      id: 'call-speaker',
+      otherNumber: '5551110025',
+      speakerEnabled: false,
+      speakerSupported: true,
+      startedAt: 1,
+      state: 'connected',
+    })
+
+    const response = await calls.setSpeaker(true)
+
+    expect(response.success).toBe(true)
+    expect(nuiCall).toHaveBeenCalledWith('calls:set-speaker', {
+      enabled: true,
+      id: 'call-speaker',
+    })
+    expect(calls.activeCall?.speakerEnabled).toBe(true)
+  })
+
+  it('does not simulate speaker state for unsupported voice providers', async () => {
+    const calls = useCallsStore()
+    calls.applyCallState({
+      direction: 'outgoing',
+      id: 'call-pma',
+      otherNumber: '5551110025',
+      speakerEnabled: false,
+      speakerSupported: false,
+      startedAt: 1,
+      state: 'connected',
+    })
+
+    const response = await calls.setSpeaker(true)
+
+    expect(response).toEqual({
+      error: 'speaker_unavailable',
+      success: false,
+    })
+    expect(nuiCall).not.toHaveBeenCalled()
+    expect(calls.activeCall?.speakerEnabled).toBe(false)
+  })
+
   it('updates a contact favorite and refreshes the contact list', async () => {
     vi.mocked(nuiCall)
       .mockResolvedValueOnce({

@@ -222,6 +222,7 @@ local server_callbacks = {
     "calls:recents",
     "calls:dial",
     "calls:answer",
+    "calls:set-speaker",
     "calls:decline",
     "calls:hangup",
     "calls:block",
@@ -376,23 +377,16 @@ local function leave_call_voice()
     if call_channel == 0 then
         return
     end
-    if Config.Calls.VoiceProvider == "pma" and GetResourceState("pma-voice") == "started" then
-        exports["pma-voice"]:setCallChannel(0)
-    end
+    Bridge.Calls.Leave()
     call_channel = 0
 end
 
 local function join_call_voice(channel)
-    if Config.Calls.VoiceProvider ~= "pma" then
-        Bridge.Debug("error", "[sky_phone] Unsupported voice provider '%s'.", tostring(Config.Calls.VoiceProvider))
+    local next_channel = tonumber(channel) or 0
+    if not Bridge.Calls.Join(next_channel) then
         return false
     end
-    if GetResourceState("pma-voice") ~= "started" then
-        Bridge.Debug("error", "[sky_phone] Configured pma-voice provider is not started.")
-        return false
-    end
-    call_channel = tonumber(channel) or 0
-    exports["pma-voice"]:setCallChannel(call_channel)
+    call_channel = next_channel
     return true
 end
 

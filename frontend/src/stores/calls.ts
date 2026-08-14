@@ -101,12 +101,33 @@ export const useCallsStore = defineStore('calls', () => {
     return response.success
   }
 
+  async function setSpeaker(
+    enabled: boolean,
+  ): Promise<NuiResponse<{ speakerEnabled: boolean }>> {
+    const call = activeCall.value
+    if (!call || call.state !== 'connected') {
+      return { success: false, error: 'call_not_connected' }
+    }
+    if (!call.speakerSupported) {
+      return { success: false, error: 'speaker_unavailable' }
+    }
+
+    const response = await nuiCall<{ speakerEnabled: boolean }>(
+      'calls:set-speaker',
+      { enabled, id: call.id },
+    )
+    if (response.success && response.data && activeCall.value?.id === call.id) {
+      activeCall.value = {
+        ...activeCall.value,
+        speakerEnabled: response.data.speakerEnabled === true,
+      }
+    }
+    return response
+  }
+
   async function blockNumber(phoneNumber: string): Promise<NuiResponse> {
     const response = await nuiCall('calls:block', { phoneNumber })
-    if (
-      response.success &&
-      activeCall.value?.otherNumber === phoneNumber
-    ) {
+    if (response.success && activeCall.value?.otherNumber === phoneNumber) {
       activeCall.value = null
       await loadRecents()
     }
@@ -148,5 +169,6 @@ export const useCallsStore = defineStore('calls', () => {
     recents,
     saveContact,
     setContactFavorite,
+    setSpeaker,
   }
 })

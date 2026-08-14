@@ -1868,6 +1868,11 @@ const defaultLocales: LocaleTree = {
         readonly_contact: 'Official company contacts cannot be changed.',
         rate_limited: 'Too many calls. Try again in a minute.',
         voice_unavailable: 'The configured phone voice service is unavailable.',
+        call_not_connected: 'Connect the call before enabling speaker mode.',
+        speaker_unavailable:
+          'Speaker mode is not available for the configured phone voice service.',
+        speaker_unsupported:
+          'The configured phone voice service does not support speaker mode.',
         inventory_full: 'There is no room for the ejected SIM card.',
         operation_in_progress:
           'Another phone operation is already in progress.',
@@ -1895,6 +1900,8 @@ const defaultLocales: LocaleTree = {
       volume: 'Volume',
       connect: 'Connect',
       disconnect: 'Disconnect',
+      speaker: 'Speaker',
+      speakerDescription: 'Play radio traffic through speaker mode',
       members: 'Currently connected ({count})',
       noMembers: 'No participants',
       history: 'Recently connected',
@@ -1927,6 +1934,12 @@ const defaultLocales: LocaleTree = {
         player_unavailable: 'Your player data is not available.',
         rate_limited: 'Please wait before changing channel again.',
         invalid_setting: 'This setting is invalid.',
+        radio_not_connected:
+          'Connect to a radio channel before enabling speaker mode.',
+        speaker_unavailable:
+          'Speaker mode is not available for the configured radio voice service.',
+        speaker_unsupported:
+          'The configured radio voice service does not support speaker mode.',
         badge_disabled: 'Service numbers are disabled.',
         badge_forbidden: 'This service number is not allowed.',
         display_name_disabled: 'Radio display names are disabled.',

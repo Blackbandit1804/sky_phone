@@ -31,6 +31,7 @@ import {
   SkySpinner,
   SkyStatusCard,
   SkyToast,
+  SkyToggle,
 } from '@/ui'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
@@ -108,6 +109,11 @@ async function disconnect(): Promise<void> {
 
 function saveVolume(): void {
   void radio.setVolume(volumeInput.value)
+}
+
+async function setSpeaker(enabled: boolean): Promise<void> {
+  if (await radio.setSpeaker(enabled)) return
+  showFeedback(errorText(radio.error))
 }
 
 function connectHistory(entry: RadioHistoryEntry): void {
@@ -302,6 +308,23 @@ onBeforeUnmount(() => {
               >
                 <output for="radio-volume">{{ volumeInput }}%</output>
               </SkyRange>
+            </SkyListItem>
+            <SkyListItem
+              v-if="radio.data.speakerSupported"
+              :title="phone.t('Apps.radio.speaker')"
+              :subtitle="phone.t('Apps.radio.speakerDescription')"
+            >
+              <template #media>
+                <Volume2 :size="20" aria-hidden="true" />
+              </template>
+              <template #after>
+                <SkyToggle
+                  :model-value="radio.data.speakerEnabled"
+                  :disabled="!radio.data.connected || radio.speakerPending"
+                  :aria-label="phone.t('Apps.radio.speaker')"
+                  @update:model-value="setSpeaker"
+                />
+              </template>
             </SkyListItem>
           </SkyList>
 

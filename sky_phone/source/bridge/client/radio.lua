@@ -50,6 +50,53 @@ function Bridge.Radio.SupportsSecondary()
     return Config.Radio.AllowSecondary and (selected == "yaca" or selected == "saltychat")
 end
 
+function Bridge.Radio.SupportsSpeaker()
+    return Bridge.Speaker.IsEnabled() and resolve_provider() == "saltychat"
+end
+
+function Bridge.Radio.GetSpeaker()
+    if not Bridge.Speaker.IsEnabled() or resolve_provider() ~= "saltychat" then
+        return false
+    end
+
+    local success, enabled = pcall(function()
+        return exports.saltychat:GetRadioSpeaker()
+    end)
+    if not success then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] SaltyChat could not read the radio speaker state: %s",
+            tostring(enabled),
+            { always = true }
+        )
+        return false
+    end
+    return enabled == true
+end
+
+function Bridge.Radio.SetSpeaker(enabled)
+    if enabled == true and not Bridge.Speaker.IsEnabled() then
+        return false
+    end
+    if resolve_provider() ~= "saltychat" then
+        return false
+    end
+
+    local success, error_message = pcall(function()
+        exports.saltychat:SetRadioSpeaker(enabled == true)
+    end)
+    if not success then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] SaltyChat could not update the local radio speaker state: %s",
+            tostring(error_message),
+            { always = true }
+        )
+        return false
+    end
+    return true
+end
+
 function Bridge.Radio.Join(primary, secondary)
     local selected = resolve_provider()
     if selected == "yaca" then
@@ -94,6 +141,7 @@ function Bridge.Radio.Leave()
     elseif selected == "pma" then
         exports["pma-voice"]:setRadioChannel(0)
     elseif selected == "saltychat" then
+        Bridge.Radio.SetSpeaker(false)
         exports.saltychat:SetRadioChannel("", true)
         exports.saltychat:SetRadioChannel("", false)
     end

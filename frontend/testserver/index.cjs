@@ -68,9 +68,11 @@ const radioData = {
     { primary: 42.1, secondary: 0 },
   ],
   members: [],
-  provider: 'yaca',
+  provider: 'saltychat',
   secondaryFrequency: 0,
   secondarySupported: true,
+  speakerEnabled: false,
+  speakerSupported: true,
   settings: { autoRejoin: false, notifications: true },
   volume: 50,
 }
@@ -5849,12 +5851,25 @@ app.post('/api/:endpoint', (request, response) => {
     radioData.frequency = 0
     radioData.secondaryFrequency = 0
     radioData.members = []
+    radioData.speakerEnabled = false
     response.json({ success: true })
     return
   }
   if (endpoint === 'radio:set-volume') {
     radioData.volume = Math.max(0, Math.min(100, Number(request.body.volume)))
     response.json({ success: true, data: { volume: radioData.volume } })
+    return
+  }
+  if (endpoint === 'radio:set-speaker') {
+    if (!radioData.connected || !radioData.speakerSupported) {
+      response.json({ success: false, error: 'speaker_unavailable' })
+      return
+    }
+    radioData.speakerEnabled = request.body.enabled === true
+    response.json({
+      success: true,
+      data: { speakerEnabled: radioData.speakerEnabled },
+    })
     return
   }
   if (endpoint === 'radio:save-settings') {
@@ -7971,7 +7986,7 @@ app.post('/api/:endpoint', (request, response) => {
                           testScenario === 'citymarkt-local-pages-missing'
                             ? ['local-pages']
                             : [],
-                        version: 3,
+                        version: 4,
                       },
                     },
                   },
@@ -8506,6 +8521,8 @@ app.post('/api/:endpoint', (request, response) => {
         direction: 'outgoing',
         id,
         otherNumber: phoneNumber,
+        speakerEnabled: false,
+        speakerSupported: true,
         startedAt,
         state: 'ringing',
       },
@@ -8523,6 +8540,13 @@ app.post('/api/:endpoint', (request, response) => {
     }
     blockedCallNumbers.add(phoneNumber)
     response.json({ success: true, data: { blocked: true, phoneNumber } })
+    return
+  }
+  if (endpoint === 'calls:set-speaker') {
+    response.json({
+      success: true,
+      data: { speakerEnabled: request.body.enabled === true },
+    })
     return
   }
   if (

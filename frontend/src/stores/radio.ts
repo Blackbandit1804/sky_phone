@@ -22,6 +22,8 @@ const defaults: RadioData = {
   provider: null,
   secondaryFrequency: 0,
   secondarySupported: true,
+  speakerEnabled: false,
+  speakerSupported: false,
   settings: { autoRejoin: false, notifications: false },
   volume: 50,
 }
@@ -30,12 +32,14 @@ export const useRadioStore = defineStore('radio', () => {
   const data = reactive<RadioData>(structuredClone(defaults))
   const error = ref('')
   const isLoading = ref(false)
+  const speakerPending = ref(false)
   const settingRequestIds: Record<keyof RadioSettings, number> = {
     autoRejoin: 0,
     notifications: 0,
   }
   let badgeRequestId = 0
   let displayNameRequestId = 0
+  let speakerRequestId = 0
   let volumeRequestId = 0
 
   function apply(next: Partial<RadioData>): void {
@@ -81,8 +85,37 @@ export const useRadioStore = defineStore('radio', () => {
       frequency: 0,
       members: [],
       secondaryFrequency: 0,
+      speakerEnabled: false,
     })
+    speakerRequestId += 1
+    speakerPending.value = false
     isLoading.value = false
+  }
+
+  async function setSpeaker(enabled: boolean): Promise<boolean> {
+    if (!data.connected || !data.speakerSupported) {
+      error.value = 'speaker_unavailable'
+      return false
+    }
+
+    const requestId = ++speakerRequestId
+    const previous = data.speakerEnabled === true
+    data.speakerEnabled = enabled
+    error.value = ''
+    speakerPending.value = true
+    const response = await nuiCall<{ speakerEnabled: boolean }>(
+      'radio:set-speaker',
+      { enabled },
+    )
+    if (requestId !== speakerRequestId) return response.success
+    speakerPending.value = false
+    if (response.success && response.data) {
+      data.speakerEnabled = response.data.speakerEnabled === true
+    } else {
+      data.speakerEnabled = previous
+      error.value = response.error ?? 'request_failed'
+    }
+    return response.success
   }
 
   async function setVolume(volume: number): Promise<void> {
@@ -155,7 +188,9 @@ export const useRadioStore = defineStore('radio', () => {
     saveBadge,
     saveDisplayName,
     saveSetting,
+    setSpeaker,
     setVolume,
+    speakerPending,
     updateMembers,
   }
 })

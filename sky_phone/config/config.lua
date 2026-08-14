@@ -60,8 +60,12 @@ Config.Sim = {
     NumberGroups = { 3, 3, 4 },
 }
 
+Config.Speaker = {
+    Enabled = true, -- global phone and radio speaker controls
+}
+
 Config.Calls = {
-    VoiceProvider = "pma",
+    VoiceProvider = "pma", -- pma (alias: pma-voice), saltychat (alias: salty)
     RingSeconds = 30,
     ContactNameMaxLength = 80,
     ContactNotesMaxLength = 500,
