@@ -47,7 +47,7 @@ import { useMarketplaceStore } from '@/stores/marketplace'
 import { useAppCatalogStore } from '@/stores/app-catalog'
 import { useAppStoreStore } from '@/stores/app-store'
 import { useWidgetsStore } from '@/stores/widgets'
-import { isPhoneAppId } from '@/config/apps'
+import { isPhoneAppId, loadAppStoreComponent } from '@/config/apps'
 import { useNotesStore } from '@/stores/notes'
 import { useMemosStore } from '@/stores/memos'
 import { useWeatherStore } from '@/stores/weather'
@@ -1223,6 +1223,9 @@ onMounted(() => {
   window.addEventListener('resize', updateViewportScale)
   systemColorScheme.addEventListener('change', onSystemColorSchemeChange)
   phone.setSystemDarkMode(systemColorScheme.matches)
+  void loadAppStoreComponent().catch((error: unknown) => {
+    console.error('[App Store] Could not preload the phone app.', error)
+  })
   void nuiCall('ui:ready', { protocolVersion: 1 })
   clockTicker = setInterval(() => {
     const now = Date.now()
