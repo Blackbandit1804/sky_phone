@@ -598,6 +598,25 @@ local function nearby_targets(source, device)
     return targets
 end
 
+local function canonical_own_contact(source, device)
+    if not device.phone_number then
+        return nil
+    end
+    local name = display_name(source)
+    return {
+        appId = "phone",
+        kind = "contact",
+        id = "self",
+        title = name,
+        subtitle = device.phone_number,
+        copyText = ("%s\n%s"):format(name, device.phone_number),
+        meta = {
+            name = name,
+            phoneNumber = device.phone_number,
+        },
+    }
+end
+
 local function sanitize_payload(source, device, data)
     if type(data) ~= "table" or not valid_kinds[data.kind] then
         return nil, "invalid_payload"
@@ -880,25 +899,6 @@ local function apply_received_payload(transfer)
         return false
     end
     return true
-end
-
-local function canonical_own_contact(source, device)
-    if not device.phone_number then
-        return nil
-    end
-    local name = display_name(source)
-    return {
-        appId = "phone",
-        kind = "contact",
-        id = "self",
-        title = name,
-        subtitle = device.phone_number,
-        copyText = ("%s\n%s"):format(name, device.phone_number),
-        meta = {
-            name = name,
-            phoneNumber = device.phone_number,
-        },
-    }
 end
 
 local function advance_transfer(id)

@@ -49,7 +49,9 @@ import { useEasyShareStore } from '@/stores/easyshare'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { useMessagesStore } from '@/stores/messages'
 import { usePhoneStore } from '@/stores/phone'
+import type { EasySharePayload } from '@/types/easyshare'
 import type { PhoneContact, RecentCall } from '@/types/phone'
+import { nuiCall } from '@/utils/nui'
 import { formatPhoneNumber, normalizePhoneNumber } from '@/utils/phone'
 
 type PhoneTab = 'recents' | 'contacts' | 'keypad'
@@ -526,17 +528,16 @@ function shareSelectedContact(): void {
   })
 }
 
-function shareOwnProfile(): void {
-  const number = phone.device?.sim?.number
-  if (!number) return
-  easyShare.open({
-    appId: 'phone',
-    copyText: `${phone.t('Apps.phone.myCard')}\n${number}`,
-    kind: 'profile',
-    link: `skyphone://phone/${number}`,
-    subtitle: formatPhoneNumber(number),
-    title: phone.t('Apps.phone.myCard'),
-  })
+async function shareOwnProfile(): Promise<void> {
+  const response = await nuiCall<EasySharePayload>('easyshare:own-contact')
+  if (!response.success || !response.data) {
+    error.value = phone.t(
+      `Apps.easyShare.errors.${response.error ?? 'request_failed'}`,
+    )
+    return
+  }
+  error.value = ''
+  easyShare.open(response.data)
 }
 
 function messageActiveCaller(): void {
