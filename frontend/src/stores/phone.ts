@@ -3938,7 +3938,13 @@ const defaultLocales: LocaleTree = {
         default: 'The account request failed.',
       },
       back: 'Settings',
-      wallpaperPicker: 'Built-in Wallpapers',
+      wallpaperPicker: 'Sky Wallpapers',
+      wallpaperFromPhotos: 'Choose from Photos',
+      wallpaperFromPhotosDescription: 'Use one of your photos',
+      wallpaperFromCamera: 'Take Photo',
+      wallpaperFromCameraDescription: 'Create a new wallpaper',
+      wallpaperHistory: 'Recent',
+      wallpaperCustom: 'Photo wallpaper',
       toggle: {
         airplaneMode: 'Toggle Airplane Mode',
         streamerMode: 'Toggle Streamer Mode',
@@ -3977,9 +3983,18 @@ const defaultLocales: LocaleTree = {
         soft: 'Soft',
       },
       wallpapers: {
-        midnight: 'Midnight wallpaper',
-        aurora: 'Aurora wallpaper',
-        ember: 'Ember wallpaper',
+        midnight: 'Midnight',
+        aurora: 'Aurora',
+        ember: 'Ember',
+        ocean: 'Ocean',
+        sunrise: 'Sunrise',
+        violet: 'Violet',
+        forest: 'Forest',
+        cobalt: 'Cobalt',
+        rose: 'Rose',
+        sand: 'Sand',
+        graphite: 'Graphite',
+        prism: 'Prism',
       },
     },
   },
@@ -4361,8 +4376,24 @@ export const usePhoneStore = defineStore('phone', {
     setSystemDarkMode(value: boolean): void {
       this.systemDarkMode = value
     },
-    setWallpaper(wallpaper: WallpaperId): void {
+    setWallpaper(wallpaper: WallpaperId, imageUrl: string | null = null): void {
+      const normalizedImageUrl =
+        wallpaper === 'custom' ? imageUrl?.trim() : null
+      if (wallpaper === 'custom' && !normalizedImageUrl) {
+        throw new Error('Custom wallpapers require a photo URL.')
+      }
+
       this.preferences.settings.wallpaper = wallpaper
+      this.preferences.settings.wallpaperImageUrl = normalizedImageUrl ?? null
+      this.preferences.settings.wallpaperHistory = [
+        { imageUrl: normalizedImageUrl ?? null, wallpaper },
+        ...this.preferences.settings.wallpaperHistory.filter((entry) =>
+          wallpaper === 'custom'
+            ? entry.wallpaper !== 'custom' ||
+              entry.imageUrl !== normalizedImageUrl
+            : entry.wallpaper !== wallpaper,
+        ),
+      ].slice(0, 4)
       this.saveDeviceNamespace('settings', this.preferences)
     },
     async unlockWithPasscode(

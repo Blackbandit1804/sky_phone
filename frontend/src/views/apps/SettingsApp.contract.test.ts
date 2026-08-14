@@ -35,4 +35,15 @@ describe('SettingsApp Sky UI contract', () => {
       /\.settings-content--subpage\s*\{[^}]*padding-top:\s*0/,
     )
   })
+
+  it('offers photo, camera, recent, and two-column built-in wallpaper choices', () => {
+    expect(source).toContain("openWallpaperMedia('photos')")
+    expect(source).toContain("openWallpaperMedia('camera')")
+    expect(source).toContain("mediaPicker.consume('settings:wallpaper')")
+    expect(source).toContain('class="settings-wallpaper-history"')
+    expect(source).toContain('class="settings-wallpaper-grid"')
+    expect(source).toMatch(
+      /\.settings-wallpaper-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/,
+    )
+  })
 })

@@ -57,6 +57,14 @@ const HOME_FOLDER_HOVER_DURATION = 900
 const phone = usePhoneStore()
 const appStore = useAppStoreStore()
 const widgets = useWidgetsStore()
+const wallpaperStyle = computed<Record<string, string>>(() => {
+  const style: Record<string, string> = {}
+  const imageUrl = phone.preferences.settings.wallpaperImageUrl
+  if (phone.preferences.settings.wallpaper === 'custom' && imageUrl) {
+    style['--phone-wallpaper-image'] = `url(${JSON.stringify(imageUrl)})`
+  }
+  return style
+})
 const searchQuery = ref('')
 const searchFocused = ref(false)
 const showAllApps = ref(false)
@@ -1296,6 +1304,7 @@ onBeforeUnmount(() => {
         'springboard--widget-dragging': draggingWidgetId !== null,
       },
     ]"
+    :style="wallpaperStyle"
   >
     <div
       class="springboard-track"
