@@ -122,7 +122,6 @@ type PasscodeFlow =
   | null
 
 const FACTORY_RESET_DURATION_MS = 8_000
-const FACTORY_RESET_RING_CIRCUMFERENCE = 289.03
 
 const phone = usePhoneStore()
 const mediaPicker = useMessageMediaStore()
@@ -1577,23 +1576,14 @@ onBeforeUnmount(() => {
       aria-live="polite"
     >
       <div class="settings-reset-content">
-        <div class="settings-reset-symbol" aria-hidden="true">
-          <svg viewBox="0 0 104 104">
-            <circle class="settings-reset-ring-track" cx="52" cy="52" r="46" />
-            <circle
-              class="settings-reset-ring-value"
-              cx="52"
-              cy="52"
-              r="46"
-              :stroke-dasharray="FACTORY_RESET_RING_CIRCUMFERENCE"
-              :stroke-dashoffset="
-                FACTORY_RESET_RING_CIRCUMFERENCE *
-                (1 - factoryResetProgress / 100)
-              "
-            />
-          </svg>
-          <div class="settings-reset-symbol__icon">
-            <Smartphone :size="34" :stroke-width="1.55" />
+        <div class="settings-reset-mark" aria-hidden="true">
+          <span class="settings-reset-mark__layer settings-reset-mark__layer--back"></span>
+          <span class="settings-reset-mark__layer settings-reset-mark__layer--middle"></span>
+          <div class="settings-reset-mark__face">
+            <Smartphone :size="35" :stroke-width="1.45" />
+            <span class="settings-reset-mark__erase">
+              <i></i><i></i><i></i>
+            </span>
           </div>
         </div>
 
@@ -2117,13 +2107,45 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   padding: 52px 28px 28px;
-  background: #000000;
+  background:
+    radial-gradient(ellipse at 8% 13%, rgb(38 117 255 / 31%), transparent 38%),
+    radial-gradient(ellipse at 92% 70%, rgb(118 66 255 / 24%), transparent 41%),
+    radial-gradient(ellipse at 42% 102%, rgb(0 191 184 / 14%), transparent 36%),
+    linear-gradient(148deg, #050b1b 0%, #080719 47%, #02060d 100%);
   color: #ffffff;
   text-align: center;
 }
 
+.settings-reset-overlay::before {
+  position: absolute;
+  inset: -30%;
+  background:
+    linear-gradient(118deg, transparent 36%, rgb(100 151 255 / 7%) 36.2%, transparent 36.7%),
+    linear-gradient(118deg, transparent 49%, rgb(164 122 255 / 6%) 49.2%, transparent 49.8%),
+    linear-gradient(118deg, transparent 63%, rgb(72 187 255 / 5%) 63.2%, transparent 63.7%);
+  content: '';
+  transform: translateX(-7%);
+}
+
+.settings-reset-overlay::after {
+  position: absolute;
+  top: 12%;
+  right: -20%;
+  width: 78%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(155 187 255 / 18%), transparent);
+  box-shadow:
+    0 132px rgb(155 187 255 / 7%),
+    0 264px rgb(155 187 255 / 5%);
+  content: '';
+  transform: rotate(-28deg);
+}
+
 .settings-reset-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   width: 100%;
   max-width: 294px;
@@ -2131,48 +2153,71 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
-.settings-reset-symbol {
+.settings-reset-mark {
   position: relative;
-  display: grid;
-  width: 116px;
-  height: 116px;
-  place-items: center;
+  width: 126px;
+  height: 102px;
 }
 
-.settings-reset-symbol svg {
+.settings-reset-mark__layer,
+.settings-reset-mark__face {
   position: absolute;
-  inset: 6px;
-  width: 104px;
-  height: 104px;
-  overflow: visible;
-  transform: rotate(-90deg);
+  width: 82px;
+  height: 68px;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 20px;
 }
 
-.settings-reset-ring-track,
-.settings-reset-ring-value {
-  fill: none;
-  stroke-width: 2.6;
+.settings-reset-mark__layer--back {
+  top: 0;
+  left: 13px;
+  background: linear-gradient(145deg, rgb(72 135 255 / 22%), rgb(82 53 190 / 12%));
+  transform: rotate(-12deg);
 }
 
-.settings-reset-ring-track { stroke: rgb(255 255 255 / 12%); }
-.settings-reset-ring-value {
-  stroke: #0a84ff;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 120ms linear;
+.settings-reset-mark__layer--middle {
+  top: 13px;
+  right: 11px;
+  border-color: rgb(168 126 255 / 20%);
+  background: linear-gradient(145deg, rgb(134 87 255 / 19%), rgb(41 89 194 / 9%));
+  transform: rotate(9deg);
 }
 
-.settings-reset-symbol__icon {
+.settings-reset-mark__face {
+  top: 28px;
+  left: 22px;
   display: grid;
-  width: 76px;
-  height: 76px;
-  border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 24px;
-  background: rgb(255 255 255 / 7%);
+  overflow: hidden;
+  border-color: rgb(255 255 255 / 20%);
+  background: linear-gradient(145deg, rgb(255 255 255 / 16%), rgb(255 255 255 / 6%));
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 15%),
+    0 22px 48px rgb(0 0 0 / 28%);
   color: rgb(255 255 255 / 92%);
   place-items: center;
 }
 
-.settings-reset-heading { margin-top: 28px; }
+.settings-reset-mark__erase {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  display: flex;
+  gap: 3px;
+}
+
+.settings-reset-mark__erase i {
+  display: block;
+  width: 11px;
+  height: 2px;
+  background: rgb(127 183 255 / 35%);
+}
+
+.settings-reset-mark__erase i:nth-child(2) {
+  background: #62aaff;
+  box-shadow: 0 0 9px rgb(81 158 255 / 50%);
+}
+
+.settings-reset-heading { margin-top: 25px; }
 
 .settings-reset-heading h2 {
   margin: 0;
@@ -2218,7 +2263,8 @@ onBeforeUnmount(() => {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #0a84ff;
+  background: linear-gradient(90deg, #208cff, #7774ff);
+  box-shadow: 0 0 12px rgb(60 132 255 / 42%);
   transition: width 120ms linear;
 }
 
@@ -2237,9 +2283,10 @@ onBeforeUnmount(() => {
   gap: 12px;
   margin-top: 30px;
   padding: 13px 14px;
-  border: 1px solid rgb(255 255 255 / 9%);
+  border: 1px solid rgb(255 255 255 / 11%);
   border-radius: 16px;
-  background: rgb(255 255 255 / 5%);
+  background: linear-gradient(135deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 4%));
+  box-shadow: inset 0 1px rgb(255 255 255 / 5%);
   text-align: left;
 }
 
@@ -2248,7 +2295,7 @@ onBeforeUnmount(() => {
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
-  border-radius: 50%;
+  border-radius: 11px;
   background: rgb(10 132 255 / 14%);
   color: #5eb0ff;
   place-items: center;
