@@ -9,6 +9,7 @@ export type BuiltinPhoneAppId =
   | 'clock'
   | 'calendar'
   | 'weather'
+  | 'health'
   | 'banking'
   | 'billing'
   | 'garage'

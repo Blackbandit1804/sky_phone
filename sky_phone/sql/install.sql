@@ -267,6 +267,33 @@ CREATE TABLE IF NOT EXISTS `sky_phone_bank_transactions` (
     KEY `idx_sky_phone_bank_reference` (`reference`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `sky_phone_health_daily` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `owner_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `activity_date` DATE NOT NULL,
+    `steps` INT UNSIGNED NOT NULL DEFAULT 0,
+    `distance_meters` INT UNSIGNED NOT NULL DEFAULT 0,
+    `active_seconds` INT UNSIGNED NOT NULL DEFAULT 0,
+    `energy_kcal` INT UNSIGNED NOT NULL DEFAULT 0,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_health_daily` (`owner_identifier`, `activity_date`),
+    KEY `idx_sky_phone_health_history` (`owner_identifier`, `activity_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_health_profiles` (
+    `owner_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `blood_type` VARCHAR(3) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL DEFAULT '',
+    `allergies` VARCHAR(500) NOT NULL DEFAULT '',
+    `conditions` VARCHAR(500) NOT NULL DEFAULT '',
+    `medication` VARCHAR(500) NOT NULL DEFAULT '',
+    `emergency_name` VARCHAR(80) NOT NULL DEFAULT '',
+    `emergency_relation` VARCHAR(40) NOT NULL DEFAULT '',
+    `emergency_phone` VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT '',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`owner_identifier`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `sky_phone_billing_invoices` (
     `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     `recipient_identifier` VARCHAR(80) NOT NULL,

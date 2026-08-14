@@ -349,6 +349,70 @@ const companiesFallbackLocales = {
   },
 }
 
+const healthFallbackLocales = {
+  name: 'Health',
+  navigation: 'Health navigation',
+  tabs: { today: 'Today', trends: 'Trends', medicalId: 'Medical ID' },
+  loading: 'Loading health data...',
+  errorTitle: 'Health is unavailable',
+  errorBody: 'Your activity data could not be loaded.',
+  tryAgain: 'Try Again',
+  goal: 'of {count}',
+  steps: 'Steps',
+  distance: 'Distance',
+  active: 'Active',
+  energy: 'Energy',
+  kilometers: '{count} km',
+  minutes: '{count} min',
+  kilocalories: '{count} kcal',
+  thisWeek: 'This week',
+  snapshot: 'Health snapshot',
+  condition: 'Condition',
+  recovery: 'Recovery',
+  currentHealth: 'Current health',
+  conditions: { good: 'Good', fair: 'Fair', low: 'Low' },
+  trends: {
+    title: 'Trends',
+    week: 'Week',
+    month: 'Month',
+    total: '{count} steps',
+    more: '{count}% more than last week',
+    less: '{count}% less than last week',
+    same: 'Same as last week',
+    dailyAverage: 'Daily average',
+    activeTime: 'Active time',
+    dailyActivity: 'Daily activity',
+    goal: 'Goal',
+  },
+  medicalId: {
+    title: 'Medical ID',
+    edit: 'Edit',
+    done: 'Done',
+    resident: 'Los Santos resident',
+    emergencyInformation: 'Emergency information',
+    bloodType: 'Blood type',
+    allergies: 'Allergies',
+    conditions: 'Conditions',
+    medication: 'Medication',
+    noneRecorded: 'None recorded',
+    emergencyContact: 'Emergency contact',
+    contactName: 'Contact name',
+    relation: 'Relation',
+    phoneNumber: 'Phone number',
+    emergencyCall: 'Emergency call',
+    callContact: 'Call emergency contact',
+    privacy:
+      'Information is stored with your character and can be shown to emergency services.',
+    saveFailed: 'Medical ID could not be saved.',
+  },
+  errors: {
+    invalid_phone_number: 'Enter a valid in-game phone number.',
+    invalid_request: 'Check the Medical ID fields.',
+    rate_limited: 'Please wait before trying again.',
+    request_failed: 'Health could not complete the request.',
+  },
+}
+
 const defaultLocales: LocaleTree = {
   Apps: {
     easyShare: {
@@ -549,6 +613,7 @@ const defaultLocales: LocaleTree = {
       },
     },
     companies: companiesFallbackLocales,
+    health: healthFallbackLocales,
     crewlink: {
       name: 'CrewLink',
       connecting: 'Connecting your crew...',

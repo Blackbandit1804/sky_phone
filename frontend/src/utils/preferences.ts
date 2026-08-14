@@ -101,6 +101,7 @@ const DEFAULT_APP_NOTIFICATIONS: Record<
   flare: { enabled: true, sounds: true },
   'app-store': { enabled: true, sounds: true },
   calculator: { enabled: true, sounds: true },
+  health: { enabled: true, sounds: true },
   snake: { enabled: true, sounds: true },
   memory: { enabled: true, sounds: true },
   'number-merge': { enabled: true, sounds: true },

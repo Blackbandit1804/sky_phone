@@ -35,7 +35,7 @@ describe('app store', () => {
     vi.useRealTimers()
   })
 
-  it('installs only the fourteen standard built-in apps by default', () => {
+  it('installs the fifteen system apps by default', () => {
     const apps = useAppStoreStore()
 
     apps.hydrate(null)
@@ -55,6 +55,7 @@ describe('app store', () => {
       'settings',
       'map',
       'calendar',
+      'health',
     ])
     for (const appId of DEFAULT_INSTALLED_PHONE_APP_IDS) {
       expect(apps.isInstalled(appId)).toBe(true)
@@ -62,6 +63,7 @@ describe('app store', () => {
     expect(apps.isInstalled('banking')).toBe(false)
     expect(apps.isInstalled('feather')).toBe(false)
     expect(apps.isInstalled('snake')).toBe(false)
+    expect(apps.isInstalled('health')).toBe(true)
   })
 
   it('removes old automatic apps unless the player installed them', () => {
@@ -157,7 +159,7 @@ describe('app store', () => {
     expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
   })
 
-  it('installs an app after showing a three second loading state', () => {
+  it('installs a downloadable app after a three second loading state', () => {
     vi.useFakeTimers()
     const apps = useAppStoreStore()
 
@@ -303,6 +305,7 @@ describe('app store', () => {
       'phone',
       'messages',
       'mail',
+      'health',
     ])
     for (const appId of NON_REMOVABLE_PHONE_APP_IDS) {
       apps.removeHomeApp(appId)

@@ -35,6 +35,7 @@ import {
   UsersRound,
   Building2,
   Newspaper,
+  HeartPulse,
 } from 'lucide-vue-next'
 import { defineAsyncComponent, markRaw, shallowReactive } from 'vue'
 
@@ -61,6 +62,7 @@ import towerStackIcon from '@/assets/img/app-icons/tower-stack.webp'
 import skyFlappyIcon from '@/assets/img/app-icons/sky-flappy.webp'
 import neonDropIcon from '@/assets/img/app-icons/neon-drop.webp'
 import weatherIcon from '@/assets/img/app-icons/weather.webp'
+import healthIcon from '@/assets/img/app-icons/health.webp'
 import bankingIcon from '@/assets/img/app-icons/banking.webp'
 import billingIcon from '@/assets/img/app-icons/billing.svg'
 import garageIcon from '@/assets/img/app-icons/garage.webp'
@@ -87,6 +89,20 @@ import type {
 } from '@/types/apps'
 
 export const PHONE_APPS = shallowReactive<PhoneAppDefinition[]>([
+  {
+    category: 'utilities',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/HealthApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 11,
+    icon: markRaw(HeartPulse),
+    iconClass: 'app-icon--health',
+    iconImage: healthIcon,
+    id: 'health',
+    labelKey: 'Apps.health.name',
+    route: '/apps/health',
+  },
   {
     category: 'social',
     component: markRaw(
@@ -643,6 +659,7 @@ export const DEFAULT_INSTALLED_PHONE_APP_IDS: ReadonlySet<BuiltinPhoneAppId> =
     'settings',
     'map',
     'calendar',
+    'health',
   ])
 
 export const NON_REMOVABLE_PHONE_APP_IDS: ReadonlySet<LaunchablePhoneAppId> =
@@ -654,6 +671,7 @@ export const NON_REMOVABLE_PHONE_APP_IDS: ReadonlySet<LaunchablePhoneAppId> =
     'phone',
     'messages',
     'mail',
+    'health',
   ])
 
 export const PHONE_APP_IDS = PHONE_APPS.map((app) => app.id)

@@ -40,6 +40,41 @@ function unixTime(offsetSeconds = 0) {
   return Math.floor(Date.now() / 1000) + offsetSeconds
 }
 
+function healthDate(dayOffset) {
+  const value = new Date()
+  value.setDate(value.getDate() + dayOffset)
+  return value.toISOString().slice(0, 10)
+}
+
+const healthStepSamples = [4289, 6312, 3421, 7024, 8618, 4302, 6420]
+let healthMedicalId = {
+  allergies: '',
+  bloodType: 'O+',
+  conditions: '',
+  emergencyName: 'Jamie Morgan',
+  emergencyPhone: '5550102211',
+  emergencyRelation: 'Sibling',
+  medication: '',
+  playerName: 'Alex Morgan',
+}
+
+function healthOverview() {
+  return {
+    dailyStepGoal: 8000,
+    days: healthStepSamples.map((steps, index) => ({
+      activeSeconds: Math.round(steps * 0.36),
+      date: healthDate(index - 6),
+      distanceMeters: Math.round(steps * 0.75),
+      energyKcal: Math.round(steps * 0.045),
+      steps,
+    })),
+    emergencyNumber: '911',
+    medicalId: healthMedicalId,
+    previousWeekSteps: 36980,
+    snapshot: { healthPercent: 96 },
+  }
+}
+
 function memoWaveform(phase = 0) {
   return Array.from({ length: 48 }, (_, index) =>
     Number(
@@ -7530,6 +7565,24 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'banking:overview') {
     response.json({ success: true, data: bankingOverview() })
+    return
+  }
+  if (endpoint === 'health:overview') {
+    response.json({ success: true, data: healthOverview() })
+    return
+  }
+  if (endpoint === 'health:save-profile') {
+    healthMedicalId = {
+      ...healthMedicalId,
+      allergies: String(request.body.allergies ?? ''),
+      bloodType: String(request.body.bloodType ?? ''),
+      conditions: String(request.body.conditions ?? ''),
+      emergencyName: String(request.body.emergencyName ?? ''),
+      emergencyPhone: String(request.body.emergencyPhone ?? ''),
+      emergencyRelation: String(request.body.emergencyRelation ?? ''),
+      medication: String(request.body.medication ?? ''),
+    }
+    response.json({ success: true, data: healthMedicalId })
     return
   }
   if (endpoint === 'billing:overview') {

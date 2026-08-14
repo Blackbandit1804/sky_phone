@@ -402,6 +402,20 @@ describe('home layout', () => {
     expect(restored.hidden).not.toContain('phone')
   })
 
+  it('reveals an existing shortcut when restoring a hidden app', () => {
+    const hidden = {
+      ...defaults,
+      grid: [...defaults.grid],
+      hidden: [...defaults.hidden, 'health' as const],
+    }
+    hidden.grid[5] = 'health'
+
+    const restored = restoreHomeApp(hidden, 'health')
+
+    expect(restored.grid[5]).toBe('health')
+    expect(restored.hidden).not.toContain('health')
+  })
+
   it('adds persistent empty pages up to the home screen limit', () => {
     let layout = defaults
     for (let page = 1; page < MAX_HOME_GRID_PAGES; page += 1) {
