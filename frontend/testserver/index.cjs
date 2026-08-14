@@ -1167,7 +1167,77 @@ const mockHousingOverview = {
       },
       cctv: { enabled: true },
       garage: { enabled: true, storedVehicles: 2 },
-      keys: [{ identifier: 'char2:mock', name: 'Jamie Rivera', online: true }],
+      keys: [
+        { identifier: 'char2:mock', name: 'Jamie Rivera', online: true },
+        { identifier: 'char7:mock', name: 'Sofia Turner', online: false },
+        {
+          identifier: 'char18:mock',
+          name: 'Property Manager',
+          online: true,
+          revocable: false,
+        },
+      ],
+    },
+    {
+      id: 'esx_property:3',
+      providerId: '3',
+      name: 'Rockford Hills Penthouse',
+      access: 'owner',
+      locked: false,
+      entrance: { x: -842.4, y: -25.1, z: 40.4 },
+      capabilities: {
+        lock: true,
+        keys: true,
+        waypoint: true,
+        cctv: true,
+        garageStatus: true,
+      },
+      cctv: { enabled: true },
+      garage: { enabled: true, storedVehicles: 4 },
+      keys: [
+        { identifier: 'char11:mock', name: 'Mia Bennett', online: true },
+        { identifier: 'char14:mock', name: 'Noah Williams', online: false },
+      ],
+    },
+    {
+      id: 'esx_property:4',
+      providerId: '4',
+      name: 'Mirror Park Family Home',
+      access: 'owner',
+      locked: true,
+      entrance: { x: 1260.8, y: -582.1, z: 68.9 },
+      capabilities: {
+        lock: true,
+        keys: true,
+        waypoint: true,
+        cctv: false,
+        garageStatus: true,
+      },
+      cctv: { enabled: false },
+      garage: { enabled: true, storedVehicles: 1 },
+      keys: [],
+    },
+    {
+      id: 'esx_property:5',
+      providerId: '5',
+      name: 'Eclipse Towers Loft',
+      access: 'owner',
+      locked: false,
+      entrance: { x: -777.1, y: 312.4, z: 85.7 },
+      capabilities: {
+        lock: true,
+        keys: true,
+        waypoint: true,
+        cctv: true,
+        garageStatus: true,
+      },
+      cctv: { enabled: true },
+      garage: { enabled: true, storedVehicles: 3 },
+      keys: [
+        { identifier: 'char5:mock', name: 'Liam Carter', online: true },
+        { identifier: 'char9:mock', name: 'Emma Collins', online: true },
+        { identifier: 'char22:mock', name: 'Vincent Cole', online: false },
+      ],
     },
     {
       id: 'esx_property:2',
@@ -1186,8 +1256,71 @@ const mockHousingOverview = {
       cctv: { enabled: false },
       garage: null,
     },
+    {
+      id: 'esx_property:6',
+      providerId: '6',
+      name: 'Del Perro Heights Suite',
+      access: 'keyholder',
+      locked: true,
+      entrance: { x: -1447.8, y: -537.4, z: 34.7 },
+      capabilities: {
+        lock: true,
+        keys: false,
+        waypoint: true,
+        cctv: true,
+        garageStatus: true,
+      },
+      cctv: { enabled: true },
+      garage: { enabled: true, storedVehicles: 1 },
+    },
+    {
+      id: 'esx_property:7',
+      providerId: '7',
+      name: 'Sandy Shores Ranch',
+      access: 'owner',
+      locked: true,
+      entrance: { x: 1967.2, y: 3819.4, z: 33.4 },
+      capabilities: {
+        lock: true,
+        keys: true,
+        waypoint: true,
+        cctv: false,
+        garageStatus: true,
+      },
+      cctv: { enabled: false },
+      garage: { enabled: false, storedVehicles: 0 },
+      keys: [
+        { identifier: 'char30:mock', name: 'Bryce Walker', online: false },
+      ],
+    },
+    {
+      id: 'esx_property:8',
+      providerId: '8',
+      name: 'Paleto Bay Cabin',
+      access: 'keyholder',
+      locked: false,
+      entrance: { x: -109.7, y: 6334.1, z: 31.6 },
+      capabilities: {
+        lock: true,
+        keys: false,
+        waypoint: true,
+        cctv: false,
+        garageStatus: false,
+      },
+      cctv: { enabled: false },
+      garage: null,
+    },
   ],
 }
+
+const mockHousingCandidates = [
+  { id: 27, name: 'Alex Morgan' },
+  { id: 31, name: 'Jordan Lee' },
+  { id: 42, name: 'Taylor Brooks' },
+  { id: 56, name: 'Casey Miller' },
+  { id: 63, name: 'Morgan Reed' },
+  { id: 78, name: 'Avery Parker' },
+]
 
 let contactSequence = 40
 const contacts = [
@@ -7538,9 +7671,19 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'housing:key-candidates') {
+    const property = mockHousingOverview.properties.find(
+      (item) => item.id === request.body.propertyId,
+    )
+    const existingNames = new Set(
+      (property?.keys ?? []).map((key) => key.name),
+    )
     response.json({
       success: true,
-      data: { candidates: [{ id: 27, name: 'Alex Morgan' }] },
+      data: {
+        candidates: mockHousingCandidates.filter(
+          (candidate) => !existingNames.has(candidate.name),
+        ),
+      },
     })
     return
   }
@@ -7554,6 +7697,30 @@ app.post('/api/:endpoint', (request, response) => {
     }
     if (request.body.action === 'toggle_lock') {
       property.locked = !property.locked
+    }
+    if (request.body.action === 'grant_key') {
+      const candidate = mockHousingCandidates.find(
+        (item) => item.id === Number(request.body.target),
+      )
+      if (!candidate || !property.capabilities.keys) {
+        response.json({ success: false, error: 'target_not_found' })
+        return
+      }
+      property.keys ??= []
+      if (!property.keys.some((key) => key.name === candidate.name)) {
+        property.keys.push({
+          identifier: `mock-player:${candidate.id}`,
+          name: candidate.name,
+          online: true,
+        })
+      }
+    }
+    if (request.body.action === 'revoke_key') {
+      property.keys = (property.keys ?? []).filter(
+        (key) =>
+          key.identifier !== request.body.identifier ||
+          key.revocable === false,
+      )
     }
     response.json({ success: true, data: { accepted: true } })
     return
