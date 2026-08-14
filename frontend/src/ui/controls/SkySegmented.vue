@@ -34,13 +34,17 @@ const props = withDefaults(
 )
 
 const insideNavbar = useSkyNavbar()
-const isNavigation = computed(() => props.navigation ?? insideNavbar)
-const rootComponent = computed(() => (isNavigation.value ? SkyGlass : 'div'))
+const isNavbarSegmented = computed(
+  () => insideNavbar && typeof props.navigation === 'undefined',
+)
+const isNavigation = computed(() => props.navigation === true)
+const usesGlass = computed(() => isNavigation.value || isNavbarSegmented.value)
+const rootComponent = computed(() => (usesGlass.value ? SkyGlass : 'div'))
 const indicatorStyle = computed<CSSProperties | undefined>(() => {
   const itemCount = Number.isFinite(props.itemCount)
     ? Math.max(0, Math.floor(props.itemCount))
     : 0
-  if (!isNavigation.value || !props.strong || itemCount === 0) return undefined
+  if (!usesGlass.value || !props.strong || itemCount === 0) return undefined
 
   const requestedIndex = Number.isFinite(props.activeIndex)
     ? Math.floor(props.activeIndex)
@@ -63,10 +67,11 @@ const indicatorStyle = computed<CSSProperties | undefined>(() => {
   <component
     :is="rootComponent"
     v-bind="$attrs"
-    :highlight="isNavigation ? glassHighlight : undefined"
+    :highlight="usesGlass ? glassHighlight : undefined"
     class="sky-segmented"
     :class="{
       'sky-segmented--navigation': isNavigation,
+      'sky-segmented--navbar': isNavbarSegmented,
       'sky-segmented--compact': compact,
       'sky-segmented--outline': outline,
       'sky-segmented--raised': raised,

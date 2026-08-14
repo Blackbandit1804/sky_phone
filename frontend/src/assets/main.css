@@ -416,6 +416,14 @@ button {
   background: var(--phone-performance-glass);
   box-shadow: none;
 }
+.phone-app--performance .sky-segmented--navbar {
+  background: var(--phone-performance-glass);
+  box-shadow: none;
+}
+.phone-app--performance .sky-tabbar__pane {
+  background: var(--phone-performance-glass);
+  box-shadow: none;
+}
 .phone-app--performance .control-center__backdrop {
   background: rgb(20 20 24 / 92%);
 }
@@ -662,6 +670,12 @@ button {
   animation: springboard-unlock 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .lock-screen {
+  --lock-notification-background: rgb(38 36 40 / 76%);
+  --lock-notification-clear-background: rgb(28 28 32 / 72%);
+  --lock-notification-color: #fff;
+  --lock-notification-muted: rgb(255 255 255 / 65%);
+  --lock-notification-focus: #fff;
+  --lock-notification-text-shadow: 0 1px 3px #0009;
   position: absolute;
   z-index: 80;
   inset: 0;
@@ -674,6 +688,17 @@ button {
   transform: translateY(var(--lock-drag));
   transition: transform 0.42s cubic-bezier(0.2, 0.9, 0.24, 1);
   will-change: transform, opacity, filter;
+}
+.phone-app--light .lock-screen {
+  --lock-notification-background: rgb(247 247 248 / 82%);
+  --lock-notification-clear-background: rgb(247 247 248 / 88%);
+  --lock-notification-color: #111;
+  --lock-notification-muted: rgb(0 0 0 / 55%);
+  --lock-notification-focus: #007aff;
+  --lock-notification-text-shadow: none;
+}
+.phone-app--performance .lock-screen {
+  --lock-notification-clear-background: var(--phone-performance-glass);
 }
 .lock-screen--dragging {
   transition: none;
@@ -774,8 +799,8 @@ button {
   border: 0;
   border-radius: 999px;
   padding: 5px 10px;
-  color: #fff;
-  background: #1c1c20b8;
+  color: var(--lock-notification-color);
+  background: var(--lock-notification-clear-background);
   box-shadow: 0 2px 10px #0004;
   font-size: 11px;
   font-weight: 600;
@@ -830,9 +855,9 @@ button {
   min-height: 76px;
   border-radius: 18px;
   padding: 11px;
-  color: #fff;
-  background-color: rgb(38 36 40 / 76%);
-  text-shadow: 0 1px 3px #0009;
+  color: var(--lock-notification-color);
+  background-color: var(--lock-notification-background);
+  text-shadow: var(--lock-notification-text-shadow);
   touch-action: pan-y;
   transform: translate3d(var(--notification-swipe), 0, 0);
   transition: transform 0.28s cubic-bezier(0.22, 0.78, 0.24, 1);
@@ -850,7 +875,7 @@ button {
   cursor: pointer;
 }
 .lock-screen__notification.is-actionable:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--lock-notification-focus);
   outline-offset: 2px;
 }
 .lock-screen__notification-icon {
@@ -878,7 +903,7 @@ button {
 }
 .lock-screen__notification-heading span,
 .lock-screen__notification-copy small {
-  color: #ffffffa6;
+  color: var(--lock-notification-muted);
   font-size: 10px;
   line-height: 14px;
 }

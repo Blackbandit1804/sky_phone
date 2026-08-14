@@ -13,7 +13,7 @@ const developmentRoutes: RouteRecordRaw[] = import.meta.env.DEV
       {
         component: () => import('@/views/development/SkyUiKitchenSinkView.vue'),
         name: 'development-sky-ui',
-        path: '/development/sky-ui',
+        path: '/development/sky-ui/:demo?',
       },
     ]
   : []

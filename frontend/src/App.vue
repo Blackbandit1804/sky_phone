@@ -1387,7 +1387,9 @@ onBeforeUnmount(() => {
                     <component
                       :is="Component"
                       v-if="isAppRoute || isDevelopmentRoute"
-                      :key="route.path"
+                      :key="
+                        isDevelopmentRoute ? String(route.name) : route.path
+                      "
                     />
                   </Transition>
                 </RouterView>

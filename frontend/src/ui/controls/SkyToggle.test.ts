@@ -93,4 +93,19 @@ describe('SkyToggle', () => {
     expect(reducedMotion).toContain('.sky-toggle__thumb-wrap')
     expect(reducedMotion).toContain('transform: translateX(-22px)')
   })
+
+  it('keeps trailing list toggles compact without shrinking their touch target', () => {
+    const uiDirectory = fileURLToPath(new URL('..', import.meta.url))
+    const controls = readFileSync(`${uiDirectory}/controls.css`, 'utf8')
+
+    expect(controls).toMatch(
+      /\.sky-list-item__after > \.sky-toggle\s*\{\s*margin-block: -8px;/,
+    )
+    expect(controls).toMatch(
+      /\.sky-toggle,\s*\.sky-radio\s*\{[\s\S]*?min-height: var\(--sky-touch-target, 44px\)/,
+    )
+    expect(controls).toMatch(
+      /\.sky-list-item__row\s*\{[\s\S]*?padding: 12px 16px;/,
+    )
+  })
 })

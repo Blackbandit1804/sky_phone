@@ -683,72 +683,129 @@
 }
 
 .sky-tabbar {
+  --sky-tabbar-pane-height: 48px;
   position: absolute;
   z-index: 20;
   right: 0;
   bottom: 0;
   left: 0;
   box-sizing: border-box;
-  min-height: calc(var(--sky-tabbar-height) + var(--sky-safe-area-bottom));
-  padding-bottom: var(--sky-safe-area-bottom);
-  border-top: 1px solid var(--sky-hairline);
-  background: var(--sky-glass-solid);
+  min-height: calc(
+    var(--sky-safe-area-bottom) + var(--sky-tabbar-pane-height) + 16px
+  );
+  display: flex;
+  justify-content: center;
+  padding-right: calc(var(--sky-safe-area-right) + 16px);
+  padding-bottom: calc(var(--sky-safe-area-bottom) + 16px);
+  padding-left: calc(var(--sky-safe-area-left) + 16px);
   color: var(--sky-text);
 }
 
-.sky-tabbar--floating {
-  right: var(--sky-space-4);
-  bottom: calc(var(--sky-safe-area-bottom) + 10px);
-  left: var(--sky-space-4);
-  min-height: 62px;
-  padding: 0;
-  border: 1px solid var(--sky-hairline);
-  border-radius: 999px;
-  background: var(--sky-surface);
-  box-shadow:
-    0 12px 28px rgba(0, 0, 0, 0.34),
-    inset 0 1px rgba(255, 255, 255, 0.04);
+.sky-tabbar--icons.sky-tabbar--labels {
+  --sky-tabbar-pane-height: 64px;
 }
 
-.sky-tabbar--floating .sky-tabbar__inner {
-  min-height: 60px;
-  padding: 3px;
+.sky-tabbar__blur,
+.sky-tabbar__background {
+  width: 100%;
+  height: calc(
+    var(--sky-safe-area-bottom) + var(--sky-tabbar-pane-height) + 32px
+  );
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
 }
 
-.sky-tabbar--floating .sky-tabbar__pane {
-  min-height: 60px;
+.sky-tabbar__blur {
+  display: none;
 }
 
-.sky-tabbar__inner,
+.sky-tabbar__background {
+  background: linear-gradient(to top, var(--sky-bg), transparent);
+}
+
+.sky-tabbar__inner {
+  width: 100%;
+  min-width: 0;
+  height: var(--sky-tabbar-pane-height);
+  position: relative;
+}
+
 .sky-tabbar__pane {
   width: 100%;
   min-width: 0;
-  min-height: var(--sky-tabbar-height);
+  height: 100%;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--sky-radius-pill);
 }
 
-.sky-tabbar__pane {
+.sky-tabbar__links {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: stretch;
 }
 
-.sky-tabbar::before {
+.sky-tabbar__highlight {
+  height: 100%;
   position: absolute;
-  right: 0;
-  bottom: 100%;
+  z-index: 0;
+  top: 0;
   left: 0;
-  height: 16px;
-  content: '';
-  background: linear-gradient(to top, var(--sky-glass-solid), transparent);
+  border-radius: inherit;
   pointer-events: none;
+  transition: transform 300ms ease;
 }
 
-.sky-tabbar__pane > button,
-.sky-tabbar__pane > a {
+[dir='rtl'] .sky-tabbar__highlight,
+.sky-tabbar[dir='rtl'] .sky-tabbar__highlight {
+  right: 0;
+  left: auto;
+}
+
+.sky-tabbar__highlight-inner,
+.sky-tabbar__highlight-thumb {
+  position: absolute;
+  inset: 4px;
+  border-radius: inherit;
+  pointer-events: none;
+  transition:
+    opacity 300ms ease,
+    transform 300ms ease;
+}
+
+.sky-tabbar__highlight-inner {
+  background: var(--sky-tabbar-highlight-background, rgba(0, 0, 0, 0.1));
+}
+
+.sky-tabbar__highlight-thumb {
+  background: var(--sky-tabbar-thumb-background, rgba(0, 0, 0, 0.05));
+  box-shadow: var(--sky-shadow-glass-thumb);
+  opacity: 0;
+}
+
+.sky-tabbar__highlight--pressed .sky-tabbar__highlight-inner {
+  opacity: 0;
+  transform: scale(1.4);
+}
+
+.sky-tabbar__highlight--pressed .sky-tabbar__highlight-thumb {
+  opacity: 1;
+  transform: scale(1.4);
+}
+
+.sky-tabbar__links > button,
+.sky-tabbar__links > a {
   box-sizing: border-box;
   min-width: 0;
-  min-height: var(--sky-tabbar-height);
+  min-height: var(--sky-tabbar-pane-height);
   margin: 0;
-  padding: var(--sky-space-1) var(--sky-space-2);
+  padding: 4px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -770,13 +827,6 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.sky-tabbar__pane > button:active,
-.sky-tabbar__pane > a:active {
-  background: var(--sky-app-accent-soft);
-  transform: scale(0.96);
-  transition-duration: 0ms;
-}
-
 @supports (
   (-webkit-backdrop-filter: blur(2px)) or (backdrop-filter: blur(2px))
 ) {
@@ -786,14 +836,12 @@
     backdrop-filter: blur(16px);
   }
 
-  .sky-tabbar {
-    background: var(--sky-glass);
+  .sky-tabbar__blur {
+    display: block;
     -webkit-backdrop-filter: blur(2px);
     backdrop-filter: blur(2px);
-  }
-
-  .sky-tabbar::before {
-    background: linear-gradient(to top, var(--sky-glass), transparent);
+    -webkit-mask-image: linear-gradient(transparent 0%, #000 50%, #000 100%);
+    mask-image: linear-gradient(transparent 0%, #000 50%, #000 100%);
   }
 }
 
@@ -812,19 +860,19 @@
   }
 }
 
-.sky-tabbar__pane > button > span,
-.sky-tabbar__pane > a > span {
+.sky-tabbar__links > button > span,
+.sky-tabbar__links > a > span {
   min-width: 0;
   max-width: 100%;
 }
 
-.sky-tabbar__pane > button > span > span:last-child,
-.sky-tabbar__pane > a > span > span:last-child {
+.sky-tabbar__links > button > span > span:last-child,
+.sky-tabbar__links > a > span > span:last-child {
   max-width: 100%;
   overflow: hidden;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 13px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
   text-overflow: ellipsis;
 }
 

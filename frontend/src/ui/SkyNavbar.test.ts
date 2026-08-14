@@ -188,19 +188,13 @@ describe('SkyNavbar', () => {
   })
 
   it('separates and fades the Konsta navbar blur before the scroll content', () => {
-    const blurEnhancement = foundationStyles.slice(
-      foundationStyles.indexOf(
-        '@supports (\n  (-webkit-backdrop-filter: blur(2px))',
-      ),
-    )
-
     expect(foundationStyles).toMatch(
       /\.sky-navbar__background\s*\{[\s\S]*?linear-gradient\([\s\S]*?--sky-navbar-glass[\s\S]*?transparent 100%/,
     )
-    expect(blurEnhancement).toMatch(
+    expect(foundationStyles).toMatch(
       /@supports[\s\S]*?-webkit-mask-image: linear-gradient\(#000, transparent\)[\s\S]*?\.sky-navbar__blur\s*\{[\s\S]*?backdrop-filter: blur\(2px\)[\s\S]*?-webkit-mask-image: linear-gradient\([\s\S]*?#000 50%[\s\S]*?transparent 100%/,
     )
-    expect(blurEnhancement).not.toMatch(
+    expect(foundationStyles).not.toMatch(
       /\.sky-navbar__background\s*\{[^}]*backdrop-filter/,
     )
   })
@@ -265,7 +259,7 @@ describe('SkyNavbar', () => {
     )
   })
 
-  it('provides the Konsta navigation context to segmented subnavbar content', async () => {
+  it('provides the Konsta navbar Glass context to segmented content', async () => {
     const html = await renderToString(
       createSSRApp({
         render: () =>
@@ -292,8 +286,10 @@ describe('SkyNavbar', () => {
     expect(html).toContain('sky-navbar__subnavbar')
     expect(html).toContain('sky-glass')
     expect(html).toContain('sky-glass--highlight')
-    expect(html).toContain('sky-segmented--navigation')
+    expect(html).toContain('sky-segmented--navbar')
+    expect(html).not.toContain('sky-segmented--navigation')
     expect(html).toContain('sky-segmented__highlight')
+    expect(foundationStyles).toContain('height: 56px')
   })
 
   it('lets subnavbar content explicitly opt out of navigation Glass', async () => {

@@ -1,10 +1,12 @@
+import { readFileSync } from 'node:fs'
+
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { describe, expect, it } from 'vitest'
 
 import SkyField from '@/ui/controls/SkyField.vue'
 
-describe('SkyField numeric constraints', () => {
+describe('SkyField', () => {
   it('forwards min, max, and step to the native input', async () => {
     const app = createSSRApp(SkyField, {
       ariaLabel: 'Primary frequency',
@@ -71,6 +73,97 @@ describe('SkyField numeric constraints', () => {
     expect(input).toContain('autocorrect="off"')
     expect(input).toContain('pattern="[A-Z0-9]+"')
     expect(input).toContain('spellcheck="false"')
+  })
+
+  it('renders a native date input without changing its accessible label', async () => {
+    const app = createSSRApp(SkyField, {
+      id: 'birthday',
+      label: 'Birthday',
+      modelValue: '2014-04-30',
+      type: 'date',
+    })
+
+    const html = await renderToString(app)
+
+    expect(html).toContain('<label class="sky-field__label" for="birthday"')
+    expect(html).toMatch(
+      /<input[^>]+id="birthday"[^>]+type="date"[^>]+value="2014-04-30"/,
+    )
+  })
+
+  it('renders typed select options and native options from the default slot', async () => {
+    const options = [
+      { label: 'Male', value: 'male' },
+      { disabled: true, label: 'Unavailable', value: 0 },
+    ] as const
+    const app = createSSRApp({
+      render: () =>
+        h(
+          SkyField,
+          {
+            ariaLabel: 'Gender',
+            modelValue: 'male',
+            options,
+            placeholder: 'Please choose...',
+            type: 'select',
+          },
+          {
+            default: () => h('option', { value: 'custom' }, 'Custom'),
+          },
+        ),
+    })
+
+    const html = await renderToString(app)
+    const select = html.match(/<select[^>]+>/)?.[0] ?? ''
+
+    expect(select).toContain('class="sky-field__input sky-field__select"')
+    expect(select).toContain('aria-label="Gender"')
+    expect(select).toContain('value="male"')
+    expect(html).toContain(
+      '<option disabled value="">Please choose...</option>',
+    )
+    expect(html).toContain('<option value="male">Male</option>')
+    expect(html).toContain('<option disabled value="0">Unavailable</option>')
+    expect(html).toContain('<option value="custom">Custom</option>')
+  })
+
+  it('raises floating labels only after the field has a value', async () => {
+    const emptyApp = createSSRApp(SkyField, {
+      floatingLabel: true,
+      label: 'Name',
+      placeholder: 'Your name',
+    })
+    const valuedApp = createSSRApp(SkyField, {
+      floatingLabel: true,
+      label: 'Name',
+      modelValue: 'Sky',
+      placeholder: 'Your name',
+    })
+
+    const emptyHtml = await renderToString(emptyApp)
+    const valuedHtml = await renderToString(valuedApp)
+
+    expect(emptyHtml).toContain('sky-field--floating-label')
+    expect(emptyHtml).not.toContain('sky-field--floating-raised')
+    expect(valuedHtml).toContain('sky-field--floating-label')
+    expect(valuedHtml).toContain('sky-field--floating-raised')
+  })
+
+  it('keeps floating-label controls touch-sized and reduced-motion aware', () => {
+    const controls = readFileSync(
+      new URL('../controls.css', import.meta.url),
+      'utf8',
+    )
+
+    expect(controls).toMatch(
+      /\.sky-field__input\s*\{[^}]*min-height:\s*var\(--sky-touch-target, 44px\)/s,
+    )
+    expect(controls).toMatch(
+      /\.sky-field--floating-label:not\(\.sky-field--inline\) \.sky-field__control\s*\{[^}]*min-height:\s*58px;[^}]*padding-top:\s*14px/s,
+    )
+    expect(controls).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\.sky-field__label/s,
+    )
   })
 
   it('renders an explicitly labelled clear control only for a non-empty value', async () => {

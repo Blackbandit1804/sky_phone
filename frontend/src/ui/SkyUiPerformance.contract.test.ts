@@ -72,6 +72,9 @@ describe('Sky UI graphics modes', () => {
     expect(performanceCss).toMatch(
       /\.phone-app--performance \.sky-segmented--navigation\s*\{[^}]*background:\s*var\(--phone-performance-glass\)[^}]*box-shadow:\s*none/s,
     )
+    expect(performanceCss).toMatch(
+      /\.phone-app--performance \.sky-segmented--navbar\s*\{[^}]*background:\s*var\(--phone-performance-glass\)[^}]*box-shadow:\s*none/s,
+    )
     expect(controlsCss).toMatch(
       /\.sky-glass\s*\{[^}]*background:\s*var\(--sky-glass-solid[^}]*box-shadow:\s*var\(--sky-shadow-glass\)/s,
     )

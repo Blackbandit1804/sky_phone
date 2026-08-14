@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import SkyChipDeleteIcon from './SkyChipDeleteIcon.vue'
+
 defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
@@ -104,7 +106,7 @@ function handleDelete(event: KeyboardEvent | MouseEvent): void {
       @keydown.space.prevent.stop="handleDelete"
     >
       <slot name="delete">
-        <span class="sky-chip__delete-icon" aria-hidden="true" />
+        <SkyChipDeleteIcon />
       </slot>
     </span>
   </component>

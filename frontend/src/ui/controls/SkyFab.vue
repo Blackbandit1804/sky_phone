@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, useSlots } from 'vue'
 
+import SkyGlass from './SkyGlass.vue'
+
 defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
@@ -59,17 +61,24 @@ function handleClick(event: MouseEvent): void {
 </script>
 
 <template>
-  <component
-    :is="component"
+  <SkyGlass
     v-bind="{ ...$attrs, ...elementProps }"
+    :component="component"
+    :disabled="disabled"
+    :href="href"
+    :type="type"
     class="sky-fab"
     :class="{
       'sky-fab--disabled': disabled,
       'sky-fab--icon-only': !hasText,
       'sky-fab--with-text': hasText,
     }"
+    role="button"
     @click="handleClick"
   >
+    <span class="sky-fab__accent-layer" aria-hidden="true"></span>
+    <span class="sky-fab__dark-accent-layer" aria-hidden="true"></span>
+    <span class="sky-fab__surface-layer" aria-hidden="true"></span>
     <span v-if="hasText && textPosition === 'before'" class="sky-fab__text">
       {{ text }}<slot name="text" />
     </span>
@@ -80,5 +89,5 @@ function handleClick(event: MouseEvent): void {
       {{ text }}<slot name="text" />
     </span>
     <slot />
-  </component>
+  </SkyGlass>
 </template>
