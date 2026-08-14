@@ -244,6 +244,9 @@ const PHONE_PORTRAIT_WIDTH = 390
 const PHONE_PORTRAIT_HEIGHT = 844
 const MIN_PRODUCTION_PHONE_ZOOM = 260 / PHONE_PORTRAIT_WIDTH
 const isDevelopment = import.meta.env.DEV
+const developmentParameters = new URLSearchParams(window.location.search)
+const developmentLockScreenPreview =
+  isDevelopment && developmentParameters.has('lockScreenPreview')
 
 const phone = usePhoneStore()
 const account = useAccountStore()
@@ -1177,7 +1180,6 @@ onMounted(() => {
     }
   }, 1000)
   if (isDevelopment) {
-    const developmentParameters = new URLSearchParams(window.location.search)
     void hydrateDevelopmentPhone()
     if (developmentParameters.has('simPickerPreview')) {
       simPicker.value = {
@@ -1251,7 +1253,7 @@ watch(
       }
       return
     }
-    isLocked.value = true
+    isLocked.value = !isDevelopment || developmentLockScreenPreview
     unlockedServicesLoaded.value = false
     controlCenterOpened.value = false
     weather.start()
@@ -1268,7 +1270,8 @@ watch(
       startPasscodeLock(passcodeRetrySeconds.value)
     }
     phone.setLaunchOrigin(null)
-    void router.replace('/')
+    if (isLocked.value) void router.replace('/')
+    else loadUnlockedPhoneData()
   },
 )
 

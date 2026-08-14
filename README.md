@@ -301,6 +301,7 @@ The browser bootstrap includes contacts, calls, messages, mail, invoices, transa
 
 System overlays are available through dedicated preview parameters:
 
+- Lock screen: `http://localhost:5174/?apiPort=3002&lockScreenPreview=1`
 - SIM picker: `http://localhost:5174/?apiPort=3002&simPickerPreview=1`
 - Payphone: `http://localhost:5174/?apiPort=3002&payphonePreview=1` (dial `5551110001` for a connected call or `5550000000` for a busy line)
 
