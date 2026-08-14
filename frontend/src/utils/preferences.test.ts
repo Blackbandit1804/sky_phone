@@ -2,10 +2,39 @@ import { describe, expect, it } from 'vitest'
 import type { LaunchablePhoneAppId } from '@/types/apps'
 import {
   DEFAULT_PHONE_PREFERENCES,
+  PHONE_SETUP_LAST_STEP,
   parsePhonePreferences,
   WALLPAPER_IDS,
 } from './preferences'
 describe('preferences', () => {
+  it('starts Setup Assistant for a phone without saved settings', () => {
+    const value = parsePhonePreferences(null)
+
+    expect(value.settings.setupCompleted).toBe(false)
+    expect(value.settings.setupStep).toBe(0)
+  })
+
+  it('migrates existing phones past Setup Assistant', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({ version: 1, settings: { wallpaper: 'aurora' } }),
+    )
+
+    expect(value.settings.setupCompleted).toBe(true)
+    expect(value.settings.setupStep).toBe(PHONE_SETUP_LAST_STEP)
+  })
+
+  it('restores an interrupted Setup Assistant step', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({
+        version: 1,
+        settings: { setupCompleted: false, setupStep: 5 },
+      }),
+    )
+
+    expect(value.settings.setupCompleted).toBe(false)
+    expect(value.settings.setupStep).toBe(5)
+  })
+
   it('falls back for malformed and obsolete records', () => {
     expect(parsePhonePreferences('{')).toEqual(DEFAULT_PHONE_PREFERENCES)
     expect(parsePhonePreferences('{"version":2}')).toEqual(

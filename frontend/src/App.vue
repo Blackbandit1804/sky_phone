@@ -16,6 +16,7 @@ import PhoneMediaCapture from '@/components/PhoneMediaCapture.vue'
 import PhoneMemoRecorder from '@/components/PhoneMemoRecorder.vue'
 import PhoneLockScreen from '@/components/PhoneLockScreen.vue'
 import PhonePasscode from '@/components/PhonePasscode.vue'
+import PhoneSetupAssistant from '@/components/PhoneSetupAssistant.vue'
 import PhoneNotifications from '@/components/PhoneNotifications.vue'
 import NotificationPhonePreview from '@/components/NotificationPhonePreview.vue'
 import PhoneStatusBar from '@/components/PhoneStatusBar.vue'
@@ -293,11 +294,19 @@ const passcodeError = ref('')
 const passcodeResetKey = ref(0)
 const passcodeRetrySeconds = ref(0)
 const passcodeVisible = ref(false)
+const setupPreviewDismissed = ref(false)
 const pendingUnlockRoute = ref<string | null>(null)
 const unlockedServicesLoaded = ref(false)
 const controlCenterOpened = ref(false)
 const activitySuspended = ref(false)
 const simPicker = ref<SimPickerPayload | null>(null)
+const setupRequired = computed(
+  () =>
+    !phone.preferences.settings.setupCompleted ||
+    (isDevelopment &&
+      developmentParameters.has('setupPreview') &&
+      !setupPreviewDismissed.value),
+)
 const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)')
 const viewportScale = ref(getViewportScale())
 const phoneBaseZoom = computed(
@@ -441,6 +450,16 @@ function loadUnlockedPhoneData(): void {
     void companies.refreshUnreadCounts()
     if (account.email) void darkchat.bootstrap()
   })
+}
+
+function completePhoneSetup(): void {
+  setupPreviewDismissed.value = true
+  isLocked.value = false
+  isUnlocking.value = false
+  passcodeVisible.value = false
+  controlCenterOpened.value = false
+  void router.replace('/')
+  loadUnlockedPhoneData()
 }
 
 async function hydrateDevelopmentPhone(): Promise<void> {
@@ -1253,7 +1272,9 @@ watch(
       }
       return
     }
-    isLocked.value = !isDevelopment || developmentLockScreenPreview
+    isLocked.value = setupRequired.value
+      ? false
+      : !isDevelopment || developmentLockScreenPreview
     unlockedServicesLoaded.value = false
     controlCenterOpened.value = false
     weather.start()
@@ -1270,7 +1291,7 @@ watch(
       startPasscodeLock(passcodeRetrySeconds.value)
     }
     phone.setLaunchOrigin(null)
-    if (isLocked.value) void router.replace('/')
+    if (isLocked.value || setupRequired.value) void router.replace('/')
     else loadUnlockedPhoneData()
   },
 )
@@ -1379,31 +1400,33 @@ onBeforeUnmount(() => {
                   v-if="!isLocked"
                   :active-call-return="showActiveCallReturn"
                   :control-center-opened="controlCenterOpened"
-                  lockable
+                  :interactive="!setupRequired"
+                  :lockable="!setupRequired"
                   @active-call="returnToActiveCall"
                   @control-center="toggleControlCenter"
                   @lock="lockPhone"
                 />
-                <SpringboardView v-if="!isDevelopmentRoute" />
+                <SpringboardView v-if="!isDevelopmentRoute && !setupRequired" />
                 <RouterView v-slot="{ Component }">
                   <Transition :name="appTransitionName">
                     <component
                       :is="Component"
-                      v-if="isAppRoute || isDevelopmentRoute"
+                      v-if="!setupRequired && (isAppRoute || isDevelopmentRoute)"
                       :key="
                         isDevelopmentRoute ? String(route.name) : route.path
                       "
                     />
                   </Transition>
                 </RouterView>
-                <PhoneHomeIndicator v-if="!isLocked" />
+                <PhoneHomeIndicator v-if="!isLocked && !setupRequired" />
                 <PhoneControlCenter
+                  v-if="!setupRequired"
                   :opened="controlCenterOpened"
                   @close="controlCenterOpened = false"
                 />
                 <Transition name="lock-screen">
                   <PhoneLockScreen
-                    v-if="isLocked"
+                    v-if="isLocked && !setupRequired"
                     :notifications="notifications.lockScreenNotifications"
                     @camera="unlockCamera"
                     @clear-notifications="notifications.clearLockScreen"
@@ -1414,7 +1437,7 @@ onBeforeUnmount(() => {
                 </Transition>
                 <Transition name="lock-screen">
                   <PhonePasscode
-                    v-if="isLocked && passcodeVisible"
+                    v-if="isLocked && passcodeVisible && !setupRequired"
                     :busy="passcodeBusy"
                     :disabled="passcodeRetrySeconds > 0"
                     :error="passcodeError"
@@ -1432,6 +1455,10 @@ onBeforeUnmount(() => {
                     @complete="submitUnlockPasscode"
                   />
                 </Transition>
+                <PhoneSetupAssistant
+                  v-if="setupRequired"
+                  @complete="completePhoneSetup"
+                />
                 <PhoneNotifications
                   :notification="notifications.current"
                   @close="notifications.dismissCurrent()"

@@ -12,6 +12,7 @@ import { nuiCall } from '@/utils/nui'
 import type { NuiResponse } from '@/utils/nui'
 import {
   DEFAULT_PHONE_PREFERENCES,
+  PHONE_SETUP_LAST_STEP,
   clampPhoneScale,
   ensureAppNotificationPreferences,
   parsePhonePreferences,
@@ -3900,11 +3901,38 @@ const defaultLocales: LocaleTree = {
       removeDeviceBody:
         'Enter your Sky Cloud password to remove this device from the account.',
       signOut: 'Sign Out',
+      reset: 'Transfer or Reset Phone',
+      transferOrReset: 'Transfer or Reset Phone',
+      transferOrResetDescription: 'Prepare this phone for a fresh setup',
+      resetHeroTitle: 'A clean start, without losing what follows you',
+      resetHeroBody:
+        'Erase local content and settings from this phone. Information attached to your SIM or stored in supported accounts remains available.',
+      erasedFromPhone: 'Erased From This Phone',
+      eraseDeviceSettings: 'Passcode, preferences and Home Screen layout',
+      eraseLocalContent: 'Photos, notes and content stored only locally',
+      eraseLocalApps: 'Downloaded apps and local app sessions',
+      keptSafe: 'Kept Safe',
+      keepSimData: 'SIM Card & Phone Number',
+      keepSimDataBody: 'Your number and SIM-backed communication remain on the SIM.',
+      keepCloudData: 'Account & Cloud Data',
+      keepCloudDataBody: 'Supported information remains in its app or Sky Cloud account.',
+      resetSetupAssistant: 'When erasing is complete, Setup Assistant starts automatically.',
       factoryReset: 'Erase All Content and Settings',
       factoryResetBody:
-        'This removes the account and all local data from this phone. Cloud data and the IMEI remain.',
-      factoryResetProgress: 'Erasing iFruit Phone',
-      factoryResetWarning: 'Do not turn off this phone. This takes 60 seconds.',
+        'This cannot be undone. Local settings, apps and unsynced content are erased. Your SIM number and account-backed data remain available.',
+      factoryResetProgress: 'Erasing Sky Phone',
+      factoryResetWarning: 'Keep this phone open. Your SIM and cloud data are safe.',
+      factoryResetSystemProcess: 'Secure system process',
+      factoryResetPreparing: 'Preparing secure reset',
+      factoryResetPreparingDetail: 'Checking device data',
+      factoryResetRemoving: 'Removing personal data',
+      factoryResetRemovingDetail: 'Clearing apps and local content',
+      factoryResetSecuring: 'Protecting linked services',
+      factoryResetSecuringDetail: 'Preserving SIM and cloud data',
+      factoryResetFinishing: 'Finishing setup',
+      factoryResetFinishingDetail: 'Preparing the welcome screen',
+      factoryResetSimSafe: 'SIM protected',
+      factoryResetCloudSafe: 'Cloud protected',
       passcode: {
         description:
           'A passcode protects the contents of this phone. It stays with the device when the SIM or Sky Cloud account changes.',
@@ -4023,11 +4051,141 @@ const defaultLocales: LocaleTree = {
     volume: 'Volume',
     wifi: 'Wi-Fi',
   },
+  Setup: {
+    title: 'Sky Phone Setup Assistant',
+    ownerFallback: 'Sky Phone Owner',
+    getStarted: 'Get Started',
+    setUpLater: 'Set Up Later',
+    welcome: {
+      title: 'Welcome to Sky Phone',
+      eyebrow: 'Designed around you',
+      hello: 'hello',
+      hallo: 'hallo',
+      bonjour: 'bonjour',
+      body: 'Hello, {name}. Let’s make this phone unmistakably yours.',
+      private: 'Private by design',
+      personal: 'Made for you',
+    },
+    connection: {
+      eyebrow: 'Mobile Connection',
+      title: 'Your connection is ready',
+      body: 'Sky Phone automatically detects the SIM installed in this device.',
+      noSim: 'No SIM installed',
+      ready: 'Connected to the Sky network',
+      offline: 'Phone works offline; calls and messages require a SIM',
+      preserved:
+        'Your SIM number and SIM-backed conversations remain with the SIM, even if this phone is erased.',
+    },
+    cloud: {
+      eyebrow: 'Sky Cloud',
+      title: 'Keep important data with you',
+      body: 'Sign in to sync supported app data and recover it on another Sky Phone.',
+      signIn: 'Sign In',
+      create: 'Create Account',
+      signInTitle: 'Sign in to Sky Cloud',
+      createTitle: 'Create your Sky Cloud account',
+      signInBody: 'Access your protected data, purchases and settings on this phone.',
+      createBody: 'Choose your personal iFruit address and keep important data available across devices.',
+      accountPreview: 'Your Sky Cloud ID',
+      accountName: 'Account name',
+      addressPlaceholder: 'alex.morgan',
+      email: 'Sky Cloud Email',
+      password: 'Password',
+      confirmPassword: 'Confirm Password',
+      passwordMismatch: 'The passwords do not match.',
+      strength0: 'At least 6 characters',
+      strength1: 'Basic password',
+      strength2: 'Good password',
+      strength3: 'Strong password',
+      strength4: 'Excellent password',
+      signInAction: 'Sign In Securely',
+      createAction: 'Create Sky Cloud Account',
+      securityNote: 'Encrypted connection · Your password stays private',
+      connected: 'Sky Cloud connected',
+      invalid: 'Enter a valid email and a password with at least 6 characters.',
+      errors: {
+        invalid_email: 'Enter a valid Sky Cloud email.',
+        invalid_password: 'Your password must contain at least 6 characters.',
+        invalid_credentials: 'Email or password is incorrect.',
+        email_taken: 'This Sky Cloud email is already registered.',
+        rate_limited: 'Too many attempts. Try again shortly.',
+        request_failed: 'Sky Cloud is temporarily unavailable.',
+      },
+    },
+    security: {
+      eyebrow: 'Privacy & Security',
+      title: 'Protect this phone',
+      body: 'Choose a four- or six-digit passcode to keep your apps and local information private.',
+      local: 'The passcode belongs to this physical phone and is never transferred with the SIM.',
+      create: 'Create Passcode',
+      createSelected: 'Create {count}-Digit Passcode',
+      lengthTitle: 'Choose passcode length',
+      fourDigit: '4-Digit Code',
+      sixDigit: '6-Digit Code',
+      enter: 'Create a Passcode',
+      confirm: 'Verify Your Passcode',
+      codeHint: 'Enter a memorable six-digit code.',
+      fourDigitHint: 'Enter a memorable four-digit code.',
+      sixDigitHint: 'Enter a memorable six-digit code.',
+      mismatch: 'The passcodes did not match. Try again.',
+      failed: 'The passcode could not be saved.',
+    },
+    appearance: {
+      eyebrow: 'Display',
+      title: 'Choose your appearance',
+      body: 'Automatic follows your system. You can change this at any time in Settings.',
+    },
+    performance: {
+      eyebrow: 'Performance',
+      title: 'Choose how your phone feels',
+      body: 'Balance responsiveness and visual effects for your FiveM setup.',
+      performance: 'Fastest response with optimized, blur-free glass.',
+      ultimate: 'Rich depth, live blur and the complete glass experience.',
+      changeLater: 'You can switch modes later under Settings › Appearance.',
+    },
+    wallpaper: {
+      eyebrow: 'Personalize',
+      title: 'Make it yours',
+      body: 'Choose one of twelve crafted Sky Phone backgrounds.',
+    },
+    notifications: {
+      eyebrow: 'Stay Informed',
+      title: 'Notifications your way',
+      body: 'Choose how apps may reach you. Critical alarms and calls stay available.',
+      allow: 'Allow App Notifications',
+      allowBody: 'Show banners, lock-screen updates and badges.',
+      sounds: 'Notification Sounds',
+      soundsBody: 'Play a subtle sound for incoming updates.',
+    },
+    apps: {
+      eyebrow: 'Suggested for You',
+      title: 'Start with your favorites',
+      body: 'Choose optional apps. Every essential phone app is already included.',
+      install: 'Add {count} Apps',
+      descriptions: {
+        banking: 'Secure city banking',
+        garage: 'Your vehicles at a glance',
+        skyride: 'Request a ride',
+        citymarkt: 'Shop local listings',
+        picstagram: 'Share photos',
+        snake: 'A timeless game',
+      },
+    },
+    ready: {
+      eyebrow: 'Setup Complete',
+      title: 'Welcome, {name}',
+      body: 'Your Sky Phone is configured and ready. Your choices can always be refined in Settings.',
+      localOnly: 'Stored on this phone',
+      enter: 'Enter Sky Phone',
+      review: 'Review Setup',
+    },
+  },
   Common: {
     add: 'Add',
     cancel: 'Cancel',
     clear: 'Clear',
     close: 'Close',
+    continue: 'Continue',
     back: 'Back',
     delete: 'Delete',
     done: 'Done',
@@ -4372,6 +4530,34 @@ export const usePhoneStore = defineStore('phone', {
       this.preferences.settings.notificationVolume = volume
       this.preferences.settings.ringtoneVolume = volume
       this.saveDeviceNamespace('settings', this.preferences)
+    },
+    setAllAppNotifications(enabled: boolean, sounds: boolean): void {
+      for (const preferences of Object.values(
+        this.preferences.settings.notifications,
+      )) {
+        preferences.enabled = enabled
+        preferences.sounds = enabled && sounds
+      }
+      this.saveDeviceNamespace('settings', this.preferences)
+    },
+    setSetupStep(step: number): void {
+      this.preferences.settings.setupStep = Math.min(
+        PHONE_SETUP_LAST_STEP,
+        Math.max(0, Math.floor(step)),
+      )
+      this.saveDeviceNamespace('settings', this.preferences)
+    },
+    completeSetup(): void {
+      this.preferences.settings.setupCompleted = true
+      this.preferences.settings.setupStep = PHONE_SETUP_LAST_STEP
+      this.saveDeviceNamespace('settings', this.preferences)
+    },
+    resetAfterFactoryReset(): void {
+      this.persistenceGeneration += 1
+      this.preferences = cloneJsonData(DEFAULT_PHONE_PREFERENCES)
+      this.deviceRevisions = {}
+      if (this.device) this.device.data = {}
+      this.security = { enabled: false, length: null, lockedUntil: 0 }
     },
     setSystemDarkMode(value: boolean): void {
       this.systemDarkMode = value

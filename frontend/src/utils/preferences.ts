@@ -39,6 +39,7 @@ export const WALLPAPER_IDS = [
 export const PHONE_SCALE_MIN = 75
 export const PHONE_SCALE_MAX = 150
 export const PHONE_SCALE_STEP = 5
+export const PHONE_SETUP_LAST_STEP = 9
 
 export type AppearanceMode = (typeof APPEARANCE_MODE_IDS)[number]
 export type GraphicsMode = (typeof GRAPHICS_MODE_IDS)[number]
@@ -79,6 +80,8 @@ export type PhonePreferencesV1 = {
     ringtone: RingtoneId
     ringtoneVolume: number
     screenBrightness: number
+    setupCompleted: boolean
+    setupStep: number
     streamerMode: boolean
     wallpaper: WallpaperId
     wallpaperHistory: WallpaperHistoryEntry[]
@@ -149,6 +152,8 @@ export const DEFAULT_PHONE_PREFERENCES: PhonePreferencesV1 = {
     ringtone: 'skyline',
     ringtoneVolume: 80,
     screenBrightness: 100,
+    setupCompleted: false,
+    setupStep: 0,
     streamerMode: false,
     wallpaper: 'midnight',
     wallpaperHistory: [{ imageUrl: null, wallpaper: 'midnight' }],
@@ -341,6 +346,20 @@ export function parsePhonePreferences(raw: string | null): PhonePreferencesV1 {
           defaults.screenBrightness,
           10,
           100,
+        ),
+        setupCompleted:
+          typeof settings.setupCompleted === 'boolean'
+            ? settings.setupCompleted
+            : true,
+        setupStep: Math.floor(
+          readNumber(
+            settings.setupStep,
+            typeof settings.setupCompleted === 'boolean'
+              ? defaults.setupStep
+              : PHONE_SETUP_LAST_STEP,
+            0,
+            PHONE_SETUP_LAST_STEP,
+          ),
         ),
         streamerMode: readBoolean(settings.streamerMode, defaults.streamerMode),
         wallpaper,

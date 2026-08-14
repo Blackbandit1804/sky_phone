@@ -9,11 +9,13 @@ const props = withDefaults(
   defineProps<{
     activeCallReturn?: boolean
     controlCenterOpened?: boolean
+    interactive?: boolean
     lockable?: boolean
   }>(),
   {
     activeCallReturn: false,
     controlCenterOpened: false,
+    interactive: true,
     lockable: false,
   },
 )
@@ -30,6 +32,7 @@ function updateTime(): void {
 }
 
 function handleTimeClick(): void {
+  if (!props.interactive) return
   if (props.activeCallReturn) {
     emit('activeCall')
     return
@@ -76,7 +79,8 @@ onBeforeUnmount(() => {
       type="button"
       :aria-label="phone.t('ControlCenter.open')"
       :aria-expanded="controlCenterOpened"
-      @click.stop="emit('controlCenter')"
+      :disabled="!interactive"
+      @click.stop="interactive && emit('controlCenter')"
     >
       <PhoneStatusIndicators
         :airplane-mode="phone.preferences.settings.airplaneMode"

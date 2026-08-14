@@ -7969,12 +7969,14 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'development:bootstrap') {
-    authenticated = true
-    linkedAccount = {
-      devices: accountDevices,
-      email: 'demo@ifruit.com',
-      id: 1,
-    }
+    authenticated = testScenario !== 'setup-account-unlinked'
+    linkedAccount = authenticated
+      ? {
+          devices: accountDevices,
+          email: 'demo@ifruit.com',
+          id: 1,
+        }
+      : null
     if (
       testScenario === 'feather-onboarding' ||
       testScenario === 'feather-register'

@@ -46,4 +46,12 @@ describe('SettingsApp Sky UI contract', () => {
       /\.settings-wallpaper-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/,
     )
   })
+
+  it('places destructive erasure behind a dedicated reset explanation', () => {
+    expect(source).toContain("openView('reset')")
+    expect(source).toContain("activeView === 'reset'")
+    expect(source).toContain("phone.t('Apps.settings.keepSimData')")
+    expect(source).toContain("phone.t('Apps.settings.keepCloudData')")
+    expect(source).toContain('phone.resetAfterFactoryReset()')
+  })
 })

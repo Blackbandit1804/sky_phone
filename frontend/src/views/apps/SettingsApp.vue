@@ -4,6 +4,7 @@ import {
   Bluetooth,
   Camera,
   Check,
+  Cloud,
   EyeOff,
   KeyRound,
   Images,
@@ -13,6 +14,7 @@ import {
   Plane,
   RotateCcw,
   Settings,
+  ShieldCheck,
   Signal,
   Smartphone,
   Sun,
@@ -41,6 +43,7 @@ import { useMessageMediaStore } from '@/stores/messageMedia'
 import PhonePasscode from '@/components/PhonePasscode.vue'
 import { useAccountStore } from '@/stores/account'
 import { useAppAuthStore } from '@/stores/app-auth'
+import { useAppStoreStore } from '@/stores/app-store'
 import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
@@ -60,7 +63,6 @@ import {
   SkyField,
   SkyLink,
   SkyNavbar,
-  SkyProgress,
   SkyScrollArea,
   SkySearchbar,
   SkySegmented,
@@ -102,6 +104,7 @@ type SettingsView =
   | 'general'
   | 'appearance'
   | 'wallpaper'
+  | 'reset'
 type RootToggleKey =
   | 'airplaneMode'
   | 'streamerMode'
@@ -119,7 +122,8 @@ type PasscodeFlow =
   | 'disable'
   | null
 
-const FACTORY_RESET_DURATION_MS = 60_000
+const FACTORY_RESET_DURATION_MS = 8_000
+const FACTORY_RESET_RING_CIRCUMFERENCE = 289.03
 
 const phone = usePhoneStore()
 const mediaPicker = useMessageMediaStore()
@@ -128,6 +132,7 @@ const router = useRouter()
 const isDevelopment = import.meta.env.DEV
 const account = useAccountStore()
 const appAuth = useAppAuthStore()
+const appStore = useAppStoreStore()
 const query = ref('')
 const activeView = ref<SettingsView>('root')
 const selectedNotificationAppId = ref<LaunchablePhoneAppId>('calculator')
@@ -155,6 +160,43 @@ const factoryResetting = ref(false)
 const factoryResetProgress = ref(0)
 const selectedFrameColor = computed(
   () => PHONE_FRAME_COLORS[phone.preferences.settings.frame],
+)
+const factoryResetPhase = computed(() => {
+  if (factoryResetProgress.value < 18) {
+    return {
+      detail: phone.t('Apps.settings.factoryResetPreparingDetail'),
+      index: 0,
+      label: phone.t('Apps.settings.factoryResetPreparing'),
+    }
+  }
+  if (factoryResetProgress.value < 72) {
+    return {
+      detail: phone.t('Apps.settings.factoryResetRemovingDetail'),
+      index: 1,
+      label: phone.t('Apps.settings.factoryResetRemoving'),
+    }
+  }
+  if (factoryResetProgress.value < 94) {
+    return {
+      detail: phone.t('Apps.settings.factoryResetSecuringDetail'),
+      index: 2,
+      label: phone.t('Apps.settings.factoryResetSecuring'),
+    }
+  }
+  return {
+    detail: phone.t('Apps.settings.factoryResetFinishingDetail'),
+    index: 3,
+    label: phone.t('Apps.settings.factoryResetFinishing'),
+  }
+})
+const factoryResetSecondsRemaining = computed(() =>
+  Math.max(
+    0,
+    Math.ceil(
+      (FACTORY_RESET_DURATION_MS * (1 - factoryResetProgress.value / 100)) /
+        1000,
+    ),
+  ),
 )
 let factoryResetAnimationFrame: number | undefined
 
@@ -613,7 +655,11 @@ async function confirmFactoryReset(): Promise<void> {
   factoryResetProgress.value = 100
   factoryResetting.value = false
   if (!success) accountToast.value = accountError()
-  else appAuth.hydrate(undefined, '')
+  else {
+    appAuth.hydrate(undefined, '')
+    appStore.hydrate(undefined)
+    phone.resetAfterFactoryReset()
+  }
 }
 
 async function confirmSimEject(): Promise<void> {
@@ -1284,17 +1330,61 @@ onBeforeUnmount(() => {
             :title="phone.t('Apps.settings.ejectSim')"
             @activate="simEjectOpened = true"
           />
+        </SkySettingsGroup>
+
+        <SkySettingsGroup>
+          <SkySettingsRow
+            kind="navigation"
+            :title="phone.t('Apps.settings.transferOrReset')"
+            :description="phone.t('Apps.settings.transferOrResetDescription')"
+            @activate="openView('reset')"
+          >
+            <template #leading>
+              <SkySettingsIcon color="#8e8e93">
+                <RotateCcw :size="18" aria-hidden="true" />
+              </SkySettingsIcon>
+            </template>
+          </SkySettingsRow>
+        </SkySettingsGroup>
+      </template>
+
+      <template v-else-if="activeView === 'reset'">
+        <section class="settings-reset-hero">
+          <div class="settings-reset-hero__icon">
+            <RotateCcw :size="35" :stroke-width="1.65" />
+          </div>
+          <h2>{{ phone.t('Apps.settings.resetHeroTitle') }}</h2>
+          <p>{{ phone.t('Apps.settings.resetHeroBody') }}</p>
+        </section>
+
+        <SkySettingsGroup :title="phone.t('Apps.settings.erasedFromPhone')">
+          <SkySettingsRow :title="phone.t('Apps.settings.eraseDeviceSettings')" />
+          <SkySettingsRow :title="phone.t('Apps.settings.eraseLocalContent')" />
+          <SkySettingsRow :title="phone.t('Apps.settings.eraseLocalApps')" />
+        </SkySettingsGroup>
+
+        <SkySettingsGroup :title="phone.t('Apps.settings.keptSafe')">
+          <SkySettingsRow
+            :title="phone.t('Apps.settings.keepSimData')"
+            :description="phone.t('Apps.settings.keepSimDataBody')"
+          />
+          <SkySettingsRow
+            :title="phone.t('Apps.settings.keepCloudData')"
+            :description="phone.t('Apps.settings.keepCloudDataBody')"
+          />
+        </SkySettingsGroup>
+
+        <SkySettingsGroup>
           <SkySettingsRow
             kind="action"
             tone="danger"
             :title="phone.t('Apps.settings.factoryReset')"
             @activate="resetOpened = true"
-          >
-            <template #leading>
-              <RotateCcw :size="18" aria-hidden="true" />
-            </template>
-          </SkySettingsRow>
+          />
         </SkySettingsGroup>
+        <p class="settings-reset-footnote">
+          {{ phone.t('Apps.settings.resetSetupAssistant') }}
+        </p>
       </template>
 
       <template v-else-if="activeView === 'appearance'">
@@ -1487,15 +1577,73 @@ onBeforeUnmount(() => {
       class="settings-reset-overlay"
       aria-live="polite"
     >
-      <div class="settings-reset-progress">
-        <strong>{{ Math.floor(factoryResetProgress) }}%</strong>
-        <SkyProgress
-          :label="phone.t('Apps.settings.factoryResetProgress')"
-          :progress="factoryResetProgress / 100"
-        />
+      <div class="settings-reset-ambient" aria-hidden="true">
+        <span v-for="particle in 8" :key="particle" />
       </div>
-      <h2>{{ phone.t('Apps.settings.factoryResetProgress') }}</h2>
-      <p>{{ phone.t('Apps.settings.factoryResetWarning') }}</p>
+
+      <div class="settings-reset-content">
+        <div class="settings-reset-eyebrow">
+          <ShieldCheck :size="13" :stroke-width="2.2" />
+          {{ phone.t('Apps.settings.factoryResetSystemProcess') }}
+        </div>
+
+        <div class="settings-reset-orbit" aria-hidden="true">
+          <svg viewBox="0 0 104 104">
+            <circle class="settings-reset-ring-track" cx="52" cy="52" r="46" />
+            <circle
+              class="settings-reset-ring-value"
+              cx="52"
+              cy="52"
+              r="46"
+              :stroke-dasharray="FACTORY_RESET_RING_CIRCUMFERENCE"
+              :stroke-dashoffset="
+                FACTORY_RESET_RING_CIRCUMFERENCE *
+                (1 - factoryResetProgress / 100)
+              "
+            />
+          </svg>
+          <div class="settings-reset-device">
+            <Smartphone :size="37" :stroke-width="1.45" />
+            <span class="settings-reset-device__scan" />
+          </div>
+          <span class="settings-reset-orbit__pulse" />
+        </div>
+
+        <div class="settings-reset-heading">
+          <strong>{{ Math.floor(factoryResetProgress) }}%</strong>
+          <h2>{{ phone.t('Apps.settings.factoryResetProgress') }}</h2>
+          <p>{{ factoryResetPhase.label }}</p>
+        </div>
+
+        <div class="settings-reset-progress" role="progressbar" :aria-valuenow="Math.floor(factoryResetProgress)" aria-valuemin="0" aria-valuemax="100">
+          <span :style="{ width: `${factoryResetProgress}%` }" />
+        </div>
+
+        <div class="settings-reset-phase-card">
+          <div class="settings-reset-phase-card__topline">
+            <span>{{ factoryResetPhase.detail }}</span>
+            <strong>{{ factoryResetSecondsRemaining }}s</strong>
+          </div>
+          <div class="settings-reset-steps" aria-hidden="true">
+            <span
+              v-for="step in 4"
+              :key="step"
+              :class="{
+                'settings-reset-step--active': step - 1 === factoryResetPhase.index,
+                'settings-reset-step--complete': step - 1 < factoryResetPhase.index,
+              }"
+            >
+              <Check v-if="step - 1 < factoryResetPhase.index" :size="9" :stroke-width="3" />
+            </span>
+          </div>
+        </div>
+
+        <div class="settings-reset-protected">
+          <span><Signal :size="14" /> {{ phone.t('Apps.settings.factoryResetSimSafe') }}</span>
+          <span><Cloud :size="14" /> {{ phone.t('Apps.settings.factoryResetCloudSafe') }}</span>
+        </div>
+        <p class="settings-reset-warning">{{ phone.t('Apps.settings.factoryResetWarning') }}</p>
+      </div>
     </div>
 
     <SkyDialog
@@ -1635,6 +1783,47 @@ onBeforeUnmount(() => {
 
 .settings-content--subpage {
   padding-top: 0;
+}
+
+.settings-reset-hero {
+  padding: 18px 24px 22px;
+  text-align: center;
+}
+
+.settings-reset-hero__icon {
+  display: grid;
+  width: 78px;
+  height: 78px;
+  margin: 0 auto 16px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 24px;
+  color: #ff665f;
+  background: linear-gradient(145deg, rgb(255 74 66 / 18%), rgb(255 255 255 / 5%));
+  box-shadow: inset 0 1px rgb(255 255 255 / 12%), 0 18px 35px rgb(0 0 0 / 14%);
+}
+
+.settings-reset-hero h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.settings-reset-hero p,
+.settings-reset-footnote {
+  color: var(--sky-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-reset-hero p {
+  margin: 10px 0 0;
+}
+
+.settings-reset-footnote {
+  margin: -3px 20px 24px;
+  text-align: center;
 }
 
 .settings-copy {
@@ -1950,34 +2139,263 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--sky-space-6);
-  background: #000000;
+  overflow: hidden;
+  padding: 34px 26px 24px;
+  background:
+    radial-gradient(circle at 50% 42%, rgb(19 92 164 / 22%), transparent 34%),
+    radial-gradient(circle at 50% 100%, rgb(8 57 107 / 18%), transparent 40%),
+    #000000;
   color: #ffffff;
   text-align: center;
 }
 
-.settings-reset-progress {
-  width: min(240px, 80%);
+.settings-reset-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  max-width: 310px;
+  flex-direction: column;
+  align-items: center;
 }
 
-.settings-reset-progress strong {
+.settings-reset-ambient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.settings-reset-ambient span {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #66b9ff;
+  box-shadow: 0 0 8px 2px rgb(43 153 255 / 45%);
+  opacity: 0.5;
+  animation: settings-reset-particle 3.8s ease-in-out infinite;
+}
+
+.settings-reset-ambient span:nth-child(1) { top: 23%; left: 17%; }
+.settings-reset-ambient span:nth-child(2) { top: 31%; right: 13%; animation-delay: -1.2s; }
+.settings-reset-ambient span:nth-child(3) { top: 48%; left: 9%; animation-delay: -2.4s; }
+.settings-reset-ambient span:nth-child(4) { top: 56%; right: 8%; animation-delay: -0.6s; }
+.settings-reset-ambient span:nth-child(5) { bottom: 24%; left: 21%; animation-delay: -3s; }
+.settings-reset-ambient span:nth-child(6) { bottom: 19%; right: 18%; animation-delay: -1.7s; }
+.settings-reset-ambient span:nth-child(7) { top: 16%; right: 30%; animation-delay: -2.1s; }
+.settings-reset-ambient span:nth-child(8) { bottom: 34%; left: 33%; animation-delay: -0.9s; }
+
+.settings-reset-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 6%);
+  color: rgb(255 255 255 / 70%);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.settings-reset-orbit {
+  position: relative;
+  display: grid;
+  width: 112px;
+  height: 112px;
+  margin-top: 26px;
+  place-items: center;
+}
+
+.settings-reset-orbit svg {
+  position: absolute;
+  inset: 4px;
+  width: 104px;
+  height: 104px;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+.settings-reset-ring-track,
+.settings-reset-ring-value {
+  fill: none;
+  stroke-width: 2.6;
+}
+
+.settings-reset-ring-track { stroke: rgb(255 255 255 / 10%); }
+.settings-reset-ring-value {
+  stroke: #2997ff;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgb(41 151 255 / 75%));
+  transition: stroke-dashoffset 120ms linear;
+}
+
+.settings-reset-device {
+  position: relative;
+  display: grid;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 23px;
+  background: linear-gradient(145deg, rgb(255 255 255 / 11%), rgb(255 255 255 / 3%));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%), 0 18px 36px rgb(0 0 0 / 38%);
+  color: rgb(255 255 255 / 88%);
+  place-items: center;
+}
+
+.settings-reset-device__scan {
+  position: absolute;
+  right: 13px;
+  left: 13px;
+  height: 1px;
+  background: #42a5ff;
+  box-shadow: 0 0 9px 2px rgb(41 151 255 / 65%);
+  animation: settings-reset-scan 2s ease-in-out infinite;
+}
+
+.settings-reset-orbit__pulse {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgb(41 151 255 / 20%);
+  border-radius: 50%;
+  animation: settings-reset-pulse 2.4s ease-out infinite;
+}
+
+.settings-reset-heading { margin-top: 19px; }
+.settings-reset-heading > strong {
   display: block;
-  margin-bottom: var(--sky-space-3);
-  font-size: 28px;
+  font-size: 34px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.settings-reset-heading h2 {
+  margin: 10px 0 0;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
+.settings-reset-heading p {
+  margin: 5px 0 0;
+  color: #66b5ff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-reset-progress {
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  margin-top: 22px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+}
+
+.settings-reset-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #087cff, #55b8ff);
+  box-shadow: 0 0 10px rgb(41 151 255 / 60%);
+  transition: width 120ms linear;
+}
+
+.settings-reset-phase-card {
+  width: 100%;
+  margin-top: 13px;
+  padding: 12px 13px;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 15px;
+  background: rgb(255 255 255 / 5%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.settings-reset-phase-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgb(255 255 255 / 68%);
+  font-size: 10px;
+}
+
+.settings-reset-phase-card__topline strong {
+  color: rgb(255 255 255 / 88%);
   font-variant-numeric: tabular-nums;
 }
 
-.settings-reset-overlay h2 {
-  margin: var(--sky-space-5) 0 0;
-  font-size: 20px;
+.settings-reset-steps {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
 }
 
-.settings-reset-overlay p {
+.settings-reset-steps > span {
+  display: grid;
+  height: 4px;
+  flex: 1;
+  border-radius: 99px;
+  background: rgb(255 255 255 / 10%);
+  color: #ffffff;
+  place-items: center;
+}
+
+.settings-reset-steps > .settings-reset-step--active {
+  background: #2997ff;
+  box-shadow: 0 0 7px rgb(41 151 255 / 55%);
+}
+
+.settings-reset-steps > .settings-reset-step--complete {
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #2997ff;
+}
+
+.settings-reset-protected {
+  display: flex;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.settings-reset-protected span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 1px solid rgb(85 190 129 / 15%);
+  border-radius: 999px;
+  background: rgb(51 199 89 / 8%);
+  color: rgb(120 226 160 / 88%);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.settings-reset-warning {
   max-width: 270px;
-  margin: var(--sky-space-2) 0 0;
-  color: rgb(255 255 255 / 62%);
-  font-size: 13px;
-  line-height: 18px;
+  margin: 11px 0 0;
+  color: rgb(255 255 255 / 42%);
+  font-size: 9px;
+  line-height: 13px;
+}
+
+@keyframes settings-reset-scan {
+  0%, 100% { transform: translateY(-18px); opacity: 0.25; }
+  50% { transform: translateY(18px); opacity: 1; }
+}
+
+@keyframes settings-reset-pulse {
+  0% { transform: scale(0.82); opacity: 0; }
+  28% { opacity: 0.7; }
+  100% { transform: scale(1.18); opacity: 0; }
+}
+
+@keyframes settings-reset-particle {
+  0%, 100% { transform: translateY(0) scale(0.75); opacity: 0.2; }
+  50% { transform: translateY(-12px) scale(1); opacity: 0.7; }
 }
 
 .settings-dialog-button--danger {

@@ -10,12 +10,15 @@ describe('browser development preview contract', () => {
       "developmentParameters.has('lockScreenPreview')",
     )
     expect(source).toContain(
-      'isLocked.value = !isDevelopment || developmentLockScreenPreview',
+      ': !isDevelopment || developmentLockScreenPreview',
     )
+    expect(source).toContain("developmentParameters.has('setupPreview')")
   })
 
   it('loads authenticated app data without replacing direct app routes', () => {
-    expect(source).toContain("if (isLocked.value) void router.replace('/')")
+    expect(source).toContain(
+      "if (isLocked.value || setupRequired.value) void router.replace('/')",
+    )
     expect(source).toContain('else loadUnlockedPhoneData()')
   })
 })
