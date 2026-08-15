@@ -248,6 +248,11 @@ onBeforeUnmount(() => {
       <k-navbar
         v-if="tab !== 'stopwatch'"
         :title="phone.t(`Apps.clock.tabs.${tab}`)"
+        :inner-class="
+          tab === 'world' || tab === 'timer'
+            ? 'clock-navbar__empty-inner'
+            : ''
+        "
         large
         transparent
         class="clock-navbar"
@@ -351,7 +356,11 @@ onBeforeUnmount(() => {
             </k-button>
             <k-button
               rounded
-              :colors="positiveActionColors"
+              :colors="
+                clock.stopwatchStartedAt === null
+                  ? positiveActionColors
+                  : dangerActionColors
+              "
               class="clock-action-button"
               @click="
                 clock.stopwatchStartedAt === null
@@ -460,7 +469,11 @@ onBeforeUnmount(() => {
             </k-button>
             <k-button
               rounded
-              :colors="positiveActionColors"
+              :colors="
+                clock.timerStartedAt === null
+                  ? positiveActionColors
+                  : dangerActionColors
+              "
               class="clock-action-button"
               :disabled="clock.timerStartedAt === null && timerValue <= 0"
               @click="

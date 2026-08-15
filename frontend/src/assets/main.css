@@ -4389,6 +4389,9 @@ button {
   overflow-y: auto;
   padding: 0;
 }
+.clock-navbar__empty-inner {
+  height: 0;
+}
 .phone-call-content {
   min-height: 0;
   flex: 1;
