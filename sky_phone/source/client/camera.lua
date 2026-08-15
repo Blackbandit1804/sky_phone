@@ -1,12 +1,32 @@
+local minimum_zoom = 0.5
+local maximum_zoom = 3.0
 local first_person_view_mode = 4
-local third_person_view_mode = 1
-local front_camera_view_mode = 0
-local front_camera_fov = 25.0
-local ultrawide_fov_multiplier = 2.0
-local front_camera_distance = 0.75
-local front_camera_height = 0.05
-local front_camera_target_height = 0.03
-local unfocused_camera_controls = {
+local front_camera_fov = 40.0
+local front_camera_distance = 1.05
+local front_camera_side_offset = 0.08
+local front_camera_height = 0.12
+local front_camera_target_height = -0.1
+local blocked_camera_controls = {
+    0, -- INPUT_NEXT_CAMERA
+    22, -- INPUT_JUMP
+    24, -- INPUT_ATTACK
+    25, -- INPUT_AIM
+    37, -- INPUT_SELECT_WEAPON
+    44, -- INPUT_COVER
+    45, -- INPUT_RELOAD
+    68, -- INPUT_VEH_AIM
+    69, -- INPUT_VEH_ATTACK
+    70, -- INPUT_VEH_ATTACK2
+    91, -- INPUT_VEH_PASSENGER_AIM
+    92, -- INPUT_VEH_PASSENGER_ATTACK
+    140, -- INPUT_MELEE_ATTACK_LIGHT
+    141, -- INPUT_MELEE_ATTACK_HEAVY
+    142, -- INPUT_MELEE_ATTACK_ALTERNATE
+    257, -- INPUT_ATTACK2
+    263, -- INPUT_MELEE_ATTACK1
+    264, -- INPUT_MELEE_ATTACK2
+}
+local camera_look_controls = {
     1, -- INPUT_LOOK_LR
     2, -- INPUT_LOOK_UD
 }
@@ -19,7 +39,7 @@ local camera_state = {
     front_camera = false,
     front_camera_handle = nil,
     landscape = false,
-    ultrawide_camera_handle = nil,
+    locked = false,
     applied_nui_focus = true,
     nui_focused = true,
     previous_ped_view = nil,
@@ -57,77 +77,29 @@ local function set_flash_enabled(enabled)
     end)
 end
 
-local function apply_camera_view()
-    local ped = PlayerPedId()
-    local view_mode = camera_state.front_camera and front_camera_view_mode or first_person_view_mode
-    if IsPedInAnyVehicle(ped, false) then
-        SetFollowVehicleCamViewMode(view_mode)
-        return
-    end
-    SetFollowPedCamViewMode(view_mode)
-end
-
 local function front_camera_position(ped)
     local head = GetPedBoneCoords(ped, 31086, 0.0, 0.0, 0.0)
     local forward = GetEntityForwardVector(ped)
     local forward_vector = vector3(forward.x, forward.y, forward.z)
-    local offset = forward_vector * front_camera_distance
-    local camera_position = head + offset + vector3(0.0, 0.0, front_camera_height)
-    local to_camera = camera_position - head
-    local dot = (to_camera.x * forward_vector.x) + (to_camera.y * forward_vector.y) + (to_camera.z * forward_vector.z)
-    if dot < 0.0 then
-        camera_position = head - offset + vector3(0.0, 0.0, front_camera_height)
-    end
-    return camera_position, head + vector3(0.0, 0.0, front_camera_target_height)
+    local right_vector = vector3(forward_vector.y, -forward_vector.x, 0.0)
+    local camera_position = head
+        + (forward_vector * front_camera_distance)
+        + (right_vector * front_camera_side_offset)
+        + vector3(0.0, 0.0, front_camera_height)
+    local target = head
+        + (right_vector * (front_camera_side_offset * 0.25))
+        + vector3(0.0, 0.0, front_camera_target_height)
+    return camera_position, target
 end
 
-local function ensure_front_camera(ped)
+local function ensure_front_camera()
     if camera_state.front_camera_handle and DoesCamExist(camera_state.front_camera_handle) then
         return
     end
     camera_state.front_camera_handle = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
-    SetCamFov(
-        camera_state.front_camera_handle,
-        camera_state.zoom == 0.5 and front_camera_fov * ultrawide_fov_multiplier or front_camera_fov
-    )
+    SetCamFov(camera_state.front_camera_handle, front_camera_fov)
     SetCamActive(camera_state.front_camera_handle, true)
     RenderScriptCams(true, false, 0, true, true)
-end
-
-local function ensure_ultrawide_camera()
-    if camera_state.ultrawide_camera_handle and DoesCamExist(camera_state.ultrawide_camera_handle) then
-        return
-    end
-    local camera_coords = GetGameplayCamCoord()
-    local camera_rotation = GetGameplayCamRot(2)
-    camera_state.ultrawide_camera_handle = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
-    SetCamCoord(
-        camera_state.ultrawide_camera_handle,
-        camera_coords.x,
-        camera_coords.y,
-        camera_coords.z
-    )
-    SetCamRot(
-        camera_state.ultrawide_camera_handle,
-        camera_rotation.x,
-        camera_rotation.y,
-        camera_rotation.z,
-        2
-    )
-    SetCamFov(
-        camera_state.ultrawide_camera_handle,
-        math.min(GetGameplayCamFov() * ultrawide_fov_multiplier, 120.0)
-    )
-    SetCamActive(camera_state.ultrawide_camera_handle, true)
-    RenderScriptCams(true, false, 0, true, true)
-end
-
-local function clear_ultrawide_camera()
-    if camera_state.ultrawide_camera_handle and DoesCamExist(camera_state.ultrawide_camera_handle) then
-        RenderScriptCams(false, false, 0, true, true)
-        DestroyCam(camera_state.ultrawide_camera_handle, false)
-    end
-    camera_state.ultrawide_camera_handle = nil
 end
 
 local function clear_front_camera()
@@ -136,6 +108,18 @@ local function clear_front_camera()
         DestroyCam(camera_state.front_camera_handle, false)
     end
     camera_state.front_camera_handle = nil
+end
+
+local function apply_rear_camera_view()
+    if camera_state.front_camera then
+        return
+    end
+    local ped = PlayerPedId()
+    if IsPedInAnyVehicle(ped, false) then
+        SetFollowVehicleCamViewMode(first_person_view_mode)
+        return
+    end
+    SetFollowPedCamViewMode(first_person_view_mode)
 end
 
 local function restore_camera_view()
@@ -150,10 +134,14 @@ local function restore_camera_view()
     end
 end
 
-local function apply_unfocused_camera_controls()
-    DisableAllControlActions(0)
-    for _, control in ipairs(unfocused_camera_controls) do
-        EnableControlAction(0, control, true)
+local function apply_camera_controls()
+    for _, control in ipairs(blocked_camera_controls) do
+        DisableControlAction(0, control, true)
+    end
+    if camera_state.locked then
+        for _, control in ipairs(camera_look_controls) do
+            DisableControlAction(0, control, true)
+        end
     end
     DisablePlayerFiring(PlayerId(), true)
 end
@@ -167,17 +155,16 @@ end
 
 local set_camera_focus
 
-local function watch_unfocused_camera_controls()
+local function watch_camera_controls()
     if camera_state.focus_watcher then
         return
     end
     camera_state.focus_watcher = true
     CreateThread(function()
-        while camera_state.active and not camera_state.applied_nui_focus do
-            apply_unfocused_camera_controls()
-            if IsDisabledControlJustReleased(0, 22) then
+        while camera_state.active do
+            apply_camera_controls()
+            if not camera_state.applied_nui_focus and IsDisabledControlJustReleased(0, 22) then
                 set_camera_focus(true)
-                break
             end
             Wait(0)
         end
@@ -203,7 +190,7 @@ AddEventHandler("sky_phone:client:cameraFocusApplied", function(data)
         SendNUIMessage({ type = "camera:focus", data = { focused = data.focused } })
     end
     if data.active and data.gameInput then
-        watch_unfocused_camera_controls()
+        watch_camera_controls()
     end
 end)
 
@@ -215,15 +202,15 @@ local function set_camera_active(active)
     if active then
         camera_state.front_camera = false
         camera_state.landscape = false
+        camera_state.locked = false
         camera_state.zoom = 1.0
         clear_front_camera()
-        clear_ultrawide_camera()
         camera_state.previous_ped_view = GetFollowPedCamViewMode()
-        camera_state.previous_vehicle_view = GetFollowVehicleCamViewMode()
         camera_state.previous_radar_hidden = IsRadarHidden()
+        camera_state.previous_vehicle_view = GetFollowVehicleCamViewMode()
         DisplayRadar(false)
         set_camera_focus(true)
-        apply_camera_view()
+        apply_rear_camera_view()
         TriggerEvent("sky_phone:animation:camera", {
             active = true,
             front = camera_state.front_camera,
@@ -234,12 +221,12 @@ local function set_camera_active(active)
         end
         camera_state.enforcing = true
         CreateThread(function()
-            local next_apply = 0
+            local next_view_apply = 0
             while camera_state.active do
                 HideHudAndRadarThisFrame()
                 if camera_state.front_camera then
                     local ped = PlayerPedId()
-                    ensure_front_camera(ped)
+                    ensure_front_camera()
                     local camera_position, target = front_camera_position(ped)
                     SetCamCoord(
                         camera_state.front_camera_handle,
@@ -248,28 +235,12 @@ local function set_camera_active(active)
                         camera_position.z
                     )
                     PointCamAtCoord(camera_state.front_camera_handle, target.x, target.y, target.z)
-                elseif camera_state.zoom == 0.5 then
-                    ensure_ultrawide_camera()
-                    local camera_coords = GetGameplayCamCoord()
-                    local camera_rotation = GetGameplayCamRot(2)
-                    SetCamCoord(
-                        camera_state.ultrawide_camera_handle,
-                        camera_coords.x,
-                        camera_coords.y,
-                        camera_coords.z
-                    )
-                    SetCamRot(
-                        camera_state.ultrawide_camera_handle,
-                        camera_rotation.x,
-                        camera_rotation.y,
-                        camera_rotation.z,
-                        2
-                    )
-                end
-                local now = GetGameTimer()
-                if now >= next_apply then
-                    apply_camera_view()
-                    next_apply = now + 250
+                else
+                    local now = GetGameTimer()
+                    if now >= next_view_apply then
+                        apply_rear_camera_view()
+                        next_view_apply = now + 250
+                    end
                 end
                 Wait(0)
             end
@@ -280,8 +251,8 @@ local function set_camera_active(active)
     set_flash_enabled(false)
     camera_state.front_camera = false
     camera_state.landscape = false
+    camera_state.locked = false
     clear_front_camera()
-    clear_ultrawide_camera()
     restore_camera_view()
     camera_state.nui_focused = true
     update_camera_focus_claim()
@@ -301,15 +272,11 @@ local function set_front_camera(active)
         return
     end
     if active then
-        clear_ultrawide_camera()
-        ensure_front_camera(PlayerPedId())
+        ensure_front_camera()
     else
         clear_front_camera()
-        if camera_state.zoom == 0.5 then
-            ensure_ultrawide_camera()
-        end
+        apply_rear_camera_view()
     end
-    apply_camera_view()
     TriggerEvent("sky_phone:animation:camera", {
         active = true,
         front = camera_state.front_camera,
@@ -332,24 +299,11 @@ local function set_camera_landscape(active)
 end
 
 local function set_camera_zoom(zoom)
-    if zoom ~= 0.5 and zoom ~= 1.0 and zoom ~= 2.0 and zoom ~= 3.0 then
+    if not zoom or zoom < minimum_zoom or zoom > maximum_zoom then
         return false
     end
+    zoom = math.floor((zoom * 100.0) + 0.5) / 100.0
     camera_state.zoom = zoom
-    if not camera_state.active then
-        return true
-    end
-    if camera_state.front_camera then
-        ensure_front_camera(PlayerPedId())
-        SetCamFov(
-            camera_state.front_camera_handle,
-            zoom == 0.5 and front_camera_fov * ultrawide_fov_multiplier or front_camera_fov
-        )
-    elseif zoom == 0.5 then
-        ensure_ultrawide_camera()
-    else
-        clear_ultrawide_camera()
-    end
     return true
 end
 
@@ -370,6 +324,15 @@ RegisterNUICallback("camera:setFocus", function(data, cb)
     if camera_state.active then
         set_camera_focus(data.focused == true)
     end
+    cb({ success = true })
+end)
+
+RegisterNUICallback("camera:setLocked", function(data, cb)
+    if type(data) ~= "table" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    camera_state.locked = data.locked == true
     cb({ success = true })
 end)
 
