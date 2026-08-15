@@ -50,8 +50,8 @@ const flashEnabled = ref(false)
 const microphoneEnabled = ref(true)
 const frontCamera = ref(false)
 const shutterActive = ref(false)
-const focused = ref(true)
 const cameraLocked = ref(false)
+const movementEnabled = ref(false)
 const recording = ref(false)
 const savingVideo = ref(false)
 const recordingStartedAt = ref(0)
@@ -231,6 +231,10 @@ async function toggleFacing(): Promise<void> {
 
 async function toggleCameraLock(): Promise<void> {
   cameraLocked.value = !cameraLocked.value
+  if (cameraLocked.value && movementEnabled.value) {
+    movementEnabled.value = false
+    await nuiCall('camera:setFocus', { focused: true })
+  }
   await nuiCall('camera:setLocked', { locked: cameraLocked.value })
 }
 
@@ -265,7 +269,17 @@ function setZoom(zoom: number): void {
 }
 
 function zoomWithWheel(event: WheelEvent): void {
-  setZoom(selectedZoom.value - event.deltaY * 0.0025)
+  const deltaMultiplier =
+    event.deltaMode === WheelEvent.DOM_DELTA_LINE
+      ? 16
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+        ? window.innerHeight
+        : 1
+  const wheelDelta = Math.max(
+    -120,
+    Math.min(120, event.deltaY * deltaMultiplier),
+  )
+  setZoom(selectedZoom.value - wheelDelta * 0.00075)
 }
 
 function resizeGameView(entry?: ResizeObserverEntry): void {
@@ -323,13 +337,20 @@ function onKeydown(event: KeyboardEvent): void {
   if (
     event.code !== 'Space' ||
     event.repeat ||
-    !focused.value ||
-    cameraLocked.value
+    cameraLocked.value ||
+    movementEnabled.value
   )
     return
   event.preventDefault()
-  focused.value = false
+  movementEnabled.value = true
   void nuiCall('camera:setFocus', { focused: false })
+}
+
+function onKeyup(event: KeyboardEvent): void {
+  if (event.code !== 'Space' || !movementEnabled.value) return
+  event.preventDefault()
+  movementEnabled.value = false
+  void nuiCall('camera:setFocus', { focused: true })
 }
 
 function onMessage(event: MessageEvent): void {
@@ -338,8 +359,12 @@ function onMessage(event: MessageEvent): void {
     data?: Record<string, unknown>
     type?: string
   }
-  if (message.type === 'camera:focus') {
-    focused.value = message.data?.focused === true
+  if (message.type === 'camera:zoom') {
+    const zoom = Number(message.data?.zoom)
+    if (Number.isFinite(zoom) && zoom >= minimumZoom && zoom <= maximumZoom) {
+      selectedZoom.value = zoom
+      resizeGameView()
+    }
   } else if (message.type === 'camera:recordState') {
     const active = message.data?.active === true
     savingVideo.value = message.data?.saving === true
@@ -406,6 +431,7 @@ onMounted(() => {
     '*',
   )
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('keyup', onKeyup)
   window.addEventListener('message', onMessage)
   void nuiCall('camera:setActive', { active: true })
   void nuiCall<{ videoBitrateKbps?: number }>('media:config').then(
@@ -424,7 +450,12 @@ onBeforeUnmount(() => {
   if (noticeTimer !== undefined) window.clearTimeout(noticeTimer)
   if (recordingTimer !== undefined) window.clearInterval(recordingTimer)
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('keyup', onKeyup)
   window.removeEventListener('message', onMessage)
+  if (movementEnabled.value) {
+    movementEnabled.value = false
+    void nuiCall('camera:setFocus', { focused: true })
+  }
   if (renderFrameId !== undefined) window.cancelAnimationFrame(renderFrameId)
   resizeObserver?.disconnect()
   gameView?.dispose()
@@ -446,7 +477,7 @@ onBeforeUnmount(() => {
     :class="{ 'camera-page--landscape': phone.cameraLandscape }"
     :aria-label="phone.t('Apps.camera.name')"
   >
-    <div class="camera-viewport" @wheel.prevent="zoomWithWheel">
+    <div class="camera-viewport" @wheel.prevent.stop="zoomWithWheel">
       <canvas
         v-if="!isDevelopment && !gameViewUnavailable"
         ref="gameCanvas"

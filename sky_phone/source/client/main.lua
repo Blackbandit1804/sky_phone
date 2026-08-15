@@ -12,6 +12,7 @@ local active_call_payload = nil
 local call_channel = 0
 local nui_generation = 0
 local activity_suspended = false
+local movement_only_input = false
 
 Bridge.Debug("debug", "[sky_phone] Client script initialized.", { always = true })
 
@@ -301,14 +302,27 @@ local function update_nui_focus()
         payphone_focus = payphone_focus,
         sim_picker_open = sim_picker_open,
     })
-    SetNuiFocus(focus.focused, focus.focused)
+    SetNuiFocus(focus.focused, focus.cursor)
     SetNuiFocusKeepInput(focus.keep_input)
+    movement_only_input = focus.movement_only
     TriggerEvent("sky_phone:client:cameraFocusApplied", {
         active = camera_active,
+        cursor = focus.cursor,
         focused = focus.focused,
         gameInput = focus.keep_input,
     })
 end
+
+CreateThread(function()
+    while true do
+        if movement_only_input then
+            SkyPhoneFocus.ApplyMovementOnlyControls()
+            Wait(0)
+        else
+            Wait(250)
+        end
+    end
+end)
 
 AddEventHandler("sky_phone:client:setSuspended", function(suspended)
     activity_suspended = suspended == true

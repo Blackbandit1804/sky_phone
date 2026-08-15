@@ -1,10 +1,11 @@
 local minimum_zoom = 0.5
 local maximum_zoom = 3.0
+local mouse_wheel_zoom_step = 0.08
 local first_person_view_mode = 4
-local front_camera_fov = 40.0
-local front_camera_distance = 1.05
-local front_camera_side_offset = 0.08
-local front_camera_height = 0.12
+local front_camera_fov = 48.0
+local front_camera_distance = 1.45
+local front_camera_side_offset = 0.0
+local front_camera_height = 0.06
 local front_camera_target_height = -0.1
 local blocked_camera_controls = {
     0, -- INPUT_NEXT_CAMERA
@@ -22,7 +23,11 @@ local blocked_camera_controls = {
     140, -- INPUT_MELEE_ATTACK_LIGHT
     141, -- INPUT_MELEE_ATTACK_HEAVY
     142, -- INPUT_MELEE_ATTACK_ALTERNATE
+    241, -- INPUT_CURSOR_SCROLL_UP
+    242, -- INPUT_CURSOR_SCROLL_DOWN
     257, -- INPUT_ATTACK2
+    261, -- INPUT_PREV_WEAPON
+    262, -- INPUT_NEXT_WEAPON
     263, -- INPUT_MELEE_ATTACK1
     264, -- INPUT_MELEE_ATTACK2
 }
@@ -38,6 +43,9 @@ local camera_state = {
     focus_watcher = false,
     front_camera = false,
     front_camera_handle = nil,
+    front_camera_offset = nil,
+    front_camera_rotation = nil,
+    game_input = false,
     landscape = false,
     locked = false,
     applied_nui_focus = true,
@@ -77,29 +85,54 @@ local function set_flash_enabled(enabled)
     end)
 end
 
-local function front_camera_position(ped)
-    local head = GetPedBoneCoords(ped, 31086, 0.0, 0.0, 0.0)
+local function capture_front_camera_transform(ped)
+    local ped_position = GetEntityCoords(ped)
+    local head_position = GetPedBoneCoords(ped, 31086, 0.0, 0.0, 0.0)
+    local head_height = head_position.z - ped_position.z
     local forward = GetEntityForwardVector(ped)
-    local forward_vector = vector3(forward.x, forward.y, forward.z)
+    local forward_vector = vector3(forward.x, forward.y, 0.0)
     local right_vector = vector3(forward_vector.y, -forward_vector.x, 0.0)
-    local camera_position = head
-        + (forward_vector * front_camera_distance)
+    local camera_offset = (forward_vector * front_camera_distance)
         + (right_vector * front_camera_side_offset)
-        + vector3(0.0, 0.0, front_camera_height)
-    local target = head
-        + (right_vector * (front_camera_side_offset * 0.25))
-        + vector3(0.0, 0.0, front_camera_target_height)
-    return camera_position, target
+        + vector3(0.0, 0.0, head_height + front_camera_height)
+    local target_offset = (right_vector * (front_camera_side_offset * 0.25))
+        + vector3(0.0, 0.0, head_height + front_camera_target_height)
+    local direction = target_offset - camera_offset
+    local horizontal_length = math.sqrt((direction.x * direction.x) + (direction.y * direction.y))
+    local rotation = vector3(
+        math.deg(math.atan(direction.z, horizontal_length)),
+        0.0,
+        math.deg(math.atan(-direction.x, direction.y))
+    )
+    return camera_offset, rotation
 end
 
-local function ensure_front_camera()
-    if camera_state.front_camera_handle and DoesCamExist(camera_state.front_camera_handle) then
-        return
+local function apply_front_camera(ped)
+    if not camera_state.front_camera_handle or not DoesCamExist(camera_state.front_camera_handle) then
+        camera_state.front_camera_offset, camera_state.front_camera_rotation =
+            capture_front_camera_transform(ped)
+        camera_state.front_camera_handle = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
+        SetCamFov(camera_state.front_camera_handle, front_camera_fov)
+        SetCamActive(camera_state.front_camera_handle, true)
+        RenderScriptCams(true, false, 0, true, true)
     end
-    camera_state.front_camera_handle = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
-    SetCamFov(camera_state.front_camera_handle, front_camera_fov)
-    SetCamActive(camera_state.front_camera_handle, true)
-    RenderScriptCams(true, false, 0, true, true)
+
+    local ped_position = GetEntityCoords(ped)
+    local camera_position = ped_position + camera_state.front_camera_offset
+    local rotation = camera_state.front_camera_rotation
+    SetCamCoord(
+        camera_state.front_camera_handle,
+        camera_position.x,
+        camera_position.y,
+        camera_position.z
+    )
+    SetCamRot(
+        camera_state.front_camera_handle,
+        rotation.x,
+        rotation.y,
+        rotation.z,
+        2
+    )
 end
 
 local function clear_front_camera()
@@ -108,6 +141,8 @@ local function clear_front_camera()
         DestroyCam(camera_state.front_camera_handle, false)
     end
     camera_state.front_camera_handle = nil
+    camera_state.front_camera_offset = nil
+    camera_state.front_camera_rotation = nil
 end
 
 local function apply_rear_camera_view()
@@ -138,7 +173,7 @@ local function apply_camera_controls()
     for _, control in ipairs(blocked_camera_controls) do
         DisableControlAction(0, control, true)
     end
-    if camera_state.locked then
+    if camera_state.locked or camera_state.front_camera then
         for _, control in ipairs(camera_look_controls) do
             DisableControlAction(0, control, true)
         end
@@ -155,6 +190,19 @@ end
 
 local set_camera_focus
 
+local function set_camera_zoom(zoom)
+    if not zoom or zoom < minimum_zoom or zoom > maximum_zoom then
+        return false
+    end
+    zoom = math.floor((zoom * 100.0) + 0.5) / 100.0
+    if camera_state.zoom == zoom then
+        return true
+    end
+    camera_state.zoom = zoom
+    SendNUIMessage({ type = "camera:zoom", data = { zoom = zoom } })
+    return true
+end
+
 local function watch_camera_controls()
     if camera_state.focus_watcher then
         return
@@ -163,8 +211,25 @@ local function watch_camera_controls()
     CreateThread(function()
         while camera_state.active do
             apply_camera_controls()
-            if not camera_state.applied_nui_focus and IsDisabledControlJustReleased(0, 22) then
-                set_camera_focus(true)
+            if camera_state.game_input then
+                if
+                    IsDisabledControlJustPressed(0, 241)
+                    or IsDisabledControlJustPressed(0, 261)
+                then
+                    set_camera_zoom(
+                        math.min(maximum_zoom, camera_state.zoom + mouse_wheel_zoom_step)
+                    )
+                elseif
+                    IsDisabledControlJustPressed(0, 242)
+                    or IsDisabledControlJustPressed(0, 262)
+                then
+                    set_camera_zoom(
+                        math.max(minimum_zoom, camera_state.zoom - mouse_wheel_zoom_step)
+                    )
+                end
+                if IsDisabledControlJustReleased(0, 22) then
+                    set_camera_focus(true)
+                end
             end
             Wait(0)
         end
@@ -180,11 +245,13 @@ end
 AddEventHandler("sky_phone:client:cameraFocusApplied", function(data)
     if type(data) ~= "table"
         or type(data.active) ~= "boolean"
+        or type(data.cursor) ~= "boolean"
         or type(data.focused) ~= "boolean"
         or type(data.gameInput) ~= "boolean"
     then
         return
     end
+    camera_state.game_input = data.gameInput
     if camera_state.applied_nui_focus ~= data.focused then
         camera_state.applied_nui_focus = data.focused
         SendNUIMessage({ type = "camera:focus", data = { focused = data.focused } })
@@ -221,26 +288,12 @@ local function set_camera_active(active)
         end
         camera_state.enforcing = true
         CreateThread(function()
-            local next_view_apply = 0
             while camera_state.active do
                 HideHudAndRadarThisFrame()
                 if camera_state.front_camera then
-                    local ped = PlayerPedId()
-                    ensure_front_camera()
-                    local camera_position, target = front_camera_position(ped)
-                    SetCamCoord(
-                        camera_state.front_camera_handle,
-                        camera_position.x,
-                        camera_position.y,
-                        camera_position.z
-                    )
-                    PointCamAtCoord(camera_state.front_camera_handle, target.x, target.y, target.z)
+                    apply_front_camera(PlayerPedId())
                 else
-                    local now = GetGameTimer()
-                    if now >= next_view_apply then
-                        apply_rear_camera_view()
-                        next_view_apply = now + 250
-                    end
+                    apply_rear_camera_view()
                 end
                 Wait(0)
             end
@@ -250,6 +303,7 @@ local function set_camera_active(active)
     end
     set_flash_enabled(false)
     camera_state.front_camera = false
+    camera_state.game_input = false
     camera_state.landscape = false
     camera_state.locked = false
     clear_front_camera()
@@ -272,7 +326,7 @@ local function set_front_camera(active)
         return
     end
     if active then
-        ensure_front_camera()
+        apply_front_camera(PlayerPedId())
     else
         clear_front_camera()
         apply_rear_camera_view()
@@ -296,15 +350,6 @@ local function set_camera_landscape(active)
             landscape = camera_state.landscape,
         })
     end
-end
-
-local function set_camera_zoom(zoom)
-    if not zoom or zoom < minimum_zoom or zoom > maximum_zoom then
-        return false
-    end
-    zoom = math.floor((zoom * 100.0) + 0.5) / 100.0
-    camera_state.zoom = zoom
-    return true
 end
 
 RegisterNUICallback("camera:setActive", function(data, cb)
