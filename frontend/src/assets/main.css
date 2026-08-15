@@ -4918,6 +4918,14 @@ button {
 .phone-screen--app .phone-app--light .phone-status-bar {
   color: #000;
 }
+.phone-screen--app .phone-app--status-light .phone-status-bar {
+  color: #fff;
+  text-shadow: 0 1px 3px #0009;
+}
+.phone-screen--app .phone-app--status-dark .phone-status-bar {
+  color: #111;
+  text-shadow: 0 1px 3px #fff8;
+}
 * {
   scrollbar-width: none;
 }

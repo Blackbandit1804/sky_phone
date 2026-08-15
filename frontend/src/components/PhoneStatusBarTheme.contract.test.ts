@@ -36,6 +36,17 @@ describe('phone status bar theme contract', () => {
     )
   })
 
+  it('keeps status indicators legible on apps with fixed canvases', () => {
+    expect(appSource).toContain("'phone-app--status-light'")
+    expect(appSource).toContain("'phone-app--status-dark'")
+    expect(styles).toMatch(
+      /\.phone-screen--app \.phone-app--status-light \.phone-status-bar\s*\{[^}]*color:\s*#fff;/s,
+    )
+    expect(styles).toMatch(
+      /\.phone-screen--app \.phone-app--status-dark \.phone-status-bar\s*\{[^}]*color:\s*#111;/s,
+    )
+  })
+
   it('keeps every status indicator bound to the inherited foreground', () => {
     expect(indicatorsSource).toMatch(/<Plane[\s\S]*?fill="currentColor"/)
     expect(indicatorsSource).toMatch(

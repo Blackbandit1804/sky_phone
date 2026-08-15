@@ -287,6 +287,24 @@ const notifications = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
 const isAppRoute = computed(() => route.name === 'app')
+const activeAppId = computed(() =>
+  typeof route.params.appId === 'string' ? route.params.appId : '',
+)
+const WHITE_STATUS_BAR_APP_IDS = new Set([
+  'calculator',
+  'camera',
+  'darkchat',
+  'fliptok',
+  'neon-drop',
+  'sky-flappy',
+  'snake',
+  'tower-stack',
+])
+const DARK_STATUS_BAR_APP_IDS = new Set([
+  'memory',
+  'minesweeper',
+  'number-merge',
+])
 const isDevelopmentRoute = computed(
   () => isDevelopment && route.name === 'development-sky-ui',
 )
@@ -1445,6 +1463,10 @@ onBeforeUnmount(() => {
                   'phone-app--darkchat': route.params.appId === 'darkchat',
                   'phone-app--light': !phone.isDarkMode,
                   'phone-app--messages': route.params.appId === 'messages',
+                  'phone-app--status-light':
+                    WHITE_STATUS_BAR_APP_IDS.has(activeAppId),
+                  'phone-app--status-dark':
+                    DARK_STATUS_BAR_APP_IDS.has(activeAppId),
                   [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
                   'phone-app--unlocking': isUnlocking,
                 }"

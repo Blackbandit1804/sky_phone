@@ -1489,6 +1489,7 @@ onMounted(async () => {
   font-family: Inter, system-ui, sans-serif;
 }
 .pages--light {
+  --yellow: #8a6500;
   --panel: #f0f0eb;
   --muted: #737a7d;
   background: #fbfbf6;
