@@ -4143,6 +4143,7 @@ const defaultLocales: LocaleTree = {
     ownerFallback: 'Sky Phone Owner',
     getStarted: 'Get Started',
     setUpLater: 'Set Up Later',
+    development: { skip: 'Skip setup' },
     welcome: {
       title: 'Welcome to Sky Phone',
       eyebrow: 'Designed around you',

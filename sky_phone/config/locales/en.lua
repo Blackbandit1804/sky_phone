@@ -72,6 +72,7 @@ Locales["en"] = {
         },
         Setup = {
             title = "Sky Phone Setup Assistant", ownerFallback = "Sky Phone Owner", getStarted = "Get Started", setUpLater = "Set Up Later",
+            development = { skip = "Skip setup" },
             welcome = { title = "Welcome to Sky Phone", eyebrow = "Designed around you", hello = "hello", hallo = "hallo", bonjour = "bonjour", body = "Hello, {name}. Let's make this phone unmistakably yours.", private = "Private by design", personal = "Made for you" },
             connection = {
                 eyebrow = "Mobile Connection", title = "Your connection is ready", body = "Sky Phone automatically detects the SIM installed in this device.",
