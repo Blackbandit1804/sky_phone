@@ -5,12 +5,10 @@ import {
   kLink,
   kList,
   kListButton,
-  kListInput,
   kListItem,
   kNavbar,
   kNavbarBackLink,
   kPage,
-  kSearchbar,
 } from 'konsta/vue'
 import {
   Ellipsis,
@@ -26,7 +24,7 @@ import NotesRichTextEditor from '@/components/NotesRichTextEditor.vue'
 import { useNotesStore } from '@/stores/notes'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
-import { SkyActionSheet, SkyButton } from '@/ui'
+import { SkyActionSheet, SkyButton, SkyFab, SkySearchbar } from '@/ui'
 import type { Note } from '@/utils/notes'
 import { noteBodyToPlainText } from '@/utils/noteRichText'
 
@@ -36,7 +34,6 @@ const easyShare = useEasyShareStore()
 const searchQuery = ref('')
 const editorId = ref<string | null>(null)
 const editorOpened = ref(false)
-const draftTitle = ref('')
 const draftBody = ref('')
 const menuOpened = ref(false)
 const currentNote = computed(() =>
@@ -100,24 +97,18 @@ function noteSubtitle(note: Note): string {
   return `${noteDate(note)} · ${notePreview(note)}`
 }
 
-function updateSearch(event: Event): void {
-  searchQuery.value = (event.target as HTMLInputElement).value
-}
-
-function updateTitle(event: Event): void {
-  draftTitle.value = (event.target as HTMLInputElement).value
+function titleFromDraftBody(body: string): string {
+  return noteBodyToPlainText(body).split('\n')[0]?.trim() ?? ''
 }
 
 function createNote(): void {
   editorId.value = null
-  draftTitle.value = ''
   draftBody.value = ''
   editorOpened.value = true
 }
 
 function editNote(note: Note): void {
   editorId.value = note.id
-  draftTitle.value = note.title
   draftBody.value = note.body
   editorOpened.value = true
 }
@@ -125,7 +116,7 @@ function editNote(note: Note): void {
 function persistDraft(): Note | undefined {
   const draft = {
     body: draftBody.value,
-    title: draftTitle.value.trim(),
+    title: titleFromDraftBody(draftBody.value) || currentNote.value?.title.trim() || '',
   }
 
   if (editorId.value) {
@@ -183,29 +174,10 @@ function shareNote(): void {
 <template>
   <k-page
     v-if="!editorOpened"
-    class="!pt-[44px] !pb-[25px]"
+    class="notes-list-page !pt-[44px]"
     :aria-label="phone.t('Apps.notes.name')"
   >
-    <k-navbar large transparent :title="phone.t('Apps.notes.name')">
-      <template #right>
-        <k-link
-          component="button"
-          icon-only
-          :aria-label="phone.t('Apps.notes.newNote')"
-          @click="createNote"
-        >
-          <SquarePen :size="21" />
-        </k-link>
-      </template>
-      <template #subnavbar>
-        <k-searchbar
-          :value="searchQuery"
-          :placeholder="phone.t('Apps.notes.searchPlaceholder')"
-          @input="updateSearch"
-          @clear="searchQuery = ''"
-        />
-      </template>
-    </k-navbar>
+    <k-navbar large transparent :title="phone.t('Apps.notes.name')" />
 
     <k-list v-if="visibleNotes.length" strong inset>
       <k-list-item
@@ -239,6 +211,28 @@ function shareNote(): void {
         </k-list-button>
       </k-list>
     </template>
+
+    <footer
+      class="notes-composer sky-ui-provider"
+      :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+    >
+      <SkySearchbar
+        v-model="searchQuery"
+        class="notes-search"
+        :clear-label="phone.t('Common.clear')"
+        :label="phone.t('Apps.notes.searchPlaceholder')"
+        :placeholder="phone.t('Apps.notes.searchPlaceholder')"
+      />
+      <SkyFab
+        class="notes-create-fab"
+        :aria-label="phone.t('Apps.notes.newNote')"
+        @click="createNote"
+      >
+        <template #icon>
+          <SquarePen :size="21" aria-hidden="true" />
+        </template>
+      </SkyFab>
+    </footer>
   </k-page>
 
   <k-page v-else class="notes-editor-page !pt-[44px] !pb-0">
@@ -264,17 +258,6 @@ function shareNote(): void {
     </k-navbar>
 
     <div class="notes-editor-layout">
-      <k-list class="notes-editor-title" nested :dividers="false">
-        <k-list-input
-          :value="draftTitle"
-          :label="phone.t('Apps.notes.title')"
-          :placeholder="phone.t('Apps.notes.titlePlaceholder')"
-          maxlength="120"
-          clear-button
-          @input="updateTitle"
-          @clear="draftTitle = ''"
-        />
-      </k-list>
       <NotesRichTextEditor
         v-model="draftBody"
         :dark="phone.isDarkMode"
@@ -330,6 +313,38 @@ function shareNote(): void {
 </template>
 
 <style scoped>
+.notes-list-page {
+  padding-bottom: calc(
+    var(--sky-safe-area-bottom) + var(--sky-touch-target) + 24px
+  ) !important;
+}
+
+.notes-composer {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-width: 0;
+  padding: 8px calc(var(--sky-page-gutter) + var(--sky-safe-area-right))
+    calc(var(--sky-safe-area-bottom) + 8px)
+    calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sky-touch-target);
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(to top, var(--sky-bg) 72%, transparent);
+}
+
+.notes-search {
+  min-width: 0;
+}
+
+.notes-create-fab {
+  width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
+}
+
 .notes-editor-page {
   display: flex;
   flex-direction: column;
@@ -342,11 +357,6 @@ function shareNote(): void {
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-}
-
-.notes-editor-title {
-  margin: 0;
-  flex: 0 0 auto;
 }
 
 .notes-action-menu {

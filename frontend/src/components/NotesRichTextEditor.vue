@@ -54,6 +54,7 @@ const allowedTags = [
   'blockquote',
   'br',
   'em',
+  'h1',
   'h2',
   'h3',
   'li',
@@ -93,9 +94,7 @@ const NoteTextSize = Mark.create({
         },
         renderHTML: (attributes) => {
           const size = attributes.size as NoteTextSizeStep | undefined
-          return size &&
-            noteTextSizeSteps.includes(size) &&
-            size !== 'normal'
+          return size && noteTextSizeSteps.includes(size) && size !== 'normal'
             ? { 'data-note-size': size }
             : {}
         },
@@ -119,7 +118,16 @@ function sanitizeEditorHtml(body: string): string {
   )
 }
 
-let acceptedHtml = sanitizeEditorHtml(props.modelValue)
+function withFirstLineHeading(html: string): string {
+  const match = html.match(
+    /^(\s*)<(p|h[1-3])(?:\s[^>]*)?>([\s\S]*?)<\/\2>([\s\S]*)$/i,
+  )
+  if (!match) return `<h1></h1>${html}`
+
+  return `${match[1]}<h1>${match[3]}</h1>${match[4]}`
+}
+
+let acceptedHtml = withFirstLineHeading(sanitizeEditorHtml(props.modelValue))
 
 const editor = useEditor({
   content: acceptedHtml,
@@ -127,7 +135,7 @@ const editor = useEditor({
     StarterKit.configure({
       code: false,
       codeBlock: false,
-      heading: { levels: [2, 3] },
+      heading: { levels: [1, 2, 3] },
       horizontalRule: false,
       link: false,
       strike: {},
@@ -137,6 +145,20 @@ const editor = useEditor({
     Placeholder.configure({ placeholder: props.placeholder }),
   ],
   injectCSS: false,
+  editorProps: {
+    handleKeyDown: (view, event) => {
+      if (event.key !== 'Backspace' || !view.state.selection.empty) return false
+
+      const { doc, selection } = view.state
+      const firstLine = doc.firstChild
+      return (
+        firstLine?.type.name === 'heading' &&
+        firstLine.attrs.level === 1 &&
+        firstLine.content.size === 0 &&
+        selection.$from.parent === firstLine
+      )
+    },
+  },
   onUpdate: ({ editor: currentEditor }) => {
     const safeHtml = String(
       DOMPurify.sanitize(currentEditor.getHTML(), {
@@ -157,8 +179,9 @@ const editor = useEditor({
 function adjustTextSize(direction: -1 | 1): void {
   if (!editor.value || editor.value.state.selection.empty) return
 
-  const currentSize = editor.value.getAttributes('noteTextSize')
-    .size as NoteTextSizeStep | undefined
+  const currentSize = editor.value.getAttributes('noteTextSize').size as
+    | NoteTextSizeStep
+    | undefined
   const currentIndex = currentSize
     ? noteTextSizeSteps.indexOf(currentSize)
     : normalTextSizeIndex
@@ -186,7 +209,8 @@ function toggleSelectionQuote(): void {
   const { from, to } = editor.value.state.selection
   const { doc, tr } = editor.value.state
   const selectedText = doc.textBetween(from, to)
-  const isQuotedInside = selectedText.startsWith('„') && selectedText.endsWith('“')
+  const isQuotedInside =
+    selectedText.startsWith('„') && selectedText.endsWith('“')
   const isQuotedOutside =
     from > 1 &&
     doc.textBetween(from - 1, from) === '„' &&
@@ -211,7 +235,7 @@ watch(
   () => props.modelValue,
   (body) => {
     if (!editor.value) return
-    const safeHtml = sanitizeEditorHtml(body)
+    const safeHtml = withFirstLineHeading(sanitizeEditorHtml(body))
     if (editor.value.getHTML() === safeHtml) return
     acceptedHtml = safeHtml
     editor.value.commands.setContent(safeHtml, { emitUpdate: false })
@@ -421,11 +445,16 @@ onBeforeUnmount(() => editor.value?.destroy())
   margin: 0 0 0.55em;
 }
 
+:deep(.tiptap h1),
 :deep(.tiptap h2),
 :deep(.tiptap h3) {
   margin: 0.75em 0 0.35em;
   letter-spacing: -0.02em;
   line-height: 1.15;
+}
+
+:deep(.tiptap h1) {
+  font-size: 32px;
 }
 
 :deep(.tiptap h2) {

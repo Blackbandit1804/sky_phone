@@ -90,6 +90,16 @@ describe('voice provider contracts', () => {
     expect(serverCalls).toContain('if not Bridge.Speaker.IsEnabled() then')
   })
 
+  it('provides safe shared defaults for the optional server radio speaker adapter', () => {
+    expect(sharedBridge).toContain('function Bridge.Radio.SupportsSpeaker()')
+    expect(sharedBridge).toMatch(
+      /function Bridge\.Radio\.SupportsSpeaker\(\)\s+return false\s+end/,
+    )
+    expect(sharedBridge).toContain('function Bridge.Radio.SetPlayerSpeaker()')
+    expect(serverVoice).toContain('function Bridge.Radio.SupportsSpeaker()')
+    expect(serverVoice).toContain('function Bridge.Radio.SetPlayerSpeaker(')
+  })
+
   it('uses the documented client and server Radio speaker exports', () => {
     expect(clientRadio).toContain('exports.saltychat:GetRadioSpeaker()')
     expect(clientRadio).toContain('exports.saltychat:SetRadioSpeaker(')

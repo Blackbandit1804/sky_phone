@@ -11,6 +11,14 @@ function Bridge.Speaker.IsEnabled()
     return not Config.Speaker or Config.Speaker.Enabled ~= false
 end
 
+function Bridge.Radio.SupportsSpeaker()
+    return false
+end
+
+function Bridge.Radio.SetPlayerSpeaker()
+    return false
+end
+
 local level_colours = {
     debug = "^5",
     info = "^2",
