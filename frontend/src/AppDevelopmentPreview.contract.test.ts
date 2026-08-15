@@ -22,6 +22,19 @@ describe('browser development preview contract', () => {
     expect(source).toContain('else loadUnlockedPhoneData()')
   })
 
+  it('requires the passcode only for the first unlock of a device session', () => {
+    expect(source).toContain('const passcodeRequired = ref(false)')
+    expect(source).toContain(
+      'if (phone.security.enabled && passcodeRequired.value)',
+    )
+    expect(source).toContain(
+      'passcodeRequired.value = isLocked.value && phone.security.enabled',
+    )
+    expect(source).toMatch(
+      /function lockPhone\(\): void \{[\s\S]*?passcodeRequired\.value = false[\s\S]*?isLocked\.value = true/,
+    )
+  })
+
   it('keeps hairlines at one rendered device pixel through phone zoom', () => {
     expect(source).toContain(
       '...getHairlinePixelStyle(phoneZoom.value, browserDevicePixelRatio.value)',

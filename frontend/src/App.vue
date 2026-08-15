@@ -321,6 +321,7 @@ const passcodeError = ref('')
 const passcodeResetKey = ref(0)
 const passcodeRetrySeconds = ref(0)
 const passcodeVisible = ref(false)
+const passcodeRequired = ref(false)
 const setupPreviewDismissed = ref(false)
 const pendingUnlockRoute = ref<string | null>(null)
 const unlockedServicesLoaded = ref(false)
@@ -521,6 +522,7 @@ function completePhoneSetup(): void {
   isLocked.value = false
   isUnlocking.value = false
   passcodeVisible.value = false
+  passcodeRequired.value = false
   controlCenterOpened.value = false
   void router.replace('/')
   loadUnlockedPhoneData()
@@ -1116,6 +1118,7 @@ function finishUnlock(): void {
   isUnlocking.value = true
   isLocked.value = false
   passcodeVisible.value = false
+  passcodeRequired.value = false
   passcodeError.value = ''
 
   unlockTimer = window.setTimeout(() => {
@@ -1132,7 +1135,7 @@ function finishUnlock(): void {
 
 function unlockPhone(): void {
   if (!isLocked.value) return
-  if (phone.security.enabled) {
+  if (phone.security.enabled && passcodeRequired.value) {
     passcodeError.value = ''
     passcodeVisible.value = true
     return
@@ -1219,6 +1222,7 @@ function lockPhone(): void {
   passcodeVisible.value = false
   passcodeBusy.value = false
   passcodeError.value = ''
+  passcodeRequired.value = false
   pendingUnlockRoute.value = null
   isLocked.value = true
 }
@@ -1336,6 +1340,7 @@ watch(
       passcodeVisible.value = false
       passcodeBusy.value = false
       passcodeError.value = ''
+      passcodeRequired.value = false
       pendingUnlockRoute.value = null
       unlockedServicesLoaded.value = false
       if (passcodeLockTimer !== undefined) {
@@ -1347,6 +1352,7 @@ watch(
     isLocked.value = setupRequired.value
       ? false
       : !isDevelopment || developmentLockScreenPreview
+    passcodeRequired.value = isLocked.value && phone.security.enabled
     unlockedServicesLoaded.value = false
     controlCenterOpened.value = false
     weather.start()
@@ -1519,6 +1525,7 @@ onBeforeUnmount(() => {
                     :disabled="passcodeRetrySeconds > 0"
                     :error="passcodeError"
                     :length="phone.security.length ?? 6"
+                    lock-screen
                     :reset-key="passcodeResetKey"
                     :subtitle="
                       passcodeRetrySeconds > 0
