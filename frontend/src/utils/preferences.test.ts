@@ -196,6 +196,10 @@ describe('preferences', () => {
     expect(value.settings.wallpaperImageUrl).toBe(
       'https://media.example/current.jpg',
     )
+    expect(value.settings.lockWallpaper).toBe('custom')
+    expect(value.settings.lockWallpaperImageUrl).toBe(
+      'https://media.example/current.jpg',
+    )
     expect(value.settings.wallpaperHistory).toHaveLength(4)
     expect(
       value.settings.wallpaperHistory.map((entry) => entry.wallpaper),
@@ -212,5 +216,25 @@ describe('preferences', () => {
 
     expect(value.settings.wallpaper).toBe('midnight')
     expect(value.settings.wallpaperImageUrl).toBeNull()
+  })
+
+  it('restores independent Home Screen and Lock Screen wallpapers', () => {
+    const value = parsePhonePreferences(
+      JSON.stringify({
+        version: 1,
+        settings: {
+          wallpaper: 'ocean',
+          lockWallpaper: 'custom',
+          lockWallpaperImageUrl: 'https://media.example/lock.jpg',
+        },
+      }),
+    )
+
+    expect(value.settings.wallpaper).toBe('ocean')
+    expect(value.settings.wallpaperImageUrl).toBeNull()
+    expect(value.settings.lockWallpaper).toBe('custom')
+    expect(value.settings.lockWallpaperImageUrl).toBe(
+      'https://media.example/lock.jpg',
+    )
   })
 })

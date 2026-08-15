@@ -6,8 +6,18 @@ const styles = readFileSync(
   new URL('../assets/main.css', import.meta.url),
   'utf8',
 )
+const source = readFileSync(
+  new URL('./PhoneLockScreen.vue', import.meta.url),
+  'utf8',
+)
 
 describe('PhoneLockScreen notification theme contract', () => {
+  it('uses the dedicated Lock Screen wallpaper preference', () => {
+    expect(source).toContain('settings.lockWallpaperImageUrl')
+    expect(source).toContain('settings.lockWallpaper')
+    expect(source).not.toContain('settings.wallpaperImageUrl')
+  })
+
   it('uses explicit light and dark notification material tokens', () => {
     expect(styles).toMatch(
       /\.lock-screen\s*\{[^}]*--lock-notification-background:\s*rgb\(38 36 40 \/ 76%\)[^}]*--lock-notification-color:\s*#fff/s,

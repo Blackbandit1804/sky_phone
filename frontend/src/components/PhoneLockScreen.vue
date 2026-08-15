@@ -74,10 +74,10 @@ const time = computed(() =>
     .trim(),
 )
 const dragStyle = computed<Record<string, string>>(() => {
-  const imageUrl = preferences.value.settings.wallpaperImageUrl
+  const imageUrl = preferences.value.settings.lockWallpaperImageUrl
   return {
     '--lock-drag': `${dragOffset.value}px`,
-    ...(preferences.value.settings.wallpaper === 'custom' && imageUrl
+    ...(preferences.value.settings.lockWallpaper === 'custom' && imageUrl
       ? { '--phone-wallpaper-image': `url(${JSON.stringify(imageUrl)})` }
       : {}),
   }
@@ -289,7 +289,7 @@ onBeforeUnmount(() => {
   <section
     class="lock-screen"
     :class="[
-      `wallpaper--${preferences.settings.wallpaper}`,
+      `wallpaper--${preferences.settings.lockWallpaper}`,
       {
         'lock-screen--dragging': dragging,
         'lock-screen--preview': preview,

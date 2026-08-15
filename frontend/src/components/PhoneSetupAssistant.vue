@@ -115,7 +115,7 @@ function choosePerformance(mode: GraphicsMode): void {
 }
 
 function chooseWallpaper(wallpaper: Exclude<WallpaperId, 'custom'>): void {
-  phone.setWallpaper(wallpaper)
+  phone.setWallpaper(wallpaper, null, 'both')
 }
 
 function toggleApp(appId: BuiltinPhoneAppId): void {

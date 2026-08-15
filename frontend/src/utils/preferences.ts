@@ -48,6 +48,7 @@ export type RingtoneId = (typeof RINGTONE_IDS)[number]
 export type NotificationSoundId = (typeof NOTIFICATION_SOUND_IDS)[number]
 export type BuiltInWallpaperId = (typeof WALLPAPER_IDS)[number]
 export type WallpaperId = BuiltInWallpaperId | 'custom'
+export type WallpaperTarget = 'home' | 'lock'
 export type WallpaperHistoryEntry = {
   imageUrl: string | null
   wallpaper: WallpaperId
@@ -72,6 +73,8 @@ export type PhonePreferencesV1 = {
     focusMode: boolean
     frame: PhoneFrameId
     graphicsMode: GraphicsMode
+    lockWallpaper: WallpaperId
+    lockWallpaperImageUrl: string | null
     notificationSound: NotificationSoundId
     notificationDurationSeconds: number
     notificationVolume: number
@@ -145,6 +148,8 @@ export const DEFAULT_PHONE_PREFERENCES: PhonePreferencesV1 = {
     focusMode: false,
     frame: 'black',
     graphicsMode: 'ultimate',
+    lockWallpaper: 'midnight',
+    lockWallpaperImageUrl: null,
     notificationSound: 'chime',
     notificationDurationSeconds: 10,
     notificationVolume: 70,
@@ -280,6 +285,20 @@ export function parsePhonePreferences(raw: string | null): PhonePreferencesV1 {
       settings.wallpaper === 'custom' && wallpaperImageUrl
         ? 'custom'
         : readChoice(settings.wallpaper, WALLPAPER_IDS, defaults.wallpaper)
+    const requestedLockWallpaperImageUrl = readWallpaperImageUrl(
+      settings.lockWallpaperImageUrl,
+    )
+    const lockWallpaper =
+      settings.lockWallpaper === 'custom' && requestedLockWallpaperImageUrl
+        ? 'custom'
+        : typeof settings.lockWallpaper === 'string' &&
+            WALLPAPER_IDS.includes(settings.lockWallpaper as BuiltInWallpaperId)
+          ? (settings.lockWallpaper as BuiltInWallpaperId)
+          : wallpaper
+    const lockWallpaperImageUrl =
+      lockWallpaper === 'custom'
+        ? (requestedLockWallpaperImageUrl ?? wallpaperImageUrl)
+        : null
     const wallpaperHistory = readWallpaperHistory(settings.wallpaperHistory)
 
     return {
@@ -305,6 +324,8 @@ export function parsePhonePreferences(raw: string | null): PhonePreferencesV1 {
           GRAPHICS_MODE_IDS,
           defaults.graphicsMode,
         ),
+        lockWallpaper,
+        lockWallpaperImageUrl,
         notificationSound: readChoice(
           settings.notificationSound,
           NOTIFICATION_SOUND_IDS,

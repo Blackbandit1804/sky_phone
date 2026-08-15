@@ -1856,6 +1856,7 @@ Locales["en"] = {
                 wallpaperFromPhotos = "Choose from Photos", wallpaperFromPhotosDescription = "Use one of your photos",
                 wallpaperFromCamera = "Take Photo", wallpaperFromCameraDescription = "Create a new wallpaper",
                 wallpaperHistory = "Recent", wallpaperCustom = "Photo wallpaper",
+                wallpaperTarget = "Wallpaper destination", wallpaperHomeScreen = "Home Screen", wallpaperLockScreen = "Lock Screen",
                 imei = "IMEI", linkedDevices = "Linked Devices", thisDevice = "This Phone", removeDevice = "Remove Device",
                 simCard = "SIM Card", simNumber = "Phone Number", simType = "SIM Type", registeredSim = "Registered",
                 anonymousSim = "Anonymous", noSim = "No SIM", ejectSim = "Eject SIM", ejectSimBody = "Return this SIM card to your inventory?",

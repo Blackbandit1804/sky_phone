@@ -39,7 +39,9 @@ describe('SettingsApp Sky UI contract', () => {
   it('offers photo, camera, recent, and two-column built-in wallpaper choices', () => {
     expect(source).toContain("openWallpaperMedia('photos')")
     expect(source).toContain("openWallpaperMedia('camera')")
-    expect(source).toContain("mediaPicker.consume('settings:wallpaper')")
+    expect(source).toContain('`settings:wallpaper:${wallpaperTarget.value}`')
+    expect(source).toContain("wallpaperTarget === 'home'")
+    expect(source).toContain("wallpaperTarget === 'lock'")
     expect(source).toContain('class="settings-wallpaper-history"')
     expect(source).toContain('class="settings-wallpaper-grid"')
     expect(source).toMatch(

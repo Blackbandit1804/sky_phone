@@ -89,6 +89,8 @@ import {
   type PhoneFrameId,
   type RingtoneId,
   type WallpaperHistoryEntry,
+  type WallpaperId,
+  type WallpaperTarget,
 } from '@/utils/preferences'
 
 type SettingsView =
@@ -156,6 +158,7 @@ const resetOpened = ref(false)
 const simEjectOpened = ref(false)
 const factoryResetting = ref(false)
 const factoryResetProgress = ref(0)
+const wallpaperTarget = ref<WallpaperTarget>('home')
 const selectedFrameColor = computed(
   () => PHONE_FRAME_COLORS[phone.preferences.settings.frame],
 )
@@ -200,6 +203,16 @@ let factoryResetAnimationFrame: number | undefined
 
 const wallpaperHistory = computed(
   () => phone.preferences.settings.wallpaperHistory,
+)
+const selectedWallpaper = computed<WallpaperId>(() =>
+  wallpaperTarget.value === 'home'
+    ? phone.preferences.settings.wallpaper
+    : phone.preferences.settings.lockWallpaper,
+)
+const selectedWallpaperImageUrl = computed(() =>
+  wallpaperTarget.value === 'home'
+    ? phone.preferences.settings.wallpaperImageUrl
+    : phone.preferences.settings.lockWallpaperImageUrl,
 )
 
 const toggleRows = [
@@ -273,10 +286,11 @@ function openSkyUiKitchenSink(): void {
 }
 
 function openWallpaperMedia(app: 'photos' | 'camera'): void {
+  const target = wallpaperTarget.value
   mediaPicker.begin(
-    'settings:wallpaper',
+    `settings:wallpaper:${target}`,
     'photo',
-    '/apps/settings?wallpaper=1',
+    `/apps/settings?wallpaper=1&wallpaperTarget=${target}`,
     1,
   )
   void router.push({
@@ -293,7 +307,18 @@ function wallpaperPreviewStyle(
 }
 
 function selectWallpaperHistory(entry: WallpaperHistoryEntry): void {
-  phone.setWallpaper(entry.wallpaper, entry.imageUrl)
+  phone.setWallpaper(entry.wallpaper, entry.imageUrl, wallpaperTarget.value)
+}
+
+function isWallpaperSelected(entry: WallpaperHistoryEntry): boolean {
+  return (
+    selectedWallpaper.value === entry.wallpaper &&
+    selectedWallpaperImageUrl.value === entry.imageUrl
+  )
+}
+
+function selectBuiltInWallpaper(wallpaper: WallpaperId): void {
+  phone.setWallpaper(wallpaper, null, wallpaperTarget.value)
 }
 
 const connectivityRows = [
@@ -671,10 +696,18 @@ async function confirmSimEject(): Promise<void> {
 }
 
 onMounted(() => {
-  if (route.query.wallpaper === '1') activeView.value = 'wallpaper'
+  if (route.query.wallpaper === '1') {
+    activeView.value = 'wallpaper'
+    wallpaperTarget.value =
+      route.query.wallpaperTarget === 'lock' ? 'lock' : 'home'
+  }
 
-  const selectedPhoto = mediaPicker.consume('settings:wallpaper')
-  if (selectedPhoto) phone.setWallpaper('custom', selectedPhoto.url)
+  const selectedPhoto = mediaPicker.consume(
+    `settings:wallpaper:${wallpaperTarget.value}`,
+  )
+  if (selectedPhoto) {
+    phone.setWallpaper('custom', selectedPhoto.url, wallpaperTarget.value)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -1459,6 +1492,28 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else-if="activeView === 'wallpaper'">
+        <SkySegmented
+          class="settings-wallpaper-target"
+          strong
+          rounded
+          :active-index="wallpaperTarget === 'home' ? 0 : 1"
+          :item-count="2"
+          :aria-label="phone.t('Apps.settings.wallpaperTarget')"
+        >
+          <SkySegmentedButton
+            :active="wallpaperTarget === 'home'"
+            @click="wallpaperTarget = 'home'"
+          >
+            {{ phone.t('Apps.settings.wallpaperHomeScreen') }}
+          </SkySegmentedButton>
+          <SkySegmentedButton
+            :active="wallpaperTarget === 'lock'"
+            @click="wallpaperTarget = 'lock'"
+          >
+            {{ phone.t('Apps.settings.wallpaperLockScreen') }}
+          </SkySegmentedButton>
+        </SkySegmented>
+
         <section class="settings-wallpaper-actions">
           <button type="button" @click="openWallpaperMedia('photos')">
             <span class="settings-wallpaper-actions__icon" aria-hidden="true">
@@ -1502,9 +1557,7 @@ onBeforeUnmount(() => {
                 `wallpaper--${entry.wallpaper}`,
                 {
                   'settings-wallpaper-history__item--selected':
-                    phone.preferences.settings.wallpaper === entry.wallpaper &&
-                    phone.preferences.settings.wallpaperImageUrl ===
-                      entry.imageUrl,
+                    isWallpaperSelected(entry),
                 },
               ]"
               :style="wallpaperPreviewStyle(entry)"
@@ -1515,14 +1568,7 @@ onBeforeUnmount(() => {
               "
               @click="selectWallpaperHistory(entry)"
             >
-              <Check
-                v-if="
-                  phone.preferences.settings.wallpaper === entry.wallpaper &&
-                  phone.preferences.settings.wallpaperImageUrl ===
-                    entry.imageUrl
-                "
-                aria-hidden="true"
-              />
+              <Check v-if="isWallpaperSelected(entry)" aria-hidden="true" />
             </button>
           </div>
         </section>
@@ -1537,10 +1583,10 @@ onBeforeUnmount(() => {
               class="settings-wallpaper-choice"
               :class="{
                 'settings-wallpaper-choice--selected':
-                  phone.preferences.settings.wallpaper === wallpaper,
+                  selectedWallpaper === wallpaper,
               }"
-              :aria-pressed="phone.preferences.settings.wallpaper === wallpaper"
-              @click="phone.setWallpaper(wallpaper)"
+              :aria-pressed="selectedWallpaper === wallpaper"
+              @click="selectBuiltInWallpaper(wallpaper)"
             >
               <span
                 class="settings-wallpaper-choice__preview"
@@ -1548,9 +1594,7 @@ onBeforeUnmount(() => {
                 aria-hidden="true"
               >
                 <span class="settings-wallpaper-choice__screen"></span>
-                <Check
-                  v-if="phone.preferences.settings.wallpaper === wallpaper"
-                />
+                <Check v-if="selectedWallpaper === wallpaper" />
               </span>
               <strong>{{
                 phone.t('Apps.settings.wallpapers.' + wallpaper)
@@ -1853,6 +1897,10 @@ onBeforeUnmount(() => {
   border: 1px solid var(--sky-hairline);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+}
+
+.settings-wallpaper-target {
+  margin-bottom: var(--sky-space-4);
 }
 
 .settings-wallpaper-actions {

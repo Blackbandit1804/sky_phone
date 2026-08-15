@@ -19,6 +19,7 @@ import {
   type AppNotificationPreferences,
   type PhonePreferencesV1,
   type WallpaperId,
+  type WallpaperTarget,
 } from '@/utils/preferences'
 
 type LocaleTree = Record<string, unknown>
@@ -4062,6 +4063,9 @@ const defaultLocales: LocaleTree = {
       wallpaperFromCameraDescription: 'Create a new wallpaper',
       wallpaperHistory: 'Recent',
       wallpaperCustom: 'Photo wallpaper',
+      wallpaperTarget: 'Wallpaper destination',
+      wallpaperHomeScreen: 'Home Screen',
+      wallpaperLockScreen: 'Lock Screen',
       toggle: {
         airplaneMode: 'Toggle Airplane Mode',
         streamerMode: 'Toggle Streamer Mode',
@@ -4654,15 +4658,26 @@ export const usePhoneStore = defineStore('phone', {
     setSystemDarkMode(value: boolean): void {
       this.systemDarkMode = value
     },
-    setWallpaper(wallpaper: WallpaperId, imageUrl: string | null = null): void {
+    setWallpaper(
+      wallpaper: WallpaperId,
+      imageUrl: string | null = null,
+      target: WallpaperTarget | 'both' = 'home',
+    ): void {
       const normalizedImageUrl =
         wallpaper === 'custom' ? imageUrl?.trim() : null
       if (wallpaper === 'custom' && !normalizedImageUrl) {
         throw new Error('Custom wallpapers require a photo URL.')
       }
 
-      this.preferences.settings.wallpaper = wallpaper
-      this.preferences.settings.wallpaperImageUrl = normalizedImageUrl ?? null
+      if (target === 'home' || target === 'both') {
+        this.preferences.settings.wallpaper = wallpaper
+        this.preferences.settings.wallpaperImageUrl = normalizedImageUrl ?? null
+      }
+      if (target === 'lock' || target === 'both') {
+        this.preferences.settings.lockWallpaper = wallpaper
+        this.preferences.settings.lockWallpaperImageUrl =
+          normalizedImageUrl ?? null
+      }
       this.preferences.settings.wallpaperHistory = [
         { imageUrl: normalizedImageUrl ?? null, wallpaper },
         ...this.preferences.settings.wallpaperHistory.filter((entry) =>
