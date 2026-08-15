@@ -3,6 +3,7 @@ dofile("sky_phone/source/client/focus.lua")
 local function resolve(overrides)
     local state = {
         activity_suspended = false,
+        allow_movement = false,
         call_focus = false,
         camera_active = false,
         camera_nui_focused = true,
@@ -26,6 +27,24 @@ assert(not minimized_call.focused, "a replayed call without an attention claim m
 local incoming_call = resolve({ call_focus = true })
 assert(incoming_call.focused and not incoming_call.keep_input, "incoming call attention must focus the NUI")
 
+local stationary_phone = resolve({ is_open = true })
+assert(
+    stationary_phone.focused and not stationary_phone.keep_input,
+    "an open phone must block game input when movement is disabled"
+)
+
+local movable_phone = resolve({ allow_movement = true, is_open = true })
+assert(
+    movable_phone.focused and movable_phone.keep_input,
+    "an open phone must keep game input when movement is enabled"
+)
+
+local movable_notification = resolve({ allow_movement = true, notification_focus = true })
+assert(
+    movable_notification.focused and not movable_notification.keep_input,
+    "movement configuration must not affect a notification without an open phone"
+)
+
 local camera_game_input = resolve({
     camera_active = true,
     camera_nui_focused = false,
@@ -34,6 +53,17 @@ local camera_game_input = resolve({
 assert(
     not camera_game_input.focused and camera_game_input.keep_input,
     "unfocused camera must own game input over the open phone"
+)
+
+local focused_camera = resolve({
+    allow_movement = true,
+    camera_active = true,
+    camera_nui_focused = true,
+    is_open = true,
+})
+assert(
+    focused_camera.focused and not focused_camera.keep_input,
+    "focused camera must override movement configuration until Space releases NUI focus"
 )
 
 local camera_interrupted_by_call = resolve({

@@ -292,6 +292,7 @@ end
 local function update_nui_focus()
     local focus = SkyPhoneFocus.Resolve({
         activity_suspended = activity_suspended,
+        allow_movement = Config.Phone.AllowMovement,
         call_focus = call_focus,
         camera_active = camera_active,
         camera_nui_focused = camera_nui_focused,

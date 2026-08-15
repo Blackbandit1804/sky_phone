@@ -106,7 +106,7 @@ set sky_phone_fliptok_password_pepper "replace-with-a-long-random-secret"
 Passwords are stored as salted hashes. The pepper is read server-side from the convar and is never
 included in the NUI bundle.
 
-Standalone FiveM phone built with Vue 3, TypeScript, Pinia, Vue Router, the Sky-owned FiveM UI system, and Tailwind CSS 4. Konsta UI remains only for screens that have not yet completed their migration. The phone opens through the usable item; `/phone` is disabled unless `Config.Phone.DevelopmentCommand` is enabled explicitly. Phone identity and SIM-card behavior are selected independently through `Config.Phone.Unique` and `Config.Sim.Enabled`.
+Standalone FiveM phone built with Vue 3, TypeScript, Pinia, Vue Router, the Sky-owned FiveM UI system, and Tailwind CSS 4. Konsta UI remains only for screens that have not yet completed their migration. The phone opens through the usable item; `/phone` is disabled unless `Config.Phone.DevelopmentCommand` is enabled explicitly. `Config.Phone.AllowMovement` controls whether game input remains active while the mobile phone is open. Phone identity and SIM-card behavior are selected independently through `Config.Phone.Unique` and `Config.Sim.Enabled`.
 
 ### Ingame test data
 

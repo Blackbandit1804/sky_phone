@@ -16,6 +16,7 @@ Config.Command = "phone"
 Config.Phone = {
     Item = "phone",
     Unique = true, -- true: data follows each phone item; false: one persistent phone per character
+    AllowMovement = true, -- true: game input stays active while the mobile phone is open
     DevelopmentCommand = true,
     DeviceName = "iFruit Phone",
 }

@@ -16,6 +16,6 @@ function SkyPhoneFocus.Resolve(state)
             or state.payphone_focus
             or state.sim_picker_open
             or (state.camera_active and state.camera_nui_focused),
-        keep_input = false,
+        keep_input = state.is_open and state.allow_movement and not state.camera_active,
     }
 end
