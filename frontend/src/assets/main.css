@@ -446,7 +446,9 @@ button {
   box-shadow: none;
 }
 .phone-app--performance .control-center__backdrop {
-  background: rgb(20 20 24 / 92%);
+  background:
+    radial-gradient(circle at 16% 12%, rgb(77 96 135 / 20%), transparent 46%),
+    linear-gradient(180deg, #191b23 0%, #11131a 100%) !important;
 }
 .phone-app--performance .app-dock {
   background-color: rgb(38 38 46 / 92%);

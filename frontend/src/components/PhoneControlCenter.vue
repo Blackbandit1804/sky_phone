@@ -573,18 +573,29 @@ onBeforeUnmount(() => {
 
 .control-center__backdrop {
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   inset: 0;
   width: 100%;
   height: 100%;
   border: 0;
-  background: rgba(20, 20, 24, 0.34);
-  backdrop-filter: blur(25px) saturate(1.45);
-  -webkit-backdrop-filter: blur(25px) saturate(1.45);
+  background:
+    radial-gradient(circle at 16% 12%, rgb(77 96 135 / 24%), transparent 46%),
+    linear-gradient(180deg, #191b23 0%, #11131a 100%);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .control-center__backdrop {
+    background:
+      radial-gradient(circle at 16% 12%, rgb(77 96 135 / 14%), transparent 46%),
+      linear-gradient(180deg, rgb(20 22 29 / 72%) 0%, rgb(13 15 21 / 86%) 100%);
+    backdrop-filter: blur(32px) brightness(0.76) saturate(0.82);
+    -webkit-backdrop-filter: blur(32px) brightness(0.76) saturate(0.82);
+  }
 }
 
 .control-center__panel {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
