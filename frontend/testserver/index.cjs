@@ -11,6 +11,7 @@ app.use(express.json({ limit: '3mb' }))
 
 const lifecycleEndpoints = new Set([
   'camera:setActive',
+  'camera:setLocked',
   'camera:setFacing',
   'camera:setFlash',
   'camera:setFocus',

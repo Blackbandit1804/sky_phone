@@ -1352,7 +1352,8 @@ Locales["en"] = {
             camera = {
                 name = "Camera", flash = "Flash", flip = "Flip camera", landscape = "Switch to landscape",
                 portrait = "Switch to portrait", photo = "Photo", video = "Video", microphoneOn = "Microphone on", microphoneOff = "Microphone muted",
-                focusHelp = "Space for movement", returnHelp = "Space to return", uploading = "{count} uploading",
+                focusHelp = "Hold Space to look around", returnHelp = "Release Space for controls", lockCamera = "Lock camera movement",
+                unlockCamera = "Unlock camera movement", spaceKey = "Space", uploading = "{count} uploading",
                 saving = "Saving video...", openGallery = "Open Photos", takePhoto = "Take photo",
                 startRecording = "Start recording", stopRecording = "Stop recording", saved = "Saved to Photos.",
                 zoom = "Set camera zoom to {zoom}",

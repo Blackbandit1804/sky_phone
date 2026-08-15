@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { kFab, kNavbar, kPage, kSegmented, kSegmentedButton } from 'konsta/vue'
+import { kFab, kPage } from 'konsta/vue'
 import {
   ArrowLeft,
   Images,
+  LockKeyhole,
+  LockOpen,
   Mic,
   MicOff,
   RefreshCw,
@@ -17,6 +19,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import type { MediaType, PhoneMedia, UploadResult } from '@/types/media'
+import { SkySegmented, SkySegmentedButton } from '@/ui'
 import { createGameView, type GameView } from '@/utils/gameView'
 import { formatRecordingDuration, mediaErrorKey } from '@/utils/media'
 import { nuiCall } from '@/utils/nui'
@@ -31,6 +34,8 @@ type CaptureItem = {
 
 const isDevelopment = import.meta.env.DEV
 const zoomLevels = [0.5, 1, 2, 3] as const
+const minimumZoom = zoomLevels[0]
+const maximumZoom = zoomLevels[zoomLevels.length - 1]
 const phone = usePhoneStore()
 const messageMedia = useMessageMediaStore()
 const route = useRoute()
@@ -40,12 +45,13 @@ const requestedMessageMedia = computed<MediaType | null>(() => {
   return value === 'photo' || value === 'video' ? value : null
 })
 const mode = ref<MediaType>(requestedMessageMedia.value ?? 'photo')
-const selectedZoom = ref<(typeof zoomLevels)[number]>(1)
+const selectedZoom = ref(1)
 const flashEnabled = ref(false)
 const microphoneEnabled = ref(true)
 const frontCamera = ref(false)
 const shutterActive = ref(false)
 const focused = ref(true)
+const cameraLocked = ref(false)
 const recording = ref(false)
 const savingVideo = ref(false)
 const recordingStartedAt = ref(0)
@@ -62,8 +68,6 @@ let recordingTimer: number | undefined
 let gameView: GameView | null = null
 let renderFrameId: number | undefined
 let resizeObserver: ResizeObserver | null = null
-let wheelDelta = 0
-let wheelResetTimer: number | undefined
 
 const pendingCount = computed(
   () =>
@@ -73,15 +77,6 @@ const controlColors = {
   bgIos: 'bg-ios-light-glass/75 dark:bg-ios-dark-glass/75',
   activeBgIos: 'active:bg-white/90 dark:active:bg-white/20',
   textIos: 'text-black/80 dark:text-white/80',
-}
-const modeColors = {
-  strongHighlightBgIos: 'bg-[#e5e5ea] dark:bg-[#2c2c2e]',
-}
-const modeButtonColors = {
-  segmentedStrongTextIos: 'text-[#ffd60a]',
-}
-const modeNavbarColors = {
-  bgIos: 'bg-transparent',
 }
 const flashColors = computed(() => ({
   ...controlColors,
@@ -234,6 +229,11 @@ async function toggleFacing(): Promise<void> {
   await nuiCall('camera:setFacing', { front: frontCamera.value })
 }
 
+async function toggleCameraLock(): Promise<void> {
+  cameraLocked.value = !cameraLocked.value
+  await nuiCall('camera:setLocked', { locked: cameraLocked.value })
+}
+
 function toggleOrientation(): void {
   if (recording.value || savingVideo.value) return
   phone.setCameraLandscape(!phone.cameraLandscape)
@@ -249,31 +249,23 @@ function toggleOrientation(): void {
   })
 }
 
-function setZoom(zoom: (typeof zoomLevels)[number]): void {
-  selectedZoom.value = zoom
+function setZoom(zoom: number): void {
+  const normalizedZoom = Math.min(
+    maximumZoom,
+    Math.max(minimumZoom, Math.round(zoom * 100) / 100),
+  )
+  if (normalizedZoom === selectedZoom.value) return
+  selectedZoom.value = normalizedZoom
   resizeGameView()
-  window.postMessage({ data: { zoom }, type: 'camera:zoom' }, '*')
-  void nuiCall('camera:setZoom', { zoom })
+  window.postMessage(
+    { data: { zoom: normalizedZoom }, type: 'camera:zoom' },
+    '*',
+  )
+  void nuiCall('camera:setZoom', { zoom: normalizedZoom })
 }
 
 function zoomWithWheel(event: WheelEvent): void {
-  wheelDelta += event.deltaY
-  if (wheelResetTimer !== undefined) window.clearTimeout(wheelResetTimer)
-  wheelResetTimer = window.setTimeout(() => {
-    wheelDelta = 0
-    wheelResetTimer = undefined
-  }, 140)
-  if (Math.abs(wheelDelta) < 35) return
-
-  const currentIndex = zoomLevels.indexOf(selectedZoom.value)
-  const nextIndex = Math.min(
-    zoomLevels.length - 1,
-    Math.max(0, currentIndex + (wheelDelta < 0 ? 1 : -1)),
-  )
-  wheelDelta = 0
-  const nextZoom = zoomLevels[nextIndex]
-  if (nextZoom !== undefined && nextZoom !== selectedZoom.value)
-    setZoom(nextZoom)
+  setZoom(selectedZoom.value - event.deltaY * 0.0025)
 }
 
 function resizeGameView(entry?: ResizeObserverEntry): void {
@@ -328,7 +320,13 @@ function updateRecordingTimer(): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.code !== 'Space' || event.repeat || !focused.value) return
+  if (
+    event.code !== 'Space' ||
+    event.repeat ||
+    !focused.value ||
+    cameraLocked.value
+  )
+    return
   event.preventDefault()
   focused.value = false
   void nuiCall('camera:setFocus', { focused: false })
@@ -425,7 +423,6 @@ onBeforeUnmount(() => {
   if (shutterTimer !== undefined) window.clearTimeout(shutterTimer)
   if (noticeTimer !== undefined) window.clearTimeout(noticeTimer)
   if (recordingTimer !== undefined) window.clearInterval(recordingTimer)
-  if (wheelResetTimer !== undefined) window.clearTimeout(wheelResetTimer)
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('message', onMessage)
   if (renderFrameId !== undefined) window.cancelAnimationFrame(renderFrameId)
@@ -459,7 +456,7 @@ onBeforeUnmount(() => {
       <div
         v-else
         class="camera-dev-view"
-        :style="{ transform: `scale(${Math.max(1, selectedZoom)})` }"
+        :style="{ transform: `scale(${selectedZoom})` }"
         aria-hidden="true"
       >
         <span class="camera-dev-sun"></span>
@@ -526,7 +523,25 @@ onBeforeUnmount(() => {
       <span v-else-if="pendingCount" class="camera-upload-pill">
         {{ phone.t('Apps.camera.uploading', { count: String(pendingCount) }) }}
       </span>
-      <span v-else class="camera-topbar-spacer" aria-hidden="true"></span>
+      <button
+        v-else
+        class="camera-focus-pill camera-lock-control"
+        :class="{ 'camera-lock-control--active': cameraLocked }"
+        type="button"
+        :aria-label="
+          phone.t(
+            cameraLocked
+              ? 'Apps.camera.unlockCamera'
+              : 'Apps.camera.lockCamera',
+          )
+        "
+        :aria-pressed="cameraLocked"
+        @click="toggleCameraLock"
+      >
+        <LockKeyhole v-if="cameraLocked" :size="12" />
+        <LockOpen v-else :size="12" />
+        <kbd>{{ phone.t('Apps.camera.spaceKey') }}</kbd>
+      </button>
       <k-fab
         component="button"
         type="button"
@@ -551,19 +566,21 @@ onBeforeUnmount(() => {
       {{ savingVideo ? phone.t('Apps.camera.saving') : elapsed }}
     </div>
 
-    <div class="camera-zoom-row">
-      <button
-        v-for="zoom in zoomLevels"
-        :key="zoom"
-        class="camera-zoom-pill"
-        :class="{ active: selectedZoom === zoom }"
-        type="button"
-        :aria-label="phone.t('Apps.camera.zoom', { zoom: `${zoom}x` })"
-        :aria-pressed="selectedZoom === zoom"
-        @click="setZoom(zoom)"
-      >
-        {{ zoom }}x
-      </button>
+    <div class="camera-zoom-control">
+      <div class="camera-zoom-row">
+        <button
+          v-for="zoom in zoomLevels"
+          :key="zoom"
+          class="camera-zoom-pill"
+          :class="{ active: Math.abs(selectedZoom - zoom) < 0.03 }"
+          type="button"
+          :aria-label="phone.t('Apps.camera.zoom', { zoom: `${zoom}x` })"
+          :aria-pressed="Math.abs(selectedZoom - zoom) < 0.03"
+          @click="setZoom(zoom)"
+        >
+          {{ zoom }}x
+        </button>
+      </div>
     </div>
 
     <footer class="camera-controls">
@@ -621,40 +638,30 @@ onBeforeUnmount(() => {
         </k-fab>
       </div>
 
-      <k-navbar
-        component="nav"
+      <SkySegmented
         class="camera-mode-navbar"
-        inner-class="hidden"
-        :colors="modeNavbarColors"
+        :active-index="mode === 'photo' ? 0 : 1"
         :aria-label="phone.t('Apps.camera.name')"
+        :item-count="2"
+        navigation
+        compact
+        strong
       >
-        <template #subnavbar>
-          <k-segmented strong rounded :colors="modeColors">
-            <k-segmented-button
-              small
-              :active="mode === 'photo'"
-              :disabled="recording || savingVideo"
-              :colors="modeButtonColors"
-              :class="mode === 'photo' ? undefined : 'text-[#8e8e93]'"
-              :aria-pressed="mode === 'photo'"
-              @click="setMode('photo')"
-            >
-              {{ phone.t('Apps.camera.photo') }}
-            </k-segmented-button>
-            <k-segmented-button
-              small
-              :active="mode === 'video'"
-              :disabled="recording || savingVideo"
-              :colors="modeButtonColors"
-              :class="mode === 'video' ? undefined : 'text-[#8e8e93]'"
-              :aria-pressed="mode === 'video'"
-              @click="setMode('video')"
-            >
-              {{ phone.t('Apps.camera.video') }}
-            </k-segmented-button>
-          </k-segmented>
-        </template>
-      </k-navbar>
+        <SkySegmentedButton
+          :active="mode === 'photo'"
+          :disabled="recording || savingVideo"
+          @click="setMode('photo')"
+        >
+          {{ phone.t('Apps.camera.photo') }}
+        </SkySegmentedButton>
+        <SkySegmentedButton
+          :active="mode === 'video'"
+          :disabled="recording || savingVideo"
+          @click="setMode('video')"
+        >
+          {{ phone.t('Apps.camera.video') }}
+        </SkySegmentedButton>
+      </SkySegmented>
     </footer>
   </k-page>
 </template>
@@ -697,8 +704,13 @@ onBeforeUnmount(() => {
   object-fit: cover;
 }
 .camera-dev-view {
+  inset: -50%;
+  width: 200%;
+  height: 200%;
   overflow: hidden;
   background: linear-gradient(#4a88ad 0 48%, #a88d68 49% 62%, #283528 63%);
+  transform-origin: center;
+  transition: transform 160ms ease;
 }
 .camera-dev-sun {
   position: absolute;
@@ -812,6 +824,31 @@ onBeforeUnmount(() => {
 .camera-focus-pill--notice {
   color: #ffd60a;
 }
+.camera-lock-control {
+  min-height: 44px;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: #fff;
+  cursor: pointer;
+}
+.camera-lock-control--active {
+  color: #ffd60a;
+}
+.camera-lock-control kbd {
+  padding: 1px 5px;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 10%);
+  color: inherit;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .camera-record-status {
   position: absolute;
   z-index: 4;
@@ -833,14 +870,24 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: #ff3b30;
 }
-.camera-zoom-row {
+.camera-zoom-control {
   position: absolute;
   z-index: 4;
-  bottom: 164px;
+  bottom: 196px;
   left: 50%;
-  display: flex;
-  gap: 6px;
+  width: 140px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: rgb(18 18 20 / 72%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   transform: translateX(-50%);
+}
+.camera-zoom-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
 }
 .camera-zoom-pill {
   width: 30px;
@@ -879,7 +926,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 54px 1fr 54px;
   align-items: center;
-  padding: 0 24px 4px;
+  padding: 0 24px 32px;
 }
 .camera-latest {
   width: 44px;
@@ -930,11 +977,27 @@ onBeforeUnmount(() => {
   opacity: 0.5;
 }
 .camera-mode-navbar {
-  position: relative;
-  top: auto;
-  width: 50%;
+  width: 54%;
   align-self: center;
-  padding-bottom: 18px;
-  padding-top: 0;
+  margin-bottom: 18px;
+  transform: translateY(-16px);
+}
+.camera-mode-navbar.sky-segmented--navigation {
+  border-color: rgb(255 255 255 / 14%);
+  background: rgb(28 28 30 / 88%);
+}
+.camera-mode-navbar :deep(.sky-segmented__highlight) {
+  background: #3a3a3c;
+}
+.camera-mode-navbar :deep(.sky-segmented-button) {
+  color: #8e8e93;
+  font-size: 12px;
+}
+.camera-mode-navbar :deep(.sky-segmented-button--active) {
+  color: #ffd60a;
+}
+.camera-mode-navbar :deep(.sky-segmented-button:focus-visible) {
+  outline: 0;
+  box-shadow: none;
 }
 </style>

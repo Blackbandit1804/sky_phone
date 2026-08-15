@@ -518,6 +518,7 @@ async function main() {
 
     const lifecycleEndpoints = [
       'camera:setActive',
+      'camera:setLocked',
       'camera:setFacing',
       'camera:setFlash',
       'camera:setFocus',

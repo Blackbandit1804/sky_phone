@@ -510,7 +510,7 @@ function onMessage(event: MessageEvent): void {
     }
   } else if (message.type === 'camera:zoom') {
     const nextZoom = Number(message.data?.zoom)
-    if (![0.5, 1, 2, 3].includes(nextZoom)) return
+    if (!Number.isFinite(nextZoom) || nextZoom < 0.5 || nextZoom > 3) return
     zoom = nextZoom
     if (gameView && !gameView.isLost()) {
       const dimensions = captureDimensions()

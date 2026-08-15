@@ -60,7 +60,7 @@ export function gameViewGeometry(
     bottom = 1 - top
   }
 
-  const normalizedZoom = Math.min(3, Math.max(1, zoom))
+  const normalizedZoom = Math.min(3, Math.max(0.5, zoom))
   const centerX = (left + right) / 2
   const centerY = (top + bottom) / 2
   left = Math.max(0, centerX + (left - centerX) / normalizedZoom)

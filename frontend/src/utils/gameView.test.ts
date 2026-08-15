@@ -31,16 +31,16 @@ describe('gameViewGeometry', () => {
     ])
   })
 
-  it('keeps 0.5x full-frame while higher zoom levels crop around the center', () => {
+  it('widens the phone crop at 0.5x while higher zoom levels crop around the center', () => {
     const wideGeometry = gameViewGeometry(1920, 1080, 540, 720, 0.5)
     expect(Array.from(wideGeometry.textureCoordinates)).toEqual([
-      expect.closeTo(0.29, 2),
+      expect.closeTo(0.08, 2),
       0,
-      expect.closeTo(0.71, 2),
+      expect.closeTo(0.92, 2),
       0,
-      expect.closeTo(0.29, 2),
+      expect.closeTo(0.08, 2),
       1,
-      expect.closeTo(0.71, 2),
+      expect.closeTo(0.92, 2),
       1,
     ])
     expect(Array.from(wideGeometry.positions)).toEqual([
