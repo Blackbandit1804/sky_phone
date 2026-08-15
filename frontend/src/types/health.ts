@@ -17,17 +17,12 @@ export type HealthMedicalId = {
   playerName: string
 }
 
-export type HealthSnapshot = {
-  healthPercent: number
-}
-
 export type HealthOverview = {
   dailyStepGoal: number
   days: HealthActivityDay[]
   emergencyNumber: string
   medicalId: HealthMedicalId
   previousWeekSteps: number
-  snapshot: HealthSnapshot
 }
 
 export type HealthMedicalIdInput = Omit<HealthMedicalId, 'playerName'>

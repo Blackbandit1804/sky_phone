@@ -22,7 +22,6 @@ const overview: HealthOverview = {
     playerName: 'Alex Morgan',
   },
   previousWeekSteps: 0,
-  snapshot: { healthPercent: 100 },
 }
 
 describe('health store', () => {

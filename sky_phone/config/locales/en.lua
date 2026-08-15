@@ -202,10 +202,6 @@ Locales["en"] = {
                 kilocalories = "{count} kcal",
                 thisWeek = "This week",
                 snapshot = "Health snapshot",
-                condition = "Condition",
-                recovery = "Recovery",
-                currentHealth = "Current health",
-                conditions = { good = "Good", fair = "Fair", low = "Low" },
                 trends = {
                     title = "Trends", week = "Week", month = "Month", total = "{count} steps",
                     more = "{count}% more than last week", less = "{count}% less than last week",
@@ -219,7 +215,6 @@ Locales["en"] = {
                     noneRecorded = "None recorded", emergencyContact = "Emergency contact",
                     contactName = "Contact name", relation = "Relation", phoneNumber = "Phone number",
                     emergencyCall = "Emergency call", callContact = "Call emergency contact",
-                    privacy = "Information is stored with your character and can be shown to emergency services.",
                     saveFailed = "Medical ID could not be saved.",
                 },
                 errors = {

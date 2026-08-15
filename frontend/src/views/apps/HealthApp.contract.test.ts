@@ -8,6 +8,7 @@ describe('HealthApp Sky UI contract', () => {
     expect(source).toContain('<SkyAppPage')
     expect(source).toContain('<SkyNavbar')
     expect(source).toContain('<SkyScrollArea')
+    expect(source).toContain('padded with-tabbar')
     expect(source).toContain('with-tabbar')
     expect(source).toContain('<SkyPillNavigation')
     expect(source).not.toContain(
@@ -25,5 +26,11 @@ describe('HealthApp Sky UI contract', () => {
     expect(source).toContain('void health.load()')
     expect(source).toContain("nuiCall('calls:dial'")
     expect(source).toContain('health.saveMedicalId')
+  })
+
+  it('does not present values the phone cannot observe', () => {
+    expect(source).not.toContain('healthPercent')
+    expect(source).not.toContain('recoveryPercent')
+    expect(source).not.toContain('conditionKey')
   })
 })

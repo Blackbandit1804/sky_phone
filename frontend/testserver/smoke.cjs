@@ -326,7 +326,7 @@ async function verifyStatefulActions(baseUrl) {
   assert.equal(health.dailyStepGoal, 8000)
   assert.equal(health.days.length, 7)
   assert.equal(health.days.at(-1).steps, 6420)
-  assert.equal(health.snapshot.healthPercent, 96)
+  assert.equal('snapshot' in health, false)
 
   const medicalId = await expectSuccess(
     baseUrl,
