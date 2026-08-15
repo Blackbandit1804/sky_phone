@@ -161,7 +161,7 @@ Config.Animations = {
         OnFoot = "cellphone@",
         Driver = "anim@cellphone@in_car@ds",
         Passenger = "anim@cellphone@in_car@ps",
-        Selfie = "anim@mp_player_intuppertake_selfie",
+        Camera = "cellphone@self",
     },
     Clips = {
         TextIn = "cellphone_text_in",
@@ -171,7 +171,7 @@ Config.Animations = {
         CallListen = "cellphone_call_listen_base",
         CallToText = "cellphone_call_to_text",
         CallOut = "cellphone_call_out",
-        Selfie = "idle_a",
+        Camera = "selfie",
     },
     Transforms = {
         Portrait = {

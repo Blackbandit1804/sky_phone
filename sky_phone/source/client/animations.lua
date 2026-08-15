@@ -245,8 +245,11 @@ local function get_base_animation(ped, mode)
     if mode == MODE_CALL then
         return dictionary, Config.Animations.Clips.CallListen
     end
-    if mode == MODE_CAMERA_SELFIE and not IsPedInAnyVehicle(ped, false) then
-        return Config.Animations.Dictionaries.Selfie, Config.Animations.Clips.Selfie
+    if
+        (mode == MODE_CAMERA_REAR or mode == MODE_CAMERA_SELFIE)
+        and not IsPedInAnyVehicle(ped, false)
+    then
+        return Config.Animations.Dictionaries.Camera, Config.Animations.Clips.Camera
     end
     return dictionary, Config.Animations.Clips.TextRead
 end
