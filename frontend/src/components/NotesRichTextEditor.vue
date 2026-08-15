@@ -18,6 +18,7 @@ import {
 } from 'lucide-vue-next'
 import { onBeforeUnmount, watch } from 'vue'
 
+import { SkyIcon, SkyTabBar, SkyTabButton } from '@/ui'
 import {
   noteBodyToEditorHtml,
   serializeRichNoteBody,
@@ -206,16 +207,6 @@ function toggleSelectionQuote(): void {
   editor.value.view.focus()
 }
 
-function scrollToolbar(event: WheelEvent): void {
-  const toolbar = event.currentTarget as HTMLElement
-  if (toolbar.scrollWidth <= toolbar.clientWidth) return
-  event.preventDefault()
-  toolbar.scrollLeft +=
-    Math.abs(event.deltaX) > Math.abs(event.deltaY)
-      ? event.deltaX
-      : event.deltaY
-}
-
 watch(
   () => props.modelValue,
   (body) => {
@@ -241,128 +232,150 @@ onBeforeUnmount(() => editor.value?.destroy())
       :editor="editor"
     />
 
-    <nav
-      v-if="editor"
-      class="notes-rich-editor__toolbar"
-      :aria-label="labels.toolbar"
-      @wheel="scrollToolbar"
-    >
-      <button
-        type="button"
-        :disabled="!editor.can().chain().focus().undo().run()"
+    <SkyTabBar v-if="editor" :label="labels.toolbar">
+      <SkyTabButton
+        :active="
+          ['tiny', 'small', 'compact'].includes(
+            editor.getAttributes('noteTextSize').size,
+          )
+        "
         :aria-label="labels.undo"
-        :title="labels.undo"
+        :disabled="!editor.can().chain().focus().undo().run()"
         @click="editor.chain().focus().undo().run()"
       >
-        <Undo2 :size="19" />
-      </button>
-      <button
-        type="button"
-        :disabled="!editor.can().chain().focus().redo().run()"
+        <template #icon
+          ><SkyIcon :size="19"><Undo2 /></SkyIcon
+        ></template>
+      </SkyTabButton>
+      <SkyTabButton
+        :active="
+          ['medium', 'large', 'huge'].includes(
+            editor.getAttributes('noteTextSize').size,
+          )
+        "
         :aria-label="labels.redo"
-        :title="labels.redo"
+        :disabled="!editor.can().chain().focus().redo().run()"
         @click="editor.chain().focus().redo().run()"
       >
-        <Redo2 :size="19" />
-      </button>
-      <span class="notes-rich-editor__separator" aria-hidden="true"></span>
-      <button
-        type="button"
+        <template #icon
+          ><SkyIcon :size="19"><Redo2 /></SkyIcon
+        ></template>
+      </SkyTabButton>
+      <SkyTabButton
+        :active="editor.isActive('bold')"
         :class="{
-          'is-active': ['tiny', 'small', 'compact'].includes(
-            editor.getAttributes('noteTextSize').size,
-          ),
-          'is-unavailable': editor.state.selection.empty,
+          'notes-rich-editor__tool--active': [
+            'tiny',
+            'small',
+            'compact',
+          ].includes(editor.getAttributes('noteTextSize').size),
+          'notes-rich-editor__tool--unavailable': editor.state.selection.empty,
         }"
         :aria-label="labels.decreaseText"
-        :title="labels.decreaseText"
         @pointerdown.prevent="adjustTextSize(-1)"
       >
         <span class="notes-rich-editor__text-tool">A−</span>
-      </button>
-      <button
-        type="button"
+      </SkyTabButton>
+      <SkyTabButton
+        :active="editor.isActive('italic')"
         :class="{
-          'is-active': ['medium', 'large', 'huge'].includes(
-            editor.getAttributes('noteTextSize').size,
-          ),
-          'is-unavailable': editor.state.selection.empty,
+          'notes-rich-editor__tool--active': [
+            'medium',
+            'large',
+            'huge',
+          ].includes(editor.getAttributes('noteTextSize').size),
+          'notes-rich-editor__tool--unavailable': editor.state.selection.empty,
         }"
         :aria-label="labels.increaseText"
-        :title="labels.increaseText"
         @pointerdown.prevent="adjustTextSize(1)"
       >
         <span
           class="notes-rich-editor__text-tool notes-rich-editor__text-tool--large"
           >A+</span
         >
-      </button>
-      <span class="notes-rich-editor__separator" aria-hidden="true"></span>
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('bold') }"
+      </SkyTabButton>
+      <SkyTabButton
+        :class="{
+          'notes-rich-editor__tool--active': editor.isActive('bold'),
+        }"
         :aria-label="labels.bold"
-        :title="labels.bold"
         @click="editor.chain().focus().toggleBold().run()"
       >
-        <Bold :size="19" />
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('italic') }"
+        <template #icon
+          ><SkyIcon :size="19"><Bold /></SkyIcon
+        ></template>
+      </SkyTabButton>
+      <SkyTabButton
+        :class="{
+          'notes-rich-editor__tool--active': editor.isActive('italic'),
+        }"
         :aria-label="labels.italic"
-        :title="labels.italic"
         @click="editor.chain().focus().toggleItalic().run()"
       >
-        <Italic :size="19" />
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('underline') }"
+        <template #icon
+          ><SkyIcon :size="19"><Italic /></SkyIcon
+        ></template>
+      </SkyTabButton>
+      <SkyTabButton
+        :active="editor.isActive('underline')"
+        :class="{
+          'notes-rich-editor__tool--active': editor.isActive('underline'),
+        }"
         :aria-label="labels.underline"
-        :title="labels.underline"
         @click="editor.chain().focus().toggleUnderline().run()"
       >
-        <Underline :size="19" />
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('strike') }"
+        <template #icon
+          ><SkyIcon :size="19"><Underline /></SkyIcon
+        ></template>
+      </SkyTabButton>
+      <SkyTabButton
+        :active="editor.isActive('strike')"
+        :class="{
+          'notes-rich-editor__tool--active': editor.isActive('strike'),
+        }"
         :aria-label="labels.strike"
-        :title="labels.strike"
         @click="editor.chain().focus().toggleStrike().run()"
       >
-        <Strikethrough :size="19" />
-      </button>
-      <span class="notes-rich-editor__separator" aria-hidden="true"></span>
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('bulletList') }"
+        <template #icon
+          ><SkyIcon :size="19"><Strikethrough /></SkyIcon
+        ></template>
+      </SkyTabButton>
+      <SkyTabButton
+        :active="editor.isActive('bulletList')"
+        :class="{
+          'notes-rich-editor__tool--active': editor.isActive('bulletList'),
+        }"
         :aria-label="labels.bulletList"
-        :title="labels.bulletList"
         @click="editor.chain().focus().toggleBulletList().run()"
       >
-        <List :size="20" />
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('orderedList') }"
+        <template #icon
+          ><SkyIcon :size="20"><List /></SkyIcon
+        ></template>
+      </SkyTabButton>
+      <SkyTabButton
+        :active="editor.isActive('orderedList')"
+        :class="{
+          'notes-rich-editor__tool--active': editor.isActive('orderedList'),
+        }"
         :aria-label="labels.numberedList"
-        :title="labels.numberedList"
         @click="editor.chain().focus().toggleOrderedList().run()"
       >
-        <ListOrdered :size="20" />
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-unavailable': editor.state.selection.empty }"
+        <template #icon
+          ><SkyIcon :size="20"><ListOrdered /></SkyIcon
+        ></template>
+      </SkyTabButton>
+      <SkyTabButton
+        :class="{
+          'notes-rich-editor__tool--unavailable': editor.state.selection.empty,
+        }"
         :aria-label="labels.quote"
-        :title="labels.quote"
         @pointerdown.prevent="toggleSelectionQuote"
       >
-        <Quote :size="19" />
-      </button>
-    </nav>
+        <template #icon
+          ><SkyIcon :size="19"><Quote /></SkyIcon
+        ></template>
+      </SkyTabButton>
+    </SkyTabBar>
   </section>
 </template>
 
@@ -390,8 +403,7 @@ onBeforeUnmount(() => editor.value?.destroy())
   scrollbar-width: none;
 }
 
-.notes-rich-editor__content::-webkit-scrollbar,
-.notes-rich-editor__toolbar::-webkit-scrollbar {
+.notes-rich-editor__content::-webkit-scrollbar {
   display: none;
 }
 
@@ -494,89 +506,6 @@ onBeforeUnmount(() => editor.value?.destroy())
   pointer-events: none;
 }
 
-.notes-rich-editor__toolbar {
-  width: 100%;
-  min-height: 59px;
-  padding: 7px var(--sky-page-gutter) calc(var(--sky-safe-area-bottom) + 7px);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  border-top: 1px solid rgb(60 60 67 / 18%);
-  background: rgb(246 246 248 / 96%);
-  box-shadow: 0 -9px 28px rgb(0 0 0 / 7%);
-  scrollbar-width: none;
-  touch-action: pan-x;
-}
-
-.notes-rich-editor--dark .notes-rich-editor__toolbar {
-  border-top-color: rgb(255 255 255 / 12%);
-  background: rgb(27 27 29 / 97%);
-  box-shadow: 0 -10px 30px rgb(0 0 0 / 38%);
-}
-
-.notes-rich-editor__toolbar button {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  border: 1px solid rgb(60 60 67 / 14%);
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: rgb(255 255 255 / 72%);
-  box-shadow: inset 0 1px rgb(255 255 255 / 65%);
-  color: inherit;
-  cursor: pointer;
-  transition:
-    transform 130ms ease,
-    background-color 150ms ease,
-    color 150ms ease;
-}
-
-.notes-rich-editor--dark .notes-rich-editor__toolbar button {
-  border-color: rgb(255 255 255 / 10%);
-  background: linear-gradient(145deg, #303034, #202023);
-  box-shadow: inset 0 1px rgb(255 255 255 / 8%);
-}
-
-.notes-rich-editor__toolbar button.is-active {
-  border-color: #ffcc00;
-  background: #ffcc00;
-  color: #171719;
-}
-
-.notes-rich-editor__toolbar button:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.notes-rich-editor__toolbar button.is-unavailable {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.notes-rich-editor__toolbar button:active:not(:disabled) {
-  transform: scale(0.94);
-}
-
-.notes-rich-editor__toolbar button:focus-visible {
-  outline: 2px solid #ffcc00;
-  outline-offset: 2px;
-}
-
-.notes-rich-editor__separator {
-  width: 1px;
-  height: 24px;
-  flex: 0 0 1px;
-  margin: 0 1px;
-  background: rgb(60 60 67 / 20%);
-}
-
-.notes-rich-editor--dark .notes-rich-editor__separator {
-  background: rgb(255 255 255 / 16%);
-}
-
 .notes-rich-editor__text-tool {
   font-size: 14px;
   font-weight: 650;
@@ -584,18 +513,5 @@ onBeforeUnmount(() => editor.value?.destroy())
 
 .notes-rich-editor__text-tool--large {
   font-size: 17px;
-}
-
-@media (hover: hover) {
-  .notes-rich-editor__toolbar button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    filter: brightness(1.08);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .notes-rich-editor__toolbar button {
-    transition: none;
-  }
 }
 </style>
