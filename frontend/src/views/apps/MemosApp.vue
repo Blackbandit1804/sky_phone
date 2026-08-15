@@ -698,6 +698,8 @@ onBeforeUnmount(() => {
   </SkyAppPage>
 
   <SkyActionSheet
+    class="memos-overlay-theme sky-ui-provider"
+    :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
     :opened="menuOpened"
     :aria-label="phone.t('Apps.memos.actions')"
     @backdropclick="menuOpened = false"
@@ -723,7 +725,8 @@ onBeforeUnmount(() => {
   />
 
   <SkyDialog
-    class="memo-recording-dialog"
+    class="memo-recording-dialog memos-overlay-theme sky-ui-provider"
+    :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
     :opened="view === 'recording' && !discardDialogOpened"
     :title="phone.t('Apps.memos.newMemo')"
     @backdropclick="requestCancelRecording"
@@ -830,6 +833,8 @@ onBeforeUnmount(() => {
   </SkyDialog>
 
   <SkyDialog
+    class="memos-overlay-theme sky-ui-provider"
+    :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
     :opened="discardDialogOpened"
     :title="phone.t('Apps.memos.discardTitle')"
     :content="phone.t('Apps.memos.discardBody')"
@@ -848,6 +853,8 @@ onBeforeUnmount(() => {
   </SkyDialog>
 
   <SkyDialog
+    class="memos-overlay-theme sky-ui-provider"
+    :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
     :opened="deleteDialogOpened"
     :title="phone.t('Apps.memos.deleteTitle')"
     :content="phone.t('Apps.memos.deleteBody')"
@@ -868,7 +875,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .memos-page,
-.memo-detail-page {
+.memo-detail-page,
+.memos-overlay-theme {
   --sky-app-accent: #ff3b30;
   --sky-app-accent-soft: rgb(255 59 48 / 15%);
 }
