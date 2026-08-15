@@ -17,7 +17,6 @@ export type PhoneContact = {
   created_at?: string
   favorite?: boolean | number
   id: string
-  icon?: string
   name: string
   notes?: string | null
   organization?: string | null

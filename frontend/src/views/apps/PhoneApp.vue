@@ -280,7 +280,7 @@ function openContact(contact?: PhoneContact, number = ''): void {
   contactNotes.value = contact?.notes ?? ''
   contactNumber.value = contact?.phone_number ?? number
   contactAvatarMediaId.value = contact?.avatar_media_id ?? null
-  contactAvatarUrl.value = contact?.avatar_url ?? contact?.icon ?? ''
+  contactAvatarUrl.value = contact?.avatar_url ?? ''
   error.value = ''
   editorOpened.value = true
 }
@@ -971,8 +971,8 @@ onBeforeUnmount(() => {
             <div class="phone-contact-hero">
               <div class="phone-contact-avatar phone-contact-avatar--large">
                 <img
-                  v-if="selectedContact?.avatar_url || selectedContact?.icon"
-                  :src="selectedContact.avatar_url ?? selectedContact.icon"
+                  v-if="selectedContact?.avatar_url"
+                  :src="selectedContact.avatar_url"
                   alt=""
                 />
                 <span v-else-if="contactInitials(selectedNumber)">{{
@@ -1297,8 +1297,8 @@ onBeforeUnmount(() => {
                 >
                   <span class="phone-contact-avatar">
                     <img
-                      v-if="contact.avatar_url || contact.icon"
-                      :src="contact.avatar_url ?? contact.icon"
+                      v-if="contact.avatar_url"
+                      :src="contact.avatar_url"
                       alt=""
                     />
                     <template v-else>{{
@@ -1331,8 +1331,8 @@ onBeforeUnmount(() => {
                 >
                   <span class="phone-contact-avatar">
                     <img
-                      v-if="contact.avatar_url || contact.icon"
-                      :src="contact.avatar_url ?? contact.icon"
+                      v-if="contact.avatar_url"
+                      :src="contact.avatar_url"
                       alt=""
                     />
                     <template v-else>{{
@@ -1394,8 +1394,8 @@ onBeforeUnmount(() => {
                 >
                   <span class="phone-keypad-suggestion__avatar">
                     <img
-                      v-if="contact.avatar_url || contact.icon"
-                      :src="contact.avatar_url ?? contact.icon"
+                      v-if="contact.avatar_url"
+                      :src="contact.avatar_url"
                       alt=""
                     />
                     <template v-else>{{

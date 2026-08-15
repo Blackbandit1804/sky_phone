@@ -166,4 +166,33 @@ describe('calls store', () => {
     expect(nuiCall).toHaveBeenNthCalledWith(2, 'contacts:list')
     expect(calls.contacts[0]?.favorite).toBe(true)
   })
+
+  it('keeps configured company branding on system contacts', async () => {
+    vi.mocked(nuiCall).mockResolvedValueOnce({
+      success: true,
+      data: [
+        {
+          avatar_url:
+            'https://picsum.photos/seed/companies-police-logo/180/180',
+          companyId: 'police',
+          id: 'company:police',
+          name: 'Los Santos Police Department',
+          organization: 'Los Santos Police Department',
+          phone_number: '911',
+          readonly: true,
+          source: 'company',
+        },
+      ],
+    })
+    const calls = useCallsStore()
+
+    await calls.loadContacts()
+
+    expect(calls.contacts[0]).toMatchObject({
+      avatar_url:
+        'https://picsum.photos/seed/companies-police-logo/180/180',
+      organization: 'Los Santos Police Department',
+      source: 'company',
+    })
+  })
 })

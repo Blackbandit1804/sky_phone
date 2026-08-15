@@ -272,11 +272,13 @@ local function validate_configuration()
             true
         )
         local address = valid_text(definition.Address or "", Config.Companies.AddressMaxLength, true)
+        local logo_url = valid_text(definition.LogoUrl, 2048, false)
         if not description or not district or not location_label or not address
             or type(definition.Public) ~= "boolean" or type(definition.Emergency) ~= "boolean"
             or type(definition.Verified) ~= "boolean" or type(definition.AcceptsRequests) ~= "boolean"
             or not Config.Companies.AvailabilityStatuses[definition.DefaultAvailability]
             or not valid_text(definition.Icon, 64, false)
+            or not logo_url or not logo_url:match("^https://[^%s]+$")
             or (definition.Emergency and definition.AcceptsRequests)
         then
             error(("[sky_phone] Company definition '%s' has invalid public profile defaults."):format(company_id))
@@ -286,6 +288,7 @@ local function validate_configuration()
         definition.District = district
         definition.LocationLabel = location_label
         definition.Address = address
+        definition.LogoUrl = logo_url
         if definition.Location ~= nil then
             local location_type = type(definition.Location)
             if location_type ~= "table" and location_type ~= "vector3" then
@@ -558,13 +561,14 @@ function SkyPhoneCompanies.GetSystemContacts()
                 id = "company:" .. company_id,
                 companyId = company_id,
                 name = definition.Name,
+                organization = definition.Name,
                 phone_number = line.Number,
+                avatar_url = definition.LogoUrl,
                 source = "company",
                 readonly = true,
                 canCall = line.CanCall == true,
                 canMessage = line.CanMessage == true,
                 verified = definition.Verified == true,
-                icon = definition.Icon,
             }
         end
     end
@@ -829,7 +833,7 @@ local function company_payload(company_id, include_inactive_services)
         canCall = line and line.CanCall == true or false,
         canMessage = line and line.CanMessage == true or false,
         location = location,
-        logoUrl = row.logo_url,
+        logoUrl = row.logo_url or definition.LogoUrl,
         coverUrl = row.cover_url,
         serviceSummary = services[1] and services[1].title or "",
         announcement = current_announcement(company_id),
