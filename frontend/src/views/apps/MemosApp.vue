@@ -1,38 +1,12 @@
 <script setup lang="ts">
 import {
-  kActions,
-  kActionsButton,
-  kActionsGroup,
-  kActionsLabel,
-  kBlock,
-  kBlockTitle,
-  kButton,
-  kDialog,
-  kDialogButton,
-  kFab,
-  kGlass,
-  kLink,
-  kList,
-  kListButton,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kRange,
-  kSearchbar,
-  kSegmented,
-  kSegmentedButton,
-} from 'konsta/vue'
-import {
   Ellipsis,
   Mic,
+  MicOff,
   Pause,
   Play,
   RotateCcw,
   RotateCw,
-  Square,
   Trash2,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -41,6 +15,29 @@ import { useMemosStore } from '@/stores/memos'
 import { useNotificationsStore } from '@/stores/notifications'
 import { usePhoneStore } from '@/stores/phone'
 import type { MemoDto, MemoRecorderState } from '@/types/memos'
+import {
+  SkyActionButton,
+  SkyActionGroup,
+  SkyActionSheet,
+  SkyAppPage,
+  SkyButton,
+  SkyDialog,
+  SkyDialogButton,
+  SkyEmptyState,
+  SkyFab,
+  SkyField,
+  SkyGlass,
+  SkyLink,
+  SkyList,
+  SkyListItem,
+  SkyNavbar,
+  SkyRange,
+  SkyScrollArea,
+  SkySearchbar,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySpinner,
+} from '@/ui'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
 type MemoView = 'detail' | 'list' | 'recording'
@@ -111,18 +108,6 @@ const activeAudioProgress = computed(() => {
   const duration = (activeAudioMemo.value?.durationMs ?? 0) / 1000
   return duration > 0 ? Math.min(1, audioCurrentTime.value / duration) : 0
 })
-const deleteActionColors = {
-  textIos: 'text-red-500',
-  textMaterial: 'text-red-500',
-}
-const recordButtonColors = {
-  fillBgIos: 'bg-red-500 active:bg-red-600',
-  fillBgMaterial: 'bg-red-500',
-  fillTextIos: 'text-white',
-  fillTextMaterial: 'text-white',
-}
-const memoRowLinkProps = { role: 'button', tabindex: 0 }
-
 function defaultRecordingTitle(): string {
   const date = new Intl.DateTimeFormat(phone.lang, {
     day: '2-digit',
@@ -264,18 +249,6 @@ function discardRecording(): void {
   view.value = 'list'
 }
 
-function updateSearch(event: Event): void {
-  searchQuery.value = (event.target as HTMLInputElement).value
-}
-
-function updateDraftTitle(event: Event): void {
-  draftTitle.value = (event.target as HTMLInputElement).value
-}
-
-function updateDraftNote(event: Event): void {
-  draftNote.value = (event.target as HTMLInputElement).value
-}
-
 async function ensureAudio(memo: MemoDto): Promise<HTMLAudioElement | null> {
   if (activeAudioId.value !== memo.id) {
     audio.value?.pause()
@@ -365,13 +338,6 @@ function openMemo(memo: MemoDto): void {
   playbackRate.value = 1
   activeAudioId.value = memo.id
   view.value = 'detail'
-}
-
-function openMemoFromKeyboard(event: KeyboardEvent, memo: MemoDto): void {
-  if ((event.target as HTMLElement).closest('.memo-row__play')) return
-  if (event.key !== 'Enter' && event.key !== ' ') return
-  event.preventDefault()
-  openMemo(memo)
 }
 
 async function persistSelected(): Promise<boolean> {
@@ -468,46 +434,45 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
-    v-if="view === 'list'"
-    class="memos-page !pt-[44px] !pb-[25px]"
-    :aria-label="phone.t('Apps.memos.name')"
+  <SkyAppPage
+    v-if="view !== 'detail'"
+    class="memos-page"
+    :dark="phone.isDarkMode"
+    accent="#ff3b30"
+    accent-soft="rgb(255 59 48 / 15%)"
+    :label="phone.t('Apps.memos.name')"
   >
-    <k-navbar large transparent :title="phone.t('Apps.memos.name')">
-      <template #subnavbar>
-        <k-searchbar
-          :value="searchQuery"
-          :placeholder="phone.t('Apps.memos.searchPlaceholder')"
-          @input="updateSearch"
-          @clear="searchQuery = ''"
-        />
-      </template>
-    </k-navbar>
+    <SkyNavbar
+      variant="large"
+      transparent
+      :title="phone.t('Apps.memos.name')"
+    />
 
-    <div class="memos-page__content">
-      <k-block v-if="memos.loading" class="memos-loading">
-        <k-preloader />
-      </k-block>
+    <SkyScrollArea class="memos-page__content">
+      <div v-if="memos.loading" class="memos-loading">
+        <SkySpinner :label="phone.t('Common.loading')" :size="24" />
+      </div>
 
-      <k-glass v-else-if="visibleMemos.length" class="memos-list-glass">
-        <k-list nested class="memos-list">
-          <k-list-item
+      <SkyGlass
+        v-else-if="visibleMemos.length"
+        class="memos-list-glass"
+        :highlight="false"
+      >
+        <SkyList nested class="memos-list">
+          <SkyListItem
             v-for="memo in visibleMemos"
             :key="memo.id"
             link
-            link-component="div"
-            :link-props="memoRowLinkProps"
+            link-component="button"
             :title="memo.title"
             :subtitle="memoSubtitle(memo)"
             :chevron="false"
             strong-title="auto"
             class="memo-row"
             @click="openMemo(memo)"
-            @keydown="openMemoFromKeyboard($event, memo)"
           >
             <template #media>
-              <k-link
-                component="button"
+              <SkyLink
                 icon-only
                 class="memo-row__play"
                 :aria-label="
@@ -525,7 +490,7 @@ onBeforeUnmount(() => {
                   fill="currentColor"
                 />
                 <Play v-else :size="17" fill="currentColor" />
-              </k-link>
+              </SkyLink>
             </template>
             <template #text>
               <div class="memo-row__waveform" aria-hidden="true">
@@ -542,67 +507,237 @@ onBeforeUnmount(() => {
                 />
               </div>
             </template>
-          </k-list-item>
-        </k-list>
-      </k-glass>
+          </SkyListItem>
+        </SkyList>
+      </SkyGlass>
 
-      <k-glass v-else class="memos-empty-glass">
-        <k-block-title large>{{
+      <SkyEmptyState
+        v-else
+        class="memos-empty"
+        :title="
           phone.t(
             searchQuery ? 'Apps.memos.noResults' : 'Apps.memos.emptyTitle',
           )
-        }}</k-block-title>
-        <k-block>{{
+        "
+        :body="
           phone.t(
             searchQuery ? 'Apps.memos.noResultsBody' : 'Apps.memos.emptyBody',
           )
-        }}</k-block>
-        <k-list v-if="!searchQuery" nested>
-          <k-list-button link-component="button" @click="startRecording">
-            {{ phone.t('Apps.memos.newMemo') }}
-          </k-list-button>
-        </k-list>
-      </k-glass>
-    </div>
+        "
+      >
+        <template #icon><MicOff :size="24" aria-hidden="true" /></template>
+      </SkyEmptyState>
+    </SkyScrollArea>
 
-    <k-fab
-      component="button"
-      type="button"
-      class="memos-record-fab"
-      :aria-label="phone.t('Apps.memos.newMemo')"
-      @click="startRecording"
-    >
-      <template #icon><Mic :size="24" /></template>
-    </k-fab>
-  </k-page>
+    <footer class="memos-composer">
+      <SkySearchbar
+        v-model="searchQuery"
+        class="memos-search"
+        :clear-label="phone.t('Common.clear')"
+        :label="phone.t('Apps.memos.searchPlaceholder')"
+        :placeholder="phone.t('Apps.memos.searchPlaceholder')"
+      />
+      <SkyFab
+        class="memos-record-fab"
+        :aria-label="phone.t('Apps.memos.newMemo')"
+        @click="startRecording"
+      >
+        <template #icon><Mic :size="23" aria-hidden="true" /></template>
+      </SkyFab>
+    </footer>
+  </SkyAppPage>
 
-  <k-page
-    v-else-if="view === 'recording'"
-    class="memo-recording-page !pt-[44px] !pb-[25px]"
-    :aria-label="phone.t('Apps.memos.newMemo')"
+  <SkyAppPage
+    v-else-if="selectedMemo"
+    class="memo-detail-page"
+    :dark="phone.isDarkMode"
+    accent="#ff3b30"
+    accent-soft="rgb(255 59 48 / 15%)"
+    :label="selectedMemo.title"
   >
-    <k-navbar :title="phone.t('Apps.memos.newMemo')">
-      <template #left>
-        <k-navbar-back-link
-          component="button"
-          :text="phone.t('Apps.memos.cancel')"
-          @click="requestCancelRecording"
-        />
+    <SkyNavbar
+      show-back
+      :back-label="phone.t('Apps.memos.back')"
+      :title="phone.t('Apps.memos.memo')"
+      @back="closeDetail"
+    >
+      <template #right>
+        <SkyLink
+          icon-only
+          :aria-label="phone.t('Apps.memos.actions')"
+          @click="openMenu"
+        >
+          <Ellipsis :size="22" aria-hidden="true" />
+        </SkyLink>
       </template>
-    </k-navbar>
+    </SkyNavbar>
 
-    <k-glass class="memo-fields-glass memo-recording-title">
-      <k-list nested :dividers="false">
-        <k-list-input
-          :value="draftTitle"
-          :label="phone.t('Apps.memos.title')"
-          :placeholder="phone.t('Apps.memos.titlePlaceholder')"
-          maxlength="120"
-          :disabled="recordingBusy"
-          @input="updateDraftTitle"
+    <SkyScrollArea class="memo-detail-scroll">
+      <SkyGlass class="memo-fields-glass" :highlight="false">
+        <SkyList nested :dividers="false">
+          <SkyField
+            v-model="draftTitle"
+            :label="phone.t('Apps.memos.title')"
+            :placeholder="phone.t('Apps.memos.titlePlaceholder')"
+            :maxlength="120"
+          />
+          <SkyField
+            v-model="draftNote"
+            type="textarea"
+            :label="phone.t('Apps.memos.note')"
+            :placeholder="phone.t('Apps.memos.notePlaceholder')"
+            :maxlength="2000"
+            :rows="3"
+          />
+        </SkyList>
+      </SkyGlass>
+
+      <SkyGlass component="section" class="memo-player" :highlight="false">
+        <div class="memo-player__meta">
+          <span>{{ memoDate(selectedMemo.createdAt) }}</span>
+          <span>{{ formatDuration(selectedMemo.durationMs) }}</span>
+        </div>
+        <div class="memo-player__waveform" aria-hidden="true">
+          <i
+            v-for="(sample, index) in selectedMemo.waveform"
+            :key="index"
+            :class="{
+              active:
+                index / Math.max(1, selectedMemo.waveform.length - 1) <=
+                activeAudioProgress,
+            }"
+            :style="{ height: `${Math.max(4, sample * 96)}px` }"
+          />
+        </div>
+        <SkyRange
+          class="memo-player__range"
+          :value="audioCurrentTime"
+          :min="0"
+          :max="selectedMemo.durationMs / 1000"
+          :step="0.1"
+          :aria-label="phone.t('Apps.memos.play')"
+          @input="seekPlayback"
         />
-      </k-list>
-    </k-glass>
+        <div class="memo-player__times">
+          <span>{{ formatDuration(audioCurrentTime * 1000) }}</span>
+          <span
+            >-{{
+              formatDuration(
+                Math.max(0, selectedMemo.durationMs - audioCurrentTime * 1000),
+              )
+            }}</span
+          >
+        </div>
+      </SkyGlass>
+
+      <SkyGlass class="memo-player-controls" :highlight="false">
+        <SkyButton
+          rounded
+          icon-only
+          variant="secondary"
+          class="memo-player-control"
+          :aria-label="phone.t('Apps.memos.skipBack')"
+          @click="skipPlayback(-15)"
+        >
+          <RotateCcw :size="22" aria-hidden="true" />
+          <small>15</small>
+        </SkyButton>
+        <SkyButton
+          rounded
+          icon-only
+          class="memo-player-control memo-player-control--main"
+          :aria-label="
+            phone.t(
+              audioPlaying ? 'Apps.memos.pausePlayback' : 'Apps.memos.play',
+            )
+          "
+          @click="togglePlayback(selectedMemo)"
+        >
+          <Pause
+            v-if="audioPlaying"
+            :size="28"
+            fill="currentColor"
+            aria-hidden="true"
+          />
+          <Play v-else :size="28" fill="currentColor" aria-hidden="true" />
+        </SkyButton>
+        <SkyButton
+          rounded
+          icon-only
+          variant="secondary"
+          class="memo-player-control"
+          :aria-label="phone.t('Apps.memos.skipForward')"
+          @click="skipPlayback(15)"
+        >
+          <RotateCw :size="22" aria-hidden="true" />
+          <small>15</small>
+        </SkyButton>
+      </SkyGlass>
+
+      <h2 class="memo-section-title">
+        {{ phone.t('Apps.memos.playbackSpeed') }}
+      </h2>
+      <SkyGlass class="memo-speed-block" :highlight="false">
+        <SkySegmented
+          strong
+          rounded
+          :item-count="4"
+          :active-index="[0.75, 1, 1.25, 1.5].indexOf(playbackRate)"
+        >
+          <SkySegmentedButton
+            v-for="rate in [0.75, 1, 1.25, 1.5]"
+            :key="rate"
+            :active="playbackRate === rate"
+            @click="setPlaybackRate(rate)"
+          >
+            {{ rate }}×
+          </SkySegmentedButton>
+        </SkySegmented>
+      </SkyGlass>
+    </SkyScrollArea>
+  </SkyAppPage>
+
+  <SkyActionSheet
+    :opened="menuOpened"
+    :aria-label="phone.t('Apps.memos.actions')"
+    @backdropclick="menuOpened = false"
+    @escape="menuOpened = false"
+  >
+    <SkyActionGroup>
+      <SkyActionButton class="memo-delete-action" @click="requestDelete">
+        <Trash2 :size="18" aria-hidden="true" />
+        <span>{{ phone.t('Apps.memos.delete') }}</span>
+      </SkyActionButton>
+    </SkyActionGroup>
+  </SkyActionSheet>
+
+  <audio
+    ref="audio"
+    :src="activeAudioMemo?.url"
+    preload="metadata"
+    @play="audioPlaying = true"
+    @pause="audioPlaying = false"
+    @timeupdate="updateAudioProgress"
+    @ended="finishPlayback"
+    @error="failPlayback"
+  />
+
+  <SkyDialog
+    class="memo-recording-dialog"
+    :opened="view === 'recording' && !discardDialogOpened"
+    :title="phone.t('Apps.memos.newMemo')"
+    @backdropclick="requestCancelRecording"
+    @escape="requestCancelRecording"
+  >
+    <SkyList class="memo-recording-fields" nested :dividers="false">
+      <SkyField
+        v-model="draftTitle"
+        :aria-label="phone.t('Apps.memos.title')"
+        :placeholder="phone.t('Apps.memos.titlePlaceholder')"
+        :maxlength="120"
+        :disabled="recordingBusy"
+      />
+    </SkyList>
 
     <section class="memo-recorder-stage">
       <div class="memo-recorder-stage__status">
@@ -631,32 +766,25 @@ onBeforeUnmount(() => {
         <i
           v-for="(level, index) in recorderWaveform"
           :key="index"
-          :style="{ height: `${Math.max(5, level * 104)}px` }"
+          :style="{ height: `${Math.max(4, level * 54)}px` }"
         />
       </div>
       <strong class="memo-recorder-time">{{
         formatDuration(recorderState.elapsedMs, true)
       }}</strong>
-    </section>
 
-    <k-glass class="memo-recorder-controls">
-      <k-preloader v-if="recordingBusy" />
-      <k-button
-        v-else-if="!recordingControllable"
-        inline
-        rounded
-        large
-        class="memo-retry-button"
-        @click="startRecording"
-      >
-        <Mic :size="18" aria-hidden="true" />
-        <span>{{ phone.t('Apps.memos.newMemo') }}</span>
-      </k-button>
-      <template v-else>
-        <k-button
+      <div class="memo-recorder-controls">
+        <SkySpinner
+          v-if="recordingBusy"
+          :label="phone.t('Apps.memos.saving')"
+          :size="24"
+        />
+        <SkyButton
+          v-else-if="recordingControllable"
           rounded
-          large
-          class="memo-control-button memo-control-button--secondary"
+          icon-only
+          variant="secondary"
+          class="memo-control-button"
           :aria-label="
             phone.t(
               recorderState.state === 'paused'
@@ -668,317 +796,149 @@ onBeforeUnmount(() => {
         >
           <Play
             v-if="recorderState.state === 'paused'"
-            :size="21"
+            :size="20"
             fill="currentColor"
+            aria-hidden="true"
           />
-          <Pause v-else :size="21" fill="currentColor" />
-        </k-button>
-        <k-button
+          <Pause v-else :size="20" fill="currentColor" aria-hidden="true" />
+        </SkyButton>
+        <SkyButton
+          v-else
           rounded
-          large
-          class="memo-control-button"
-          :colors="recordButtonColors"
-          :aria-label="phone.t('Apps.memos.stop')"
-          @click="stopRecording"
+          tonal
+          class="memo-retry-button"
+          @click="startRecording"
         >
-          <Square :size="21" fill="currentColor" />
-        </k-button>
-      </template>
-    </k-glass>
-  </k-page>
-
-  <k-page
-    v-else-if="selectedMemo"
-    class="memo-detail-page !pt-[44px] !pb-[25px]"
-    :aria-label="selectedMemo.title"
-  >
-    <k-navbar :title="phone.t('Apps.memos.memo')">
-      <template #left>
-        <k-navbar-back-link
-          component="button"
-          :text="phone.t('Apps.memos.back')"
-          @click="closeDetail"
-        />
-      </template>
-      <template #right>
-        <k-link
-          component="button"
-          icon-only
-          :aria-label="phone.t('Apps.memos.actions')"
-          @click="openMenu"
-        >
-          <Ellipsis :size="22" />
-        </k-link>
-      </template>
-    </k-navbar>
-
-    <k-glass class="memo-fields-glass memo-detail-fields">
-      <k-list nested :dividers="false">
-        <k-list-input
-          :value="draftTitle"
-          :label="phone.t('Apps.memos.title')"
-          :placeholder="phone.t('Apps.memos.titlePlaceholder')"
-          maxlength="120"
-          @input="updateDraftTitle"
-        />
-        <k-list-input
-          type="textarea"
-          :value="draftNote"
-          :label="phone.t('Apps.memos.note')"
-          :placeholder="phone.t('Apps.memos.notePlaceholder')"
-          maxlength="2000"
-          @input="updateDraftNote"
-        />
-      </k-list>
-    </k-glass>
-
-    <k-glass component="section" class="memo-player" :highlight="false">
-      <div class="memo-player__meta">
-        <span>{{ memoDate(selectedMemo.createdAt) }}</span>
-        <span>{{ formatDuration(selectedMemo.durationMs) }}</span>
+          <Mic :size="17" aria-hidden="true" />
+          <span>{{ phone.t('Apps.memos.newMemo') }}</span>
+        </SkyButton>
       </div>
-      <div class="memo-player__waveform" aria-hidden="true">
-        <i
-          v-for="(sample, index) in selectedMemo.waveform"
-          :key="index"
-          :class="{
-            active:
-              index / Math.max(1, selectedMemo.waveform.length - 1) <=
-              activeAudioProgress,
-          }"
-          :style="{ height: `${Math.max(4, sample * 96)}px` }"
-        />
-      </div>
-      <k-range
-        class="memo-player__range"
-        :value="audioCurrentTime"
-        :min="0"
-        :max="selectedMemo.durationMs / 1000"
-        :step="0.1"
-        :aria-label="phone.t('Apps.memos.play')"
-        @input="seekPlayback"
-      />
-      <div class="memo-player__times">
-        <span>{{ formatDuration(audioCurrentTime * 1000) }}</span>
-        <span
-          >-{{
-            formatDuration(
-              Math.max(0, selectedMemo.durationMs - audioCurrentTime * 1000),
-            )
-          }}</span
-        >
-      </div>
-    </k-glass>
+    </section>
 
-    <k-glass class="memo-player-controls">
-      <k-button
-        rounded
-        class="memo-player-control"
-        :aria-label="phone.t('Apps.memos.skipBack')"
-        @click="skipPlayback(-15)"
-      >
-        <RotateCcw :size="22" />
-        <small>15</small>
-      </k-button>
-      <k-button
-        rounded
-        large
-        class="memo-player-control memo-player-control--main"
-        :aria-label="
-          phone.t(audioPlaying ? 'Apps.memos.pausePlayback' : 'Apps.memos.play')
-        "
-        @click="togglePlayback(selectedMemo)"
-      >
-        <Pause v-if="audioPlaying" :size="28" fill="currentColor" />
-        <Play v-else :size="28" fill="currentColor" />
-      </k-button>
-      <k-button
-        rounded
-        class="memo-player-control"
-        :aria-label="phone.t('Apps.memos.skipForward')"
-        @click="skipPlayback(15)"
-      >
-        <RotateCw :size="22" />
-        <small>15</small>
-      </k-button>
-    </k-glass>
-
-    <k-block-title>{{ phone.t('Apps.memos.playbackSpeed') }}</k-block-title>
-    <k-glass class="memo-speed-block" :highlight="false">
-      <k-segmented strong rounded>
-        <k-segmented-button
-          v-for="rate in [0.75, 1, 1.25, 1.5]"
-          :key="rate"
-          :active="playbackRate === rate"
-          @click="setPlaybackRate(rate)"
-        >
-          {{ rate }}×
-        </k-segmented-button>
-      </k-segmented>
-    </k-glass>
-  </k-page>
-
-  <k-actions
-    v-if="menuOpened"
-    :opened="menuOpened"
-    @backdropclick="menuOpened = false"
-  >
-    <k-actions-group>
-      <k-actions-button
-        class="memo-delete-action"
-        font-size-ios="text-base"
-        :colors="deleteActionColors"
-        @click="requestDelete"
-      >
-        <Trash2 :size="17" aria-hidden="true" />
-        <span>{{ phone.t('Apps.memos.delete') }}</span>
-      </k-actions-button>
-    </k-actions-group>
-  </k-actions>
-
-  <audio
-    ref="audio"
-    :src="activeAudioMemo?.url"
-    preload="metadata"
-    @play="audioPlaying = true"
-    @pause="audioPlaying = false"
-    @timeupdate="updateAudioProgress"
-    @ended="finishPlayback"
-    @error="failPlayback"
-  />
-
-  <k-dialog
-    :opened="discardDialogOpened"
-    @backdropclick="discardDialogOpened = false"
-  >
-    <template #title>{{ phone.t('Apps.memos.discardTitle') }}</template>
-    <p>{{ phone.t('Apps.memos.discardBody') }}</p>
     <template #buttons>
-      <k-dialog-button @click="discardDialogOpened = false">
-        {{ phone.t('Apps.memos.keepRecording') }}
-      </k-dialog-button>
-      <k-dialog-button strong class="memo-danger" @click="discardRecording">
-        {{ phone.t('Apps.memos.discard') }}
-      </k-dialog-button>
+      <SkyDialogButton @click="requestCancelRecording">
+        {{ phone.t('Apps.memos.cancel') }}
+      </SkyDialogButton>
+      <SkyDialogButton
+        strong
+        :disabled="recordingBusy || !recordingControllable"
+        @click="stopRecording"
+      >
+        {{ phone.t('Apps.memos.done') }}
+      </SkyDialogButton>
     </template>
-  </k-dialog>
+  </SkyDialog>
 
-  <k-actions
-    v-if="deleteDialogOpened"
-    :opened="deleteDialogOpened"
-    @backdropclick="deleteDialogOpened = false"
+  <SkyDialog
+    :opened="discardDialogOpened"
+    :title="phone.t('Apps.memos.discardTitle')"
+    :content="phone.t('Apps.memos.discardBody')"
+    role="alertdialog"
+    @backdropclick="discardDialogOpened = false"
+    @escape="discardDialogOpened = false"
   >
-    <k-actions-group>
-      <k-actions-label class="memo-delete-confirmation">
-        <span>
-          <strong>{{ phone.t('Apps.memos.deleteTitle') }}</strong>
-          <small>{{ phone.t('Apps.memos.deleteBody') }}</small>
-        </span>
-      </k-actions-label>
-      <k-actions-button
-        class="memo-delete-action"
-        font-size-ios="text-base"
-        :colors="deleteActionColors"
-        @click="deleteSelected"
-      >
-        <Trash2 :size="17" aria-hidden="true" />
-        <span>{{ phone.t('Common.delete') }}</span>
-      </k-actions-button>
-    </k-actions-group>
-    <k-actions-group>
-      <k-actions-button
-        bold
-        class="memo-cancel-action"
-        font-size-ios="text-base"
-        @click="deleteDialogOpened = false"
-      >
-        {{ phone.t('Common.cancel') }}
-      </k-actions-button>
-    </k-actions-group>
-  </k-actions>
+    <template #buttons>
+      <SkyDialogButton @click="discardDialogOpened = false">
+        {{ phone.t('Apps.memos.keepRecording') }}
+      </SkyDialogButton>
+      <SkyDialogButton strong class="memo-danger" @click="discardRecording">
+        {{ phone.t('Apps.memos.discard') }}
+      </SkyDialogButton>
+    </template>
+  </SkyDialog>
 
+  <SkyDialog
+    :opened="deleteDialogOpened"
+    :title="phone.t('Apps.memos.deleteTitle')"
+    :content="phone.t('Apps.memos.deleteBody')"
+    role="alertdialog"
+    @backdropclick="deleteDialogOpened = false"
+    @escape="deleteDialogOpened = false"
+  >
+    <template #buttons>
+      <SkyDialogButton @click="deleteDialogOpened = false">
+        {{ phone.t('Common.cancel') }}
+      </SkyDialogButton>
+      <SkyDialogButton strong class="memo-danger" @click="deleteSelected">
+        {{ phone.t('Common.delete') }}
+      </SkyDialogButton>
+    </template>
+  </SkyDialog>
 </template>
 
 <style scoped>
 .memos-page,
-.memo-recording-page,
 .memo-detail-page {
-  position: relative;
-  background: var(--k-color-surface, #f2f2f7);
-}
-
-.memos-page,
-.memo-recording-page {
-  overflow: hidden;
-}
-
-.memos-page {
-  display: flex;
-  flex-direction: column;
-}
-
-.memos-page :deep(.k-navbar) {
-  flex: 0 0 auto;
+  --sky-app-accent: #ff3b30;
+  --sky-app-accent-soft: rgb(255 59 48 / 15%);
 }
 
 .memos-page__content {
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding-bottom: 92px;
-}
-
-.memo-detail-page {
-  overflow-y: auto;
+  padding-top: 4px;
+  padding-bottom: calc(var(--sky-safe-area-bottom) + 86px);
 }
 
 .memos-loading {
-  display: grid;
   min-height: 180px;
+  display: grid;
   place-items: center;
+  color: var(--sky-app-accent);
 }
 
 .memos-list-glass,
-.memos-empty-glass,
 .memo-fields-glass,
 .memo-player,
-.memo-recorder-controls,
 .memo-player-controls,
 .memo-speed-block {
-  border: 1px solid rgb(60 60 67 / 11%);
   overflow: hidden;
+  border-radius: var(--sky-radius-card);
 }
 
-.memos-list-glass,
-.memos-empty-glass {
-  margin: 16px;
-  border-radius: 24px;
+.memos-list-glass {
+  margin-top: 4px;
 }
 
-.memos-empty-glass {
-  padding: 2px 0 8px;
+.memos-list {
+  margin: 0;
 }
 
-.memos-empty-glass :deep(.k-block-title),
-.memos-empty-glass :deep(.k-block) {
-  margin-right: 16px;
-  margin-left: 16px;
+.memos-empty {
+  min-height: 290px;
+  justify-content: center;
+}
+
+.memos-empty :deep(.sky-empty-state__icon) {
+  color: var(--sky-app-accent);
+  background: var(--sky-app-accent-soft);
+}
+
+.memos-composer {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-width: 0;
+  padding: 8px calc(var(--sky-page-gutter) + var(--sky-safe-area-right))
+    calc(var(--sky-safe-area-bottom) + 8px)
+    calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sky-touch-target);
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(to top, var(--sky-bg) 72%, transparent);
+}
+
+.memos-search {
+  min-width: 0;
 }
 
 .memos-record-fab {
-  position: absolute;
-  z-index: 20;
-  right: 20px;
-  bottom: 35px;
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 24%),
-    0 5px 12px rgb(0 0 0 / 18%) !important;
+  width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
 }
 
-.memo-row :deep(.k-list-item-media) {
+.memo-row :deep(.sky-list-item__media) {
   align-self: center;
 }
 
@@ -987,8 +947,8 @@ onBeforeUnmount(() => {
   height: 38px;
   display: grid;
   border-radius: 50%;
-  color: #ff3b30;
-  background: rgb(255 59 48 / 11%);
+  color: var(--sky-app-accent);
+  background: var(--sky-app-accent-soft);
   place-items: center;
 }
 
@@ -1007,11 +967,11 @@ onBeforeUnmount(() => {
 .memo-recorder-waveform i {
   display: block;
   min-width: 2px;
-  border-radius: 999px;
-  background: #c7c7cc;
+  border-radius: var(--sky-radius-pill);
+  background: var(--sky-subtle);
   transition:
     height 90ms linear,
-    background-color 160ms ease;
+    background-color var(--sky-transition-normal) ease;
 }
 
 .memo-row__waveform i {
@@ -1020,116 +980,34 @@ onBeforeUnmount(() => {
 
 .memo-row__waveform i.active,
 .memo-player__waveform i.active {
-  background: #ff3b30;
+  background: var(--sky-app-accent);
 }
 
-.memo-recording-title,
-.memo-detail-fields {
-  margin: 8px 18px 0;
-  border-radius: 22px;
+.memo-detail-scroll {
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 12px;
 }
 
-.memo-recorder-stage {
-  min-height: 485px;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 20px 18px 110px;
+.memo-fields-glass :deep(.sky-list) {
+  margin: 0;
 }
 
-.memo-recorder-stage__status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #8e8e93;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.memo-recording-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ff3b30;
-  animation: memo-pulse 1.2s ease-in-out infinite;
-}
-
-.memo-recorder-waveform {
-  width: 100%;
-  height: 150px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  margin: 26px 0 20px;
-  overflow: hidden;
-}
-
-.memo-recorder-waveform i {
-  flex: 1 1 2px;
-  max-width: 4px;
-  background: linear-gradient(#ff7169, #ff3b30);
-}
-
-.memo-recorder-time {
-  font-size: 38px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -1.5px;
-}
-
-.memo-recorder-controls,
-.memo-player-controls {
-  position: absolute;
-  z-index: 10;
-  right: 18px;
-  bottom: 34px;
-  left: 18px;
-  min-height: 82px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 34px;
-  border-radius: 30px;
-}
-
-.memo-control-button {
-  width: 54px;
-  height: 54px;
-  padding: 0;
-  border-radius: 50%;
-}
-
-.memo-retry-button {
-  width: auto;
-  min-width: 164px;
-  gap: 8px;
-  padding-right: 22px;
-  padding-left: 22px;
-}
-
-.memo-control-button--secondary {
-  color: #1c1c1e;
-  background: rgb(118 118 128 / 14%);
-}
-
-.memo-detail-fields :deep(textarea) {
-  min-height: 62px;
+.memo-fields-glass :deep(.sky-field__textarea) {
+  min-height: 76px;
   resize: none;
 }
 
 .memo-player {
-  margin: 10px 18px 0;
   padding: 17px 16px 11px;
-  border-radius: 24px;
 }
 
 .memo-player__meta,
 .memo-player__times {
   display: flex;
   justify-content: space-between;
-  color: #8e8e93;
+  color: var(--sky-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -1144,28 +1022,20 @@ onBeforeUnmount(() => {
 }
 
 .memo-player__waveform i {
-  flex: 1 1 2px;
   min-width: 1.5px;
+  flex: 1 1 2px;
 }
 
 .memo-player__range {
-  margin: -2px 0 0;
+  margin-top: -2px;
 }
 
 .memo-player-controls {
-  position: static;
   min-height: 86px;
-  margin: 13px 18px 5px;
-}
-
-.memo-speed-block {
-  margin: 0 18px 28px;
-  padding: 4px;
-  border-radius: 999px;
-}
-
-.memo-speed-block :deep(.k-segmented) {
-  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 34px;
 }
 
 .memo-player-control {
@@ -1173,9 +1043,6 @@ onBeforeUnmount(() => {
   width: 48px;
   height: 48px;
   padding: 0;
-  border-radius: 50%;
-  color: #1c1c1e;
-  background: rgb(118 118 128 / 12%);
 }
 
 .memo-player-control small {
@@ -1187,76 +1054,115 @@ onBeforeUnmount(() => {
 .memo-player-control--main {
   width: 62px;
   height: 62px;
-  color: white;
-  background: #ff3b30;
   box-shadow: 0 8px 22px rgb(255 59 48 / 28%);
 }
 
-.memo-danger {
-  color: #ff3b30;
-}
-
-.memo-delete-action,
-.memo-cancel-action {
-  height: 48px;
-}
-
-.memo-delete-action {
-  gap: 8px;
-}
-
-.memo-delete-confirmation {
-  height: auto;
-  min-height: 64px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  text-align: center;
-}
-
-.memo-delete-confirmation span {
-  display: grid;
-  gap: 3px;
-}
-
-.memo-delete-confirmation strong {
-  color: #1c1c1e;
+.memo-section-title {
+  margin: 2px 8px -4px;
+  color: var(--sky-muted);
   font-size: 13px;
   font-weight: 650;
 }
 
-.memo-delete-confirmation small {
-  font-size: 11px;
-  line-height: 1.35;
+.memo-speed-block {
+  margin-bottom: 12px;
+  padding: 4px;
+}
+
+.memo-speed-block :deep(.sky-segmented) {
+  background: transparent;
+}
+
+.memo-delete-action {
+  min-height: 48px;
+  gap: 8px;
+  color: var(--sky-danger);
+}
+
+.memo-recording-fields {
+  margin: 0 0 14px;
+  border-radius: var(--sky-radius-control);
+  background: var(--sky-surface-muted);
+}
+
+.memo-recording-fields :deep(.sky-field) {
+  min-height: 44px;
+}
+
+.memo-recorder-stage {
+  display: grid;
+  justify-items: center;
+}
+
+.memo-recorder-stage__status {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--sky-muted);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.memo-recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sky-app-accent);
+  animation: memo-pulse 1.2s ease-in-out infinite;
+}
+
+.memo-recorder-waveform {
+  width: 100%;
+  height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  margin: 10px 0 4px;
+  overflow: hidden;
+}
+
+.memo-recorder-waveform i {
+  max-width: 3px;
+  flex: 1 1 2px;
+  background: var(--sky-app-accent);
+}
+
+.memo-recorder-time {
+  color: var(--sky-text);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+}
+
+.memo-recorder-controls {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.memo-control-button {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+}
+
+.memo-retry-button {
+  min-width: 150px;
+  gap: 7px;
+}
+
+.memo-danger {
+  color: var(--sky-danger);
+  background: var(--sky-danger-soft);
 }
 
 audio {
   display: none;
-}
-
-:global(.phone-app.dark .memos-page),
-:global(.phone-app.dark .memo-recording-page),
-:global(.phone-app.dark .memo-detail-page) {
-  background: #000;
-}
-
-:global(.phone-app.dark .memos-list-glass),
-:global(.phone-app.dark .memos-empty-glass),
-:global(.phone-app.dark .memo-fields-glass),
-:global(.phone-app.dark .memo-player),
-:global(.phone-app.dark .memo-recorder-controls),
-:global(.phone-app.dark .memo-player-controls),
-:global(.phone-app.dark .memo-speed-block) {
-  border-color: rgb(255 255 255 / 10%);
-}
-
-:global(.phone-app.dark .memo-control-button--secondary),
-:global(.phone-app.dark .memo-player-control:not(.memo-player-control--main)) {
-  color: #fff;
-  background: rgb(255 255 255 / 12%);
-}
-
-:global(.phone-app.dark .memo-delete-confirmation strong) {
-  color: #fff;
 }
 
 @keyframes memo-pulse {
