@@ -853,9 +853,91 @@ async function verifyStatefulActions(baseUrl) {
   )
   assert(flareBeforeDelete.profile, 'flare:bootstrap did not include a profile')
   assert(
+    flareBeforeDelete.profile.photoMediaIds.length >= 1 &&
+      flareBeforeDelete.profile.photoMediaIds.length <= 6,
+    'flare:bootstrap profile did not include one to six gallery photos',
+  )
+  assert.equal(
+    flareBeforeDelete.profile.photoMediaIds.length,
+    flareBeforeDelete.profile.photoUrls.length,
+    'flare:bootstrap profile photo IDs and URLs were out of sync',
+  )
+  const galleryPhotoUrls = new Set(
+    gallery
+      .filter((item) => item.mediaType === 'photo')
+      .map((item) => item.url),
+  )
+  assert(
+    flareBeforeDelete.profile.photoUrls.every((url) =>
+      galleryPhotoUrls.has(url),
+    ),
+    'flare:bootstrap profile used photos outside the phone gallery',
+  )
+  assert(
+    flareBeforeDelete.suggestions.every(
+      (profile) =>
+        profile.photoUrls.length >= 1 &&
+        profile.photoUrls.every((url) => galleryPhotoUrls.has(url)),
+    ),
+    'Flare suggestions used photos outside the phone gallery',
+  )
+  assert(
     flareBeforeDelete.matches.length > 0,
     'flare:bootstrap did not include a deletable match',
   )
+  assert(
+    flareBeforeDelete.matches.every(
+      (match) =>
+        match.profile.photoUrls.length >= 1 &&
+        match.profile.photoUrls.every((url) => galleryPhotoUrls.has(url)),
+    ),
+    'Flare matches used photos outside the phone gallery',
+  )
+  const [removedProfilePhotoId, retainedProfilePhotoId] =
+    flareBeforeDelete.profile.photoMediaIds
+  await expectSuccess(baseUrl, 'gallery:delete', {
+    id: removedProfilePhotoId,
+  })
+  const flareAfterGalleryDelete = await expectSuccess(
+    baseUrl,
+    'flare:bootstrap',
+    {},
+    true,
+  )
+  assert.deepEqual(
+    flareAfterGalleryDelete.profile.photoMediaIds,
+    [retainedProfilePhotoId],
+    'gallery:delete did not remove the deleted photo from the Flare profile',
+  )
+  assert.deepEqual(
+    flareAfterGalleryDelete.profile.photoUrls,
+    [gallery.find((item) => item.id === retainedProfilePhotoId)?.url],
+    'gallery:delete left Flare photo IDs and URLs out of sync',
+  )
+  const rejectedLastPhotoDelete = await post(baseUrl, 'gallery:delete', {
+    id: retainedProfilePhotoId,
+  })
+  assert.deepEqual(rejectedLastPhotoDelete, {
+    error: 'profile_photo_required',
+    success: false,
+  })
+  const nonProfilePhotoId = gallery.find(
+    (item) =>
+      item.mediaType === 'photo' &&
+      !flareBeforeDelete.profile.photoMediaIds.includes(item.id),
+  )?.id
+  const rejectedBulkLastPhotoDelete = await post(
+    baseUrl,
+    'gallery:delete-many',
+    {
+      correlationId: 'flare-last-photo-protection',
+      ids: [retainedProfilePhotoId, nonProfilePhotoId],
+    },
+  )
+  assert.deepEqual(rejectedBulkLastPhotoDelete, {
+    error: 'profile_photo_required',
+    success: false,
+  })
   const swipedProfile = flareBeforeDelete.suggestions[0]
   await expectSuccess(baseUrl, 'flare:swipe', {
     choice: 'pass',
@@ -889,12 +971,32 @@ async function verifyStatefulActions(baseUrl) {
     error: 'profile_not_found',
     success: false,
   })
+  const rejectedEmptyFlare = await post(baseUrl, 'flare:save-profile', {
+    ...flareBeforeDelete.profile,
+    photoMediaIds: [],
+    photoUrls: undefined,
+  })
+  assert.deepEqual(rejectedEmptyFlare, {
+    error: 'invalid_profile_photos',
+    success: false,
+  })
+  const flareStillDeleted = await expectSuccess(
+    baseUrl,
+    'flare:bootstrap',
+    {},
+    true,
+  )
+  assert.equal(
+    flareStillDeleted.profile,
+    null,
+    'an invalid empty Flare profile was persisted',
+  )
   const recreatedFlare = await expectSuccess(
     baseUrl,
     'flare:save-profile',
     {
       ...flareBeforeDelete.profile,
-      photoMediaIds: [],
+      photoMediaIds: [retainedProfilePhotoId],
       photoUrls: undefined,
     },
     true,
@@ -904,6 +1006,11 @@ async function verifyStatefulActions(baseUrl) {
       (profile) => profile.id === swipedProfile.id,
     ),
     'recreated Flare profile retained a deleted swipe filter',
+  )
+  assert.deepEqual(
+    recreatedFlare.profile.photoMediaIds,
+    [retainedProfilePhotoId],
+    'recreated Flare profile did not retain its valid gallery photo',
   )
 
   await expectSuccess(baseUrl, 'account:logout')

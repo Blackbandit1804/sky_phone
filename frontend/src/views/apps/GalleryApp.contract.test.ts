@@ -170,4 +170,28 @@ describe('GalleryApp import action', () => {
     expect(source).toContain('id: 13 + index')
     expect(source).not.toContain('picsum.photos')
   })
+
+  it('routes single-image deletion through the browser API when apiPort is set', () => {
+    const deleteSelectedStart = source.indexOf(
+      'async function deleteSelected()',
+    )
+    const deleteSelected = source.slice(
+      deleteSelectedStart,
+      source.indexOf('function onMessage', deleteSelectedStart),
+    )
+
+    expect(deleteSelected).toContain(
+      'if (isDevelopment && !developmentApiEnabled)',
+    )
+    expect(deleteSelected).toContain(
+      "const response = await nuiCall('gallery:delete'",
+    )
+    expect(deleteSelected).toContain(
+      'if (isDevelopment && developmentApiEnabled)',
+    )
+    expect(deleteSelected).toContain("type: 'media:deleteResult'")
+    expect(deleteSelected).toContain('error: response.error')
+    expect(deleteSelected).toContain('success: response.success')
+    expect(deleteSelected).not.toMatch(/if \(isDevelopment\)\s*\{/)
+  })
 })

@@ -44,8 +44,7 @@ export function orderMedia(
   return sortOrder === 'oldest'
     ? orderMediaOldestFirst(media)
     : [...media].sort(
-        (left, right) =>
-          right.createdAt - left.createdAt || right.id - left.id,
+        (left, right) => right.createdAt - left.createdAt || right.id - left.id,
       )
 }
 
@@ -110,6 +109,7 @@ export function mediaErrorKey(error?: string): string {
     'not_found',
     'operation_in_progress',
     'owner_changed',
+    'profile_photo_required',
     'rate_limited',
     'request_failed',
     'request_timeout',

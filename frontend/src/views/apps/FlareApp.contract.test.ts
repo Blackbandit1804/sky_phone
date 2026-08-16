@@ -17,7 +17,7 @@ const localeSource = readFileSync(
 )
 
 describe('FlareApp profile editing contract', () => {
-  it('opens the central photo source picker while creating an account', () => {
+  it('shows direct Gallery and Camera actions while creating an account', () => {
     const onboardingStart = source.indexOf(
       '<template v-else-if="!flare.profile">',
     )
@@ -29,27 +29,68 @@ describe('FlareApp profile editing contract', () => {
 
     expect(onboardingStart).toBeGreaterThan(-1)
     expect(onboardingEnd).toBeGreaterThan(onboardingStart)
-    expect(onboarding).toContain('aria-controls="flare-photo-source-sheet"')
-    expect(onboarding).toContain('aria-haspopup="dialog"')
-    expect(onboarding).toContain('@click="openPhotoSourcePicker"')
-    expect(onboarding).not.toContain("openProfileMediaApp('photos')")
-    expect(onboarding).not.toContain("openProfileMediaApp('camera')")
+    expect(onboarding).toContain("openProfileMediaApp('photos')")
+    expect(onboarding).toContain("openProfileMediaApp('camera')")
+    expect(onboarding).toContain("phone.t('Apps.flare.choosePhotos')")
+    expect(onboarding).toContain("phone.t('Apps.flare.takePhoto')")
+    expect(onboarding).not.toContain('@click="openPhotoSourcePicker"')
   })
 
-  it('uses the same Gallery and Camera picker for onboarding and editing', () => {
+  it('uses the central anchored SkyDropdown for photo sources while editing', () => {
+    const triggerClass = source.indexOf('class="flare-photo-add"')
+    const triggerStart = source.lastIndexOf('<sky-button', triggerClass)
+    const triggerEnd = source.indexOf('</sky-button>', triggerClass)
+    const trigger = source.slice(triggerStart, triggerEnd)
+    const dropdownStart = source.search(/<SkyDropdown\b/)
+    const dropdownEnd = source.indexOf('/>', dropdownStart)
+    const dropdown = source.slice(dropdownStart, dropdownEnd)
+    const pickerStart = source.indexOf('function openPhotoSourcePicker')
+    const pickerEnd = source.indexOf(
+      'function openProfileMediaApp',
+      pickerStart,
+    )
+    const picker = source.slice(pickerStart, pickerEnd)
     const mediaAppStart = source.indexOf('function openProfileMediaApp')
     const mediaAppEnd = source.indexOf('function removeDraftPhoto')
     const mediaApp = source.slice(mediaAppStart, mediaAppEnd)
 
-    expect(source.match(/@click="openPhotoSourcePicker"/g)).toHaveLength(2)
-    expect(source).toMatch(
-      /<sky-action-sheet\s+id=["']flare-photo-source-sheet["']/,
+    expect(triggerClass).toBeGreaterThan(-1)
+    expect(triggerStart).toBeGreaterThan(-1)
+    expect(triggerEnd).toBeGreaterThan(triggerStart)
+    expect(source.match(/@click="openPhotoSourcePicker"/g)).toHaveLength(1)
+    expect(trigger).toContain('aria-controls="flare-photo-source-menu"')
+    expect(trigger).toContain('aria-haspopup="menu"')
+    expect(trigger).toContain(':aria-expanded="photoSourceOpened"')
+    expect(trigger).not.toContain('aria-haspopup="dialog"')
+
+    expect(dropdownStart).toBeGreaterThan(-1)
+    expect(dropdownEnd).toBeGreaterThan(dropdownStart)
+    expect(dropdown).toContain('id="flare-photo-source-menu"')
+    expect(dropdown).toContain(':items="photoSourceItems"')
+    expect(dropdown).toMatch(/:label="phone\.t\('Apps\.flare\.addPhotos'\)"/)
+    expect(dropdown).toContain(':opened="photoSourceOpened"')
+    expect(dropdown).toContain(':target="photoSourceTarget"')
+    expect(dropdown).toContain('@backdropclick="closePhotoSourcePicker"')
+    expect(dropdown).toContain('@escape="closePhotoSourcePicker"')
+    expect(dropdown).toContain('@positionerror="closePhotoSourcePicker"')
+    expect(dropdown).toContain('@select="selectPhotoSource"')
+
+    expect(source).toContain(
+      "{ id: 'photos', label: phone.t('Apps.flare.choosePhotos') }",
     )
     expect(source).toContain(
-      '<sky-action-button bold @click="openProfileMediaApp(\'photos\')">',
+      "{ id: 'camera', label: phone.t('Apps.flare.takePhoto') }",
     )
-    expect(source).toContain(
-      '<sky-action-button @click="openProfileMediaApp(\'camera\')">',
+    expect(pickerStart).toBeGreaterThan(-1)
+    expect(pickerEnd).toBeGreaterThan(pickerStart)
+    expect(picker).toContain('event.currentTarget instanceof HTMLElement')
+    expect(picker).toContain('photoSourceTarget.value = event.currentTarget')
+    expect(picker).toContain("if (id !== 'photos' && id !== 'camera') return")
+    expect(picker).toContain('openProfileMediaApp(id)')
+
+    expect(source).not.toContain('flare-photo-source-sheet')
+    expect(source).not.toMatch(
+      /<sky-action-sheet\b[\s\S]*?openProfileMediaApp\(['"](?:photos|camera)['"]\)[\s\S]*?<\/sky-action-sheet>/i,
     )
     expect(mediaAppStart).toBeGreaterThan(-1)
     expect(mediaAppEnd).toBeGreaterThan(mediaAppStart)
@@ -58,6 +99,51 @@ describe('FlareApp profile editing contract', () => {
     expect(mediaApp).toContain("app === 'photos' ? remaining : 1")
     expect(mediaApp).toContain('void router.push({')
     expect(mediaApp).toContain("query: { mediaAttachment: 'photo' }")
+  })
+
+  it('requires one profile photo before creating or saving a profile', () => {
+    const saveStart = source.indexOf('async function saveProfile()')
+    const saveEnd = source.indexOf('\n\nfunction selectTab', saveStart)
+    const saveProfile = source.slice(saveStart, saveEnd)
+
+    expect(source).toContain(
+      'const hasRequiredProfilePhoto = computed(() => draftPhotos.value.length >= 1)',
+    )
+    expect(saveProfile).toContain('!hasRequiredProfilePhoto.value')
+    expect(
+      source.match(/:disabled="profileSaving \|\| !hasRequiredProfilePhoto"/g),
+    ).toHaveLength(2)
+    expect(source).toContain('if (draftPhotos.value.length <= 1) return')
+    expect(source).toContain(
+      'if (flare.profile && draftPhotos.value.length === 0)',
+    )
+    expect(
+      source.match(
+        /<sky-link\s+v-if="draftPhotos\.length > 1"[\s\S]*?class="flare-photo-remove"/g,
+      ),
+    ).toHaveLength(2)
+    expect(source.match(/Apps\.flare\.profilePhotoRequired/g)).toHaveLength(2)
+    expect(serverSource).toMatch(
+      /#data\.photoMediaIds\s*<\s*1[\s\S]*?#data\.photoMediaIds\s*>\s*6/,
+    )
+    expect(localeSource).toContain(
+      'Add one to six photos from Photos or Camera.',
+    )
+  })
+
+  it('uses eligible in-game profile photos for Explorer covers', () => {
+    const explorerStart = source.indexOf("activeTab === 'explore'")
+    const explorerEnd = source.indexOf("activeTab === 'likes'", explorerStart)
+    const explorer = source.slice(explorerStart, explorerEnd)
+
+    expect(source).not.toContain('profiles-source.png')
+    expect(source).toContain('const exploreTiles = computed(')
+    expect(source).toContain('profile.photoUrls.length > 0')
+    expect(source).toContain("coverUrl: profile?.photoUrls[0] ?? ''")
+    expect(explorer).toContain(
+      ':style="tile.coverUrl ? photoStyle(tile.coverUrl) : undefined"',
+    )
+    expect(explorer).not.toContain('avatarStyle(tile.avatar)')
   })
 
   it('opens the relationship goal editor from the profile summary card', () => {

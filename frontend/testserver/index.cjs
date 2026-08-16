@@ -2878,6 +2878,19 @@ mockMedia.push(
     url: mockGalleryImage(title, sky, landscape, accent),
   })),
 )
+
+function mockPhotoUrls(ids) {
+  return ids.map((id) => {
+    const photo = mockMedia.find(
+      (item) => item.id === id && item.mediaType === 'photo',
+    )
+    if (!photo) {
+      throw new Error(`Missing mock gallery photo ${id}`)
+    }
+    return photo.url
+  })
+}
+
 const weazelNewsCategoryIds = ['official', 'events', 'jobs', 'news', 'business']
 const weazelNewsMaxImages = 6
 let weazelNewsSequence = 8
@@ -3452,8 +3465,8 @@ let flareProfile = {
   interests: ['Night drives', 'Music', 'Coffee'],
   lookingFor: 'dates',
   discoverable: true,
-  photoMediaIds: [],
-  photoUrls: [],
+  photoMediaIds: [1, 3],
+  photoUrls: mockPhotoUrls([1, 3]),
 }
 let flareSuggestions = [
   {
@@ -3465,7 +3478,7 @@ let flareSuggestions = [
     avatar: 0,
     interests: ['Beach days', 'Food spots', 'Art'],
     lookingFor: 'longTerm',
-    photoUrls: [],
+    photoUrls: mockPhotoUrls([3, 7]),
   },
   {
     id: 12,
@@ -3476,7 +3489,7 @@ let flareSuggestions = [
     avatar: 1,
     interests: ['Architecture', 'Karaoke', 'Travel'],
     lookingFor: 'dates',
-    photoUrls: [],
+    photoUrls: mockPhotoUrls([4, 11]),
   },
   {
     id: 13,
@@ -3487,7 +3500,7 @@ let flareSuggestions = [
     avatar: 2,
     interests: ['Coffee', 'Photography', 'Dogs'],
     lookingFor: 'friends',
-    photoUrls: [],
+    photoUrls: mockPhotoUrls([5, 9]),
   },
   {
     id: 14,
@@ -3498,7 +3511,7 @@ let flareSuggestions = [
     avatar: 3,
     interests: ['Cars', 'Road trips', 'Vinyl'],
     lookingFor: 'longTerm',
-    photoUrls: [],
+    photoUrls: mockPhotoUrls([8, 13]),
   },
   {
     id: 15,
@@ -3509,7 +3522,7 @@ let flareSuggestions = [
     avatar: 4,
     interests: ['Sailing', 'Fitness', 'Brunch'],
     lookingFor: 'dates',
-    photoUrls: [],
+    photoUrls: mockPhotoUrls([12, 14]),
   },
 ]
 const flareSuggestionFixtures = flareSuggestions.map((profile) => ({
@@ -3529,7 +3542,7 @@ const flareMatches = [
       avatar: 5,
       interests: ['Live music', 'Cooking'],
       lookingFor: 'dates',
-      photoUrls: [],
+      photoUrls: mockPhotoUrls([15, 16]),
     },
     lastMessage: 'Friday night jazz',
     lastMessageAt: isoTime(-18 * 60 * 1000),
@@ -3598,6 +3611,36 @@ function freshFlareSuggestions() {
     interests: [...profile.interests],
     photoUrls: [...profile.photoUrls],
   }))
+}
+
+function flarePhotoRemovalWouldEmptyProfile(mediaIds) {
+  if (!flareProfile || !Array.isArray(flareProfile.photoMediaIds)) {
+    return false
+  }
+  const currentIds = flareProfile.photoMediaIds
+  const removedIds = new Set(mediaIds)
+  return (
+    currentIds.length > 0 &&
+    currentIds.some((id) => removedIds.has(id)) &&
+    currentIds.every((id) => removedIds.has(id))
+  )
+}
+
+function removeFlareProfilePhotos(mediaIds) {
+  if (!flareProfile || !Array.isArray(flareProfile.photoMediaIds)) return
+  const removedIds = new Set(mediaIds)
+  const photoMediaIds = []
+  const photoUrls = []
+  flareProfile.photoMediaIds.forEach((id, index) => {
+    if (removedIds.has(id)) return
+    photoMediaIds.push(id)
+    photoUrls.push(flareProfile.photoUrls[index])
+  })
+  flareProfile = {
+    ...flareProfile,
+    photoMediaIds,
+    photoUrls,
+  }
 }
 
 const companyCategories = [
@@ -6437,28 +6480,26 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'flare:save-profile') {
     const requestedPhotoIds = request.body.photoMediaIds
-    let photoUpdate = {}
-    if (requestedPhotoIds !== undefined) {
-      const validIds =
-        Array.isArray(requestedPhotoIds) &&
-        requestedPhotoIds.length <= 6 &&
-        new Set(requestedPhotoIds).size === requestedPhotoIds.length &&
-        requestedPhotoIds.every((id) => Number.isInteger(id) && id > 0)
-      const photos = validIds
-        ? requestedPhotoIds.map((id) =>
-            mockMedia.find(
-              (item) => item.id === id && item.mediaType === 'photo',
-            ),
-          )
-        : []
-      if (!validIds || photos.some((photo) => !photo)) {
-        response.json({ success: false, error: 'invalid_profile_photos' })
-        return
-      }
-      photoUpdate = {
-        photoMediaIds: [...requestedPhotoIds],
-        photoUrls: photos.map((photo) => photo.url),
-      }
+    const validIds =
+      Array.isArray(requestedPhotoIds) &&
+      requestedPhotoIds.length >= 1 &&
+      requestedPhotoIds.length <= 6 &&
+      new Set(requestedPhotoIds).size === requestedPhotoIds.length &&
+      requestedPhotoIds.every((id) => Number.isInteger(id) && id > 0)
+    const photos = validIds
+      ? requestedPhotoIds.map((id) =>
+          mockMedia.find(
+            (item) => item.id === id && item.mediaType === 'photo',
+          ),
+        )
+      : []
+    if (!validIds || photos.some((photo) => !photo)) {
+      response.json({ success: false, error: 'invalid_profile_photos' })
+      return
+    }
+    const photoUpdate = {
+      photoMediaIds: [...requestedPhotoIds],
+      photoUrls: photos.map((photo) => photo.url),
     }
     flareProfile = {
       ...flareProfile,
@@ -9109,7 +9150,13 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'gallery:delete') {
-    mockMedia = mockMedia.filter((item) => item.id !== Number(request.body.id))
+    const mediaId = Number(request.body.id)
+    if (flarePhotoRemovalWouldEmptyProfile([mediaId])) {
+      response.json({ success: false, error: 'profile_photo_required' })
+      return
+    }
+    mockMedia = mockMedia.filter((item) => item.id !== mediaId)
+    removeFlareProfilePhotos([mediaId])
     response.json({ success: true })
     return
   }
@@ -9133,7 +9180,12 @@ app.post('/api/:endpoint', (request, response) => {
     const deletedIds = mockMedia
       .filter((item) => ids.includes(item.id))
       .map((item) => item.id)
+    if (flarePhotoRemovalWouldEmptyProfile(deletedIds)) {
+      response.json({ success: false, error: 'profile_photo_required' })
+      return
+    }
     mockMedia = mockMedia.filter((item) => !deletedIds.includes(item.id))
+    removeFlareProfilePhotos(deletedIds)
     response.json({
       success: true,
       data: {

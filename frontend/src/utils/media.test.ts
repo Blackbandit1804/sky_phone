@@ -13,8 +13,20 @@ import {
 } from './media'
 
 const media = [
-  { createdAt: 10, favorite: false, id: 1, mediaType: 'photo' as const, url: 'photo' },
-  { createdAt: 20, favorite: false, id: 2, mediaType: 'video' as const, url: 'video' },
+  {
+    createdAt: 10,
+    favorite: false,
+    id: 1,
+    mediaType: 'photo' as const,
+    url: 'photo',
+  },
+  {
+    createdAt: 20,
+    favorite: false,
+    id: 2,
+    mediaType: 'video' as const,
+    url: 'video',
+  },
 ]
 
 describe('media utilities', () => {
@@ -27,8 +39,20 @@ describe('media utilities', () => {
   it('merges pages without duplicates and keeps newest first', () => {
     expect(
       mergeMedia(media, [
-        { createdAt: 30, favorite: true, id: 1, mediaType: 'photo', url: 'updated' },
-        { createdAt: 25, favorite: false, id: 3, mediaType: 'photo', url: 'new' },
+        {
+          createdAt: 30,
+          favorite: true,
+          id: 1,
+          mediaType: 'photo',
+          url: 'updated',
+        },
+        {
+          createdAt: 25,
+          favorite: false,
+          id: 3,
+          mediaType: 'photo',
+          url: 'new',
+        },
       ]).map((entry) => [entry.id, entry.url]),
     ).toEqual([
       [1, 'updated'],
@@ -130,6 +154,9 @@ describe('media utilities', () => {
     )
     expect(mediaErrorKey('import_url_not_allowed')).toBe(
       'import_url_not_allowed',
+    )
+    expect(mediaErrorKey('profile_photo_required')).toBe(
+      'profile_photo_required',
     )
     expect(mediaErrorKey('private_provider_error')).toBe('request_failed')
   })

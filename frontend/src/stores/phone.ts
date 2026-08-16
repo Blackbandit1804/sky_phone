@@ -867,7 +867,8 @@ const defaultLocales: LocaleTree = {
       photo: 'Profile photo',
       profilePhotos: 'Profile photos',
       profilePhotosBody:
-        'Add up to six photos from Photos or Camera. Your first photo is shown first.',
+        'Add one to six photos from Photos or Camera. Your first photo is shown first.',
+      profilePhotoRequired: 'Add at least one profile photo to continue.',
       addPhotos: 'Add photos',
       choosePhotos: 'Choose from Photos',
       primaryPhoto: 'Main',
@@ -1006,7 +1007,7 @@ const defaultLocales: LocaleTree = {
         invalid_profile: 'Check your name, age and profile text.',
         profile_not_found: 'This Flare account is no longer available.',
         invalid_profile_photos:
-          'Choose or take up to six photos saved in your own Photos library.',
+          'Choose or take at least one and up to six photos saved in your own Photos library.',
         request_failed: 'Flare could not save those changes. Try again.',
         invalid_target: 'This profile is no longer available.',
         invalid_choice: 'That swipe could not be saved.',
@@ -4060,6 +4061,8 @@ const defaultLocales: LocaleTree = {
         import_url_unavailable: 'The linked media could not be reached.',
         import_size_unavailable: 'The website did not provide the media size.',
         not_found: 'The media item no longer exists.',
+        profile_photo_required:
+          'This is the last photo on your Flare profile. Add another profile photo before deleting it.',
         operation_in_progress:
           'Another media operation is already in progress.',
         owner_changed: 'The active phone account changed.',

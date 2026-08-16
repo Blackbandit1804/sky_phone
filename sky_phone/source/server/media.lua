@@ -796,6 +796,28 @@ RegisterNetEvent("sky_phone:media:fail-upload", function(data)
     upload_result(src, state.correlation_id, false, error_code)
 end)
 
+local function is_required_flare_profile_photo(media_id)
+    local rows = Bridge.Database.Query([[
+        SELECT photo.`profile_id`
+        FROM `sky_phone_flare_profile_photos` photo
+        JOIN `sky_phone_flare_profiles` profile ON profile.`id` = photo.`profile_id`
+        WHERE photo.`media_id` = ?
+            AND NOT EXISTS (
+                SELECT 1
+                FROM `sky_phone_flare_profile_photos` other_photo
+                JOIN `sky_phone_media` other_media
+                    ON other_media.`id` = other_photo.`media_id`
+                    AND other_media.`account_id` = profile.`account_id`
+                    AND other_media.`media_type` = 'photo'
+                WHERE other_photo.`profile_id` = photo.`profile_id`
+                    AND other_photo.`media_id` <> photo.`media_id`
+                    AND other_media.`url` LIKE 'https://%'
+            )
+        LIMIT 1
+    ]], { media_id })
+    return rows[1] ~= nil
+end
+
 local function delete_owned_media(src, owner, media_id)
     local condition, params = owner_condition(owner)
     local query_params = { media_id }
@@ -803,12 +825,15 @@ local function delete_owned_media(src, owner, media_id)
         query_params[#query_params + 1] = value
     end
     local rows = Bridge.Database.Query(([[
-        SELECT `id`, `remote_id`, `origin` FROM `sky_phone_media`
+        SELECT `id`, `remote_id`, `origin`, `media_type` FROM `sky_phone_media`
         WHERE `id` = ? AND %s AND `media_type` IN ('photo', 'video') LIMIT 1
     ]]):format(condition), query_params)
     local row = rows[1]
     if not row then
         return false, "not_found"
+    end
+    if row.media_type == "photo" and is_required_flare_profile_photo(media_id) then
+        return false, "profile_photo_required"
     end
     local delete_key = row.origin == "phone_upload" and row.remote_id or ("import:%s"):format(media_id)
     if pending_deletes[delete_key] then

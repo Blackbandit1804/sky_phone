@@ -967,12 +967,13 @@ async function initializeVideo(event: Event): Promise<void> {
 
 async function deleteSelected(): Promise<void> {
   if (!selected.value || deleting.value) return
+  const selectedId = selected.value.id
   deleting.value = true
   deleteDialogOpened.value = false
   pendingDeleteCorrelation = `${Date.now()}-${crypto.randomUUID()}`
-  if (isDevelopment) {
+  if (isDevelopment && !developmentApiEnabled) {
     const developmentIndex = developmentMedia.findIndex(
-      (entry) => entry.id === selected.value?.id,
+      (entry) => entry.id === selectedId,
     )
     if (developmentIndex >= 0) developmentMedia.splice(developmentIndex, 1)
     window.setTimeout(() => {
@@ -981,7 +982,7 @@ async function deleteSelected(): Promise<void> {
           data: {
             data: {
               correlationId: pendingDeleteCorrelation,
-              id: selected.value?.id,
+              id: selectedId,
               success: true,
             },
             type: 'media:deleteResult',
@@ -991,10 +992,25 @@ async function deleteSelected(): Promise<void> {
     }, 500)
     return
   }
-  await nuiCall('gallery:delete', {
+  const response = await nuiCall('gallery:delete', {
     correlationId: pendingDeleteCorrelation,
-    id: selected.value.id,
+    id: selectedId,
   })
+  if (isDevelopment && developmentApiEnabled) {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          data: {
+            correlationId: pendingDeleteCorrelation,
+            error: response.error,
+            id: selectedId,
+            success: response.success,
+          },
+          type: 'media:deleteResult',
+        },
+      }),
+    )
+  }
 }
 
 function onMessage(event: MessageEvent): void {

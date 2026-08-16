@@ -419,7 +419,7 @@ Locales["en"] = {
             flare = {
                 name = "Flare", signInTitle = "Sign in to Flare", signInBody = "Flare profiles and matches are linked to your private Sky Cloud account.",
                 createProfile = "Create your profile", welcome = "Find your spark", welcomeBody = "Build a profile and meet people across Los Santos.",
-                photo = "Profile photo", profilePhotos = "Profile photos", profilePhotosBody = "Add up to six photos from Photos or Camera. Your first photo is shown first.", addPhotos = "Add photos", choosePhotos = "Choose from Photos", primaryPhoto = "Main", removePhoto = "Remove photo {number}",
+                photo = "Profile photo", profilePhotos = "Profile photos", profilePhotosBody = "Add one to six photos from Photos or Camera. Your first photo is shown first.", profilePhotoRequired = "Add at least one profile photo to continue.", addPhotos = "Add photos", choosePhotos = "Choose from Photos", primaryPhoto = "Main", removePhoto = "Remove photo {number}",
                 profilePhotoFallback = "Flare profile avatar", profilePhotoNumber = "Profile photo {number} of {count}", viewProfilePhoto = "Show profile photo {number} of {count}",
                 yourName = "Your name", namePlaceholder = "What should people call you?", age = "Age", bio = "About you", bioPlaceholder = "A short line that starts a conversation...",
                 gender = "I am", showMe = "Show me", woman = "Woman", man = "Man", nonbinary = "Non-binary", women = "Women", men = "Men", nonbinaryPeople = "Non-binary people", everyone = "Everyone",
@@ -444,7 +444,7 @@ Locales["en"] = {
                 messagePlaceholder = "Write a message", itsAMatch = "It's a spark!", matchBody = "You and {name} liked each other.", sayHello = "Say hello", keepSwiping = "Keep exploring", newMatchNotification = "You and {sender} found a spark!", newMessageNotification = "New message from {sender}",
                 lookingFor = { longTerm = "Long-term connection", dates = "Good dates", friends = "New friends" },
                 errors = {
-                    invalid_profile = "Check your name, age and profile text.", profile_not_found = "This Flare account is no longer available.", invalid_profile_photos = "Choose or take up to six photos saved in your own Photos library.", request_failed = "Flare could not save those changes. Try again.", invalid_target = "This profile is no longer available.", invalid_choice = "That swipe could not be saved.", invalid_discovery = "That Discovery setting is invalid.", discovery_disabled = "Enable Discovery before swiping.",
+                    invalid_profile = "Check your name, age and profile text.", profile_not_found = "This Flare account is no longer available.", invalid_profile_photos = "Choose or take at least one and up to six photos saved in your own Photos library.", request_failed = "Flare could not save those changes. Try again.", invalid_target = "This profile is no longer available.", invalid_choice = "That swipe could not be saved.", invalid_discovery = "That Discovery setting is invalid.", discovery_disabled = "Enable Discovery before swiping.",
                     nothing_to_rewind = "There is no recent swipe to rewind.", cannot_rewind_match = "A swipe that created a match cannot be rewound.",
                     match_not_found = "This match is no longer available.", invalid_message = "Write a message before sending.", invalid_attachment = "This attachment is unavailable.", gif_provider_unconfigured = "GIF search is not configured.", gif_provider_unauthorized = "The GIF provider key is invalid.", gif_provider_rate_limited = "GIF search is busy. Try again shortly.", gif_provider_failed = "GIFs are temporarily unavailable.", rate_limited = "Slow down for a moment and try again.", default = "Flare could not complete the request.",
                 },
@@ -1810,7 +1810,7 @@ Locales["en"] = {
                     import_source_unavailable = "This website is temporarily unavailable.",
                     invalid_import_url = "Enter a valid HTTPS media link.", import_url_not_allowed = "This link is not from the selected website.",
                     import_url_unavailable = "The linked media could not be reached.", import_size_unavailable = "The website did not provide the media size.",
-                    not_found = "The media item no longer exists.", owner_changed = "The active phone account changed.",
+                    not_found = "The media item no longer exists.", profile_photo_required = "This is the last photo on your Flare profile. Add another profile photo before deleting it.", owner_changed = "The active phone account changed.",
                     operation_in_progress = "Another media operation is already in progress.",
                     rate_limited = "Too many media actions. Try again shortly.", request_failed = "The Photos request failed.",
                     request_timeout = "The media service timed out.", unsupported = "This media format is not supported.",
