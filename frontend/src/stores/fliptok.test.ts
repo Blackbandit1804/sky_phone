@@ -233,4 +233,30 @@ describe('FlipTok verification updates', () => {
       profileId: profile.id,
     })
   })
+
+  it('does not show a follow state when the server rejects it', async () => {
+    vi.mocked(nuiCall).mockResolvedValue({ success: false })
+    const store = useFlipTokStore()
+    const creatorVideo = { ...video, is_owner: false, profile_id: 8 }
+    store.feed = [creatorVideo]
+
+    expect(await store.follow(creatorVideo)).toBe(false)
+    expect(creatorVideo.is_following).toBe(false)
+  })
+
+  it('removes an owned video from every local surface after deletion', async () => {
+    vi.mocked(nuiCall).mockResolvedValue({ success: true })
+    const store = useFlipTokStore()
+    store.profile = { ...profile, video_count: 1 }
+    store.feed = [{ ...video }]
+    store.searchResults = [{ ...video }]
+    store.profileVideos = [{ ...video }]
+
+    expect(await store.deleteVideo(video.id)).toBe(true)
+    expect(nuiCall).toHaveBeenCalledWith('fliptok:delete', { id: video.id })
+    expect(store.feed).toEqual([])
+    expect(store.searchResults).toEqual([])
+    expect(store.profileVideos).toEqual([])
+    expect(store.profile.video_count).toBe(0)
+  })
 })

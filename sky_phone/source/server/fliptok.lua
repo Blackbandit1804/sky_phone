@@ -155,11 +155,31 @@ local function load_profile(profile_id, viewer_id)
     return rows[1] and hydrate_profile(rows[1], viewer_id) or nil
 end
 
+local function load_accessible_video(video_id, viewer_id)
+    if type(video_id) ~= "string" or video_id == "" or #video_id > 64 then return nil end
+    local rows = Bridge.Database.Query([[SELECT v.`profile_id`, v.`comments_enabled`
+        FROM `sky_phone_fliptok_videos` v
+        WHERE v.`id` = ? AND v.`status` = 'published'
+            AND (v.`profile_id` = ? OR v.`visibility` = 'public' OR
+                (v.`visibility` = 'followers' AND EXISTS(
+                    SELECT 1 FROM `sky_phone_fliptok_follows` follow
+                    WHERE follow.`follower_id` = ? AND follow.`following_id` = v.`profile_id`)))
+            AND NOT EXISTS(SELECT 1 FROM `sky_phone_fliptok_blocks` block WHERE
+                (block.`blocker_id` = ? AND block.`blocked_id` = v.`profile_id`) OR
+                (block.`blocked_id` = ? AND block.`blocker_id` = v.`profile_id`))
+        LIMIT 1]], { video_id, viewer_id, viewer_id, viewer_id, viewer_id })
+    return rows[1]
+end
+
 local function notify_profile(recipient_id, actor_id, kind, video_id)
     local rows = Bridge.Database.Query([[SELECT recipient.`account_id`, actor.`display_name` AS `actor_name`
         FROM `sky_phone_fliptok_profiles` recipient
         JOIN `sky_phone_fliptok_profiles` actor ON actor.`id` = ?
         WHERE recipient.`id` = ? LIMIT 1]], { actor_id, recipient_id })
+    if not rows[1] then
+        Bridge.Debug("warn", "[sky_phone] FlipTok notification target or actor no longer exists.", { always = true })
+        return
+    end
     SkyPhone.NotifyAccountDevices(tonumber(rows[1].account_id), "sky_phone:fliptok:new", {
         actor = rows[1].actor_name,
         kind = kind,
@@ -544,7 +564,9 @@ Bridge.Callbacks.Register("sky_phone:fliptok:publish", function(source, data)
             params = { id, current_media_id, index },
         }
     end
-    Bridge.Database.Transaction(queries)
+    if not Bridge.Database.Transaction(queries) then
+        return { success = false, error = "request_failed" }
+    end
     return { success = true, data = { id = id } }
 end)
 
@@ -555,16 +577,13 @@ Bridge.Callbacks.Register("sky_phone:fliptok:react", function(source, data)
     if type(data) ~= "table" or type(data.id) ~= "string" or (data.kind ~= "like" and data.kind ~= "save") or type(data.active) ~= "boolean" then
         return { success = false, error = "invalid_request" }
     end
-    local videos = Bridge.Database.Query("SELECT `profile_id` FROM `sky_phone_fliptok_videos` WHERE `id` = ? AND `status` = 'published' LIMIT 1", { data.id })
-    if not videos[1] then return { success = false, error = "video_not_found" } end
-    local owner_id = tonumber(videos[1].profile_id)
-    if owner_id ~= profile.id and are_profiles_blocked(profile.id, owner_id) then
-        return { success = false, error = "blocked" }
-    end
+    local video = load_accessible_video(data.id, profile.id)
+    if not video then return { success = false, error = "video_not_found" } end
+    local owner_id = tonumber(video.profile_id)
     if data.active then
         local inserted = Bridge.Database.Query("INSERT IGNORE INTO `sky_phone_fliptok_reactions` (`video_id`, `profile_id`, `kind`) VALUES (?, ?, ?)", { data.id, profile.id, data.kind })
         if affected_rows(inserted) > 0 and data.kind == "like" and owner_id ~= profile.id then
-            Bridge.Database.Query("INSERT INTO `sky_phone_fliptok_notifications` (`id`, `recipient_id`, `actor_id`, `video_id`, `kind`) VALUES (?, ?, ?, ?, 'like')", { new_id(), videos[1].profile_id, profile.id, data.id })
+            Bridge.Database.Query("INSERT INTO `sky_phone_fliptok_notifications` (`id`, `recipient_id`, `actor_id`, `video_id`, `kind`) VALUES (?, ?, ?, ?, 'like')", { new_id(), video.profile_id, profile.id, data.id })
             notify_profile(owner_id, profile.id, "like", data.id)
         end
     else
@@ -576,8 +595,13 @@ end)
 Bridge.Callbacks.Register("sky_phone:fliptok:follow", function(source, data)
     local profile, error_response = require_profile(source)
     if not profile then return error_response end
+    if not SkyPhone.AllowOperation(source, "fliptok:follow", 30, 60) then
+        return { success = false, error = "rate_limited" }
+    end
     local target_id = type(data) == "table" and tonumber(data.profileId) or nil
     if not target_id or target_id == profile.id or type(data.active) ~= "boolean" then return { success = false, error = "invalid_request" } end
+    local targets = Bridge.Database.Query("SELECT `id` FROM `sky_phone_fliptok_profiles` WHERE `id` = ? LIMIT 1", { target_id })
+    if not targets[1] then return { success = false, error = "profile_not_found" } end
     if are_profiles_blocked(profile.id, target_id) then return { success = false, error = "blocked" } end
     if data.active then
         local inserted = Bridge.Database.Query("INSERT IGNORE INTO `sky_phone_fliptok_follows` (`follower_id`, `following_id`) SELECT ?, `id` FROM `sky_phone_fliptok_profiles` WHERE `id` = ?", { profile.id, target_id })
@@ -594,7 +618,9 @@ end)
 Bridge.Callbacks.Register("sky_phone:fliptok:comments", function(source, data)
     local profile, error_response = require_profile(source)
     if not profile then return error_response end
-    if type(data) ~= "table" or type(data.id) ~= "string" then return { success = false, error = "invalid_request" } end
+    if type(data) ~= "table" or not load_accessible_video(data.id, profile.id) then
+        return { success = false, error = "video_not_found" }
+    end
     local rows = Bridge.Database.Query([[SELECT c.`id`, c.`parent_id`, c.`body`, UNIX_TIMESTAMP(c.`created_at`) * 1000 AS `created_at`,
         p.`id` AS `profile_id`, p.`handle`, p.`display_name`, p.`verified`, avatar.`url` AS `avatar_url`,
         parent_author.`handle` AS `reply_to_handle`,
@@ -630,25 +656,24 @@ Bridge.Callbacks.Register("sky_phone:fliptok:comment", function(source, data)
     local parent_id = type(data) == "table" and trim(data.parentId) or nil
     if type(data) ~= "table" or type(data.id) ~= "string" or not valid_text(body, 1, Config.FlipTok.CommentMaxLength) then return { success = false, error = "invalid_comment" } end
     if parent_id and #parent_id ~= 36 then return { success = false, error = "invalid_comment" } end
-    local videos = Bridge.Database.Query("SELECT `profile_id` FROM `sky_phone_fliptok_videos` WHERE `id` = ? AND `status` = 'published' AND `comments_enabled` = 1 LIMIT 1", { data.id })
-    if not videos[1] then return { success = false, error = "comments_disabled" } end
-    local owner_id = tonumber(videos[1].profile_id)
-    if owner_id ~= profile.id and are_profiles_blocked(profile.id, owner_id) then
-        return { success = false, error = "blocked" }
-    end
+    local video = load_accessible_video(data.id, profile.id)
+    if not video then return { success = false, error = "video_not_found" } end
+    if tonumber(video.comments_enabled) ~= 1 then return { success = false, error = "comments_disabled" } end
+    local owner_id = tonumber(video.profile_id)
     if parent_id then
-        local parents = Bridge.Database.Query([[SELECT c.`id`, c.`profile_id` FROM `sky_phone_fliptok_comments` c
+        local parents = Bridge.Database.Query([[SELECT c.`id`, c.`parent_id`, c.`profile_id` FROM `sky_phone_fliptok_comments` c
             WHERE c.`id` = ? AND c.`video_id` = ? AND c.`status` = 'visible' LIMIT 1]], { parent_id, data.id })
         if not parents[1] or are_profiles_blocked(profile.id, tonumber(parents[1].profile_id)) then
             return { success = false, error = "invalid_comment" }
         end
+        parent_id = parents[1].parent_id or parents[1].id
     end
     local comment_id = new_id()
     Bridge.Database.Query("INSERT INTO `sky_phone_fliptok_comments` (`id`, `video_id`, `profile_id`, `parent_id`, `body`) VALUES (?, ?, ?, ?, ?)", {
         comment_id, data.id, profile.id, parent_id, body,
     })
-    if tonumber(videos[1].profile_id) ~= profile.id then
-        Bridge.Database.Query("INSERT INTO `sky_phone_fliptok_notifications` (`id`, `recipient_id`, `actor_id`, `video_id`, `kind`) VALUES (?, ?, ?, ?, 'comment')", { new_id(), videos[1].profile_id, profile.id, data.id })
+    if owner_id ~= profile.id then
+        Bridge.Database.Query("INSERT INTO `sky_phone_fliptok_notifications` (`id`, `recipient_id`, `actor_id`, `video_id`, `kind`) VALUES (?, ?, ?, ?, 'comment')", { new_id(), video.profile_id, profile.id, data.id })
         notify_profile(owner_id, profile.id, "comment", data.id)
     end
     return { success = true, data = { id = comment_id } }
@@ -664,10 +689,13 @@ Bridge.Callbacks.Register("sky_phone:fliptok:comment-react", function(source, da
     if type(comment_id) ~= "string" or #comment_id ~= 36 or type(data.active) ~= "boolean" then
         return { success = false, error = "invalid_request" }
     end
-    local comments = Bridge.Database.Query([[SELECT c.`profile_id` FROM `sky_phone_fliptok_comments` c
+    local comments = Bridge.Database.Query([[SELECT c.`profile_id`, c.`video_id` FROM `sky_phone_fliptok_comments` c
         JOIN `sky_phone_fliptok_videos` v ON v.`id` = c.`video_id`
         WHERE c.`id` = ? AND c.`status` = 'visible' AND v.`status` = 'published' LIMIT 1]], { comment_id })
     if not comments[1] then return { success = false, error = "invalid_comment" } end
+    if not load_accessible_video(comments[1].video_id, profile.id) then
+        return { success = false, error = "video_not_found" }
+    end
     if are_profiles_blocked(profile.id, tonumber(comments[1].profile_id)) then
         return { success = false, error = "blocked" }
     end
@@ -682,19 +710,23 @@ Bridge.Callbacks.Register("sky_phone:fliptok:comment-react", function(source, da
 end)
 
 Bridge.Callbacks.Register("sky_phone:fliptok:view", function(source, data)
-    local _, error_response = require_profile(source)
-    if error_response then return error_response end
+    local profile, error_response = require_profile(source)
+    if not profile then return error_response end
     if not SkyPhone.AllowOperation(source, "fliptok:view", 120, 60) then return { success = false, error = "rate_limited" } end
-    if type(data) ~= "table" or type(data.id) ~= "string" then return { success = false, error = "invalid_request" } end
+    if type(data) ~= "table" or not load_accessible_video(data.id, profile.id) then
+        return { success = false, error = "video_not_found" }
+    end
     Bridge.Database.Query("UPDATE `sky_phone_fliptok_videos` SET `view_count` = `view_count` + 1 WHERE `id` = ? AND `status` = 'published'", { data.id })
     return { success = true }
 end)
 
 Bridge.Callbacks.Register("sky_phone:fliptok:share", function(source, data)
-    local _, error_response = require_profile(source)
-    if error_response then return error_response end
+    local profile, error_response = require_profile(source)
+    if not profile then return error_response end
     if not SkyPhone.AllowOperation(source, "fliptok:share", 30, 60) then return { success = false, error = "rate_limited" } end
-    if type(data) ~= "table" or type(data.id) ~= "string" then return { success = false, error = "invalid_request" } end
+    if type(data) ~= "table" or not load_accessible_video(data.id, profile.id) then
+        return { success = false, error = "video_not_found" }
+    end
     Bridge.Database.Query("UPDATE `sky_phone_fliptok_videos` SET `share_count` = `share_count` + 1 WHERE `id` = ? AND `status` = 'published'", { data.id })
     return { success = true }
 end)
@@ -711,7 +743,10 @@ Bridge.Callbacks.Register("sky_phone:fliptok:profile", function(source, data)
     end
     local target = load_profile(tonumber(rows[1].id), viewer.id)
     if not target then return { success = false, error = "profile_not_found" } end
-    local videos = list_videos(viewer.id, "v.`profile_id` = ? AND (v.`visibility` = 'public' OR v.`profile_id` = ?)", { target.id, viewer.id, viewer.id, viewer.id }, 60, 0, "v.`created_at` DESC")
+    local videos = list_videos(viewer.id, [[v.`profile_id` = ? AND (v.`visibility` = 'public' OR v.`profile_id` = ? OR
+        (v.`visibility` = 'followers' AND EXISTS(SELECT 1 FROM `sky_phone_fliptok_follows` profile_follow
+            WHERE profile_follow.`follower_id` = ? AND profile_follow.`following_id` = v.`profile_id`)))]],
+        { target.id, viewer.id, viewer.id, viewer.id, viewer.id }, 60, 0, "v.`created_at` DESC")
     return { success = true, data = { profile = target, videos = videos } }
 end)
 
@@ -856,12 +891,17 @@ end)
 Bridge.Callbacks.Register("sky_phone:fliptok:block", function(source, data)
     local profile, error_response = require_profile(source)
     if not profile then return error_response end
+    if not SkyPhone.AllowOperation(source, "fliptok:block", 20, 60) then
+        return { success = false, error = "rate_limited" }
+    end
     local target_id = type(data) == "table" and tonumber(data.profileId) or nil
     if not target_id or target_id == profile.id then return { success = false, error = "invalid_request" } end
-    Bridge.Database.Transaction({
+    local targets = Bridge.Database.Query("SELECT `id` FROM `sky_phone_fliptok_profiles` WHERE `id` = ? LIMIT 1", { target_id })
+    if not targets[1] then return { success = false, error = "profile_not_found" } end
+    if not Bridge.Database.Transaction({
         { query = "INSERT IGNORE INTO `sky_phone_fliptok_blocks` (`blocker_id`, `blocked_id`) VALUES (?, ?)", params = { profile.id, target_id } },
         { query = "DELETE FROM `sky_phone_fliptok_follows` WHERE (`follower_id` = ? AND `following_id` = ?) OR (`follower_id` = ? AND `following_id` = ?)", params = { profile.id, target_id, target_id, profile.id } },
-    })
+    }) then return { success = false, error = "request_failed" } end
     return { success = true }
 end)
 

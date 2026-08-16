@@ -585,6 +585,14 @@ let flipTokVideos = [
     music_source: '',
     music_url: '',
     music_video_id: '',
+    media_type: 'video',
+    media: [
+      {
+        id: 2,
+        mediaType: 'video',
+        url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+      },
+    ],
     url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
     comments_enabled: true,
     is_liked: false,
@@ -617,6 +625,14 @@ let flipTokVideos = [
     music_source: 'audio',
     music_url: flipTokMusicTracks[0].url,
     music_video_id: '',
+    media_type: 'video',
+    media: [
+      {
+        id: 6,
+        mediaType: 'video',
+        url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+      },
+    ],
     url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
     comments_enabled: true,
     is_liked: true,
@@ -629,6 +645,56 @@ let flipTokVideos = [
     share_count: 220,
     created_at: Date.now() - 7200000,
   },
+  {
+    avatar_url: null,
+    id: 'fliptok-3',
+    profile_id: 1,
+    handle: 'skyline',
+    display_name: 'Skyline',
+    verified: true,
+    caption: 'Three stops through Los Santos. #CityLife',
+    location: '',
+    trim_start_ms: 0,
+    trim_end_ms: null,
+    cover_time_ms: 0,
+    original_volume: 0,
+    music_volume: 0,
+    music_track: '',
+    music_title: '',
+    music_artist: '',
+    music_source: '',
+    music_url: '',
+    music_video_id: '',
+    media_type: 'photo',
+    media: [
+      {
+        id: 1,
+        mediaType: 'photo',
+        url: mockGalleryImage('City Night', '#172554', '#111827', '#7c3aed'),
+      },
+      {
+        id: 3,
+        mediaType: 'photo',
+        url: mockGalleryImage('Beach Drive', '#0369a1', '#164e63', '#fbbf24'),
+      },
+      {
+        id: 4,
+        mediaType: 'photo',
+        url: mockGalleryImage('Mountain Road', '#475569', '#334155', '#e2e8f0'),
+      },
+    ],
+    url: mockGalleryImage('City Night', '#172554', '#111827', '#7c3aed'),
+    comments_enabled: true,
+    is_liked: false,
+    is_saved: false,
+    is_following: false,
+    is_owner: true,
+    like_count: 812,
+    comment_count: 0,
+    view_count: 17300,
+    share_count: 64,
+    created_at: Date.now() - 10800000,
+  },
 ]
 let flipTokComments = [
   {
@@ -637,6 +703,7 @@ let flipTokComments = [
     is_liked: false,
     like_count: 7,
     parent_id: null,
+    video_id: 'fliptok-1',
     profile_id: 2,
     reply_to_handle: null,
     handle: 'nova',
@@ -6951,9 +7018,14 @@ app.post('/api/:endpoint', (request, response) => {
     const video = flipTokVideos.find((item) => item.id === request.body.id)
     if (video) {
       const key = request.body.kind === 'like' ? 'is_liked' : 'is_saved'
+      const changed = video[key] !== request.body.active
       video[key] = request.body.active
+      if (changed && request.body.kind === 'like')
+        video.like_count += request.body.active ? 1 : -1
     }
-    response.json({ success: true })
+    response.json(
+      video ? { success: true } : { success: false, error: 'video_not_found' },
+    )
     return
   }
   if (endpoint === 'fliptok:video') {
@@ -6981,16 +7053,36 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'fliptok:comments') {
-    response.json({ success: true, data: flipTokComments })
+    const video = flipTokVideos.find((item) => item.id === request.body.id)
+    response.json(
+      video
+        ? {
+            success: true,
+            data: flipTokComments.filter(
+              (comment) => comment.video_id === video.id,
+            ),
+          }
+        : { success: false, error: 'video_not_found' },
+    )
     return
   }
   if (endpoint === 'fliptok:comment') {
+    const video = flipTokVideos.find((item) => item.id === request.body.id)
+    if (!video) {
+      response.json({ success: false, error: 'video_not_found' })
+      return
+    }
+    if (!video.comments_enabled) {
+      response.json({ success: false, error: 'comments_disabled' })
+      return
+    }
     const comment = {
       avatar_url: flipTokProfile.avatar_url,
       id: `comment-${Date.now()}`,
       is_liked: false,
       like_count: 0,
       parent_id: request.body.parentId || null,
+      video_id: video.id,
       profile_id: 1,
       reply_to_handle: request.body.parentId
         ? flipTokComments.find((item) => item.id === request.body.parentId)
@@ -7003,16 +7095,22 @@ app.post('/api/:endpoint', (request, response) => {
       created_at: Date.now(),
     }
     flipTokComments.push(comment)
+    video.comment_count += 1
     response.json({ success: true, data: { id: comment.id } })
     return
   }
   if (endpoint === 'fliptok:comment-react') {
     const comment = flipTokComments.find((item) => item.id === request.body.id)
     if (comment) {
+      const changed = comment.is_liked !== (request.body.active === true)
       comment.is_liked = request.body.active === true
-      comment.like_count += comment.is_liked ? 1 : -1
+      if (changed) comment.like_count += comment.is_liked ? 1 : -1
     }
-    response.json({ success: true })
+    response.json(
+      comment
+        ? { success: true }
+        : { success: false, error: 'invalid_comment' },
+    )
     return
   }
   if (endpoint === 'fliptok:activities') {
@@ -7197,13 +7295,24 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'fliptok:publish') {
-    const media = mockMedia.find(
-      (item) => item.id === request.body.mediaId && item.mediaType === 'video',
+    const mediaType = request.body.mediaType === 'photo' ? 'photo' : 'video'
+    const submittedMediaIds = Array.isArray(request.body.mediaIds)
+      ? request.body.mediaIds
+      : [request.body.mediaId]
+    const mediaIds = [...new Set(submittedMediaIds.map(Number))]
+    const mediaItems = mediaIds.map((id) =>
+      mockMedia.find((item) => item.id === id && item.mediaType === mediaType),
     )
-    if (!media) {
+    if (
+      mediaItems.length < 1 ||
+      mediaItems.length > 10 ||
+      (mediaType === 'video' && mediaItems.length !== 1) ||
+      mediaItems.some((item) => !item)
+    ) {
       response.json({ success: false, error: 'invalid_media' })
       return
     }
+    const media = mediaItems[0]
     const musicTrack = String(request.body.musicTrack || '')
     const configuredTrack = flipTokMusicTracks.find(
       (track) => track.id === musicTrack,
@@ -7222,7 +7331,7 @@ app.post('/api/:endpoint', (request, response) => {
       response.json({ success: false, error: 'invalid_music_url' })
       return
     }
-    flipTokVideos.unshift({
+    const createdVideo = {
       avatar_url: flipTokProfile.avatar_url,
       id: `fliptok-${Date.now()}`,
       profile_id: 1,
@@ -7230,11 +7339,13 @@ app.post('/api/:endpoint', (request, response) => {
       display_name: flipTokProfile.display_name,
       verified: flipTokProfile.verified,
       caption: request.body.caption,
-      location: request.body.location,
-      trim_start_ms: request.body.trimStartMs || 0,
-      trim_end_ms: request.body.trimEndMs || null,
-      cover_time_ms: request.body.coverTimeMs || 0,
-      original_volume: request.body.originalVolume ?? 100,
+      location: String(request.body.location || ''),
+      trim_start_ms: mediaType === 'photo' ? 0 : request.body.trimStartMs || 0,
+      trim_end_ms:
+        mediaType === 'photo' ? null : request.body.trimEndMs || null,
+      cover_time_ms: mediaType === 'photo' ? 0 : request.body.coverTimeMs || 0,
+      original_volume:
+        mediaType === 'photo' ? 0 : (request.body.originalVolume ?? 100),
       music_volume: request.body.musicVolume || 0,
       music_track: configuredTrack?.id || '',
       music_title: configuredTrack?.title || youtubeMetadata?.title || '',
@@ -7248,6 +7359,12 @@ app.post('/api/:endpoint', (request, response) => {
             : '',
       music_url: youtubeVideoId ? '' : configuredTrack?.url || customMusicUrl,
       music_video_id: youtubeVideoId,
+      media_type: mediaType,
+      media: mediaItems.map((item) => ({
+        id: item.id,
+        mediaType: item.mediaType,
+        url: item.url,
+      })),
       url: media.url,
       comments_enabled: request.body.commentsEnabled,
       is_liked: false,
@@ -7259,8 +7376,28 @@ app.post('/api/:endpoint', (request, response) => {
       view_count: 0,
       share_count: 0,
       created_at: Date.now(),
-    })
-    response.json({ success: true, data: { id: flipTokVideos[0].id } })
+    }
+    if (request.body.draft !== true) {
+      flipTokVideos.unshift(createdVideo)
+      flipTokProfile.video_count += 1
+    }
+    response.json({ success: true, data: { id: createdVideo.id } })
+    return
+  }
+  if (endpoint === 'fliptok:delete') {
+    const index = flipTokVideos.findIndex(
+      (video) => video.id === request.body.id && video.is_owner,
+    )
+    if (index < 0) {
+      response.json({ success: false, error: 'video_not_found' })
+      return
+    }
+    flipTokVideos.splice(index, 1)
+    flipTokComments = flipTokComments.filter(
+      (comment) => comment.video_id !== request.body.id,
+    )
+    flipTokProfile.video_count = Math.max(0, flipTokProfile.video_count - 1)
+    response.json({ success: true })
     return
   }
   if (endpoint.startsWith('fliptok:')) {

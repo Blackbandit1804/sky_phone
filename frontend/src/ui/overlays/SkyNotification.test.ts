@@ -21,13 +21,13 @@ async function renderNotification(
 }
 
 describe('SkyNotification', () => {
-  it('renders the complete Konsta iOS notification structure', async () => {
+  it('renders the complete Sky popup notification structure', async () => {
     const html = await renderNotification({
       button: 'Close notification',
       opened: true,
       subtitle: 'Notification with close button',
       text: 'Click (x) button to close me',
-      title: 'Konsta UI',
+      title: 'Sky Phone',
       titleRightText: 'now',
     })
 
@@ -50,7 +50,7 @@ describe('SkyNotification', () => {
     expect(html).not.toContain('Hidden')
   })
 
-  it('locks the Konsta iOS glass, typography, and close geometry', () => {
+  it('locks the compact popup glass, typography, and close geometry', () => {
     const overlays = readFileSync(
       new URL('../overlays.css', import.meta.url),
       'utf8',
@@ -66,19 +66,23 @@ describe('SkyNotification', () => {
     expect(notificationRule).toBeDefined()
     expect(notificationRule).toMatch(/z-index:\s*50;/)
     expect(notificationRule).toMatch(
-      /top:\s*calc\(var\(--sky-safe-area-top, 0px\) \+ 8px\);/,
+      /top:\s*calc\(var\(--sky-safe-area-top, 0px\) \+ 6px\);/,
     )
-    expect(notificationRule).toMatch(/right:\s*8px;[\s\S]*left:\s*8px;/)
-    expect(notificationRule).toMatch(/gap:\s*16px;[\s\S]*padding:\s*16px;/)
+    expect(notificationRule).toMatch(/right:\s*10px;[\s\S]*left:\s*10px;/)
+    expect(notificationRule).toMatch(/min-height:\s*72px;/)
+    expect(notificationRule).toMatch(/gap:\s*10px;[\s\S]*padding:\s*10px 12px;/)
     expect(notificationRule).toMatch(
-      /border:\s*0;[\s\S]*border-radius:\s*24px;/,
+      /border:\s*1px solid var\(--sky-hairline\);[\s\S]*border-radius:\s*18px;/,
     )
-    expect(notificationRule).not.toMatch(/min-height|background:/)
+    expect(notificationRule).not.toMatch(/background:/)
     expect(overlays).toMatch(
-      /\.sky-notification__title,[\s\S]*?font-size:\s*14px;[\s\S]*?line-height:\s*20px;/,
+      /\.sky-notification__title,[\s\S]*?font-size:\s*12px;[\s\S]*?line-height:\s*16px;/,
     )
     expect(overlays).toMatch(
-      /\.sky-notification__time\s*\{[\s\S]*?margin-inline-start:\s*auto;[\s\S]*?margin-inline-end:\s*4px;[\s\S]*?color:\s*var\(--sky-notification-meta\);/,
+      /\.sky-notification__title\s*\{[\s\S]*?font-size:\s*13px;[\s\S]*?text-overflow:\s*ellipsis;/,
+    )
+    expect(overlays).toMatch(
+      /\.sky-notification__time\s*\{[\s\S]*?margin-inline-start:\s*auto;[\s\S]*?margin-inline-end:\s*0;[\s\S]*?color:\s*var\(--sky-notification-meta\);/,
     )
     expect(overlays).toMatch(
       /\.sky-notification__close\s*\{[\s\S]*?width:\s*var\(--sky-touch-target, 44px\);[\s\S]*?height:\s*var\(--sky-touch-target, 44px\);[\s\S]*?position:\s*absolute;[\s\S]*?right:\s*-8px;/,
@@ -87,7 +91,7 @@ describe('SkyNotification', () => {
       /\.sky-notification__close-icon\s*\{\s*width:\s*20px;\s*height:\s*20px;/,
     )
     expect(overlays).toMatch(
-      /\.sky-notification-slide-enter-from,[\s\S]*?transform:\s*translateY\(-100%\);/,
+      /\.sky-notification-slide-enter-from,[\s\S]*?transform:\s*translateY\(-32px\) scale\(0\.97\);/,
     )
     expect(tokens).toContain('--sky-notification-meta: rgba(0, 0, 0, 0.45)')
     expect(tokens).toContain(

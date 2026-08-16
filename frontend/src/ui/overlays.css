@@ -690,15 +690,17 @@
   box-sizing: border-box;
   position: absolute;
   z-index: 50;
-  top: calc(var(--sky-safe-area-top, 0px) + 8px);
-  right: 8px;
-  left: 8px;
+  top: calc(var(--sky-safe-area-top, 0px) + 6px);
+  right: 10px;
+  left: 10px;
+  min-height: 72px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border: 0;
-  border-radius: 24px;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: hidden;
+  border: 1px solid var(--sky-hairline);
+  border-radius: 18px;
   color: var(--sky-text);
   box-shadow: var(--sky-shadow-glass);
   touch-action: none;
@@ -732,8 +734,8 @@
 .sky-notification__time,
 .sky-notification__subtitle,
 .sky-notification__text {
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .sky-notification__title,
@@ -742,17 +744,29 @@
 }
 
 .sky-notification__title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sky-notification__time {
   margin-inline-start: auto;
-  margin-inline-end: 4px;
+  margin-inline-end: 0;
+  flex: none;
   color: var(--sky-notification-meta);
+  font-size: 10px;
+  line-height: 14px;
 }
 
 .sky-notification__text {
   color: var(--sky-text);
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .sky-notification__close {
@@ -790,14 +804,14 @@
 .sky-notification-slide-enter-active,
 .sky-notification-slide-leave-active {
   transition:
-    opacity 500ms cubic-bezier(0.4, 0, 0.2, 1),
-    transform 500ms cubic-bezier(0.4, 0, 0.2, 1);
+    opacity 300ms ease,
+    transform 380ms var(--sky-ease-out, ease-out);
 }
 
 .sky-notification-slide-enter-from,
 .sky-notification-slide-leave-to {
   opacity: 0;
-  transform: translateY(-100%);
+  transform: translateY(-32px) scale(0.97);
 }
 
 .sky-panel__panel,
