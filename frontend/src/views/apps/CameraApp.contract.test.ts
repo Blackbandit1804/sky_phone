@@ -71,12 +71,9 @@ describe('Camera app controls', () => {
     expect(cameraClient).toContain(
       'SetFollowPedCamViewMode(first_person_view_mode)',
     )
-    expect(cameraClient).toContain(
-      'SetFollowVehicleCamViewMode(first_person_view_mode)',
-    )
-    expect(cameraClient).toMatch(
-      /while camera_state\.active do[\s\S]*else\s+apply_rear_camera_view\(\)/,
-    )
+    expect(cameraClient).toContain('SetFollowVehicleCamViewMode(view_mode)')
+    expect(cameraClient).toContain('SetFollowPedCamViewMode(view_mode)')
+    expect(cameraClient).toMatch(/while camera_state\.active do[\s\S]*apply_camera_view\(\)/)
     expect(cameraClient).not.toContain('next_view_apply')
     expect(cameraClient).not.toContain('ultrawide_camera_handle')
     expect(cameraClient).not.toContain('ensure_ultrawide_camera')
@@ -89,9 +86,16 @@ describe('Camera app controls', () => {
     expect(cameraClient).toContain(
       'if camera_state.locked or camera_state.front_camera then',
     )
-    expect(cameraClient).toContain('capture_front_camera_transform')
-    expect(cameraClient).toContain('forward_vector * front_camera_distance')
-    expect(cameraClient).toContain('front_camera_target_offset')
+    expect(cameraClient).toContain('get_front_camera_transform')
+    expect(cameraClient).toContain('local front_camera_view_mode = 0')
+    expect(cameraClient).toContain('local front_camera_fov = 32.0')
+    expect(cameraClient).toContain('local front_camera_distance = 1.05')
+    expect(cameraClient).toContain('local head_position = GetPedBoneCoords')
+    expect(cameraClient).toContain('local dot = (to_camera.x * forward_vector.x)')
+    expect(cameraClient).toContain('front_camera_target_height')
+    expect(cameraClient).toContain(
+      'return { block_game = false, block_look = false, cursor = false, focused = true, game_input = true, keep_input = true }',
+    )
     expect(cameraClient).toContain('SetCamCoord(')
     expect(cameraClient).toContain('PointCamAtCoord(')
     expect(cameraClient).not.toContain('SetCamRot(')

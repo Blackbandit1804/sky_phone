@@ -1,9 +1,15 @@
 local disabled_controls = {}
+local all_controls_disabled = false
 local firing_disabled = false
 
 function DisableControlAction(group, control, disabled)
     assert(group == 0 and disabled, "phone controls must be disabled in the primary input group")
     disabled_controls[control] = true
+end
+
+function DisableAllControlActions(group)
+    assert(group == 0, "focused phone input must block the primary input group")
+    all_controls_disabled = true
 end
 
 function PlayerId()
@@ -53,7 +59,10 @@ assert(
 
 local stationary_phone = resolve({ is_open = true })
 assert(
-    stationary_phone.cursor and stationary_phone.focused and not stationary_phone.keep_input,
+    stationary_phone.cursor
+        and stationary_phone.focused
+        and stationary_phone.block_game
+        and not stationary_phone.keep_input,
     "an open phone must block game input when movement is disabled"
 )
 
@@ -62,8 +71,9 @@ assert(
     movable_phone.cursor
         and movable_phone.focused
         and movable_phone.keep_input
-        and movable_phone.game_input,
-    "an open phone must keep GTA input when movement is enabled"
+        and movable_phone.game_input
+        and movable_phone.block_game,
+    "an open phone with the cursor active must block GTA hotkeys while keeping NUI input"
 )
 
 local cursor_disabled_phone = resolve({
@@ -74,18 +84,34 @@ local cursor_disabled_phone = resolve({
 assert(
     not cursor_disabled_phone.cursor
         and cursor_disabled_phone.focused
-        and cursor_disabled_phone.keep_input,
+        and cursor_disabled_phone.keep_input
+        and cursor_disabled_phone.game_input
+        and not cursor_disabled_phone.block_game,
     "toggling Alt must release the NUI cursor while preserving phone and GTA input"
 )
 
-SkyPhoneFocus.ApplyGameInputControls()
+SkyPhoneFocus.ApplyFocusedControls()
+assert(all_controls_disabled, "focused phone cursor must block every GTA control while typing")
+assert(firing_disabled, "focused phone cursor must block attacks while typing")
+
+all_controls_disabled = false
+firing_disabled = false
+SkyPhoneFocus.ApplyGameInputControls(true)
 for _, control in ipairs({ 19, 24, 140, 141, 142, 257, 263, 264 }) do
     assert(disabled_controls[control], ("phone control %d must remain disabled"):format(control))
 end
-assert(not disabled_controls[1] and not disabled_controls[2], "look controls must stay enabled")
+for _, control in ipairs({ 1, 2, 3, 4, 5, 6 }) do
+    assert(disabled_controls[control], ("look control %d must be disabled while the phone cursor is active"):format(control))
+end
 assert(not disabled_controls[21] and not disabled_controls[22], "sprint and jump must stay enabled")
 assert(not disabled_controls[30] and not disabled_controls[31], "movement axes must stay enabled")
 assert(firing_disabled, "player attacks must remain disabled while the phone is open")
+
+disabled_controls = {}
+firing_disabled = false
+SkyPhoneFocus.ApplyGameInputControls(false)
+assert(not disabled_controls[1] and not disabled_controls[2], "Alt cursor toggle must restore camera look")
+assert(firing_disabled, "player attacks must remain disabled after the cursor is toggled off")
 
 local movable_notification = resolve({ allow_movement = true, notification_focus = true })
 assert(
@@ -102,8 +128,9 @@ assert(
     not camera_game_input.cursor
         and camera_game_input.focused
         and camera_game_input.keep_input
-        and not camera_game_input.game_input,
-    "camera movement must keep keyboard focus without retaining the NUI cursor"
+        and camera_game_input.game_input
+        and not camera_game_input.block_look,
+    "camera movement must keep keyboard focus and GTA movement without retaining the NUI cursor"
 )
 
 local focused_camera = resolve({
@@ -113,7 +140,10 @@ local focused_camera = resolve({
     is_open = true,
 })
 assert(
-    focused_camera.cursor and focused_camera.focused and not focused_camera.keep_input,
+    focused_camera.cursor
+        and focused_camera.focused
+        and not focused_camera.keep_input
+        and not focused_camera.game_input,
     "focused camera must override movement configuration until Space enables passthrough"
 )
 

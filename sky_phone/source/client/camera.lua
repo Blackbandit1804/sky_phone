@@ -2,11 +2,11 @@ local minimum_zoom = 0.5
 local maximum_zoom = 3.0
 local mouse_wheel_zoom_step = 0.08
 local first_person_view_mode = 4
-local front_camera_fov = 48.0
-local front_camera_distance = 1.45
-local front_camera_side_offset = 0.0
-local front_camera_height = 0.06
-local front_camera_target_height = -0.1
+local front_camera_view_mode = 0
+local front_camera_fov = 32.0
+local front_camera_distance = 1.05
+local front_camera_height = 0.05
+local front_camera_target_height = 0.03
 local blocked_camera_controls = {
     0, -- INPUT_NEXT_CAMERA
     22, -- INPUT_JUMP
@@ -43,8 +43,6 @@ local camera_state = {
     focus_watcher = false,
     front_camera = false,
     front_camera_handle = nil,
-    front_camera_offset = nil,
-    front_camera_target_offset = nil,
     game_input = false,
     landscape = false,
     locked = false,
@@ -85,34 +83,32 @@ local function set_flash_enabled(enabled)
     end)
 end
 
-local function capture_front_camera_transform(ped)
-    local ped_position = GetEntityCoords(ped)
+local function get_front_camera_transform(ped)
     local head_position = GetPedBoneCoords(ped, 31086, 0.0, 0.0, 0.0)
-    local head_height = head_position.z - ped_position.z
     local forward = GetEntityForwardVector(ped)
-    local forward_vector = vector3(forward.x, forward.y, 0.0)
-    local right_vector = vector3(forward_vector.y, -forward_vector.x, 0.0)
-    local camera_offset = (forward_vector * front_camera_distance)
-        + (right_vector * front_camera_side_offset)
-        + vector3(0.0, 0.0, head_height + front_camera_height)
-    local target_offset = (right_vector * (front_camera_side_offset * 0.25))
-        + vector3(0.0, 0.0, head_height + front_camera_target_height)
-    return camera_offset, target_offset
+    local forward_vector = vector3(forward.x, forward.y, forward.z)
+    local camera_offset = forward_vector * front_camera_distance
+    local camera_position = head_position + camera_offset + vector3(0.0, 0.0, front_camera_height)
+    local to_camera = camera_position - head_position
+    local dot = (to_camera.x * forward_vector.x)
+        + (to_camera.y * forward_vector.y)
+        + (to_camera.z * forward_vector.z)
+    if dot < 0.0 then
+        camera_position = head_position - camera_offset + vector3(0.0, 0.0, front_camera_height)
+    end
+    local target_position = head_position + vector3(0.0, 0.0, front_camera_target_height)
+    return camera_position, target_position
 end
 
 local function apply_front_camera(ped)
     if not camera_state.front_camera_handle or not DoesCamExist(camera_state.front_camera_handle) then
-        camera_state.front_camera_offset, camera_state.front_camera_target_offset =
-            capture_front_camera_transform(ped)
         camera_state.front_camera_handle = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
         SetCamFov(camera_state.front_camera_handle, front_camera_fov)
         SetCamActive(camera_state.front_camera_handle, true)
         RenderScriptCams(true, false, 0, true, true)
     end
 
-    local ped_position = GetEntityCoords(ped)
-    local camera_position = ped_position + camera_state.front_camera_offset
-    local target_position = ped_position + camera_state.front_camera_target_offset
+    local camera_position, target_position = get_front_camera_transform(ped)
     SetCamCoord(
         camera_state.front_camera_handle,
         camera_position.x,
@@ -133,20 +129,16 @@ local function clear_front_camera()
         DestroyCam(camera_state.front_camera_handle, false)
     end
     camera_state.front_camera_handle = nil
-    camera_state.front_camera_offset = nil
-    camera_state.front_camera_target_offset = nil
 end
 
-local function apply_rear_camera_view()
-    if camera_state.front_camera then
-        return
-    end
+local function apply_camera_view()
     local ped = PlayerPedId()
+    local view_mode = camera_state.front_camera and front_camera_view_mode or first_person_view_mode
     if IsPedInAnyVehicle(ped, false) then
-        SetFollowVehicleCamViewMode(first_person_view_mode)
+        SetFollowVehicleCamViewMode(view_mode)
         return
     end
-    SetFollowPedCamViewMode(first_person_view_mode)
+    SetFollowPedCamViewMode(view_mode)
 end
 
 local function restore_camera_view()
@@ -269,7 +261,7 @@ local function set_camera_active(active)
         camera_state.previous_vehicle_view = GetFollowVehicleCamViewMode()
         DisplayRadar(false)
         set_camera_focus(true)
-        apply_rear_camera_view()
+        apply_camera_view()
         TriggerEvent("sky_phone:animation:camera", {
             active = true,
             front = camera_state.front_camera,
@@ -284,9 +276,8 @@ local function set_camera_active(active)
                 HideHudAndRadarThisFrame()
                 if camera_state.front_camera then
                     apply_front_camera(PlayerPedId())
-                else
-                    apply_rear_camera_view()
                 end
+                apply_camera_view()
                 Wait(0)
             end
             camera_state.enforcing = false
@@ -321,8 +312,8 @@ local function set_front_camera(active)
         apply_front_camera(PlayerPedId())
     else
         clear_front_camera()
-        apply_rear_camera_view()
     end
+    apply_camera_view()
     TriggerEvent("sky_phone:animation:camera", {
         active = true,
         front = camera_state.front_camera,

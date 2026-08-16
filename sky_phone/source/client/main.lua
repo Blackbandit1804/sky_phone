@@ -12,6 +12,8 @@ local active_call_payload = nil
 local call_channel = 0
 local nui_generation = 0
 local activity_suspended = false
+local phone_block_game = false
+local phone_block_look = false
 local phone_game_input = false
 local phone_cursor_disabled = false
 
@@ -306,8 +308,10 @@ local function update_nui_focus()
     })
     SetNuiFocus(focus.focused, focus.cursor)
     SetNuiFocusKeepInput(focus.keep_input)
+    phone_block_game = focus.block_game == true
+    phone_block_look = focus.block_look == true
     phone_game_input = focus.game_input
-    if not phone_game_input then
+    if not phone_game_input and not phone_block_game then
         phone_cursor_disabled = false
     end
     TriggerEvent("sky_phone:client:cameraFocusApplied", {
@@ -320,8 +324,12 @@ end
 
 CreateThread(function()
     while true do
-        if phone_game_input then
-            SkyPhoneFocus.ApplyGameInputControls()
+        if phone_game_input or phone_block_game then
+            if phone_block_game then
+                SkyPhoneFocus.ApplyFocusedControls()
+            else
+                SkyPhoneFocus.ApplyGameInputControls(phone_block_look)
+            end
             if IsDisabledControlJustPressed(0, 19) then
                 phone_cursor_disabled = not phone_cursor_disabled
                 update_nui_focus()
