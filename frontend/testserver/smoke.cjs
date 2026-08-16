@@ -67,6 +67,7 @@ const browserDataRequests = [
   ['weather:get', {}],
   ['weazel-news:context', {}],
   ['weazel-news:list', { category: null, offset: 0, search: '' }],
+  ['weazel-news:manage-list', { offset: 0, search: '', status: 'all' }],
 ]
 
 async function post(baseUrl, endpoint, body = {}) {
@@ -84,6 +85,102 @@ async function expectSuccess(baseUrl, endpoint, body = {}, data = false) {
   assert.equal(result.success, true, `${endpoint}: ${result.error ?? 'failed'}`)
   if (data) assert.notEqual(result.data, undefined, `${endpoint}: missing data`)
   return result.data
+}
+
+function expectItems(value, label, minimum = 1) {
+  assert(
+    Array.isArray(value) && value.length >= minimum,
+    `${label} did not include enough browser test data`,
+  )
+}
+
+function verifyBrowserTestData(dataByEndpoint) {
+  const development = dataByEndpoint.get('development:bootstrap')
+  expectItems(development.device.data.alarms.payload, 'clock alarms', 3)
+  expectItems(
+    development.device.data.media.payload.captures,
+    'camera captures',
+    2,
+  )
+  expectItems(development.memos, 'memos', 3)
+  expectItems(development.notes, 'notes', 4)
+  assert(
+    Object.keys(development.device.data.games.payload).length >= 7,
+    'games did not include saved browser test progress',
+  )
+
+  expectItems(dataByEndpoint.get('health:overview').days, 'health history', 7)
+  expectItems(
+    dataByEndpoint.get('billing:list').invoices,
+    'billing invoices',
+    3,
+  )
+  expectItems(dataByEndpoint.get('calendar:list'), 'calendar events', 5)
+  expectItems(dataByEndpoint.get('calls:recents'), 'recent calls', 5)
+  expectItems(dataByEndpoint.get('companies:list').companies, 'companies', 3)
+  expectItems(dataByEndpoint.get('contacts:list'), 'contacts', 10)
+  expectItems(
+    dataByEndpoint.get('crewlink:bootstrap').groups,
+    'CrewLink groups',
+    2,
+  )
+  expectItems(
+    dataByEndpoint.get('darkchat:bootstrap').conversations,
+    'DarkChat conversations',
+  )
+  expectItems(dataByEndpoint.get('feather:feed').items, 'Feather posts', 5)
+  expectItems(
+    dataByEndpoint.get('flare:bootstrap').suggestions,
+    'Flare suggestions',
+    5,
+  )
+  expectItems(dataByEndpoint.get('fliptok:feed').items, 'FlipTok videos', 2)
+  expectItems(dataByEndpoint.get('gallery:list'), 'gallery media', 30)
+  expectItems(
+    dataByEndpoint.get('garage:vehicles').vehicles,
+    'garage vehicles',
+    4,
+  )
+  expectItems(
+    dataByEndpoint.get('housing:overview').properties,
+    'housing properties',
+    5,
+  )
+  expectItems(dataByEndpoint.get('mail:list').items, 'inbox mail', 2)
+  expectItems(dataByEndpoint.get('map:markers'), 'map markers')
+  expectItems(
+    dataByEndpoint.get('marketplace:list').items,
+    'CityMarkt listings',
+    4,
+  )
+  expectItems(
+    dataByEndpoint.get('messages:conversations'),
+    'message conversations',
+    5,
+  )
+  expectItems(
+    dataByEndpoint.get('music:bootstrap').serverTracks,
+    'music tracks',
+    3,
+  )
+  expectItems(dataByEndpoint.get('pages:list').items, 'Local Pages posts', 4)
+  expectItems(
+    dataByEndpoint.get('picstagram:feed').items,
+    'Picstagram posts',
+    2,
+  )
+  expectItems(dataByEndpoint.get('radio:get').history, 'radio history', 2)
+  expectItems(dataByEndpoint.get('skyride:history').items, 'SkyRide history', 2)
+  expectItems(
+    dataByEndpoint.get('weazel-news:list').items,
+    'Weazel News articles',
+    5,
+  )
+  expectItems(
+    dataByEndpoint.get('weazel-news:manage-list').items,
+    'Weazel News editorial articles',
+    7,
+  )
 }
 
 async function verifyStatefulActions(baseUrl) {
@@ -110,7 +207,6 @@ async function verifyStatefulActions(baseUrl) {
     gallery.find((item) => item.id === gallery[0].id)?.favorite,
     true,
   )
-
   const articlePhotos = gallery
     .filter((item) => item.mediaType === 'photo')
     .slice(0, 7)
@@ -594,9 +690,14 @@ async function main() {
   const baseUrl = `http://127.0.0.1:${address.port}`
 
   try {
+    const dataByEndpoint = new Map()
     for (const [endpoint, body] of browserDataRequests) {
-      await expectSuccess(baseUrl, endpoint, body, true)
+      dataByEndpoint.set(
+        endpoint,
+        await expectSuccess(baseUrl, endpoint, body, true),
+      )
     }
+    verifyBrowserTestData(dataByEndpoint)
 
     await verifyStatefulActions(baseUrl)
 
