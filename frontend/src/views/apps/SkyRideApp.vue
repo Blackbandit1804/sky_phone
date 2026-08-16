@@ -229,6 +229,10 @@ function formatQuoteDistance(
   )
 }
 
+function formatRideDistance(distanceMeters: number): string {
+  return formatQuoteDistance(Math.max(0, distanceMeters) / 1000, 'kilometer')
+}
+
 function formatDistanceRate(option: SkyRideQuoteOption): string {
   const unitKey =
     skyride.quote?.distanceUnit === 'mile' ? 'perMile' : 'perKilometer'
@@ -1256,12 +1260,18 @@ onBeforeUnmount(() => {
                 </div>
                 <template #footer>
                   <div class="skyride-history-card__footer">
-                    <span>{{
-                      ride.driver?.name ??
-                      ride.passenger?.name ??
-                      phone.t('Apps.skyride.ride')
-                    }}</span
-                    ><strong>{{
+                    <div class="skyride-history-card__meta">
+                      <span>{{
+                        ride.driver?.name ??
+                        ride.passenger?.name ??
+                        phone.t('Apps.skyride.ride')
+                      }}</span>
+                      <span class="skyride-history-card__distance">
+                        <Route :size="13" aria-hidden="true" />
+                        {{ formatRideDistance(ride.distanceMeters) }}
+                      </span>
+                    </div>
+                    <strong>{{
                       formatMoney(ride.finalPrice ?? ride.price, ride.currency)
                     }}</strong>
                   </div>
@@ -1497,11 +1507,12 @@ onBeforeUnmount(() => {
       class="skyride-profile-sheet"
       :opened="profileEditorOpened"
       :aria-label="phone.t('Apps.skyride.editProfile')"
+      swipe-to-close
       @backdropclick="closeProfileEditor"
       @escape="closeProfileEditor"
+      @swipeclose="closeProfileEditor"
     >
       <section class="skyride-profile-editor">
-        <div class="skyride-sheet__handle" aria-hidden="true"></div>
         <div class="skyride-sheet__title">
           <div>
             <span>{{ phone.t('Apps.skyride.profile') }}</span>
@@ -1524,10 +1535,18 @@ onBeforeUnmount(() => {
           </div>
           <strong>{{ phone.t('Apps.skyride.profilePhoto') }}</strong>
           <div>
-            <SkyButton outline rounded @click="openProfileMedia('photos')">
+            <SkyButton
+              rounded
+              class="skyride-profile-media-button"
+              @click="openProfileMedia('photos')"
+            >
               <Images :size="17" /> {{ phone.t('Apps.skyride.gallery') }}
             </SkyButton>
-            <SkyButton outline rounded @click="openProfileMedia('camera')">
+            <SkyButton
+              rounded
+              class="skyride-profile-media-button"
+              @click="openProfileMedia('camera')"
+            >
               <Camera :size="17" /> {{ phone.t('Apps.skyride.camera') }}
             </SkyButton>
           </div>
@@ -1556,6 +1575,7 @@ onBeforeUnmount(() => {
         <div class="skyride-profile-editor__actions">
           <SkyButton
             block
+            large
             rounded
             variant="secondary"
             @click="closeProfileEditor"
@@ -1737,6 +1757,7 @@ onBeforeUnmount(() => {
 .skyride-app {
   --ride-accent: #f5c518;
   --ride-accent-strong: #725600;
+  --ride-bg-rgb: 244 244 247;
   --ride-bg: #f4f4f7;
   --ride-card: rgba(255, 255, 255, 0.88);
   --ride-card-strong: #fff;
@@ -1744,6 +1765,7 @@ onBeforeUnmount(() => {
   --ride-text: #171719;
   --ride-muted: #707078;
   --ride-map: #07131f;
+  --ride-profile-media-bg: #725600;
   --sky-bg: var(--ride-bg);
   --sky-surface: var(--ride-card-strong);
   --sky-surface-muted: #e6e6eb;
@@ -1760,6 +1782,7 @@ onBeforeUnmount(() => {
 
 .skyride-app--dark {
   --ride-accent-strong: #f5c518;
+  --ride-bg-rgb: 8 9 11;
   --ride-bg: #08090b;
   --ride-card: rgba(29, 30, 33, 0.9);
   --ride-card-strong: #1c1d20;
@@ -1767,6 +1790,7 @@ onBeforeUnmount(() => {
   --ride-text: #f7f7f8;
   --ride-muted: #a2a2aa;
   --ride-map: #050a10;
+  --ride-profile-media-bg: #9b7600;
   --sky-surface-muted: #2c2c2e;
   --sky-danger: #ff453a;
 }
@@ -1884,7 +1908,12 @@ onBeforeUnmount(() => {
 .skyride-home-panel {
   min-height: 320px;
   margin-top: 0;
-  background: var(--ride-bg);
+  background: linear-gradient(
+    180deg,
+    rgb(var(--ride-bg-rgb) / 0) 0,
+    rgb(var(--ride-bg-rgb) / 0.78) 54px,
+    var(--ride-bg) 112px
+  );
 }
 
 .skyride-heading,
@@ -1948,6 +1977,11 @@ onBeforeUnmount(() => {
 .skyride-sheet__content :deep(.sky-list),
 .skyride-profile :deep(.sky-list) {
   margin-block: 0 14px;
+}
+
+.skyride-location-list,
+.skyride-activity-list {
+  margin-inline: 2px !important;
 }
 
 .skyride-location-list :deep(li),
@@ -2514,8 +2548,28 @@ onBeforeUnmount(() => {
 
 .skyride-history-card__footer {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
   font-size: 12px;
+}
+
+.skyride-history-card__meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.skyride-history-card__distance {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.skyride-history-card__distance > svg {
+  flex: 0 0 auto;
+  color: var(--ride-accent-strong);
 }
 
 .skyride-message-contact > svg {
@@ -2651,6 +2705,7 @@ button.skyride-profile-avatar--editable {
   font-weight: 600;
   line-height: 13px;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .skyride-tab-pane :deep(> .sky-tab-button .sky-tab-button__icon) {
@@ -2675,24 +2730,24 @@ button.skyride-profile-avatar--editable {
 
 .skyride-profile-editor {
   box-sizing: border-box;
-  height: 100%;
-  overflow-y: auto;
-  padding: calc(var(--sky-safe-area-top) + 8px) 14px
-    calc(var(--sky-safe-area-bottom) + 12px);
+  min-height: 0;
+  padding: 4px 14px calc(var(--sky-safe-area-bottom) + 12px);
   color: var(--ride-text);
   background: var(--ride-bg);
-  border-radius: 0;
+  border-radius: 0 0 28px 28px;
 }
 
 .skyride-profile-sheet :deep(.sky-overlay-backdrop) {
-  background: var(--ride-bg);
+  background: rgba(0, 0, 0, 0.38);
 }
 
 .skyride-profile-sheet :deep(.sky-sheet__panel) {
-  top: 0;
-  max-height: none;
+  top: auto;
+  max-height: 78%;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 0;
-  border-radius: 0;
+  border-radius: 28px 28px 0 0;
   background: var(--ride-bg);
   box-shadow: none;
 }
@@ -2722,6 +2777,20 @@ button.skyride-profile-avatar--editable {
 
 .skyride-profile-editor__avatar :deep(.sky-button) {
   gap: 6px;
+}
+
+.skyride-profile-editor__avatar :deep(.skyride-profile-media-button) {
+  border-color: var(--ride-profile-media-bg);
+  background: var(--ride-profile-media-bg);
+  color: #fff !important;
+}
+
+.skyride-profile-editor__avatar
+  :deep(.skyride-profile-media-button:active:not(:disabled)) {
+  border-color: var(--ride-profile-media-bg);
+  background: var(--ride-profile-media-bg);
+  color: #fff !important;
+  filter: brightness(0.9);
 }
 
 .skyride-profile-editor__actions {

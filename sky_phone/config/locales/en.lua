@@ -1187,7 +1187,7 @@ Locales["en"] = {
                     cancelled = "This ride is no longer active.",
                 },
                 navigation = "SkyRide navigation",
-                tabs = { home = "Home", rides = "Rides", activity = "Activity", messages = "Messages", profile = "Profile" },
+                tabs = { home = "Home", rides = "Rides", activity = "Activity", messages = "Chat", profile = "Profile" },
                 rides = "Your Rides", ridesBody = "Review completed and cancelled rides.", noRides = "No rides yet",
                 noRidesBody = "Completed and cancelled rides will appear here.", activity = "Activity",
                 activityBody = "Recent trip updates and milestones.", noActivity = "No recent activity",

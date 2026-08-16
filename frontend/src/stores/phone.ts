@@ -2502,7 +2502,7 @@ const defaultLocales: LocaleTree = {
         home: 'Home',
         rides: 'Rides',
         activity: 'Activity',
-        messages: 'Messages',
+        messages: 'Chat',
         profile: 'Profile',
       },
       rides: 'Your Rides',
