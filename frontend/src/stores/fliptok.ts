@@ -7,7 +7,6 @@ import type {
   FlipTokPage,
   FlipTokProfile,
   FlipTokProfilePage,
-  FlipTokReport,
   FlipTokVideo,
 } from '@/types/fliptok'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
@@ -19,13 +18,11 @@ export const useFlipTokStore = defineStore('fliptok', {
     comments: [] as FlipTokComment[],
     connections: [] as FlipTokProfile[],
     feed: [] as FlipTokVideo[],
-    isAdmin: false,
     loading: false,
     musicTracks: [] as FlipTokMusicTrack[],
     mode: 'for-you' as 'for-you' | 'following',
     profile: null as FlipTokProfile | null,
     profileVideos: [] as FlipTokVideo[],
-    reports: [] as FlipTokReport[],
     searchResults: [] as FlipTokVideo[],
     viewedProfile: null as FlipTokProfile | null,
   }),
@@ -65,7 +62,6 @@ export const useFlipTokStore = defineStore('fliptok', {
       const response = await nuiCall<{
         authenticated: boolean
         feed?: FlipTokPage
-        isAdmin?: boolean
         musicTracks: FlipTokMusicTrack[]
         profile?: FlipTokProfile
       }>('fliptok:bootstrap')
@@ -74,7 +70,6 @@ export const useFlipTokStore = defineStore('fliptok', {
       this.authenticated = response.data.authenticated === true
       this.profile = response.data.profile ?? null
       this.feed = response.data.feed?.items ?? []
-      this.isAdmin = response.data.isAdmin === true
       this.musicTracks = response.data.musicTracks ?? []
       return true
     },
@@ -246,22 +241,6 @@ export const useFlipTokStore = defineStore('fliptok', {
       const response = await nuiCall<FlipTokActivity[]>('fliptok:activities')
       this.activities = response.success && response.data ? response.data : []
       if (response.success) await nuiCall('fliptok:mark-activities')
-    },
-    async loadReports(): Promise<boolean> {
-      const response = await nuiCall<FlipTokReport[]>('fliptok:admin-reports')
-      this.reports = response.success && response.data ? response.data : []
-      return response.success
-    },
-    async resolveReport(
-      id: string,
-      action: 'dismiss' | 'remove',
-    ): Promise<boolean> {
-      const response = await nuiCall('fliptok:admin-resolve-report', {
-        action,
-        id,
-      })
-      if (response.success) await this.loadReports()
-      return response.success
     },
   },
 })

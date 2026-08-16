@@ -51,14 +51,17 @@ describe('FlipTokApp Sky UI contract', () => {
     expect(source).toContain('comment-like-pulse')
     expect(source).toContain('@keyframes comment-heart-pop')
     expect(source).toContain('class="comment-row comment-row--reply"')
+    expect(source).toContain('v-show="expandedCommentThreads.has(thread.comment.id)"')
+    expect(source).toContain("t('showReplies'")
     expect(source).toContain('form.comments-composer')
   })
 
-  it('keeps moderation and profile actions compact and inside Sky UI', () => {
-    expect(source).toContain('class="moderation-button"')
-    expect(source).toContain('<ShieldCheck />')
-    expect(source).toContain('.moderation-button__surface')
-    expect(source).toMatch(/\.profile-actions\s*\{[^}]*max-width:\s*286px/s)
+  it('sends reports to Discord and keeps moderation out of the phone UI', () => {
+    expect(source).not.toContain('moderationOpen')
+    expect(source).toContain('reportDiscordNote')
+    expect(serverSource).toContain('Config.FlipTok.ReportWebhookConvar')
+    expect(serverSource).toContain('PerformHttpRequest(webhook')
+    expect(serverSource).not.toContain('INSERT IGNORE INTO `sky_phone_fliptok_reports`')
   })
 
   it('exposes follower lists and editable profile photos', () => {
@@ -69,6 +72,18 @@ describe('FlipTokApp Sky UI contract', () => {
     expect(source).toContain('@click="removeProfilePhoto"')
     expect(source).toContain('profilePhotoSheetOpen')
     expect(source).toContain('avatarMediaId')
+    expect(source).toContain('class="overlay-screen connections-screen"')
+    expect(source).toContain('class="connections-tabs"')
+  })
+
+  it('supports camera videos, photo slides, and a safe composer return path', () => {
+    expect(source).toContain("chooseVideo('camera')")
+    expect(source).toContain("choosePhotoSlideshow('photos')")
+    expect(source).toContain("'/apps/fliptok?compose=1'")
+    expect(source).toContain("route.query.compose === '1'")
+    expect(source).toContain('mediaIds: selectedMediaItems.value.map')
+    expect(source).toContain('class="photo-slideshow"')
+    expect(migrationSource).toContain('sky_phone_fliptok_video_media')
   })
 
   it('shows a transient follow confirmation', () => {

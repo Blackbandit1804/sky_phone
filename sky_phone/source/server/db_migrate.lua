@@ -1671,6 +1671,25 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_fliptok_video_media",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "video_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "media_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "sort_order", type = "TINYINT UNSIGNED NOT NULL" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_fliptok_video_media_order", columns = "(`video_id`, `sort_order`)" },
+            { name = "uniq_sky_phone_fliptok_video_media", columns = "(`video_id`, `media_id`)" },
+        },
+        foreignKeys = {
+            { column = "video_id", references = "`sky_phone_fliptok_videos` (`id`) ON DELETE CASCADE" },
+            { column = "media_id", references = "`sky_phone_media` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_fliptok_reactions",
         columns = {
             { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
@@ -2685,6 +2704,10 @@ local schema = {
 }
 
 Bridge.Database.Migrate("sky_phone", schema)
+Bridge.Database.Query([[
+    INSERT IGNORE INTO `sky_phone_fliptok_video_media` (`video_id`, `media_id`, `sort_order`)
+    SELECT `id`, `media_id`, 1 FROM `sky_phone_fliptok_videos`
+]], {})
 Bridge.Database.Query([[
     INSERT IGNORE INTO `sky_phone_weazel_article_media` (`article_id`, `media_id`, `position`)
     SELECT `id`, `image_media_id`, 1

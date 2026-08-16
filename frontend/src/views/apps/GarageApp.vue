@@ -16,7 +16,6 @@ import {
   ShieldAlert,
   Warehouse,
   Wrench,
-  X,
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
@@ -36,7 +35,6 @@ import {
   SkyDialogButton,
   SkyEmptyState,
   SkyGlass,
-  SkyLink,
   SkyNavbar,
   SkyScrollArea,
   SkySearchbar,
@@ -57,6 +55,7 @@ const selectedVehicle = ref<GarageVehicle | null>(null)
 const valetCandidate = ref<GarageVehicle | null>(null)
 const toastOpened = ref(false)
 const toastText = ref('')
+const failedVehicleImages = ref<Record<string, true>>({})
 
 const kindIcons: Record<GarageVehicleKind, typeof CarFront> = {
   bike: Bike,
@@ -115,6 +114,18 @@ function modelName(vehicle: GarageVehicle): string {
   if (vehicle.name && vehicle.nickname) return vehicle.name
   if (typeof vehicle.model === 'string' && vehicle.model) return vehicle.model
   return phone.t(`Apps.garage.kinds.${vehicle.kind}`)
+}
+
+function vehicleImageUrl(vehicle: GarageVehicle): string {
+  if (failedVehicleImages.value[vehicle.id]) return ''
+  return vehicle.imageUrl ?? ''
+}
+
+function useVehicleIcon(vehicle: GarageVehicle): void {
+  failedVehicleImages.value = {
+    ...failedVehicleImages.value,
+    [vehicle.id]: true,
+  }
 }
 
 function conditionValue(vehicle: GarageVehicle): number | null {
@@ -344,7 +355,14 @@ onBeforeUnmount(() => {
           @click="selectedVehicle = vehicle"
         >
           <span class="garage-vehicle__visual" :class="`is-${vehicle.kind}`">
-            <component :is="kindIcons[vehicle.kind]" :size="47" />
+            <img
+              v-if="vehicleImageUrl(vehicle)"
+              :src="vehicleImageUrl(vehicle)"
+              :alt="displayName(vehicle)"
+              loading="lazy"
+              @error="useVehicleIcon(vehicle)"
+            />
+            <component v-else :is="kindIcons[vehicle.kind]" :size="47" />
             <i :class="`is-${vehicle.status}`">
               {{ phone.t(`Apps.garage.status.${vehicle.status}`) }}
             </i>
@@ -394,24 +412,30 @@ onBeforeUnmount(() => {
       <SkySheet
         :opened="Boolean(selectedVehicle)"
         :aria-label="selectedVehicle ? displayName(selectedVehicle) : undefined"
+        swipe-to-close
+        grabber-clickable
+        :grabber-label="phone.t('Common.close')"
         @backdropclick="selectedVehicle = null"
         @escape="selectedVehicle = null"
+        @grabberclick="selectedVehicle = null"
+        @swipeclose="selectedVehicle = null"
       >
         <section v-if="selectedVehicle" class="garage-detail">
-          <SkyLink
-            component="button"
-            icon-only
-            class="garage-detail__close"
-            :aria-label="phone.t('Common.close')"
-            @click="selectedVehicle = null"
-          >
-            <X :size="18" />
-          </SkyLink>
           <span
             class="garage-detail__visual"
             :class="`is-${selectedVehicle.kind}`"
           >
-            <component :is="kindIcons[selectedVehicle.kind]" :size="62" />
+            <img
+              v-if="vehicleImageUrl(selectedVehicle)"
+              :src="vehicleImageUrl(selectedVehicle)"
+              :alt="displayName(selectedVehicle)"
+              @error="useVehicleIcon(selectedVehicle)"
+            />
+            <component
+              v-else
+              :is="kindIcons[selectedVehicle.kind]"
+              :size="62"
+            />
           </span>
           <span
             class="garage-detail__status"
@@ -423,7 +447,9 @@ onBeforeUnmount(() => {
           <p>{{ modelName(selectedVehicle) }} · {{ selectedVehicle.plate }}</p>
 
           <div class="garage-detail__location">
-            <MapPin :size="18" />
+            <i class="garage-detail__location-icon">
+              <MapPin :size="17" />
+            </i>
             <span>
               <small>{{ phone.t('Apps.garage.location') }}</small>
               <strong>{{
@@ -564,7 +590,7 @@ onBeforeUnmount(() => {
   --garage-separator: var(--sky-hairline);
 }
 .garage-navbar :deep(.sky-navbar__title-container > div) {
-  transform: translateY(-14px);
+  transform: translateY(-20px);
 }
 .garage-scroll {
   padding-top: 0;
@@ -650,20 +676,31 @@ onBeforeUnmount(() => {
   margin: 13px 0 10px;
 }
 .garage-filters {
+  height: 40px;
+  min-height: 40px;
   margin-bottom: 13px;
+  padding: 0;
 }
 .garage-filters :deep(button) {
   min-width: 0;
+  height: 40px;
+  min-height: 40px;
   padding-right: 4px;
   padding-left: 4px;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
   font-size: 11px;
   font-weight: 600;
 }
+.garage-filters :deep(.sky-segmented__highlight) {
+  top: 0;
+  bottom: 0;
+}
 .garage-filters small {
   min-width: 17px;
   padding: 1px 4px;
-  border-radius: 9px;
+  border-radius: var(--sky-radius-pill);
   background: rgb(36 120 255 / 13%);
   font-size: 10px;
   font-weight: 700;
@@ -715,26 +752,36 @@ onBeforeUnmount(() => {
   background: #fff4dd;
   color: #744914;
 }
+.garage-vehicle__visual > img,
+.garage-detail__visual > img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+.garage-vehicle__visual > img {
+  padding: 20px 7px 7px;
+  box-sizing: border-box;
+}
 .garage-vehicle__visual > i {
   position: absolute;
   top: 7px;
   left: 50%;
-  display: inline-flex;
+  display: inline-grid;
   width: max-content;
   min-width: 48px;
   max-width: 70px;
-  height: 14px;
-  padding: 0 6px;
-  align-items: center;
-  justify-content: center;
+  height: 16px;
+  padding: 1px 6px 0;
+  place-items: center;
   box-sizing: border-box;
-  border-radius: 999px;
+  border-radius: var(--sky-radius-pill);
   background: var(--sky-success);
   color: #fff;
   font-size: 7px;
   font-style: normal;
   font-weight: 720;
-  line-height: 1;
+  line-height: normal;
   white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -782,7 +829,7 @@ onBeforeUnmount(() => {
   flex: none;
   padding: 2px 5px;
   border: 1px solid var(--garage-separator);
-  border-radius: 5px;
+  border-radius: var(--sky-radius-control);
   background: var(--garage-surface-muted);
   color: var(--garage-text);
   font-size: 8px;
@@ -826,24 +873,10 @@ onBeforeUnmount(() => {
 }
 .garage-detail {
   position: relative;
-  padding: 12px 18px 28px;
+  padding: 6px 18px 28px;
   background: var(--sky-surface);
   color: var(--garage-text);
   text-align: center;
-}
-.garage-detail__close {
-  position: absolute;
-  z-index: 2;
-  top: 10px;
-  right: 14px;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  border-radius: var(--sky-radius-pill);
-  background: var(--sky-surface-muted);
-  color: var(--garage-secondary);
 }
 .garage-detail__visual {
   width: 104px;
@@ -854,6 +887,10 @@ onBeforeUnmount(() => {
   border-radius: var(--sky-radius-card);
   background: var(--sky-app-accent-soft);
   color: var(--garage-blue);
+}
+.garage-detail__visual > img {
+  padding: 7px;
+  box-sizing: border-box;
 }
 .garage-detail__visual.is-bike {
   background: #f2eaff;
@@ -869,13 +906,17 @@ onBeforeUnmount(() => {
   color: #744914;
 }
 .garage-detail__status {
-  display: inline-flex;
-  padding: 4px 9px;
-  border-radius: 999px;
+  min-height: 24px;
+  padding: 1px 10px 0;
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  border-radius: var(--sky-radius-pill);
   background: var(--sky-success-soft);
   color: var(--sky-success);
   font-size: 12px;
   font-weight: 720;
+  line-height: normal;
   text-transform: uppercase;
 }
 .garage-detail__status.is-out {
@@ -907,8 +948,18 @@ onBeforeUnmount(() => {
   border-radius: var(--sky-radius-card);
   border: 1px solid var(--sky-hairline);
   background: var(--sky-app-accent-soft);
-  color: var(--garage-blue);
   text-align: left;
+}
+.garage-detail__location-icon {
+  width: 31px;
+  height: 31px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--sky-radius-control);
+  background: var(--garage-blue);
+  color: #fff;
+  font-style: normal;
 }
 .garage-detail__location span {
   display: flex;
@@ -952,7 +1003,7 @@ onBeforeUnmount(() => {
   height: 4px;
   display: block;
   overflow: hidden;
-  border-radius: 3px;
+  border-radius: var(--sky-radius-pill);
   background: rgb(118 118 128 / 16%);
 }
 .garage-metrics article > i b {
@@ -1021,7 +1072,7 @@ onBeforeUnmount(() => {
   height: 3px;
   margin-top: 7px;
   overflow: hidden;
-  border-radius: 3px;
+  border-radius: var(--sky-radius-pill);
   background: rgb(10 132 255 / 13%);
 }
 .garage-valet-live__track i {

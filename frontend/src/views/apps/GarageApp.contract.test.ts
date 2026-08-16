@@ -3,6 +3,14 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./GarageApp.vue', import.meta.url), 'utf8')
+const garageServer = readFileSync(
+  new URL('../../../../sky_phone/source/server/garage.lua', import.meta.url),
+  'utf8',
+)
+const phoneConfig = readFileSync(
+  new URL('../../../../sky_phone/config/config.lua', import.meta.url),
+  'utf8',
+)
 
 describe('GarageApp Sky UI contract', () => {
   it('uses first-party Sky UI without direct Konsta markup', () => {
@@ -26,7 +34,25 @@ describe('GarageApp Sky UI contract', () => {
   it('raises only the Garage title block', () => {
     expect(source).toContain('class="garage-navbar"')
     expect(source).toMatch(
-      /\.garage-navbar :deep\(\.sky-navbar__title-container > div\)\s*\{[^}]*translateY\(-14px\)/s,
+      /\.garage-navbar :deep\(\.sky-navbar__title-container > div\)\s*\{[^}]*translateY\(-20px\)/s,
     )
+  })
+
+  it('uses configurable vehicle imagery with an icon fallback', () => {
+    expect(source).toContain('vehicleImageUrl(vehicle)')
+    expect(source).toContain('@error="useVehicleIcon(vehicle)"')
+    expect(source).toContain('v-else :is="kindIcons[vehicle.kind]"')
+    expect(garageServer).toContain('imageUrl = vehicle_image_url(model)')
+    expect(phoneConfig).toContain(
+      'UrlTemplate = "https://cdn.sky-systems.net/vehicles/{model}.png"',
+    )
+    expect(phoneConfig).toContain('ModelNames = {}')
+  })
+
+  it('uses the draggable Sky sheet instead of a close button', () => {
+    expect(source).toContain('swipe-to-close')
+    expect(source).toContain('grabber-clickable')
+    expect(source).toContain('@swipeclose="selectedVehicle = null"')
+    expect(source).not.toContain('garage-detail__close')
   })
 })

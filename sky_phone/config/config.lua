@@ -300,6 +300,13 @@ Config.Garage = {
     System = "auto", -- auto, custom, esx, qb, qbox, ak47, bp, cd, codem, ds-servercreator, hex, jg, my, okok, op, quasar, rx, vms, ws, zyke_garages
     MaximumVehicles = 250,
     RequestsPerMinute = 30,
+    VehicleImages = {
+        Enabled = true,
+        UrlTemplate = "https://cdn.sky-systems.net/vehicles/{model}.png",
+        -- Optional spawn-name overrides for garages that only store model hashes.
+        -- Example: [970598228] = "sultan",
+        ModelNames = {},
+    },
     Custom = {
         Table = "",
         OwnerColumn = "",
@@ -418,10 +425,11 @@ Config.FlipTok = {
     PasswordMaxLength = 72,
     PasswordPepperConvar = "sky_phone_fliptok_password_pepper",
     MaxVideoDurationMs = 300000,
+    MaxPostMedia = 10,
     MusicTracks = {},
     VerifyCommand = "fliptokverify",
     AdminGroups = { "admin" },
-    ReportAdminGroups = { "admin" },
+    ReportWebhookConvar = "sky_phone_fliptok_report_webhook",
 }
 
 Config.Picstagram = {

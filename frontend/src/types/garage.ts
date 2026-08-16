@@ -14,6 +14,7 @@ export type GarageVehicle = {
   engine: number | null
   fuel: number | null
   id: string
+  imageUrl?: string | null
   kind: GarageVehicleKind
   location: string
   model: number | string | null
