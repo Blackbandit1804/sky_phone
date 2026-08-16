@@ -323,6 +323,7 @@ const passcodeRetrySeconds = ref(0)
 const passcodeVisible = ref(false)
 const passcodeRequired = ref(false)
 const setupPreviewDismissed = ref(false)
+const setupDevelopmentSkipped = ref(false)
 const pendingUnlockRoute = ref<string | null>(null)
 const unlockedServicesLoaded = ref(false)
 const controlCenterOpened = ref(false)
@@ -330,10 +331,13 @@ const activitySuspended = ref(false)
 const simPicker = ref<SimPickerPayload | null>(null)
 const setupRequired = computed(
   () =>
-    !phone.preferences.settings.setupCompleted ||
-    (isDevelopment &&
-      developmentParameters.has('setupPreview') &&
-      !setupPreviewDismissed.value),
+    !(
+      isDevelopment && setupDevelopmentSkipped.value
+    ) &&
+    (!phone.preferences.settings.setupCompleted ||
+      (isDevelopment &&
+        developmentParameters.has('setupPreview') &&
+        !setupPreviewDismissed.value)),
 )
 const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)')
 const viewportScale = ref(getViewportScale())
@@ -526,6 +530,12 @@ function completePhoneSetup(): void {
   controlCenterOpened.value = false
   void router.replace('/')
   loadUnlockedPhoneData()
+}
+
+function skipPhoneSetupForDevelopment(): void {
+  if (!isDevelopment) return
+  setupDevelopmentSkipped.value = true
+  completePhoneSetup()
 }
 
 async function hydrateDevelopmentPhone(): Promise<void> {
@@ -1542,6 +1552,7 @@ onBeforeUnmount(() => {
                 <PhoneSetupAssistant
                   v-if="setupRequired"
                   @complete="completePhoneSetup"
+                  @skip="skipPhoneSetupForDevelopment"
                 />
                 <PhoneNotifications
                   :notification="notifications.current"

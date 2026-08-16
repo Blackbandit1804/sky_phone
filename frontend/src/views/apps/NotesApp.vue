@@ -5,12 +5,10 @@ import {
   kLink,
   kList,
   kListButton,
-  kListInput,
   kListItem,
   kNavbar,
   kNavbarBackLink,
   kPage,
-  kSearchbar,
 } from 'konsta/vue'
 import {
   Ellipsis,
@@ -26,7 +24,14 @@ import NotesRichTextEditor from '@/components/NotesRichTextEditor.vue'
 import { useNotesStore } from '@/stores/notes'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
-import { SkyActionSheet, SkyButton } from '@/ui'
+import {
+  SkyActionSheet,
+  SkyButton,
+  SkyFab,
+  SkyScrollArea,
+  SkySearchbar,
+  SkyToolbar,
+} from '@/ui'
 import type { Note } from '@/utils/notes'
 import { noteBodyToPlainText } from '@/utils/noteRichText'
 
@@ -36,7 +41,6 @@ const easyShare = useEasyShareStore()
 const searchQuery = ref('')
 const editorId = ref<string | null>(null)
 const editorOpened = ref(false)
-const draftTitle = ref('')
 const draftBody = ref('')
 const menuOpened = ref(false)
 const currentNote = computed(() =>
@@ -63,6 +67,7 @@ const visibleNotes = computed(() => {
 const editorLabels = computed(() => ({
   bold: phone.t('Apps.notes.tools.bold'),
   bulletList: phone.t('Apps.notes.tools.bulletList'),
+  closeFormatting: phone.t('Common.close'),
   decreaseText: phone.t('Apps.notes.tools.decreaseText'),
   increaseText: phone.t('Apps.notes.tools.increaseText'),
   italic: phone.t('Apps.notes.tools.italic'),
@@ -100,24 +105,18 @@ function noteSubtitle(note: Note): string {
   return `${noteDate(note)} · ${notePreview(note)}`
 }
 
-function updateSearch(event: Event): void {
-  searchQuery.value = (event.target as HTMLInputElement).value
-}
-
-function updateTitle(event: Event): void {
-  draftTitle.value = (event.target as HTMLInputElement).value
+function titleFromDraftBody(body: string): string {
+  return noteBodyToPlainText(body).split('\n')[0]?.trim() ?? ''
 }
 
 function createNote(): void {
   editorId.value = null
-  draftTitle.value = ''
   draftBody.value = ''
   editorOpened.value = true
 }
 
 function editNote(note: Note): void {
   editorId.value = note.id
-  draftTitle.value = note.title
   draftBody.value = note.body
   editorOpened.value = true
 }
@@ -125,7 +124,10 @@ function editNote(note: Note): void {
 function persistDraft(): Note | undefined {
   const draft = {
     body: draftBody.value,
-    title: draftTitle.value.trim(),
+    title:
+      titleFromDraftBody(draftBody.value) ||
+      currentNote.value?.title.trim() ||
+      '',
   }
 
   if (editorId.value) {
@@ -183,62 +185,70 @@ function shareNote(): void {
 <template>
   <k-page
     v-if="!editorOpened"
-    class="!pt-[44px] !pb-[25px]"
+    class="notes-list-page"
     :aria-label="phone.t('Apps.notes.name')"
   >
-    <k-navbar large transparent :title="phone.t('Apps.notes.name')">
-      <template #right>
-        <k-link
-          component="button"
-          icon-only
-          :aria-label="phone.t('Apps.notes.newNote')"
-          @click="createNote"
+    <k-navbar large transparent :title="phone.t('Apps.notes.name')" />
+
+    <SkyScrollArea as="main" class="notes-list-scroll">
+      <k-list v-if="visibleNotes.length" strong inset>
+        <k-list-item
+          v-for="note in visibleNotes"
+          :key="note.id"
+          href="#"
+          :title="noteTitle(note)"
+          :subtitle="noteSubtitle(note)"
+          :chevron="false"
+          strong-title="auto"
+          @click.prevent="editNote(note)"
         >
-          <SquarePen :size="21" />
-        </k-link>
-      </template>
-      <template #subnavbar>
-        <k-searchbar
-          :value="searchQuery"
-          :placeholder="phone.t('Apps.notes.searchPlaceholder')"
-          @input="updateSearch"
-          @clear="searchQuery = ''"
-        />
-      </template>
-    </k-navbar>
-
-    <k-list v-if="visibleNotes.length" strong inset>
-      <k-list-item
-        v-for="note in visibleNotes"
-        :key="note.id"
-        href="#"
-        :title="noteTitle(note)"
-        :subtitle="noteSubtitle(note)"
-        :chevron="false"
-        strong-title="auto"
-        @click.prevent="editNote(note)"
-      >
-        <template v-if="note.pinned" #after>
-          <Pin :size="15" aria-hidden="true" />
-        </template>
-      </k-list-item>
-    </k-list>
-
-    <template v-else>
-      <k-block-title large>{{
-        phone.t(searchQuery ? 'Apps.notes.noResults' : 'Apps.notes.emptyTitle')
-      }}</k-block-title>
-      <k-block strong inset>{{
-        phone.t(
-          searchQuery ? 'Apps.notes.noResultsBody' : 'Apps.notes.emptyBody',
-        )
-      }}</k-block>
-      <k-list v-if="!searchQuery" strong inset>
-        <k-list-button link-component="button" @click="createNote">
-          {{ phone.t('Apps.notes.newNote') }}
-        </k-list-button>
+          <template v-if="note.pinned" #after>
+            <Pin :size="15" aria-hidden="true" />
+          </template>
+        </k-list-item>
       </k-list>
-    </template>
+
+      <template v-else>
+        <k-block-title large>{{
+          phone.t(
+            searchQuery ? 'Apps.notes.noResults' : 'Apps.notes.emptyTitle',
+          )
+        }}</k-block-title>
+        <k-block strong inset>{{
+          phone.t(
+            searchQuery ? 'Apps.notes.noResultsBody' : 'Apps.notes.emptyBody',
+          )
+        }}</k-block>
+        <k-list v-if="!searchQuery" strong inset>
+          <k-list-button link-component="button" @click="createNote">
+            {{ phone.t('Apps.notes.newNote') }}
+          </k-list-button>
+        </k-list>
+      </template>
+    </SkyScrollArea>
+
+    <SkyToolbar
+      class="notes-composer sky-ui-provider"
+      :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+      component="footer"
+      :aria-label="phone.t('Apps.notes.searchPlaceholder')"
+    >
+      <SkySearchbar
+        v-model="searchQuery"
+        :clear-label="phone.t('Common.clear')"
+        :label="phone.t('Apps.notes.searchPlaceholder')"
+        :placeholder="phone.t('Apps.notes.searchPlaceholder')"
+      />
+      <SkyFab
+        :aria-label="phone.t('Apps.notes.newNote')"
+        variant="neutral"
+        @click="createNote"
+      >
+        <template #icon>
+          <SquarePen :size="21" aria-hidden="true" />
+        </template>
+      </SkyFab>
+    </SkyToolbar>
   </k-page>
 
   <k-page v-else class="notes-editor-page !pt-[44px] !pb-0">
@@ -264,17 +274,6 @@ function shareNote(): void {
     </k-navbar>
 
     <div class="notes-editor-layout">
-      <k-list class="notes-editor-title" nested :dividers="false">
-        <k-list-input
-          :value="draftTitle"
-          :label="phone.t('Apps.notes.title')"
-          :placeholder="phone.t('Apps.notes.titlePlaceholder')"
-          maxlength="120"
-          clear-button
-          @input="updateTitle"
-          @clear="draftTitle = ''"
-        />
-      </k-list>
       <NotesRichTextEditor
         v-model="draftBody"
         :dark="phone.isDarkMode"
@@ -298,11 +297,7 @@ function shareNote(): void {
             {{ phone.t('Apps.easyShare.name') }}
           </SkyButton>
           <SkyButton block large tonal @click="togglePinned">
-            <PinOff
-              v-if="currentNote?.pinned"
-              :size="19"
-              aria-hidden="true"
-            />
+            <PinOff v-if="currentNote?.pinned" :size="19" aria-hidden="true" />
             <Pin v-else :size="19" aria-hidden="true" />
             {{
               phone.t(
@@ -330,6 +325,13 @@ function shareNote(): void {
 </template>
 
 <style scoped>
+.notes-list-page {
+  padding-bottom: 0 !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .notes-editor-page {
   display: flex;
   flex-direction: column;
@@ -342,11 +344,6 @@ function shareNote(): void {
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-}
-
-.notes-editor-title {
-  margin: 0;
-  flex: 0 0 auto;
 }
 
 .notes-action-menu {

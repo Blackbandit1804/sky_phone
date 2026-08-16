@@ -15,7 +15,7 @@ export async function nuiCall<T = unknown>(
     'apiPort',
   )
   const baseUrl = import.meta.env.DEV
-    ? `http://localhost:${developmentPort ?? '3001'}/api`
+    ? `http://localhost:${developmentPort ?? '3002'}/api`
     : `https://${resourceName}`
   const requestData = import.meta.env.DEV
     ? {

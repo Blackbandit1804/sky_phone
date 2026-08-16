@@ -72,7 +72,6 @@ function healthOverview() {
     emergencyNumber: '911',
     medicalId: healthMedicalId,
     previousWeekSteps: 36980,
-    snapshot: { healthPercent: 96 },
   }
 }
 

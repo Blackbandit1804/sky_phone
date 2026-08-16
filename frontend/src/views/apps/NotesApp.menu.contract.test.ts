@@ -7,6 +7,32 @@ const menuSource = source.slice(
   source.indexOf('<SkyActionSheet'),
   source.indexOf('</SkyActionSheet>') + '</SkyActionSheet>'.length,
 )
+const listSource = source.slice(
+  source.indexOf('<k-page\n    v-if="!editorOpened"'),
+  source.indexOf('<k-page v-else'),
+)
+
+describe('NotesApp list controls', () => {
+  it('places the Sky searchbar and create action together at the bottom', () => {
+    const composerSource = listSource.slice(
+      listSource.indexOf('<SkyToolbar'),
+      listSource.indexOf('</SkyToolbar>') + '</SkyToolbar>'.length,
+    )
+
+    expect(composerSource).toContain('component="footer"')
+    expect(listSource).toContain('<SkyScrollArea as="main"')
+    expect(composerSource).toContain('<SkySearchbar')
+    expect(composerSource).toContain('v-model="searchQuery"')
+    expect(composerSource).toContain('<SkyFab')
+    expect(composerSource).toContain('variant="neutral"')
+    expect(composerSource).toContain('@click="createNote"')
+    expect(composerSource).not.toContain('notes-search')
+    expect(composerSource).not.toContain('notes-create-fab')
+    expect(listSource).not.toContain('<k-searchbar')
+    expect(listSource).not.toContain('<template #right>')
+    expect(listSource).not.toContain('!pt-[44px]')
+  })
+})
 
 describe('NotesApp more menu', () => {
   it('uses the shared Feather-style action sheet', () => {

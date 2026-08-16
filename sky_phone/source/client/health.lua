@@ -5,19 +5,6 @@ local step_progress = 0.0
 local last_coords = nil
 local last_report_at = GetGameTimer()
 
-local function health_snapshot()
-    local ped = PlayerPedId()
-    if not DoesEntityExist(ped) then
-        return { healthPercent = 0 }
-    end
-
-    local health = GetEntityHealth(ped)
-    local maximum = math.max(1, GetEntityMaxHealth(ped))
-    local base = maximum > 100 and 100 or 0
-    local percentage = math.floor(math.max(0, math.min(100, (health - base) / (maximum - base) * 100)) + 0.5)
-    return { healthPercent = percentage }
-end
-
 local function flush_activity()
     last_report_at = GetGameTimer()
     local distance_meters = math.floor(pending_distance + 0.5)
@@ -95,9 +82,6 @@ end)
 
 RegisterNUICallback("health:overview", function(data, cb)
     local result = Bridge.Callbacks.Trigger("sky_phone:health:overview", data or {})
-    if result and result.success and result.data then
-        result.data.snapshot = health_snapshot()
-    end
     cb(result or { success = false, error = "request_failed" })
 end)
 

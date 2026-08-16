@@ -30,7 +30,7 @@ import {
   type WallpaperId,
 } from '@/utils/preferences'
 
-const emit = defineEmits<{ complete: [] }>()
+const emit = defineEmits<{ complete: []; skip: [] }>()
 
 const phone = usePhoneStore()
 const account = useAccountStore()
@@ -86,6 +86,7 @@ const passwordStrength = computed(() => {
 const currentWallpaperStyle = computed(() => ({
   '--setup-wallpaper': `var(--phone-wallpaper-${phone.preferences.settings.wallpaper})`,
 }))
+const showDevelopmentSkip = import.meta.env.DEV
 
 function moveTo(nextStep: number): void {
   direction.value = nextStep < step.value ? 'back' : 'forward'
@@ -207,6 +208,10 @@ function finish(): void {
   phone.completeSetup()
   emit('complete')
 }
+
+function skipSetupForDevelopment(): void {
+  emit('skip')
+}
 </script>
 
 <template>
@@ -217,6 +222,14 @@ function finish(): void {
     :aria-label="phone.t('Setup.title')"
   >
     <div class="setup-assistant__aurora" aria-hidden="true"></div>
+    <button
+      v-if="showDevelopmentSkip"
+      type="button"
+      class="setup-assistant__development-skip"
+      @click="skipSetupForDevelopment"
+    >
+      {{ phone.t('Setup.development.skip') }}
+    </button>
     <header v-if="step > 0 && step < 9" class="setup-assistant__chrome">
       <button
         type="button"
@@ -840,6 +853,24 @@ function finish(): void {
     radial-gradient(circle at 40% 92%, rgb(0 214 184/13%), transparent 25%);
   filter: blur(28px);
   animation: setup-aurora 12s ease-in-out infinite alternate;
+}
+.setup-assistant__development-skip {
+  position: absolute;
+  z-index: 3;
+  top: 20px;
+  right: 18px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 12px;
+  color: rgb(255 255 255 / 82%);
+  background: rgb(10 16 31 / 72%);
+  font-size: 11px;
+  font-weight: 700;
+}
+.setup-assistant__development-skip:focus-visible {
+  outline: 2px solid #72b5ff;
+  outline-offset: 2px;
 }
 .setup-assistant__chrome {
   position: absolute;

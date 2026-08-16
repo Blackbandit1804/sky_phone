@@ -34,7 +34,7 @@ describe('nuiCall', () => {
     })
     expect(vi.getTimerCount()).toBe(0)
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:3001/api/test',
+      'http://localhost:3002/api/test',
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
   })

@@ -55,4 +55,22 @@ describe('SkyFab', () => {
     expect(fabTokens).toContain('--sky-fab-accent-inset-start')
     expect(fabTokens).not.toContain('rgba(10, 132, 255, 0.25)')
   })
+
+  it('offers a neutral glass variant without accent layers', async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () => h(SkyFab, { ariaLabel: 'Create', variant: 'neutral' }),
+      }),
+    )
+
+    expect(html).toContain('sky-fab--neutral')
+
+    const controls = readFileSync(
+      fileURLToPath(new URL('../controls.css', import.meta.url)),
+      'utf8',
+    )
+    expect(controls).toMatch(
+      /\.sky-glass\.sky-fab--neutral\s*\{[^}]*background:\s*var\(--sky-glass-solid/s,
+    )
+  })
 })

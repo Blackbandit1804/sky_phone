@@ -9,7 +9,6 @@ import {
   MapPin,
   Phone,
   RefreshCw,
-  ShieldCheck,
   Timer,
   UserRound,
 } from 'lucide-vue-next'
@@ -101,20 +100,6 @@ const trendCopy = computed(() => {
     })
   }
   return phone.t('Apps.health.trends.same')
-})
-const healthPercent = computed(
-  () => overview.value?.snapshot.healthPercent ?? 0,
-)
-const conditionKey = computed(() =>
-  healthPercent.value >= 70
-    ? 'good'
-    : healthPercent.value >= 35
-      ? 'fair'
-      : 'low',
-)
-const recoveryPercent = computed(() => {
-  const activeLoad = Math.min(20, Math.round((today.value?.activeSeconds ?? 0) / 180))
-  return Math.max(0, Math.min(100, healthPercent.value - activeLoad))
 })
 const dateRange = computed(() => {
   if (!visibleDays.value.length) return ''
@@ -248,7 +233,7 @@ onBeforeUnmount(() => {
       </template>
     </SkyNavbar>
 
-    <SkyScrollArea class="health-content" with-tabbar>
+    <SkyScrollArea class="health-content" padded with-tabbar>
       <div v-if="health.isLoading && !overview" class="health-loading">
         <SkySpinner />
         <span>{{ phone.t('Apps.health.loading') }}</span>
@@ -333,34 +318,6 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section class="health-section">
-          <h2>{{ phone.t('Apps.health.snapshot') }}</h2>
-          <div class="health-list">
-            <div class="health-list__row">
-              <span class="health-list__icon health-list__icon--green">
-                <HeartPulse :size="21" />
-              </span>
-              <span>{{ phone.t('Apps.health.condition') }}</span>
-              <strong :class="`health-value--${conditionKey}`">{{
-                phone.t(`Apps.health.conditions.${conditionKey}`)
-              }}</strong>
-            </div>
-            <div class="health-list__row">
-              <span class="health-list__icon health-list__icon--orange">
-                <Activity :size="21" />
-              </span>
-              <span>{{ phone.t('Apps.health.recovery') }}</span>
-              <strong>{{ recoveryPercent }}%</strong>
-            </div>
-            <div class="health-list__row">
-              <span class="health-list__icon">
-                <ShieldCheck :size="21" />
-              </span>
-              <span>{{ phone.t('Apps.health.currentHealth') }}</span>
-              <strong>{{ healthPercent }}%</strong>
-            </div>
-          </div>
-        </section>
       </template>
 
       <template v-else-if="activeTab === 'trends'">
@@ -568,10 +525,6 @@ onBeforeUnmount(() => {
             }}
           </SkyButton>
 
-          <p class="health-privacy-note">
-            <ShieldCheck :size="22" aria-hidden="true" />
-            <span>{{ phone.t('Apps.health.medicalId.privacy') }}</span>
-          </p>
         </template>
 
         <p v-if="actionError" class="health-action-error" role="alert">
@@ -890,15 +843,6 @@ onBeforeUnmount(() => {
   color: var(--health-orange);
 }
 
-.health-list__row .health-value--good {
-  color: var(--health-green);
-}
-
-.health-list__row .health-value--fair {
-  color: var(--health-orange);
-}
-
-.health-list__row .health-value--low,
 .health-list__row .health-value--accent {
   color: var(--health-accent);
 }
@@ -1119,25 +1063,6 @@ onBeforeUnmount(() => {
   min-height: 54px;
   flex: none;
   gap: 9px;
-}
-
-.health-privacy-note {
-  display: flex;
-  align-items: flex-start;
-  margin: 0;
-  padding: 14px 16px;
-  border: calc(var(--sky-hairline-scale) * 1px) solid var(--health-panel-border);
-  border-radius: 18px;
-  background: var(--health-panel);
-  color: var(--sky-muted);
-  font-size: 13px;
-  line-height: 1.35;
-  gap: 12px;
-}
-
-.health-privacy-note svg {
-  flex: none;
-  color: var(--health-green);
 }
 
 .health-form {

@@ -72,6 +72,7 @@ Locales["en"] = {
         },
         Setup = {
             title = "Sky Phone Setup Assistant", ownerFallback = "Sky Phone Owner", getStarted = "Get Started", setUpLater = "Set Up Later",
+            development = { skip = "Skip setup" },
             welcome = { title = "Welcome to Sky Phone", eyebrow = "Designed around you", hello = "hello", hallo = "hallo", bonjour = "bonjour", body = "Hello, {name}. Let's make this phone unmistakably yours.", private = "Private by design", personal = "Made for you" },
             connection = {
                 eyebrow = "Mobile Connection", title = "Your connection is ready", body = "Sky Phone automatically detects the SIM installed in this device.",
@@ -202,10 +203,6 @@ Locales["en"] = {
                 kilocalories = "{count} kcal",
                 thisWeek = "This week",
                 snapshot = "Health snapshot",
-                condition = "Condition",
-                recovery = "Recovery",
-                currentHealth = "Current health",
-                conditions = { good = "Good", fair = "Fair", low = "Low" },
                 trends = {
                     title = "Trends", week = "Week", month = "Month", total = "{count} steps",
                     more = "{count}% more than last week", less = "{count}% less than last week",
@@ -219,7 +216,6 @@ Locales["en"] = {
                     noneRecorded = "None recorded", emergencyContact = "Emergency contact",
                     contactName = "Contact name", relation = "Relation", phoneNumber = "Phone number",
                     emergencyCall = "Emergency call", callContact = "Call emergency contact",
-                    privacy = "Information is stored with your character and can be shown to emergency services.",
                     saveFailed = "Medical ID could not be saved.",
                 },
                 errors = {
