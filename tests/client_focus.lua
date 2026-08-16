@@ -1,5 +1,5 @@
 local disabled_controls = {}
-local all_controls_disabled = false
+local all_controls_disabled = {}
 local firing_disabled = false
 
 function DisableControlAction(group, control, disabled)
@@ -8,8 +8,7 @@ function DisableControlAction(group, control, disabled)
 end
 
 function DisableAllControlActions(group)
-    assert(group == 0, "focused phone input must block the primary input group")
-    all_controls_disabled = true
+    all_controls_disabled[group] = true
 end
 
 function PlayerId()
@@ -91,10 +90,12 @@ assert(
 )
 
 SkyPhoneFocus.ApplyFocusedControls()
-assert(all_controls_disabled, "focused phone cursor must block every GTA control while typing")
+for _, group in ipairs({ 0, 1, 2 }) do
+    assert(all_controls_disabled[group], ("focused phone cursor must block input group %d while typing"):format(group))
+end
 assert(firing_disabled, "focused phone cursor must block attacks while typing")
 
-all_controls_disabled = false
+all_controls_disabled = {}
 firing_disabled = false
 SkyPhoneFocus.ApplyGameInputControls(true)
 for _, control in ipairs({ 19, 24, 140, 141, 142, 257, 263, 264 }) do

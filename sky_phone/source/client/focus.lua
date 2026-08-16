@@ -2,9 +2,12 @@ SkyPhoneFocus = {}
 
 local blocked_phone_controls = { 19, 24, 140, 141, 142, 257, 263, 264 }
 local blocked_phone_look_controls = { 1, 2, 3, 4, 5, 6 }
+local focused_control_groups = { 0, 1, 2 }
 
 function SkyPhoneFocus.ApplyFocusedControls()
-    DisableAllControlActions(0)
+    for _, group in ipairs(focused_control_groups) do
+        DisableAllControlActions(group)
+    end
     DisablePlayerFiring(PlayerId(), true)
 end
 
