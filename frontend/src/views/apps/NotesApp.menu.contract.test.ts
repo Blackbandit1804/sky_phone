@@ -15,16 +15,22 @@ const listSource = source.slice(
 describe('NotesApp list controls', () => {
   it('places the Sky searchbar and create action together at the bottom', () => {
     const composerSource = listSource.slice(
-      listSource.indexOf('<footer'),
-      listSource.indexOf('</footer>') + '</footer>'.length,
+      listSource.indexOf('<SkyToolbar'),
+      listSource.indexOf('</SkyToolbar>') + '</SkyToolbar>'.length,
     )
 
+    expect(composerSource).toContain('component="footer"')
+    expect(listSource).toContain('<SkyScrollArea as="main"')
     expect(composerSource).toContain('<SkySearchbar')
     expect(composerSource).toContain('v-model="searchQuery"')
     expect(composerSource).toContain('<SkyFab')
+    expect(composerSource).toContain('variant="neutral"')
     expect(composerSource).toContain('@click="createNote"')
+    expect(composerSource).not.toContain('notes-search')
+    expect(composerSource).not.toContain('notes-create-fab')
     expect(listSource).not.toContain('<k-searchbar')
     expect(listSource).not.toContain('<template #right>')
+    expect(listSource).not.toContain('!pt-[44px]')
   })
 })
 

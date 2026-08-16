@@ -14,6 +14,7 @@ const props = withDefaults(
     text?: string
     textPosition?: 'after' | 'before'
     type?: 'button' | 'reset' | 'submit'
+    variant?: 'neutral' | 'primary'
   }>(),
   {
     ariaLabel: '',
@@ -23,6 +24,7 @@ const props = withDefaults(
     text: '',
     textPosition: 'after',
     type: 'button',
+    variant: 'primary',
   },
 )
 
@@ -71,6 +73,7 @@ function handleClick(event: MouseEvent): void {
     :class="{
       'sky-fab--disabled': disabled,
       'sky-fab--icon-only': !hasText,
+      'sky-fab--neutral': variant === 'neutral',
       'sky-fab--with-text': hasText,
     }"
     role="button"

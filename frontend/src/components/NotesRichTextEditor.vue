@@ -15,8 +15,9 @@ import {
   Strikethrough,
   Underline,
   Undo2,
+  X,
 } from 'lucide-vue-next'
-import { onBeforeUnmount, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 
 import { SkyIcon, SkyTabBar, SkyTabButton } from '@/ui'
 import {
@@ -35,6 +36,7 @@ export type NotesEditorLabels = {
   redo: string
   strike: string
   toolbar: string
+  closeFormatting: string
   underline: string
   undo: string
 }
@@ -49,6 +51,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
+
+const formatMode = ref(false)
 
 const allowedTags = [
   'blockquote',
@@ -231,6 +235,18 @@ function toggleSelectionQuote(): void {
   editor.value.view.focus()
 }
 
+function hasActiveTextFormat(): boolean {
+  if (!editor.value) return false
+  const size = editor.value.getAttributes('noteTextSize').size
+  return (
+    Boolean(size) ||
+    editor.value.isActive('bold') ||
+    editor.value.isActive('italic') ||
+    editor.value.isActive('underline') ||
+    editor.value.isActive('strike')
+  )
+}
+
 watch(
   () => props.modelValue,
   (body) => {
@@ -256,149 +272,135 @@ onBeforeUnmount(() => editor.value?.destroy())
       :editor="editor"
     />
 
-    <SkyTabBar v-if="editor" :label="labels.toolbar">
-      <SkyTabButton
-        :active="
-          ['tiny', 'small', 'compact'].includes(
-            editor.getAttributes('noteTextSize').size,
-          )
-        "
-        :aria-label="labels.undo"
-        :disabled="!editor.can().chain().focus().undo().run()"
-        @click="editor.chain().focus().undo().run()"
-      >
-        <template #icon
-          ><SkyIcon :size="19"><Undo2 /></SkyIcon
-        ></template>
-      </SkyTabButton>
-      <SkyTabButton
-        :active="
-          ['medium', 'large', 'huge'].includes(
-            editor.getAttributes('noteTextSize').size,
-          )
-        "
-        :aria-label="labels.redo"
-        :disabled="!editor.can().chain().focus().redo().run()"
-        @click="editor.chain().focus().redo().run()"
-      >
-        <template #icon
-          ><SkyIcon :size="19"><Redo2 /></SkyIcon
-        ></template>
-      </SkyTabButton>
-      <SkyTabButton
-        :active="editor.isActive('bold')"
-        :class="{
-          'notes-rich-editor__tool--active': [
-            'tiny',
-            'small',
-            'compact',
-          ].includes(editor.getAttributes('noteTextSize').size),
-          'notes-rich-editor__tool--unavailable': editor.state.selection.empty,
-        }"
-        :aria-label="labels.decreaseText"
-        @pointerdown.prevent="adjustTextSize(-1)"
-      >
-        <span class="notes-rich-editor__text-tool">A−</span>
-      </SkyTabButton>
-      <SkyTabButton
-        :active="editor.isActive('italic')"
-        :class="{
-          'notes-rich-editor__tool--active': [
-            'medium',
-            'large',
-            'huge',
-          ].includes(editor.getAttributes('noteTextSize').size),
-          'notes-rich-editor__tool--unavailable': editor.state.selection.empty,
-        }"
-        :aria-label="labels.increaseText"
-        @pointerdown.prevent="adjustTextSize(1)"
-      >
-        <span
-          class="notes-rich-editor__text-tool notes-rich-editor__text-tool--large"
-          >A+</span
+    <SkyTabBar v-if="editor" :label="labels.toolbar" :labels="false">
+      <template v-if="!formatMode">
+        <SkyTabButton
+          :aria-label="labels.undo"
+          :disabled="!editor.can().chain().focus().undo().run()"
+          @click="editor.chain().focus().undo().run()"
         >
-      </SkyTabButton>
-      <SkyTabButton
-        :class="{
-          'notes-rich-editor__tool--active': editor.isActive('bold'),
-        }"
-        :aria-label="labels.bold"
-        @click="editor.chain().focus().toggleBold().run()"
-      >
-        <template #icon
-          ><SkyIcon :size="19"><Bold /></SkyIcon
-        ></template>
-      </SkyTabButton>
-      <SkyTabButton
-        :class="{
-          'notes-rich-editor__tool--active': editor.isActive('italic'),
-        }"
-        :aria-label="labels.italic"
-        @click="editor.chain().focus().toggleItalic().run()"
-      >
-        <template #icon
-          ><SkyIcon :size="19"><Italic /></SkyIcon
-        ></template>
-      </SkyTabButton>
-      <SkyTabButton
-        :active="editor.isActive('underline')"
-        :class="{
-          'notes-rich-editor__tool--active': editor.isActive('underline'),
-        }"
-        :aria-label="labels.underline"
-        @click="editor.chain().focus().toggleUnderline().run()"
-      >
-        <template #icon
-          ><SkyIcon :size="19"><Underline /></SkyIcon
-        ></template>
-      </SkyTabButton>
-      <SkyTabButton
-        :active="editor.isActive('strike')"
-        :class="{
-          'notes-rich-editor__tool--active': editor.isActive('strike'),
-        }"
-        :aria-label="labels.strike"
-        @click="editor.chain().focus().toggleStrike().run()"
-      >
-        <template #icon
-          ><SkyIcon :size="19"><Strikethrough /></SkyIcon
-        ></template>
-      </SkyTabButton>
-      <SkyTabButton
-        :active="editor.isActive('bulletList')"
-        :class="{
-          'notes-rich-editor__tool--active': editor.isActive('bulletList'),
-        }"
-        :aria-label="labels.bulletList"
-        @click="editor.chain().focus().toggleBulletList().run()"
-      >
-        <template #icon
-          ><SkyIcon :size="20"><List /></SkyIcon
-        ></template>
-      </SkyTabButton>
-      <SkyTabButton
-        :active="editor.isActive('orderedList')"
-        :class="{
-          'notes-rich-editor__tool--active': editor.isActive('orderedList'),
-        }"
-        :aria-label="labels.numberedList"
-        @click="editor.chain().focus().toggleOrderedList().run()"
-      >
-        <template #icon
-          ><SkyIcon :size="20"><ListOrdered /></SkyIcon
-        ></template>
-      </SkyTabButton>
-      <SkyTabButton
-        :class="{
-          'notes-rich-editor__tool--unavailable': editor.state.selection.empty,
-        }"
-        :aria-label="labels.quote"
-        @pointerdown.prevent="toggleSelectionQuote"
-      >
-        <template #icon
-          ><SkyIcon :size="19"><Quote /></SkyIcon
-        ></template>
-      </SkyTabButton>
+          <template #icon
+            ><SkyIcon :size="20"><Undo2 /></SkyIcon
+          ></template>
+        </SkyTabButton>
+        <SkyTabButton
+          :aria-label="labels.redo"
+          :disabled="!editor.can().chain().focus().redo().run()"
+          @click="editor.chain().focus().redo().run()"
+        >
+          <template #icon
+            ><SkyIcon :size="20"><Redo2 /></SkyIcon
+          ></template>
+        </SkyTabButton>
+        <SkyTabButton
+          :active="hasActiveTextFormat()"
+          :aria-label="labels.toolbar"
+          @click="formatMode = true"
+        >
+          <span class="notes-rich-editor__format-tool">Aa</span>
+        </SkyTabButton>
+        <SkyTabButton
+          :active="editor.isActive('bulletList')"
+          :aria-label="labels.bulletList"
+          @click="editor.chain().focus().toggleBulletList().run()"
+        >
+          <template #icon
+            ><SkyIcon :size="21"><List /></SkyIcon
+          ></template>
+        </SkyTabButton>
+        <SkyTabButton
+          :active="editor.isActive('orderedList')"
+          :aria-label="labels.numberedList"
+          @click="editor.chain().focus().toggleOrderedList().run()"
+        >
+          <template #icon
+            ><SkyIcon :size="21"><ListOrdered /></SkyIcon
+          ></template>
+        </SkyTabButton>
+        <SkyTabButton
+          :aria-label="labels.quote"
+          :disabled="editor.state.selection.empty"
+          @pointerdown.prevent="toggleSelectionQuote"
+        >
+          <template #icon
+            ><SkyIcon :size="20"><Quote /></SkyIcon
+          ></template>
+        </SkyTabButton>
+      </template>
+
+      <template v-else>
+        <SkyTabButton
+          :active="
+            ['tiny', 'small', 'compact'].includes(
+              editor.getAttributes('noteTextSize').size,
+            )
+          "
+          :aria-label="labels.decreaseText"
+          :disabled="editor.state.selection.empty"
+          @pointerdown.prevent="adjustTextSize(-1)"
+        >
+          <span class="notes-rich-editor__text-tool">A−</span>
+        </SkyTabButton>
+        <SkyTabButton
+          :active="
+            ['medium', 'large', 'huge'].includes(
+              editor.getAttributes('noteTextSize').size,
+            )
+          "
+          :aria-label="labels.increaseText"
+          :disabled="editor.state.selection.empty"
+          @pointerdown.prevent="adjustTextSize(1)"
+        >
+          <span
+            class="notes-rich-editor__text-tool notes-rich-editor__text-tool--large"
+            >A+</span
+          >
+        </SkyTabButton>
+        <SkyTabButton
+          :active="editor.isActive('bold')"
+          :aria-label="labels.bold"
+          @click="editor.chain().focus().toggleBold().run()"
+        >
+          <template #icon
+            ><SkyIcon :size="20"><Bold /></SkyIcon
+          ></template>
+        </SkyTabButton>
+        <SkyTabButton
+          :active="editor.isActive('italic')"
+          :aria-label="labels.italic"
+          @click="editor.chain().focus().toggleItalic().run()"
+        >
+          <template #icon
+            ><SkyIcon :size="20"><Italic /></SkyIcon
+          ></template>
+        </SkyTabButton>
+        <SkyTabButton
+          :active="editor.isActive('underline')"
+          :aria-label="labels.underline"
+          @click="editor.chain().focus().toggleUnderline().run()"
+        >
+          <template #icon
+            ><SkyIcon :size="20"><Underline /></SkyIcon
+          ></template>
+        </SkyTabButton>
+        <SkyTabButton
+          :active="editor.isActive('strike')"
+          :aria-label="labels.strike"
+          @click="editor.chain().focus().toggleStrike().run()"
+        >
+          <template #icon
+            ><SkyIcon :size="20"><Strikethrough /></SkyIcon
+          ></template>
+        </SkyTabButton>
+        <SkyTabButton
+          :aria-label="labels.closeFormatting"
+          @click="formatMode = false"
+        >
+          <template #icon
+            ><SkyIcon :size="20"><X /></SkyIcon
+          ></template>
+        </SkyTabButton>
+      </template>
     </SkyTabBar>
   </section>
 </template>
@@ -542,5 +544,11 @@ onBeforeUnmount(() => editor.value?.destroy())
 
 .notes-rich-editor__text-tool--large {
   font-size: 17px;
+}
+
+.notes-rich-editor__format-tool {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
 }
 </style>

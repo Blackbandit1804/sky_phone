@@ -2724,8 +2724,23 @@ label.sky-list-item__row {
   padding: 0;
 }
 
+.sky-glass.sky-fab--neutral {
+  background: var(--sky-glass-solid, rgba(247, 247, 248, 0.96));
+  color: var(--sky-text, #000000);
+}
+
+.sky-fab--neutral .sky-fab__accent-layer,
+.sky-fab--neutral .sky-fab__dark-accent-layer,
+.sky-fab--neutral .sky-fab__surface-layer {
+  display: none;
+}
+
 .sky-glass.sky-fab:active:not(:disabled) {
   background: transparent;
+}
+
+.sky-glass.sky-fab--neutral:active:not(:disabled) {
+  background: var(--sky-glass-solid, rgba(247, 247, 248, 0.96));
 }
 
 .sky-fab--disabled {

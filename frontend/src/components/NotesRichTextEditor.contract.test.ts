@@ -10,10 +10,17 @@ const source = readFileSync(
 describe('NotesRichTextEditor formatting tabbar', () => {
   it('lists every formatting action through shared tabbar primitives', () => {
     expect(source.match(/<SkyTabBar\b/g)).toHaveLength(1)
-    expect(source.match(/<SkyTabButton\b/g)).toHaveLength(11)
+    expect(source.match(/<SkyTabButton\b/g)).toHaveLength(13)
     expect(source).toContain(
       "import { SkyIcon, SkyTabBar, SkyTabButton } from '@/ui'",
     )
+    expect(source).toContain(
+      '<SkyTabBar v-if="editor" :label="labels.toolbar" :labels="false">',
+    )
+    expect(source).toContain('<template v-if="!formatMode">')
+    expect(source).toContain('@click="formatMode = true"')
+    expect(source).toContain('@click="formatMode = false"')
+    expect(source).toContain(':disabled="editor.state.selection.empty"')
     expect(source).not.toContain('notes-rich-editor__toolbar-row')
     expect(source).not.toContain('scrollToolbar')
   })

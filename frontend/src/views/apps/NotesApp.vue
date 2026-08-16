@@ -24,7 +24,14 @@ import NotesRichTextEditor from '@/components/NotesRichTextEditor.vue'
 import { useNotesStore } from '@/stores/notes'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
-import { SkyActionSheet, SkyButton, SkyFab, SkySearchbar } from '@/ui'
+import {
+  SkyActionSheet,
+  SkyButton,
+  SkyFab,
+  SkyScrollArea,
+  SkySearchbar,
+  SkyToolbar,
+} from '@/ui'
 import type { Note } from '@/utils/notes'
 import { noteBodyToPlainText } from '@/utils/noteRichText'
 
@@ -60,6 +67,7 @@ const visibleNotes = computed(() => {
 const editorLabels = computed(() => ({
   bold: phone.t('Apps.notes.tools.bold'),
   bulletList: phone.t('Apps.notes.tools.bulletList'),
+  closeFormatting: phone.t('Common.close'),
   decreaseText: phone.t('Apps.notes.tools.decreaseText'),
   increaseText: phone.t('Apps.notes.tools.increaseText'),
   italic: phone.t('Apps.notes.tools.italic'),
@@ -116,7 +124,10 @@ function editNote(note: Note): void {
 function persistDraft(): Note | undefined {
   const draft = {
     body: draftBody.value,
-    title: titleFromDraftBody(draftBody.value) || currentNote.value?.title.trim() || '',
+    title:
+      titleFromDraftBody(draftBody.value) ||
+      currentNote.value?.title.trim() ||
+      '',
   }
 
   if (editorId.value) {
@@ -174,65 +185,70 @@ function shareNote(): void {
 <template>
   <k-page
     v-if="!editorOpened"
-    class="notes-list-page !pt-[44px]"
+    class="notes-list-page"
     :aria-label="phone.t('Apps.notes.name')"
   >
     <k-navbar large transparent :title="phone.t('Apps.notes.name')" />
 
-    <k-list v-if="visibleNotes.length" strong inset>
-      <k-list-item
-        v-for="note in visibleNotes"
-        :key="note.id"
-        href="#"
-        :title="noteTitle(note)"
-        :subtitle="noteSubtitle(note)"
-        :chevron="false"
-        strong-title="auto"
-        @click.prevent="editNote(note)"
-      >
-        <template v-if="note.pinned" #after>
-          <Pin :size="15" aria-hidden="true" />
-        </template>
-      </k-list-item>
-    </k-list>
-
-    <template v-else>
-      <k-block-title large>{{
-        phone.t(searchQuery ? 'Apps.notes.noResults' : 'Apps.notes.emptyTitle')
-      }}</k-block-title>
-      <k-block strong inset>{{
-        phone.t(
-          searchQuery ? 'Apps.notes.noResultsBody' : 'Apps.notes.emptyBody',
-        )
-      }}</k-block>
-      <k-list v-if="!searchQuery" strong inset>
-        <k-list-button link-component="button" @click="createNote">
-          {{ phone.t('Apps.notes.newNote') }}
-        </k-list-button>
+    <SkyScrollArea as="main" class="notes-list-scroll">
+      <k-list v-if="visibleNotes.length" strong inset>
+        <k-list-item
+          v-for="note in visibleNotes"
+          :key="note.id"
+          href="#"
+          :title="noteTitle(note)"
+          :subtitle="noteSubtitle(note)"
+          :chevron="false"
+          strong-title="auto"
+          @click.prevent="editNote(note)"
+        >
+          <template v-if="note.pinned" #after>
+            <Pin :size="15" aria-hidden="true" />
+          </template>
+        </k-list-item>
       </k-list>
-    </template>
 
-    <footer
+      <template v-else>
+        <k-block-title large>{{
+          phone.t(
+            searchQuery ? 'Apps.notes.noResults' : 'Apps.notes.emptyTitle',
+          )
+        }}</k-block-title>
+        <k-block strong inset>{{
+          phone.t(
+            searchQuery ? 'Apps.notes.noResultsBody' : 'Apps.notes.emptyBody',
+          )
+        }}</k-block>
+        <k-list v-if="!searchQuery" strong inset>
+          <k-list-button link-component="button" @click="createNote">
+            {{ phone.t('Apps.notes.newNote') }}
+          </k-list-button>
+        </k-list>
+      </template>
+    </SkyScrollArea>
+
+    <SkyToolbar
       class="notes-composer sky-ui-provider"
       :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+      component="footer"
+      :aria-label="phone.t('Apps.notes.searchPlaceholder')"
     >
       <SkySearchbar
         v-model="searchQuery"
-        class="notes-search"
         :clear-label="phone.t('Common.clear')"
         :label="phone.t('Apps.notes.searchPlaceholder')"
         :placeholder="phone.t('Apps.notes.searchPlaceholder')"
       />
       <SkyFab
-        class="notes-create-fab"
         :aria-label="phone.t('Apps.notes.newNote')"
+        variant="neutral"
         @click="createNote"
       >
         <template #icon>
           <SquarePen :size="21" aria-hidden="true" />
         </template>
       </SkyFab>
-    </footer>
+    </SkyToolbar>
   </k-page>
 
   <k-page v-else class="notes-editor-page !pt-[44px] !pb-0">
@@ -281,11 +297,7 @@ function shareNote(): void {
             {{ phone.t('Apps.easyShare.name') }}
           </SkyButton>
           <SkyButton block large tonal @click="togglePinned">
-            <PinOff
-              v-if="currentNote?.pinned"
-              :size="19"
-              aria-hidden="true"
-            />
+            <PinOff v-if="currentNote?.pinned" :size="19" aria-hidden="true" />
             <Pin v-else :size="19" aria-hidden="true" />
             {{
               phone.t(
@@ -314,35 +326,10 @@ function shareNote(): void {
 
 <style scoped>
 .notes-list-page {
-  padding-bottom: calc(
-    var(--sky-safe-area-bottom) + var(--sky-touch-target) + 24px
-  ) !important;
-}
-
-.notes-composer {
-  position: absolute;
-  z-index: 20;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  min-width: 0;
-  padding: 8px calc(var(--sky-page-gutter) + var(--sky-safe-area-right))
-    calc(var(--sky-safe-area-bottom) + 8px)
-    calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--sky-touch-target);
-  align-items: center;
-  gap: 10px;
-  background: linear-gradient(to top, var(--sky-bg) 72%, transparent);
-}
-
-.notes-search {
-  min-width: 0;
-}
-
-.notes-create-fab {
-  width: var(--sky-touch-target);
-  height: var(--sky-touch-target);
+  padding-bottom: 0 !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .notes-editor-page {
