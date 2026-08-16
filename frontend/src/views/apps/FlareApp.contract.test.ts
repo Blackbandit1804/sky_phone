@@ -2,13 +2,10 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  new URL('./FlareApp.vue', import.meta.url),
-  'utf8',
-)
+const source = readFileSync(new URL('./FlareApp.vue', import.meta.url), 'utf8')
 
 describe('FlareApp profile editing contract', () => {
-  it('offers Gallery and Camera directly while creating an account', () => {
+  it('opens the central photo source picker while creating an account', () => {
     const onboardingStart = source.indexOf(
       '<template v-else-if="!flare.profile">',
     )
@@ -20,20 +17,22 @@ describe('FlareApp profile editing contract', () => {
 
     expect(onboardingStart).toBeGreaterThan(-1)
     expect(onboardingEnd).toBeGreaterThan(onboardingStart)
-    expect(onboarding).toContain('flare-photo-onboarding-sources')
-    expect(onboarding).toContain("openProfileMediaApp('photos')")
-    expect(onboarding).toContain("openProfileMediaApp('camera')")
-    expect(onboarding).toContain("phone.t('Apps.flare.choosePhotos')")
-    expect(onboarding).toContain("phone.t('Apps.flare.takePhoto')")
+    expect(onboarding).toContain('aria-controls="flare-photo-source-sheet"')
+    expect(onboarding).toContain('aria-haspopup="dialog"')
+    expect(onboarding).toContain('@click="openPhotoSourcePicker"')
+    expect(onboarding).not.toContain("openProfileMediaApp('photos')")
+    expect(onboarding).not.toContain("openProfileMediaApp('camera')")
   })
 
-  it('uses the central source picker when editing profile photos', () => {
+  it('uses the same Gallery and Camera picker for onboarding and editing', () => {
     const mediaAppStart = source.indexOf('function openProfileMediaApp')
     const mediaAppEnd = source.indexOf('function removeDraftPhoto')
     const mediaApp = source.slice(mediaAppStart, mediaAppEnd)
 
-    expect(source.match(/@click="openPhotoSourcePicker"/g)).toHaveLength(1)
-    expect(source).toContain('<sky-action-sheet')
+    expect(source.match(/@click="openPhotoSourcePicker"/g)).toHaveLength(2)
+    expect(source).toContain(
+      '<sky-action-sheet\n      id="flare-photo-source-sheet"',
+    )
     expect(source).toContain(
       '<sky-action-button bold @click="openProfileMediaApp(\'photos\')">',
     )

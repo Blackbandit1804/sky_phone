@@ -940,29 +940,18 @@ onBeforeUnmount(() => {
                 <X />
               </sky-link>
             </div>
-            <div
+            <sky-button
               v-if="draftPhotos.length < 6"
-              class="flare-photo-onboarding-sources"
-              role="group"
-              :aria-label="phone.t('Apps.flare.addPhotos')"
+              clear
+              class="flare-photo-add"
+              :class="{ 'is-empty': !draftPhotos.length }"
+              aria-controls="flare-photo-source-sheet"
+              aria-haspopup="dialog"
+              @click="openPhotoSourcePicker"
             >
-              <sky-button
-                tonal
-                rounded
-                @click="openProfileMediaApp('photos')"
-              >
-                <Images :size="19" aria-hidden="true" />
-                <span>{{ phone.t('Apps.flare.choosePhotos') }}</span>
-              </sky-button>
-              <sky-button
-                tonal
-                rounded
-                @click="openProfileMediaApp('camera')"
-              >
-                <Camera :size="19" aria-hidden="true" />
-                <span>{{ phone.t('Apps.flare.takePhoto') }}</span>
-              </sky-button>
-            </div>
+              <Plus />
+              <span>{{ phone.t('Apps.flare.addPhotos') }}</span>
+            </sky-button>
           </div>
         </sky-card>
         <sky-list inset strong>
@@ -1710,6 +1699,8 @@ onBeforeUnmount(() => {
               clear
               class="flare-photo-add"
               :class="{ 'is-empty': !draftPhotos.length }"
+              aria-controls="flare-photo-source-sheet"
+              aria-haspopup="dialog"
               @click="openPhotoSourcePicker"
             >
               <Plus />
@@ -1900,6 +1891,7 @@ onBeforeUnmount(() => {
     </div>
 
     <sky-action-sheet
+      id="flare-photo-source-sheet"
       :aria-label="phone.t('Apps.flare.addPhotos')"
       :opened="photoSourceOpened"
       @backdropclick="closePhotoSourcePicker"
@@ -2920,17 +2912,6 @@ onBeforeUnmount(() => {
   min-height: 104px;
   grid-column: 1 / -1;
   aspect-ratio: auto;
-}
-.flare-photo-onboarding-sources {
-  grid-column: 1 / -1;
-  display: grid;
-  gap: var(--sky-space-2);
-}
-.flare-photo-onboarding-sources :deep(.sky-button) {
-  min-height: var(--sky-touch-target);
-  height: auto;
-  justify-content: flex-start;
-  padding: var(--sky-space-2) var(--sky-space-4);
 }
 .flare-photo-grid :deep(.flare-photo-add svg) {
   width: 25px;
