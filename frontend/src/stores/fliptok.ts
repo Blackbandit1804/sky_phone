@@ -137,26 +137,27 @@ export const useFlipTokStore = defineStore('fliptok', {
         if (kind === 'like') video.like_count += next ? -1 : 1
       }
     },
-    async follow(video: FlipTokVideo): Promise<void> {
+    async follow(video: FlipTokVideo): Promise<boolean> {
       const next = !video.is_following
       const response = await nuiCall('fliptok:follow', {
         active: next,
         profileId: video.profile_id,
       })
-      if (response.success)
-        this.feed
-          .filter((item) => item.profile_id === video.profile_id)
-          .forEach((item) => {
-            item.is_following = next
-          })
+      if (!response.success) return false
+      this.feed
+        .filter((item) => item.profile_id === video.profile_id)
+        .forEach((item) => {
+          item.is_following = next
+        })
+      return true
     },
-    async followProfile(profile: FlipTokProfile): Promise<void> {
+    async followProfile(profile: FlipTokProfile): Promise<boolean> {
       const next = !profile.is_following
       const response = await nuiCall('fliptok:follow', {
         active: next,
         profileId: profile.id,
       })
-      if (!response.success) return
+      if (!response.success) return false
       profile.is_following = next
       profile.followers += next ? 1 : -1
       this.feed
@@ -164,6 +165,7 @@ export const useFlipTokStore = defineStore('fliptok', {
         .forEach((item) => {
           item.is_following = next
         })
+      return true
     },
     async loadProfile(query: {
       handle?: string
@@ -201,11 +203,12 @@ export const useFlipTokStore = defineStore('fliptok', {
       if (this.viewedProfile?.id === profileId) this.viewedProfile = null
       return true
     },
-    async loadComments(id: string): Promise<void> {
+    async loadComments(id: string): Promise<boolean> {
       const response = await nuiCall<FlipTokComment[]>('fliptok:comments', {
         id,
       })
       this.comments = response.success && response.data ? response.data : []
+      return response.success
     },
     async comment(
       id: string,
@@ -237,10 +240,23 @@ export const useFlipTokStore = defineStore('fliptok', {
       this.connections = response.success && response.data ? response.data : []
       return response.success
     },
-    async loadActivities(): Promise<void> {
+    async loadActivities(): Promise<boolean> {
       const response = await nuiCall<FlipTokActivity[]>('fliptok:activities')
       this.activities = response.success && response.data ? response.data : []
       if (response.success) await nuiCall('fliptok:mark-activities')
+      return response.success
+    },
+    async deleteVideo(id: string): Promise<boolean> {
+      const response = await nuiCall('fliptok:delete', { id })
+      if (!response.success) return false
+      this.feed = this.feed.filter((video) => video.id !== id)
+      this.searchResults = this.searchResults.filter((video) => video.id !== id)
+      this.profileVideos = this.profileVideos.filter((video) => video.id !== id)
+      if (this.profile && this.profile.video_count > 0)
+        this.profile.video_count -= 1
+      if (this.viewedProfile?.is_owner && this.viewedProfile.video_count > 0)
+        this.viewedProfile.video_count -= 1
+      return true
     },
   },
 })

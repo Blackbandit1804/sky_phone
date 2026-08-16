@@ -201,6 +201,80 @@ async function verifyStatefulActions(baseUrl) {
       .every((item) => typeof item.thumbnailUrl === 'string'),
     'gallery:list returned a test video without a thumbnail',
   )
+  const flipTokPhotos = gallery
+    .filter((item) => item.mediaType === 'photo')
+    .slice(0, 3)
+  const createdFlipTok = await expectSuccess(
+    baseUrl,
+    'fliptok:publish',
+    {
+      caption: 'Browser mock photo slideshow',
+      commentsEnabled: true,
+      coverTimeMs: 0,
+      customMusicUrl: '',
+      draft: false,
+      mediaId: flipTokPhotos[0].id,
+      mediaIds: flipTokPhotos.map((item) => item.id),
+      mediaType: 'photo',
+      musicTrack: '',
+      musicVolume: 0,
+      originalVolume: 0,
+      trimEndMs: null,
+      trimStartMs: 0,
+      visibility: 'public',
+    },
+    true,
+  )
+  let flipTokFeed = await expectSuccess(
+    baseUrl,
+    'fliptok:feed',
+    { mode: 'for-you', offset: 0 },
+    true,
+  )
+  const photoFlipTok = flipTokFeed.items.find(
+    (item) => item.id === createdFlipTok.id,
+  )
+  assert.equal(photoFlipTok.media_type, 'photo')
+  assert.deepEqual(
+    photoFlipTok.media.map((item) => item.id),
+    flipTokPhotos.map((item) => item.id),
+    'fliptok:publish did not preserve photo order',
+  )
+  await expectSuccess(baseUrl, 'fliptok:comment', {
+    body: 'Browser mock scoped comment',
+    id: createdFlipTok.id,
+  })
+  const createdComments = await expectSuccess(
+    baseUrl,
+    'fliptok:comments',
+    { id: createdFlipTok.id },
+    true,
+  )
+  assert(
+    createdComments.some((comment) => comment.body.includes('scoped comment')),
+    'fliptok:comment did not persist for its video',
+  )
+  const otherComments = await expectSuccess(
+    baseUrl,
+    'fliptok:comments',
+    { id: 'fliptok-1' },
+    true,
+  )
+  assert(
+    !otherComments.some((comment) => comment.body.includes('scoped comment')),
+    'fliptok:comments leaked comments from another video',
+  )
+  await expectSuccess(baseUrl, 'fliptok:delete', { id: createdFlipTok.id })
+  flipTokFeed = await expectSuccess(
+    baseUrl,
+    'fliptok:feed',
+    { mode: 'for-you', offset: 0 },
+    true,
+  )
+  assert(
+    !flipTokFeed.items.some((item) => item.id === createdFlipTok.id),
+    'fliptok:delete kept the removed video in the feed',
+  )
   await expectSuccess(
     baseUrl,
     'gallery:favorite',

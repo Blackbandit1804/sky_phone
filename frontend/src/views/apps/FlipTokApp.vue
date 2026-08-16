@@ -5,6 +5,8 @@ import {
   Camera,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   Heart,
   Home,
@@ -103,6 +105,8 @@ const authConfirmPassword = ref('')
 const authSubmitting = ref(false)
 const logoutDialogOpen = ref(false)
 const logoutSubmitting = ref(false)
+const deleteDialogOpen = ref(false)
+const deleteSubmitting = ref(false)
 const tab = ref<Tab>('feed')
 const selectedVideo = ref<FlipTokVideo | null>(null)
 const selectedMedia = ref<PhoneMedia | null>(null)
@@ -146,7 +150,10 @@ const reportReason = ref<
   'spam' | 'harassment' | 'dangerous' | 'illegal' | 'other'
 >('spam')
 const reportDetails = ref('')
+const reportSubmitting = ref(false)
 const publishing = ref(false)
+const profileSaving = ref(false)
+const profileFollowPending = ref(false)
 const feedback = ref('')
 const likedPulseId = ref<string | null>(null)
 const commentLikePulseId = ref<string | null>(null)
@@ -154,6 +161,9 @@ const reactionPulse = ref<{ id: string; kind: 'like' | 'save' } | null>(null)
 const playbackFailedIds = ref(new Set<string>())
 const followFeedbackIds = ref(new Set<string>())
 const followPendingIds = ref(new Set<string>())
+const feedBeforePreview = ref<FlipTokVideo[] | null>(null)
+const photoSlideIndexes = ref<Record<string, number>>({})
+const composerPhotoIndex = ref(0)
 const profileDraft = ref({
   accountType: 'person',
   avatarMediaId: 0,
@@ -165,6 +175,21 @@ const selectedProfilePhoto = ref<PhoneMedia | null>(null)
 const feedCards = new Map<string, HTMLElement>()
 const videoElements = new Map<string, HTMLVideoElement>()
 const musicElements = new Map<string, HTMLAudioElement>()
+const photoSlideElements = new Map<string, HTMLElement>()
+const photoSlideAnimations = new Map<HTMLElement, Animation>()
+let photoSlideDrag: {
+  currentX: number
+  element: HTMLElement
+  frame: number | null
+  lastMoveAt: number
+  lastX: number
+  pointerId: number
+  startIndex: number
+  startTranslateX: number
+  startX: number
+  track: HTMLElement
+  velocity: number
+} | null = null
 let flipTokYoutubePlayer: YouTubePlayer | null = null
 let flipTokYoutubeApi: YouTubeApi | null = null
 let flipTokYoutubeOwner = ''
@@ -175,6 +200,7 @@ let likePulseTimer: number | null = null
 let commentLikePulseTimer: number | null = null
 let reactionPulseTimer: number | null = null
 let feedbackTimer: number | null = null
+let searchTimer: number | null = null
 const followFeedbackTimers = new Map<string, number>()
 const visibilityOptions = ['public', 'followers', 'private'] as const
 const accountTypeOptions = [
@@ -190,6 +216,11 @@ const reportReasonOptions = [
   'dangerous',
   'illegal',
   'other',
+] as const
+const discoveryTags = [
+  { labelKey: 'trendLosSantos', value: '#LosSantos' },
+  { labelKey: 'trendRoleplay', value: '#Roleplay' },
+  { labelKey: 'trendTrending', value: '#Trending' },
 ] as const
 
 const currentProfile = computed(() => store.viewedProfile ?? store.profile)
@@ -215,6 +246,10 @@ const canPublish = computed(
     !customMusicLoadFailed.value,
 )
 const selectedMediaType = computed(() => selectedMedia.value?.mediaType ?? null)
+const selectedComposerPhoto = computed(
+  () =>
+    selectedMediaItems.value[composerPhotoIndex.value] ?? selectedMedia.value,
+)
 const visibilityMenuItems = computed(() =>
   visibilityOptions.map((option) => ({
     checked: visibility.value === option,
@@ -247,7 +282,7 @@ function initials(name: string): string {
 }
 
 function compactCount(value: number): string {
-  return new Intl.NumberFormat('en', {
+  return new Intl.NumberFormat(phone.lang, {
     maximumFractionDigits: 1,
     notation: 'compact',
   }).format(value)
@@ -257,6 +292,177 @@ function videoMedia(video: FlipTokVideo) {
   return video.media?.length
     ? video.media
     : [{ id: 0, mediaType: video.media_type ?? 'video', url: video.url }]
+}
+
+function photoSlideIndex(videoId: string): number {
+  return photoSlideIndexes.value[videoId] ?? 0
+}
+
+function setPhotoSlideElement(videoId: string, element: unknown): void {
+  if (element instanceof HTMLElement) {
+    photoSlideElements.set(videoId, element)
+    const track = element.firstElementChild
+    if (track instanceof HTMLElement) {
+      track.style.transform = `translate3d(-${photoSlideIndex(videoId) * 100}%, 0, 0)`
+    }
+    return
+  }
+  const previous = photoSlideElements.get(videoId)
+  if (previous) cancelPhotoSlideAnimation(previous)
+  photoSlideElements.delete(videoId)
+}
+
+function updatePhotoSlideIndex(videoId: string, index: number): void {
+  const normalizedIndex = Math.max(0, index)
+  if (photoSlideIndexes.value[videoId] === normalizedIndex) return
+  photoSlideIndexes.value = {
+    ...photoSlideIndexes.value,
+    [videoId]: normalizedIndex,
+  }
+}
+
+function photoSlideTranslateX(track: HTMLElement): number {
+  const transform = window.getComputedStyle(track).transform
+  if (!transform || transform === 'none') return 0
+  try {
+    return new DOMMatrixReadOnly(transform).m41
+  } catch {
+    return 0
+  }
+}
+
+function beginPhotoSlideDrag(videoId: string, event: PointerEvent): void {
+  if (event.pointerType === 'mouse' && event.button !== 0) return
+  const element = photoSlideElements.get(videoId)
+  const track = element?.firstElementChild
+  if (!element || !(track instanceof HTMLElement)) return
+  const currentTransform = window.getComputedStyle(track).transform
+  cancelPhotoSlideAnimation(element)
+  track.style.transform =
+    currentTransform && currentTransform !== 'none'
+      ? currentTransform
+      : `translate3d(-${photoSlideIndex(videoId) * 100}%, 0, 0)`
+  const startTranslateX = photoSlideTranslateX(track)
+  const now = performance.now()
+  photoSlideDrag = {
+    currentX: event.clientX,
+    element,
+    frame: null,
+    lastMoveAt: now,
+    lastX: event.clientX,
+    pointerId: event.pointerId,
+    startIndex: photoSlideIndex(videoId),
+    startTranslateX,
+    startX: event.clientX,
+    track,
+    velocity: 0,
+  }
+  element.classList.add('photo-slideshow--dragging')
+  element.setPointerCapture(event.pointerId)
+}
+
+function renderPhotoSlideDrag(
+  drag: NonNullable<typeof photoSlideDrag>,
+): void {
+  drag.frame = null
+  if (photoSlideDrag !== drag) return
+  const translateX = drag.startTranslateX + (drag.currentX - drag.startX)
+  drag.track.style.transform = `translate3d(${translateX}px, 0, 0)`
+}
+
+function updatePhotoSlideDrag(event: PointerEvent): void {
+  if (!photoSlideDrag || photoSlideDrag.pointerId !== event.pointerId) return
+  event.preventDefault()
+  const samples = event.getCoalescedEvents?.() ?? [event]
+  const sample = samples.at(-1) ?? event
+  const now = performance.now()
+  const elapsed = Math.max(1, now - photoSlideDrag.lastMoveAt)
+  const instantVelocity = (photoSlideDrag.lastX - sample.clientX) / elapsed
+  photoSlideDrag.velocity =
+    photoSlideDrag.velocity * 0.68 + instantVelocity * 0.32
+  photoSlideDrag.currentX = sample.clientX
+  photoSlideDrag.lastX = sample.clientX
+  photoSlideDrag.lastMoveAt = now
+  if (photoSlideDrag.frame === null) {
+    const drag = photoSlideDrag
+    drag.frame = window.requestAnimationFrame(() => renderPhotoSlideDrag(drag))
+  }
+}
+
+function endPhotoSlideDrag(video: FlipTokVideo, event: PointerEvent): void {
+  if (!photoSlideDrag || photoSlideDrag.pointerId !== event.pointerId) return
+  const drag = photoSlideDrag
+  const { element, pointerId } = drag
+  drag.currentX = event.clientX
+  if (drag.frame !== null) window.cancelAnimationFrame(drag.frame)
+  renderPhotoSlideDrag(drag)
+  const lastIndex = videoMedia(video).length - 1
+  const distance = drag.startX - drag.currentX
+  const shouldAdvance =
+    Math.abs(distance) > element.clientWidth * 0.12 ||
+    Math.abs(drag.velocity) > 0.35
+  const direction = Math.sign(distance || drag.velocity)
+  const nextIndex = Math.max(
+    0,
+    Math.min(
+      lastIndex,
+      shouldAdvance ? drag.startIndex + direction : drag.startIndex,
+    ),
+  )
+  if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId)
+  element.classList.remove('photo-slideshow--dragging')
+  photoSlideDrag = null
+  settlePhotoSlide(video.id, element, nextIndex)
+}
+
+function cancelPhotoSlideAnimation(element: HTMLElement): void {
+  const animation = photoSlideAnimations.get(element)
+  animation?.cancel()
+  photoSlideAnimations.delete(element)
+  element.classList.remove('photo-slideshow--settling')
+}
+
+function settlePhotoSlide(
+  videoId: string,
+  element: HTMLElement,
+  index: number,
+): void {
+  cancelPhotoSlideAnimation(element)
+  const track = element.firstElementChild
+  if (!(track instanceof HTMLElement)) return
+  const startTransform = window.getComputedStyle(track).transform
+  const targetTransform = `translate3d(-${index * 100}%, 0, 0)`
+  const animationTarget = `translate3d(${-index * element.clientWidth}px, 0, 0)`
+  updatePhotoSlideIndex(videoId, index)
+  element.classList.add('photo-slideshow--settling')
+  const animation = track.animate(
+    [
+      { transform: startTransform === 'none' ? track.style.transform : startTransform },
+      { transform: animationTarget },
+    ],
+    {
+      duration: 420,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      fill: 'forwards',
+    },
+  )
+  photoSlideAnimations.set(element, animation)
+  animation.onfinish = () => {
+    track.style.transform = targetTransform
+    animation.cancel()
+    photoSlideAnimations.delete(element)
+    element.classList.remove('photo-slideshow--settling')
+  }
+}
+
+function moveComposerPhoto(direction: -1 | 1): void {
+  composerPhotoIndex.value = Math.max(
+    0,
+    Math.min(
+      selectedMediaItems.value.length - 1,
+      composerPhotoIndex.value + direction,
+    ),
+  )
 }
 
 function parseYoutubeVideoId(value: string): string {
@@ -351,7 +557,7 @@ function formatTimestamp(value: number): string {
     timestamp.getFullYear() === now.getFullYear() &&
     timestamp.getMonth() === now.getMonth() &&
     timestamp.getDate() === now.getDate()
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(phone.lang, {
     ...(sameDay ? {} : { day: '2-digit', month: 'short' }),
     hour: '2-digit',
     minute: '2-digit',
@@ -710,7 +916,12 @@ function observeVideos(): void {
             : undefined
           if (item && video) void playFeedVideo(item, video)
           else if (item?.music_source === 'youtube' && item.music_video_id) {
-            void playFlipTokYoutube(id, item.music_video_id, item.music_volume, 0)
+            void playFlipTokYoutube(
+              id,
+              item.music_video_id,
+              item.music_volume,
+              0,
+            )
           } else if (item) {
             const music = musicElements.get(id)
             if (music) void music.play().catch(() => undefined)
@@ -860,10 +1071,14 @@ async function followFromFeed(video: FlipTokVideo): Promise<void> {
   const pending = new Set(followPendingIds.value)
   pending.add(video.id)
   followPendingIds.value = pending
-  await store.follow(video)
+  const followed = await store.follow(video)
   const settled = new Set(followPendingIds.value)
   settled.delete(video.id)
   followPendingIds.value = settled
+  if (!followed) {
+    notify(t('errors.default'))
+    return
+  }
   if (!video.is_following) return
 
   const visible = new Set(followFeedbackIds.value)
@@ -883,7 +1098,11 @@ async function followFromFeed(video: FlipTokVideo): Promise<void> {
 }
 
 async function changeMode(mode: 'for-you' | 'following'): Promise<void> {
-  await store.loadFeed(mode)
+  if (!(await store.loadFeed(mode))) {
+    notify(t('errors.default'))
+    return
+  }
+  feedBeforePreview.value = null
   await nextTick()
   observeVideos()
 }
@@ -892,7 +1111,10 @@ async function openComments(video: FlipTokVideo): Promise<void> {
   selectedVideo.value = video
   replyingTo.value = null
   expandedCommentThreads.value = new Set()
-  await store.loadComments(video.id)
+  if (!(await store.loadComments(video.id))) {
+    notify(t('errors.video_not_found'))
+    return
+  }
   commentsOpen.value = true
 }
 
@@ -926,23 +1148,32 @@ async function submitComment(): Promise<void> {
   await store.loadComments(selectedVideo.value.id)
 }
 
-function chooseMedia(source: 'camera' | 'photos', mediaType: 'photo' | 'video'): void {
-  messageMedia.begin('fliptok:compose', mediaType, '/apps/fliptok?compose=1', mediaType === 'photo' ? 10 : 1, {
-    caption: caption.value,
-    commentsEnabled: commentsEnabled.value,
-    visibility: visibility.value,
-    trimStartMs: trimStartMs.value,
-    trimEndMs: trimEndMs.value,
-    coverTimeMs: coverTimeMs.value,
-    originalVolume: originalVolume.value,
-    musicVolume: musicVolume.value,
-    musicTrack: musicTrack.value,
-    customMusicUrl: customMusicUrl.value,
-    customMusicTitle: customMusicTitle.value,
-    customMusicArtist: customMusicArtist.value,
-    customMusicVideoId: customMusicVideoId.value,
-    selectedMediaItems: selectedMediaItems.value,
-  })
+function chooseMedia(
+  source: 'camera' | 'photos',
+  mediaType: 'photo' | 'video',
+): void {
+  messageMedia.begin(
+    'fliptok:compose',
+    mediaType,
+    '/apps/fliptok?compose=1',
+    mediaType === 'photo' ? 10 : 1,
+    {
+      caption: caption.value,
+      commentsEnabled: commentsEnabled.value,
+      visibility: visibility.value,
+      trimStartMs: trimStartMs.value,
+      trimEndMs: trimEndMs.value,
+      coverTimeMs: coverTimeMs.value,
+      originalVolume: originalVolume.value,
+      musicVolume: musicVolume.value,
+      musicTrack: musicTrack.value,
+      customMusicUrl: customMusicUrl.value,
+      customMusicTitle: customMusicTitle.value,
+      customMusicArtist: customMusicArtist.value,
+      customMusicVideoId: customMusicVideoId.value,
+      selectedMediaItems: selectedMediaItems.value,
+    },
+  )
   void router.push({
     path: `/apps/${source}`,
     query: { mediaAttachment: mediaType },
@@ -959,13 +1190,18 @@ function choosePhotoSlideshow(source: 'camera' | 'photos' = 'photos'): void {
 
 async function publish(draft = false): Promise<void> {
   if (!selectedMedia.value || publishing.value) return
+  const mediaIds = (
+    selectedMediaItems.value.length
+      ? selectedMediaItems.value
+      : [selectedMedia.value]
+  ).map((media) => media.id)
   publishing.value = true
   const response = await nuiCall('fliptok:publish', {
     caption: caption.value,
     commentsEnabled: commentsEnabled.value,
     draft,
     mediaId: selectedMedia.value.id,
-    mediaIds: selectedMediaItems.value.map((media) => media.id),
+    mediaIds,
     mediaType: selectedMediaType.value,
     trimStartMs: trimStartMs.value,
     trimEndMs: trimEndMs.value || null,
@@ -982,6 +1218,7 @@ async function publish(draft = false): Promise<void> {
   resetComposer()
   composeOpen.value = false
   tab.value = 'feed'
+  feedBeforePreview.value = null
   await store.loadFeed('for-you')
   await nextTick()
   observeVideos()
@@ -991,6 +1228,7 @@ async function publish(draft = false): Promise<void> {
 function resetComposer(): void {
   selectedMedia.value = null
   selectedMediaItems.value = []
+  composerPhotoIndex.value = 0
   caption.value = ''
   visibility.value = 'public'
   commentsEnabled.value = true
@@ -1109,8 +1347,19 @@ async function runSearch(): Promise<void> {
 }
 
 function openDiscoveredVideo(video: FlipTokVideo): void {
+  if (!feedBeforePreview.value) feedBeforePreview.value = [...store.feed]
   store.feed = [video]
   tab.value = 'feed'
+}
+
+async function openFeedTab(): Promise<void> {
+  if (feedBeforePreview.value) {
+    store.feed = feedBeforePreview.value
+    feedBeforePreview.value = null
+  }
+  tab.value = 'feed'
+  await nextTick()
+  observeVideos()
 }
 
 async function openProfile(profileId?: number, handle?: string): Promise<void> {
@@ -1119,12 +1368,17 @@ async function openProfile(profileId?: number, handle?: string): Promise<void> {
     commentsOpen.value = false
     actionsOpen.value = false
     tab.value = 'profile'
+    return
   }
+  notify(t('errors.profile_not_found'))
 }
 
 async function openOwnProfile(): Promise<void> {
   if (store.profile) {
-    await store.loadProfile({ profileId: store.profile.id })
+    if (!(await store.loadProfile({ profileId: store.profile.id }))) {
+      notify(t('errors.profile_not_found'))
+      return
+    }
     store.viewedProfile = null
   } else store.showOwnProfile()
   tab.value = 'profile'
@@ -1146,6 +1400,11 @@ async function openConnectionProfile(profile: FlipTokProfile): Promise<void> {
   await openProfile(profile.id)
 }
 
+async function followConnection(profile: FlipTokProfile): Promise<void> {
+  if (profile.is_owner || profile.is_following) return
+  if (!(await store.followProfile(profile))) notify(t('errors.default'))
+}
+
 function openActions(video: FlipTokVideo): void {
   selectedVideo.value = video
   actionsOpen.value = true
@@ -1153,7 +1412,11 @@ function openActions(video: FlipTokVideo): void {
 
 async function shareVideo(video: FlipTokVideo): Promise<void> {
   const response = await nuiCall('fliptok:share', { id: video.id })
-  if (response.success) video.share_count += 1
+  if (!response.success) {
+    notify(t(`errors.${response.error ?? 'default'}`))
+    return
+  }
+  video.share_count += 1
   useEasyShareStore().open({
     appId: 'fliptok',
     copyText: `@${video.handle}: ${video.caption}`,
@@ -1181,12 +1444,14 @@ function shareCurrentProfile(): void {
 }
 
 async function reportVideo(): Promise<void> {
-  if (!selectedVideo.value) return
+  if (!selectedVideo.value || reportSubmitting.value) return
+  reportSubmitting.value = true
   const response = await nuiCall('fliptok:report', {
     details: reportDetails.value.trim(),
     id: selectedVideo.value.id,
     reason: reportReason.value,
   })
+  reportSubmitting.value = false
   if (!response.success)
     return notify(t(`errors.${response.error ?? 'default'}`))
   actionsOpen.value = false
@@ -1211,7 +1476,7 @@ async function blockCreator(): Promise<void> {
 async function blockCurrentProfile(): Promise<void> {
   if (!currentProfile.value || currentProfile.value.is_owner) return
   if (await store.blockProfile(currentProfile.value.id)) {
-    openOwnProfile()
+    await openOwnProfile()
     notify(t('blocked'))
   }
 }
@@ -1254,11 +1519,14 @@ function removeProfilePhoto(): void {
 }
 
 async function saveProfile(): Promise<void> {
+  if (profileSaving.value) return
+  profileSaving.value = true
   const response = await nuiCall<FlipTokProfile>('fliptok:update-profile', {
     ...profileDraft.value,
     avatarMediaId:
       selectedProfilePhoto.value?.id ?? profileDraft.value.avatarMediaId,
   })
+  profileSaving.value = false
   if (!response.success || !response.data)
     return notify(t(`errors.${response.error ?? 'default'}`))
   store.profile = response.data
@@ -1267,11 +1535,41 @@ async function saveProfile(): Promise<void> {
   profileEditOpen.value = false
 }
 
+async function followCurrentProfile(): Promise<void> {
+  const profile = currentProfile.value
+  if (!profile || profile.is_owner || profileFollowPending.value) return
+  profileFollowPending.value = true
+  const success = await store.followProfile(profile)
+  profileFollowPending.value = false
+  if (!success) notify(t('errors.default'))
+}
+
+function requestDeleteVideo(): void {
+  if (!selectedVideo.value?.is_owner) return
+  actionsOpen.value = false
+  deleteDialogOpen.value = true
+}
+
+async function confirmDeleteVideo(): Promise<void> {
+  if (!selectedVideo.value || deleteSubmitting.value) return
+  deleteSubmitting.value = true
+  const deleted = await store.deleteVideo(selectedVideo.value.id)
+  deleteSubmitting.value = false
+  if (!deleted) {
+    notify(t('errors.video_not_found'))
+    return
+  }
+  deleteDialogOpen.value = false
+  selectedVideo.value = null
+  notify(t('videoDeleted'))
+}
+
 watch(tab, async (value) => {
   videoElements.forEach((video) => video.pause())
   musicElements.forEach((audio) => audio.pause())
   pauseFlipTokYoutube()
-  if (value === 'activity') await store.loadActivities()
+  if (value === 'activity' && !(await store.loadActivities()))
+    notify(t('errors.default'))
   if (value === 'discover' && store.searchResults.length === 0)
     await runSearch()
   if (value === 'feed') {
@@ -1279,6 +1577,22 @@ watch(tab, async (value) => {
     observeVideos()
   }
 })
+
+watch(commentsOpen, (opened) => {
+  if (opened) return
+  expandedCommentThreads.value = new Set()
+  replyingTo.value = null
+})
+
+watch(
+  () => selectedMediaItems.value.length,
+  (length) => {
+    composerPhotoIndex.value = Math.max(
+      0,
+      Math.min(composerPhotoIndex.value, length - 1),
+    )
+  },
+)
 
 watch(
   () => store.authenticated,
@@ -1290,11 +1604,11 @@ watch(
 )
 
 watch(search, () => {
-  window.clearTimeout((runSearch as unknown as { timer?: number }).timer)
-  ;(runSearch as unknown as { timer?: number }).timer = window.setTimeout(
-    runSearch,
-    250,
-  )
+  if (searchTimer !== null) window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(() => {
+    searchTimer = null
+    void runSearch()
+  }, 250)
 })
 
 watch(originalVolume, (value) => {
@@ -1368,6 +1682,7 @@ onMounted(async () => {
       : (selection.context?.selectedMediaItems ?? [])
     selectedMedia.value = restoredMedia[0] ?? null
     selectedMediaItems.value = restoredMedia
+    composerPhotoIndex.value = 0
     caption.value = selection.context?.caption ?? ''
     commentsEnabled.value = selection.context?.commentsEnabled ?? true
     visibility.value = selection.context?.visibility ?? 'public'
@@ -1387,7 +1702,8 @@ onMounted(async () => {
     composeOpen.value = true
   }
   await store.bootstrap()
-  if (route.query.compose === '1' && store.authenticated) composeOpen.value = true
+  if (route.query.compose === '1' && store.authenticated)
+    composeOpen.value = true
   const easyShareId = String(route.query.easyShareId ?? '')
   if (easyShareId && route.query.easyShareKind === 'profile') {
     const profileId = Number(easyShareId)
@@ -1410,9 +1726,23 @@ onBeforeUnmount(() => {
   if (likePulseTimer !== null) window.clearTimeout(likePulseTimer)
   if (commentLikePulseTimer !== null) window.clearTimeout(commentLikePulseTimer)
   if (reactionPulseTimer !== null) window.clearTimeout(reactionPulseTimer)
+  if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
+  if (searchTimer !== null) window.clearTimeout(searchTimer)
   followFeedbackTimers.forEach((timer) => window.clearTimeout(timer))
   followFeedbackTimers.clear()
+  if (photoSlideDrag) {
+    if (photoSlideDrag.frame !== null) {
+      window.cancelAnimationFrame(photoSlideDrag.frame)
+    }
+    if (photoSlideDrag.element.hasPointerCapture(photoSlideDrag.pointerId)) {
+      photoSlideDrag.element.releasePointerCapture(photoSlideDrag.pointerId)
+    }
+    photoSlideDrag.element.classList.remove('photo-slideshow--dragging')
+    photoSlideDrag = null
+  }
+  Array.from(photoSlideAnimations.keys()).forEach(cancelPhotoSlideAnimation)
   feedCards.clear()
+  photoSlideElements.clear()
   videoElements.forEach((video) => video.pause())
   destroyFlipTokYoutube()
 })
@@ -1567,15 +1897,33 @@ onBeforeUnmount(() => {
           :key="video.id"
           :ref="(el) => setFeedCard(video.id, el)"
           class="video-card"
+          :class="{ 'video-card--photo': video.media_type === 'photo' }"
         >
-          <div v-if="video.media_type === 'photo'" class="photo-slideshow">
-            <img
-              v-for="media in videoMedia(video)"
-              :key="media.id || media.url"
-              :src="media.url"
-              alt=""
-            />
+          <div
+            v-if="video.media_type === 'photo'"
+            :ref="(el) => setPhotoSlideElement(video.id, el)"
+            class="photo-slideshow"
+            @pointerdown="beginPhotoSlideDrag(video.id, $event)"
+            @pointermove="updatePhotoSlideDrag"
+            @pointerup="endPhotoSlideDrag(video, $event)"
+            @pointercancel="endPhotoSlideDrag(video, $event)"
+          >
+            <div class="photo-slideshow__track">
+              <img
+                v-for="media in videoMedia(video)"
+                :key="media.id || media.url"
+                :src="media.url"
+                alt=""
+              />
+            </div>
           </div>
+          <span
+            v-if="video.media_type === 'photo' && videoMedia(video).length > 1"
+            class="photo-slideshow__count"
+          >
+            {{ photoSlideIndex(video.id) + 1 }} /
+            {{ videoMedia(video).length }}
+          </span>
           <video
             v-else
             :ref="(el) => setVideoElement(video.id, el)"
@@ -1604,8 +1952,13 @@ onBeforeUnmount(() => {
           />
           <div
             class="video-shade"
-            @click="handleVideoClick(video)"
-            @dblclick.prevent="handleVideoDoubleClick(video)"
+            :class="{
+              'video-shade--passive': video.media_type === 'photo',
+            }"
+            @click="video.media_type !== 'photo' && handleVideoClick(video)"
+            @dblclick.prevent="
+              video.media_type !== 'photo' && handleVideoDoubleClick(video)
+            "
           />
           <button
             v-if="playbackFailedIds.has(video.id)"
@@ -1671,7 +2024,11 @@ onBeforeUnmount(() => {
           </section>
           <aside class="video-actions">
             <div class="video-profile-action">
-              <button class="avatar" @click="openProfile(video.profile_id)">
+              <button
+                class="avatar"
+                :aria-label="video.display_name"
+                @click="openProfile(video.profile_id)"
+              >
                 <img v-if="video.avatar_url" :src="video.avatar_url" alt="" />
                 <template v-else>{{ initials(video.display_name) }}</template>
               </button>
@@ -1729,7 +2086,9 @@ onBeforeUnmount(() => {
             <button @click="shareVideo(video)">
               <Share2 /><span>{{ compactCount(video.share_count) }}</span>
             </button>
-            <button @click="openActions(video)"><MoreHorizontal /></button>
+            <button :aria-label="t('more')" @click="openActions(video)">
+              <MoreHorizontal />
+            </button>
           </aside>
         </article>
         <div v-if="!store.feed.length" class="empty-feed">
@@ -1740,7 +2099,11 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else-if="tab === 'discover'">
-      <SkyNavbar class="fliptok-navbar" :title="t('discover')" variant="medium">
+      <SkyNavbar
+        class="fliptok-navbar fliptok-discover-navbar"
+        :title="t('discover')"
+        variant="medium"
+      >
         <template #subnavbar>
           <SkySearchbar
             v-model="search"
@@ -1753,9 +2116,15 @@ onBeforeUnmount(() => {
       </SkyNavbar>
       <SkyScrollArea padded with-tabbar class="light-screen discover-screen">
         <div class="trend-pills">
-          <SkyChip component="button" type="button"># LosSantos</SkyChip>
-          <SkyChip component="button" type="button"># Roleplay</SkyChip>
-          <SkyChip component="button" type="button"># Trending</SkyChip>
+          <SkyChip
+            v-for="trend in discoveryTags"
+            :key="trend.value"
+            component="button"
+            type="button"
+            @click="search = trend.value"
+          >
+            {{ t(trend.labelKey) }}
+          </SkyChip>
         </div>
         <div class="video-grid">
           <button
@@ -1763,11 +2132,7 @@ onBeforeUnmount(() => {
             :key="video.id"
             @click="openDiscoveredVideo(video)"
           >
-            <img
-              v-if="video.media_type === 'photo'"
-              :src="video.url"
-              alt=""
-            />
+            <img v-if="video.media_type === 'photo'" :src="video.url" alt="" />
             <video
               v-else
               :src="video.url"
@@ -1784,7 +2149,11 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else-if="tab === 'activity'">
-      <SkyNavbar class="fliptok-navbar" :title="t('activity')" variant="large" />
+      <SkyNavbar
+        class="fliptok-navbar"
+        :title="t('activity')"
+        variant="large"
+      />
       <SkyScrollArea padded with-tabbar class="light-screen activity-list">
         <article
           v-for="activity in store.activities"
@@ -1810,7 +2179,7 @@ onBeforeUnmount(() => {
 
     <template v-else-if="tab === 'profile'">
       <SkyNavbar
-        class="fliptok-navbar"
+        class="fliptok-navbar fliptok-profile-navbar"
         title=""
         :show-back="Boolean(store.viewedProfile)"
         :back-label="phone.t('Common.back')"
@@ -1878,7 +2247,11 @@ onBeforeUnmount(() => {
         <p class="bio">{{ currentProfile.bio || t('emptyBio') }}</p>
         <div v-if="!currentProfile.is_owner" class="profile-actions">
           <template>
-            <SkyButton rounded @click="store.followProfile(currentProfile)">
+            <SkyButton
+              rounded
+              :disabled="profileFollowPending"
+              @click="followCurrentProfile"
+            >
               {{ currentProfile.is_following ? t('unfollow') : t('follow') }}
             </SkyButton>
             <SkyButton
@@ -1896,11 +2269,7 @@ onBeforeUnmount(() => {
             :key="video.id"
             @click="openDiscoveredVideo(video)"
           >
-            <img
-              v-if="video.media_type === 'photo'"
-              :src="video.url"
-              alt=""
-            />
+            <img v-if="video.media_type === 'photo'" :src="video.url" alt="" />
             <video
               v-else
               :src="video.url"
@@ -1939,7 +2308,7 @@ onBeforeUnmount(() => {
         <SkySegmentedButton
           :active="tab === 'feed'"
           class="main-tab"
-          @click="tab = 'feed'"
+          @click="openFeedTab"
         >
           <Home /><small>{{ t('home') }}</small>
         </SkySegmentedButton>
@@ -2021,11 +2390,44 @@ onBeforeUnmount(() => {
           />
           <div v-else class="compose-photo-preview">
             <img
-              v-for="media in selectedMediaItems"
-              :key="media.id"
-              :src="media.url"
+              v-if="selectedComposerPhoto"
+              :key="selectedComposerPhoto.id"
+              :src="selectedComposerPhoto.url"
               alt=""
             />
+            <template v-if="selectedMediaItems.length > 1">
+              <button
+                type="button"
+                class="compose-photo-preview__arrow compose-photo-preview__arrow--previous"
+                :disabled="composerPhotoIndex === 0"
+                :aria-label="t('previousPhoto')"
+                @click="moveComposerPhoto(-1)"
+              >
+                <ChevronLeft />
+              </button>
+              <button
+                type="button"
+                class="compose-photo-preview__arrow compose-photo-preview__arrow--next"
+                :disabled="composerPhotoIndex === selectedMediaItems.length - 1"
+                :aria-label="t('nextPhoto')"
+                @click="moveComposerPhoto(1)"
+              >
+                <ChevronRight />
+              </button>
+              <span class="compose-photo-preview__count">
+                {{ composerPhotoIndex + 1 }} / {{ selectedMediaItems.length }}
+              </span>
+              <div class="compose-photo-preview__dots" aria-hidden="true">
+                <span
+                  v-for="media in selectedMediaItems"
+                  :key="media.id"
+                  :class="{
+                    active:
+                      selectedMediaItems[composerPhotoIndex]?.id === media.id,
+                  }"
+                />
+              </div>
+            </template>
           </div>
           <div class="media-preview__actions">
             <SkyButton
@@ -2211,8 +2613,14 @@ onBeforeUnmount(() => {
         @back="profileEditOpen = false"
       >
         <template #right>
-          <SkyButton small rounded class="done-button" @click="saveProfile">
-            {{ t('done') }}
+          <SkyButton
+            small
+            rounded
+            class="done-button"
+            :disabled="profileSaving"
+            @click="saveProfile"
+          >
+            {{ profileSaving ? t('savingProfile') : t('done') }}
           </SkyButton>
         </template>
       </SkyNavbar>
@@ -2277,6 +2685,7 @@ onBeforeUnmount(() => {
           />
           <SkyListItem
             link
+            link-component="button"
             :title="t('accountType')"
             :after="t(`accountTypes.${profileDraft.accountType}`)"
             @click="accountTypeSheetOpen = true"
@@ -2400,7 +2809,9 @@ onBeforeUnmount(() => {
                 <span></span>
                 {{
                   expandedCommentThreads.has(thread.comment.id)
-                    ? t('hideReplies')
+                    ? t('hideReplies', {
+                        count: String(thread.replies.length),
+                      })
                     : t('showReplies', {
                         count: String(thread.replies.length),
                       })
@@ -2463,7 +2874,11 @@ onBeforeUnmount(() => {
               {{ t('noComments') }}
             </div>
           </div>
-          <form class="comments-composer" @submit.prevent="submitComment">
+          <form
+            v-if="selectedVideo?.comments_enabled"
+            class="comments-composer"
+            @submit.prevent="submitComment"
+          >
             <div v-if="replyingTo" class="replying-to">
               <span>{{
                 t('replyingTo', { handle: `@${replyingTo.handle}` })
@@ -2498,21 +2913,39 @@ onBeforeUnmount(() => {
               </template>
             </SkyMessagebar>
           </form>
+          <p v-else class="comments-disabled">
+            {{ t('errors.comments_disabled') }}
+          </p>
         </div>
       </SkySheet>
     </div>
 
     <div v-if="actionsOpen" class="fliptok-sheet">
-      <SkySheet :opened="actionsOpen" @backdropclick="actionsOpen = false"
-        ><div class="sheet-handle" />
+      <SkySheet
+        :opened="actionsOpen"
+        grabber-clickable
+        swipe-to-close
+        @backdropclick="actionsOpen = false"
+        @grabberclick="actionsOpen = false"
+        @swipeclose="actionsOpen = false"
+      >
         <div class="action-sheet">
           <SkyList inset strong
             ><SkyListItem
+              v-if="selectedVideo?.is_owner"
+              link
+              link-component="button"
+              content-class="w-full"
+              class="danger"
+              :title="t('removeVideo')"
+              @click="requestDeleteVideo" /><SkyListItem
+              v-if="!selectedVideo?.is_owner"
               link
               link-component="button"
               content-class="w-full"
               :title="t('report')"
               @click="openReport" /><SkyListItem
+              v-if="!selectedVideo?.is_owner"
               link
               link-component="button"
               content-class="w-full"
@@ -2522,8 +2955,8 @@ onBeforeUnmount(() => {
           ><SkyButton large rounded tonal @click="actionsOpen = false">{{
             t('cancel')
           }}</SkyButton>
-        </div></SkySheet
-      >
+        </div>
+      </SkySheet>
     </div>
     <div v-if="reportSheetOpen" class="fliptok-sheet">
       <SkySheet
@@ -2564,12 +2997,19 @@ onBeforeUnmount(() => {
             />
           </SkyList>
           <div class="report-sheet__actions">
-            <SkyButton rounded @click="reportVideo">{{
-              t('submitReport')
-            }}</SkyButton>
-            <SkyButton rounded tonal @click="reportSheetOpen = false">{{
-              t('cancel')
-            }}</SkyButton>
+            <SkyButton
+              rounded
+              :disabled="reportSubmitting"
+              @click="reportVideo"
+              >{{ t('submitReport') }}</SkyButton
+            >
+            <SkyButton
+              rounded
+              tonal
+              :disabled="reportSubmitting"
+              @click="reportSheetOpen = false"
+              >{{ t('cancel') }}</SkyButton
+            >
           </div>
         </div>
       </SkySheet>
@@ -2577,9 +3017,12 @@ onBeforeUnmount(() => {
     <div v-if="musicSheetOpen" class="fliptok-sheet">
       <SkySheet
         :opened="musicSheetOpen"
+        grabber-clickable
+        swipe-to-close
         @backdropclick="musicSheetOpen = false"
+        @grabberclick="musicSheetOpen = false"
+        @swipeclose="musicSheetOpen = false"
       >
-        <div class="sheet-handle" />
         <div class="selection-sheet music-selection-sheet">
           <h3>{{ t('chooseSound') }}</h3>
           <SkyList inset strong>
@@ -2699,10 +3142,13 @@ onBeforeUnmount(() => {
       <SkySheet
         :opened="profilePhotoSheetOpen"
         :aria-label="t('profilePhoto')"
+        grabber-clickable
+        swipe-to-close
         @backdropclick="profilePhotoSheetOpen = false"
         @escape="profilePhotoSheetOpen = false"
+        @grabberclick="profilePhotoSheetOpen = false"
+        @swipeclose="profilePhotoSheetOpen = false"
       >
-        <div class="sheet-handle" />
         <div class="selection-sheet profile-photo-sheet">
           <h3>{{ t('profilePhoto') }}</h3>
           <SkyList inset strong>
@@ -2746,8 +3192,12 @@ onBeforeUnmount(() => {
     <div v-if="accountTypeSheetOpen" class="fliptok-sheet">
       <SkySheet
         :opened="accountTypeSheetOpen"
+        grabber-clickable
+        swipe-to-close
         @backdropclick="accountTypeSheetOpen = false"
-        ><div class="sheet-handle" />
+        @grabberclick="accountTypeSheetOpen = false"
+        @swipeclose="accountTypeSheetOpen = false"
+      >
         <div class="selection-sheet">
           <h3>{{ t('accountType') }}</h3>
           <SkyList inset strong
@@ -2794,13 +3244,20 @@ onBeforeUnmount(() => {
           <SkySegmentedButton
             :active="connectionsMode === 'followers'"
             @click="openConnections('followers')"
-          >{{ t('followers') }}</SkySegmentedButton>
+            >{{ t('followers') }}</SkySegmentedButton
+          >
           <SkySegmentedButton
             :active="connectionsMode === 'following'"
             @click="openConnections('following')"
-          >{{ t('following') }}</SkySegmentedButton>
+            >{{ t('following') }}</SkySegmentedButton
+          >
         </SkySegmented>
-        <SkyList v-if="store.connections.length" inset strong class="connections-list">
+        <SkyList
+          v-if="store.connections.length"
+          inset
+          strong
+          class="connections-list"
+        >
           <SkyListItem
             v-for="profile in store.connections"
             :key="profile.id"
@@ -2815,8 +3272,14 @@ onBeforeUnmount(() => {
                 @click="openConnectionProfile(profile)"
               >
                 <span class="connection-avatar">
-                  <img v-if="profile.avatar_url" :src="profile.avatar_url" alt="" />
-                  <template v-else>{{ initials(profile.display_name) }}</template>
+                  <img
+                    v-if="profile.avatar_url"
+                    :src="profile.avatar_url"
+                    alt=""
+                  />
+                  <template v-else>{{
+                    initials(profile.display_name)
+                  }}</template>
                 </span>
               </button>
             </template>
@@ -2826,8 +3289,12 @@ onBeforeUnmount(() => {
                 small
                 rounded
                 :tonal="profile.is_following"
-                @click="store.followProfile(profile)"
-              >{{ profile.is_following ? t('unfollow') : t('follow') }}</SkyButton>
+                :disabled="profile.is_following"
+                @click="followConnection(profile)"
+                >{{
+                  profile.is_following ? t('unfollow') : t('follow')
+                }}</SkyButton
+              >
             </template>
           </SkyListItem>
         </SkyList>
@@ -2856,6 +3323,29 @@ onBeforeUnmount(() => {
           @click="confirmLogout"
         >
           {{ logoutSubmitting ? t('signingOut') : t('logout') }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
+    <SkyDialog
+      :opened="deleteDialogOpen"
+      @backdropclick="!deleteSubmitting && (deleteDialogOpen = false)"
+    >
+      <template #title>{{ t('deleteVideoTitle') }}</template>
+      <p>{{ t('deleteVideoBody') }}</p>
+      <template #buttons>
+        <SkyDialogButton
+          :disabled="deleteSubmitting"
+          @click="deleteDialogOpen = false"
+        >
+          {{ t('cancel') }}
+        </SkyDialogButton>
+        <SkyDialogButton
+          strong
+          class="logout-dialog-button"
+          :disabled="deleteSubmitting"
+          @click="confirmDeleteVideo"
+        >
+          {{ deleteSubmitting ? t('deletingVideo') : t('removeVideo') }}
         </SkyDialogButton>
       </template>
     </SkyDialog>
@@ -4821,6 +5311,16 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
+.comments-disabled {
+  margin: 0;
+  padding: var(--sky-space-3) var(--sky-space-2)
+    calc(var(--sky-safe-area-bottom) + var(--sky-space-3));
+  border-top: 1px solid var(--sky-hairline);
+  color: var(--sky-muted);
+  font-size: 10px;
+  text-align: center;
+}
+
 .replying-to {
   min-height: 20px;
   padding: 0 var(--sky-space-2) 2px;
@@ -4891,26 +5391,51 @@ onBeforeUnmount(() => {
 
 .photo-slideshow,
 .compose-photo-preview {
-  display: flex;
   width: 100%;
   height: 100%;
+}
+
+.photo-slideshow {
+  overflow: hidden;
+}
+
+.photo-slideshow__track,
+.compose-photo-preview {
+  display: flex;
+}
+
+.photo-slideshow__track {
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
+.compose-photo-preview {
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
 }
 
-.photo-slideshow::-webkit-scrollbar,
 .compose-photo-preview::-webkit-scrollbar {
   display: none;
 }
 
-.photo-slideshow img,
+.photo-slideshow__track img,
 .compose-photo-preview img {
   width: 100%;
   height: 100%;
   flex: 0 0 100%;
   object-fit: cover;
   scroll-snap-align: center;
+}
+
+.photo-slideshow__track img {
+  backface-visibility: hidden;
+  pointer-events: none;
+  transform: translateZ(0);
+  -webkit-user-drag: none;
 }
 
 .photo-slideshow__count {
@@ -4948,11 +5473,21 @@ onBeforeUnmount(() => {
 }
 
 @keyframes follow-confirmed-fade-centered {
-  0%, 48% { opacity: 1; transform: translateX(-50%) scale(1); }
-  100% { opacity: 0; transform: translateX(-50%) scale(0.72); }
+  0%,
+  48% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.72);
+  }
 }
 
 .video-actions button {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
   gap: 2px;
 }
 
@@ -5085,6 +5620,23 @@ onBeforeUnmount(() => {
   color: var(--sky-app-accent);
 }
 
+.media-picker > header strong,
+.media-picker > header span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.media-picker > header strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.media-picker > header span {
+  color: var(--sky-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 .media-source-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -5106,7 +5658,13 @@ onBeforeUnmount(() => {
   color: var(--sky-text);
   font: inherit;
   font-size: 9px;
+  line-height: 1.2;
   text-align: center;
+}
+
+.media-source-grid button strong {
+  width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .media-source-grid svg {
@@ -5269,5 +5827,230 @@ onBeforeUnmount(() => {
   width: var(--sky-touch-target);
   min-width: var(--sky-touch-target);
   flex: 0 0 var(--sky-touch-target);
+}
+
+/* Feed interaction and photo posts stay inside the phone viewport. */
+.video-feed {
+  overscroll-behavior-y: contain;
+  contain: layout paint;
+}
+
+.video-card {
+  block-size: 100%;
+  inline-size: 100%;
+}
+
+.video-shade--passive {
+  pointer-events: none;
+}
+
+.photo-slideshow {
+  position: absolute;
+  inset: 0;
+  overscroll-behavior-inline: contain;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  contain: layout paint;
+}
+
+.compose-photo-preview__arrow {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 50%;
+  background: rgb(14 14 16 / 58%);
+  color: #fff;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.photo-slideshow--dragging,
+.photo-slideshow--settling {
+  cursor: grabbing;
+}
+
+.compose-photo-preview__arrow svg {
+  width: 17px;
+  height: 17px;
+}
+
+.compose-photo-preview__arrow:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.photo-slideshow__count {
+  top: calc(var(--sky-safe-area-top) + 58px);
+  right: 12px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* The avatar follow control must not inherit the generic action height. */
+.video-actions .follow-dot {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  padding: 0 !important;
+  display: grid;
+  place-items: center;
+  border: 2px solid #111;
+  border-radius: 50% !important;
+  background: var(--sky-app-accent) !important;
+}
+
+.video-actions .follow-dot svg {
+  width: 11px !important;
+  height: 11px !important;
+  margin: 0;
+}
+
+/* No unused action row is reserved above Discover. */
+.fliptok-discover-navbar.sky-navbar--no-navigation {
+  padding-top: calc(var(--sky-navbar-safe-area-top) + var(--sky-space-2));
+}
+
+.compose-photo-preview {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: #111;
+}
+
+.compose-photo-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.compose-photo-preview__arrow {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.compose-photo-preview__arrow--previous {
+  left: 10px;
+}
+
+.compose-photo-preview__arrow--next {
+  right: 10px;
+}
+
+.compose-photo-preview__count {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  right: 10px;
+  padding: 4px 8px;
+  border-radius: var(--sky-radius-pill);
+  background: rgb(14 14 16 / 58%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  backdrop-filter: blur(10px);
+}
+
+.compose-photo-preview__dots {
+  position: absolute;
+  z-index: 2;
+  right: 42px;
+  bottom: 10px;
+  left: 42px;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+
+.compose-photo-preview__dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 48%);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 36%);
+}
+
+.compose-photo-preview__dots span.active {
+  width: 13px;
+  border-radius: var(--sky-radius-pill);
+  background: #fff;
+}
+
+/* Login and register center in the remaining phone area and still scroll. */
+.fliptok-auth {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.fliptok-auth__navbar {
+  flex: 0 0 auto;
+}
+
+.fliptok-auth__body {
+  min-height: 0;
+  padding-top: var(--sky-space-3);
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.fliptok-auth__glass {
+  margin-block: auto;
+}
+
+/* Profile actions are separate icon surfaces instead of one shared pill. */
+.fliptok-profile-navbar :deep(.sky-navbar__right) {
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+
+.profile-navbar-actions {
+  gap: 6px;
+}
+
+.profile-navbar-actions :deep(.sky-link) {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-control);
+  background: var(--sky-surface);
+  color: var(--sky-text);
+  box-shadow: var(--sky-shadow-thumb);
+}
+
+.connections-list :deep(.sky-list-item__media) {
+  width: var(--sky-touch-target);
+  min-width: var(--sky-touch-target);
+  display: grid;
+  place-items: center;
+}
+
+.connections-list .connection-profile {
+  height: var(--sky-touch-target);
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.connections-list .connection-avatar {
+  line-height: 1;
+  text-align: center;
+}
+
+.connections-list :deep(.sky-button:disabled) {
+  opacity: 0.72;
 }
 </style>
