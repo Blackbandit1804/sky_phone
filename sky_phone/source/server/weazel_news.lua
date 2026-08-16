@@ -17,6 +17,7 @@ if type(config.Enabled) ~= "boolean" then
 end
 require_integer_config("PageSize", 1, 100)
 require_integer_config("MaximumOffset", 0, 1000000)
+require_integer_config("MaximumImages", 1, 6)
 require_integer_config("SearchMaxLength", 1, 256)
 require_integer_config("DraftTitleMinLength", 1, 160)
 require_integer_config("DraftBodyMinLength", 1, 12000)
@@ -219,6 +220,7 @@ local function article_dto(row)
         category = row.category,
         imageUrl = row.image_url,
         imageMediaId = row.image_media_id and tonumber(row.image_media_id) or nil,
+        images = {},
         authorName = row.author_name,
         createdAt = created_at * 1000,
         updatedAt = updated_at * 1000,
@@ -226,6 +228,54 @@ local function article_dto(row)
         status = row.status,
         revision = tonumber(row.revision) or 1,
     }
+end
+
+local function attach_article_images(articles)
+    if #articles < 1 then
+        return articles
+    end
+
+    local placeholders = {}
+    local article_ids = {}
+    local articles_by_id = {}
+    for index, article in ipairs(articles) do
+        placeholders[index] = "?"
+        article_ids[index] = article.id
+        article.images = {}
+        articles_by_id[article.id] = article
+    end
+
+    local rows = Bridge.Database.Query(([[
+        SELECT relation.`article_id`, relation.`media_id`, relation.`position`, media.`url`
+        FROM `sky_phone_weazel_article_media` relation
+        JOIN `sky_phone_media` media
+            ON media.`id` = relation.`media_id` AND media.`media_type` = 'photo'
+        WHERE relation.`article_id` IN (%s)
+        ORDER BY relation.`article_id`, relation.`position`, relation.`id`
+    ]]):format(table.concat(placeholders, ", ")), article_ids)
+    for _, row in ipairs(rows) do
+        local article = articles_by_id[row.article_id]
+        local media_id = tonumber(row.media_id)
+        if article and media_id and type(row.url) == "string" then
+            article.images[#article.images + 1] = {
+                mediaId = media_id,
+                url = row.url,
+            }
+        end
+    end
+
+    for _, article in ipairs(articles) do
+        if #article.images < 1 and article.imageMediaId and article.imageUrl then
+            article.images[1] = {
+                mediaId = article.imageMediaId,
+                url = article.imageUrl,
+            }
+        end
+        local cover = article.images[1]
+        article.imageMediaId = cover and cover.mediaId or nil
+        article.imageUrl = cover and cover.url or nil
+    end
+    return articles
 end
 
 local function load_article(id, include_drafts)
@@ -237,7 +287,8 @@ local function load_article(id, include_drafts)
         WHERE article.`id` = ? AND article.`deleted_at` IS NULL%s
         LIMIT 1
     ]]):format(article_detail_columns, visibility), { id })
-    return article_dto(rows[1])
+    local article = article_dto(rows[1])
+    return article and attach_article_images({ article })[1] or nil
 end
 
 local function query_articles(where_clause, parameters, order_clause, offset)
@@ -264,10 +315,42 @@ local function query_articles(where_clause, parameters, order_clause, offset)
     for _, row in ipairs(rows) do
         articles[#articles + 1] = article_dto(row)
     end
-    return articles, has_more
+    return attach_article_images(articles), has_more
 end
 
-local function validate_article(source, data, retained_media_id)
+local function validate_article_media(source, data, retained_media_ids)
+    local values = data.imageMediaIds
+    if values == nil then
+        values = data.imageMediaId ~= nil and { data.imageMediaId } or {}
+    end
+    if type(values) ~= "table" or #values > config.MaximumImages then
+        return nil
+    end
+    for key in pairs(values) do
+        if type(key) ~= "number" or key < 1 or key > #values or key ~= math.floor(key) then
+            return nil
+        end
+    end
+
+    local media_ids = {}
+    local seen = {}
+    for index, value in ipairs(values) do
+        local media_id = valid_integer(value, 1, 9007199254740991)
+        if not media_id or seen[media_id] then
+            return nil
+        end
+        if not retained_media_ids[media_id]
+            and not SkyPhoneMedia.ResolveOwnedMedia(source, tostring(media_id), "photo")
+        then
+            return nil
+        end
+        seen[media_id] = true
+        media_ids[index] = media_id
+    end
+    return media_ids
+end
+
+local function validate_article(source, data, retained_media_ids)
     if type(data) ~= "table" then
         return nil, "invalid_article"
     end
@@ -287,27 +370,38 @@ local function validate_article(source, data, retained_media_id)
         return nil, status == "draft" and "invalid_draft" or "invalid_publish"
     end
 
-    local media_id
-    if data.imageMediaId ~= nil then
-        media_id = valid_integer(data.imageMediaId, 1, 9007199254740991)
-        if not media_id then
-            return nil, "invalid_attachment"
-        end
-        if media_id ~= retained_media_id then
-            local url = SkyPhoneMedia.ResolveOwnedMedia(source, tostring(media_id), "photo")
-            if not url then
-                return nil, "invalid_attachment"
-            end
-        end
+    local media_ids = validate_article_media(source, data, retained_media_ids or {})
+    if not media_ids then
+        return nil, "invalid_attachment"
     end
     return {
         title = title,
         body = body,
         excerpt = make_excerpt(body),
         category = data.category,
-        image_media_id = media_id,
+        image_media_id = media_ids[1],
+        image_media_ids = media_ids,
         status = status,
     }
+end
+
+local function article_matches(article, expected, revision)
+    if not article or article.revision ~= revision
+        or article.title ~= expected.title
+        or article.body ~= expected.body
+        or article.excerpt ~= expected.excerpt
+        or article.category ~= expected.category
+        or article.status ~= expected.status
+        or #article.images ~= #expected.image_media_ids
+    then
+        return false
+    end
+    for index, media_id in ipairs(expected.image_media_ids) do
+        if article.images[index].mediaId ~= media_id then
+            return false
+        end
+    end
+    return true
 end
 
 Bridge.Callbacks.Register("sky_phone:weazel-news:context", function(source)
@@ -340,6 +434,7 @@ Bridge.Callbacks.Register("sky_phone:weazel-news:context", function(source)
             jobLabel = access and access.job_label or nil,
             jobGradeLabel = access and access.grade_label or nil,
             categories = category_context,
+            maximumImages = config.MaximumImages,
         },
     }
 end)
@@ -466,24 +561,39 @@ Bridge.Callbacks.Register("sky_phone:weazel-news:create", function(source, data)
     if not valid_uuid(id) then
         error("[sky_phone] Database did not generate a Weazel News article id.")
     end
-    Bridge.Database.Query([[
-        INSERT INTO `sky_phone_weazel_articles`
-            (`id`, `title`, `body`, `excerpt`, `category`, `image_media_id`, `author_identifier`,
-                `author_name`, `updated_by_identifier`, `status`, `published_at`)
-        VALUES (?, ?, ?, ?, ?, NULLIF(?, 0), ?, ?, ?, ?, IF(? = 'published', CURRENT_TIMESTAMP, NULL))
-    ]], {
-        id,
-        article.title,
-        article.body,
-        article.excerpt,
-        article.category,
-        article.image_media_id or 0,
-        actor.identifier,
-        actor.name,
-        actor.identifier,
-        article.status,
-        article.status,
-    })
+    local statements = {{
+        query = [[
+            INSERT INTO `sky_phone_weazel_articles`
+                (`id`, `title`, `body`, `excerpt`, `category`, `image_media_id`, `author_identifier`,
+                    `author_name`, `updated_by_identifier`, `status`, `published_at`)
+            VALUES (?, ?, ?, ?, ?, NULLIF(?, 0), ?, ?, ?, ?, IF(? = 'published', CURRENT_TIMESTAMP, NULL))
+        ]],
+        params = {
+            id,
+            article.title,
+            article.body,
+            article.excerpt,
+            article.category,
+            article.image_media_id or 0,
+            actor.identifier,
+            actor.name,
+            actor.identifier,
+            article.status,
+            article.status,
+        },
+    }}
+    for position, media_id in ipairs(article.image_media_ids) do
+        statements[#statements + 1] = {
+            query = [[
+                INSERT INTO `sky_phone_weazel_article_media` (`article_id`, `media_id`, `position`)
+                VALUES (?, ?, ?)
+            ]],
+            params = { id, media_id, position },
+        }
+    end
+    if not Bridge.Database.Transaction(statements) then
+        return { success = false, error = "request_failed" }
+    end
     local created = load_article(id, true)
     if not created then
         error(("[sky_phone] Could not reload created Weazel News article '%s'."):format(id))
@@ -517,8 +627,23 @@ Bridge.Callbacks.Register("sky_phone:weazel-news:update", function(source, data)
     if tonumber(current.revision) ~= revision then
         return { success = false, error = "revision_conflict" }
     end
-    local retained_media_id = current.image_media_id and tonumber(current.image_media_id) or nil
-    local article, validation_error = validate_article(source, data, retained_media_id)
+    local retained_media_ids = {}
+    local retained_cover_id = current.image_media_id and tonumber(current.image_media_id) or nil
+    if retained_cover_id then
+        retained_media_ids[retained_cover_id] = true
+    end
+    local retained_rows = Bridge.Database.Query([[
+        SELECT `media_id`
+        FROM `sky_phone_weazel_article_media`
+        WHERE `article_id` = ?
+    ]], { data.id })
+    for _, row in ipairs(retained_rows) do
+        local media_id = tonumber(row.media_id)
+        if media_id then
+            retained_media_ids[media_id] = true
+        end
+    end
+    local article, validation_error = validate_article(source, data, retained_media_ids)
     if not article then
         return { success = false, error = validation_error }
     end
@@ -526,34 +651,80 @@ Bridge.Callbacks.Register("sky_phone:weazel-news:update", function(source, data)
     if not actor then
         return { success = false, error = "request_failed" }
     end
-    local result = Bridge.Database.Query([[
-        UPDATE `sky_phone_weazel_articles`
-        SET `title` = ?, `body` = ?, `excerpt` = ?, `category` = ?, `image_media_id` = NULLIF(?, 0),
-            `published_at` = CASE
-                WHEN ? = 'draft' THEN NULL
-                WHEN `status` = 'draft' THEN CURRENT_TIMESTAMP
-                ELSE `published_at`
-            END,
-            `status` = ?, `updated_by_identifier` = ?, `revision` = `revision` + 1
-        WHERE `id` = ? AND `revision` = ? AND `deleted_at` IS NULL
-    ]], {
-        article.title,
-        article.body,
-        article.excerpt,
-        article.category,
-        article.image_media_id or 0,
-        article.status,
-        article.status,
-        actor.identifier,
-        data.id,
-        revision,
-    })
-    if affected_rows(result) ~= 1 then
-        return { success = false, error = "revision_conflict" }
+    local mutation_rows = Bridge.Database.Query("SELECT UUID() AS `id`", {})
+    local mutation_id = mutation_rows[1] and mutation_rows[1].id
+    if not valid_uuid(mutation_id) then
+        error("[sky_phone] Database did not generate a Weazel News mutation id.")
+    end
+    local mutation_token = "weazel:" .. mutation_id
+    local next_revision = revision + 1
+    local statements = {
+        {
+            query = [[
+                UPDATE `sky_phone_weazel_articles`
+                SET `title` = ?, `body` = ?, `excerpt` = ?, `category` = ?,
+                    `image_media_id` = NULLIF(?, 0),
+                    `published_at` = CASE
+                        WHEN ? = 'draft' THEN NULL
+                        WHEN `status` = 'draft' THEN CURRENT_TIMESTAMP
+                        ELSE `published_at`
+                    END,
+                    `status` = ?, `updated_by_identifier` = ?, `revision` = `revision` + 1
+                WHERE `id` = ? AND `revision` = ? AND `deleted_at` IS NULL
+            ]],
+            params = {
+                article.title,
+                article.body,
+                article.excerpt,
+                article.category,
+                article.image_media_id or 0,
+                article.status,
+                article.status,
+                mutation_token,
+                data.id,
+                revision,
+            },
+        },
+        {
+            query = [[
+                DELETE relation
+                FROM `sky_phone_weazel_article_media` relation
+                JOIN `sky_phone_weazel_articles` article ON article.`id` = relation.`article_id`
+                WHERE article.`id` = ? AND article.`revision` = ?
+                    AND article.`updated_by_identifier` = ?
+            ]],
+            params = { data.id, next_revision, mutation_token },
+        },
+    }
+    for position, media_id in ipairs(article.image_media_ids) do
+        statements[#statements + 1] = {
+            query = [[
+                INSERT INTO `sky_phone_weazel_article_media` (`article_id`, `media_id`, `position`)
+                SELECT article.`id`, ?, ?
+                FROM `sky_phone_weazel_articles` article
+                WHERE article.`id` = ? AND article.`revision` = ?
+                    AND article.`updated_by_identifier` = ? AND article.`deleted_at` IS NULL
+            ]],
+            params = { media_id, position, data.id, next_revision, mutation_token },
+        }
+    end
+    statements[#statements + 1] = {
+        query = [[
+            UPDATE `sky_phone_weazel_articles`
+            SET `updated_by_identifier` = ?
+            WHERE `id` = ? AND `revision` = ? AND `updated_by_identifier` = ?
+        ]],
+        params = { actor.identifier, data.id, next_revision, mutation_token },
+    }
+    if not Bridge.Database.Transaction(statements) then
+        return { success = false, error = "request_failed" }
     end
     local updated = load_article(data.id, true)
     if not updated then
-        error(("[sky_phone] Could not reload updated Weazel News article '%s'."):format(data.id))
+        return { success = false, error = "not_found" }
+    end
+    if not article_matches(updated, article, next_revision) then
+        return { success = false, error = "revision_conflict" }
     end
     return { success = true, data = { article = updated } }
 end)

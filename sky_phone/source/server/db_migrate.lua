@@ -2663,9 +2663,34 @@ local schema = {
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
+    {
+        name = "sky_phone_weazel_article_media",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "article_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "media_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "position", type = "TINYINT UNSIGNED NOT NULL" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_weazel_article_position", columns = "(`article_id`, `position`)" },
+            { name = "uniq_sky_phone_weazel_article_media", columns = "(`article_id`, `media_id`)" },
+        },
+        foreignKeys = {
+            { column = "article_id", references = "`sky_phone_weazel_articles` (`id`) ON DELETE CASCADE" },
+            { column = "media_id", references = "`sky_phone_media` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
 }
 
 Bridge.Database.Migrate("sky_phone", schema)
+Bridge.Database.Query([[
+    INSERT IGNORE INTO `sky_phone_weazel_article_media` (`article_id`, `media_id`, `position`)
+    SELECT `id`, `image_media_id`, 1
+    FROM `sky_phone_weazel_articles`
+    WHERE `image_media_id` IS NOT NULL
+]], {})
 Bridge.Database.Query("DELETE FROM `sky_phone_feather_notifications` WHERE `kind` = 'repost'", {})
 Bridge.Database.Query("DELETE FROM `sky_phone_feather_reactions` WHERE `kind` = 'repost'", {})
 Bridge.Database.Query([[

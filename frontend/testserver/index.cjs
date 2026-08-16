@@ -2800,6 +2800,7 @@ mockMedia.push(
   })),
 )
 const weazelNewsCategoryIds = ['official', 'events', 'jobs', 'news', 'business']
+const weazelNewsMaxImages = 6
 let weazelNewsSequence = 8
 let weazelNewsArticles = [
   {
@@ -2809,8 +2810,7 @@ let weazelNewsArticles = [
     excerpt:
       'Temporary navigation restrictions are in effect around the southern harbor while crews inspect the main shipping channel.',
     category: 'official',
-    imageUrl: 'https://picsum.photos/seed/weazel-harbor/1200/760',
-    imageMediaId: null,
+    images: weazelNewsImages([15, 13, 20]),
     authorName: 'Avery Brooks',
     createdAt: Date.now() - 35 * 60 * 1000,
     updatedAt: Date.now() - 28 * 60 * 1000,
@@ -2825,8 +2825,7 @@ let weazelNewsArticles = [
     excerpt:
       'Food stands, live performers, and classic cars are coming to Vinewood Boulevard this weekend.',
     category: 'events',
-    imageUrl: 'https://picsum.photos/seed/weazel-vinewood/1200/760',
-    imageMediaId: null,
+    images: weazelNewsImages([11]),
     authorName: 'Maya Chen',
     createdAt: Date.now() - 2 * 60 * 60 * 1000,
     updatedAt: Date.now() - 2 * 60 * 60 * 1000,
@@ -2841,8 +2840,7 @@ let weazelNewsArticles = [
     excerpt:
       'City departments are recruiting new staff across emergency response, transport, and public administration.',
     category: 'jobs',
-    imageUrl: null,
-    imageMediaId: null,
+    images: [],
     authorName: 'Jordan Hayes',
     createdAt: Date.now() - 4 * 60 * 60 * 1000,
     updatedAt: Date.now() - 3 * 60 * 60 * 1000,
@@ -2857,8 +2855,7 @@ let weazelNewsArticles = [
     excerpt:
       'Every lane through Del Perro has reopened after crews cleared an earlier road obstruction.',
     category: 'news',
-    imageUrl: 'https://picsum.photos/seed/weazel-del-perro/1200/760',
-    imageMediaId: null,
+    images: weazelNewsImages([9]),
     authorName: 'Avery Brooks',
     createdAt: Date.now() - 7 * 60 * 60 * 1000,
     updatedAt: Date.now() - 6 * 60 * 60 * 1000,
@@ -2873,8 +2870,7 @@ let weazelNewsArticles = [
     excerpt:
       'Independent downtown retailers are seeing stronger evening trade during a trial of extended opening hours.',
     category: 'business',
-    imageUrl: 'https://picsum.photos/seed/weazel-downtown/1200/760',
-    imageMediaId: null,
+    images: weazelNewsImages([5]),
     authorName: 'Maya Chen',
     createdAt: Date.now() - 26 * 60 * 60 * 1000,
     updatedAt: Date.now() - 25 * 60 * 60 * 1000,
@@ -2889,8 +2885,7 @@ let weazelNewsArticles = [
     excerpt:
       'Local racing teams are preparing vehicles and reviewing safety procedures for the next sanctioned season.',
     category: 'events',
-    imageUrl: 'https://picsum.photos/seed/sky-phone-3/800/600',
-    imageMediaId: 3,
+    images: weazelNewsImages([3, 7]),
     authorName: 'Jordan Hayes',
     createdAt: Date.now() - 55 * 60 * 1000,
     updatedAt: Date.now() - 12 * 60 * 1000,
@@ -2905,8 +2900,7 @@ let weazelNewsArticles = [
     excerpt:
       'The editorial desk is collecting confirmed service notices and transport updates for Monday morning.',
     category: 'official',
-    imageUrl: null,
-    imageMediaId: null,
+    images: [],
     authorName: 'Jordan Hayes',
     createdAt: Date.now() - 18 * 60 * 1000,
     updatedAt: Date.now() - 8 * 60 * 1000,
@@ -2914,7 +2908,7 @@ let weazelNewsArticles = [
     status: 'draft',
     revision: 2,
   },
-]
+].map(syncWeazelNewsArticleImages)
 
 function weazelNewsExcerpt(body) {
   const normalized = body.replace(/\s+/g, ' ').trim()
@@ -2929,6 +2923,24 @@ function weazelNewsImageUrl(imageMediaId) {
     (item) => item.id === imageMediaId && item.mediaType === 'photo',
   )
   return media?.url ?? null
+}
+
+function weazelNewsImages(imageMediaIds) {
+  return imageMediaIds.map((mediaId) => ({
+    mediaId,
+    url: weazelNewsImageUrl(mediaId),
+  }))
+}
+
+function syncWeazelNewsArticleImages(article) {
+  const images = Array.isArray(article.images) ? article.images : []
+  const firstImage = images[0] ?? null
+  return {
+    ...article,
+    imageMediaId: firstImage?.mediaId ?? null,
+    imageUrl: firstImage?.url ?? null,
+    images,
+  }
 }
 
 function validateWeazelNewsDraft(data) {
@@ -2948,24 +2960,45 @@ function validateWeazelNewsDraft(data) {
     return { error: status === 'draft' ? 'invalid_draft' : 'invalid_publish' }
   }
 
-  let imageMediaId = null
-  if (data.imageMediaId !== null && data.imageMediaId !== undefined) {
-    imageMediaId = Number(data.imageMediaId)
+  const requestedImageMediaIds =
+    data.imageMediaIds === undefined
+      ? data.imageMediaId === null || data.imageMediaId === undefined
+        ? []
+        : [data.imageMediaId]
+      : data.imageMediaIds
+  if (
+    !Array.isArray(requestedImageMediaIds) ||
+    requestedImageMediaIds.length > weazelNewsMaxImages
+  ) {
+    return { error: 'invalid_attachment' }
+  }
+
+  const imageMediaIds = []
+  const seenImageMediaIds = new Set()
+  for (const requestedImageMediaId of requestedImageMediaIds) {
+    const imageMediaId = Number(requestedImageMediaId)
     if (
       !Number.isSafeInteger(imageMediaId) ||
+      seenImageMediaIds.has(imageMediaId) ||
       !weazelNewsImageUrl(imageMediaId)
     ) {
       return { error: 'invalid_attachment' }
     }
+    seenImageMediaIds.add(imageMediaId)
+    imageMediaIds.push(imageMediaId)
   }
+
+  const images = weazelNewsImages(imageMediaIds)
+  const firstImage = images[0] ?? null
 
   return {
     article: {
       body,
       category: data.category,
       excerpt: weazelNewsExcerpt(body),
-      imageMediaId,
-      imageUrl: weazelNewsImageUrl(imageMediaId),
+      imageMediaId: firstImage?.mediaId ?? null,
+      imageUrl: firstImage?.url ?? null,
+      images,
       status,
       title,
     },
@@ -4822,6 +4855,7 @@ app.post('/api/:endpoint', (request, response) => {
         ...(canManageWeazelNews
           ? { jobGradeLabel: 'Senior Reporter', jobLabel: 'Weazel News' }
           : {}),
+        maximumImages: weazelNewsMaxImages,
       },
     })
     return
@@ -7730,9 +7764,7 @@ app.post('/api/:endpoint', (request, response) => {
     const property = mockHousingOverview.properties.find(
       (item) => item.id === request.body.propertyId,
     )
-    const existingNames = new Set(
-      (property?.keys ?? []).map((key) => key.name),
-    )
+    const existingNames = new Set((property?.keys ?? []).map((key) => key.name))
     response.json({
       success: true,
       data: {
@@ -7774,8 +7806,7 @@ app.post('/api/:endpoint', (request, response) => {
     if (request.body.action === 'revoke_key') {
       property.keys = (property.keys ?? []).filter(
         (key) =>
-          key.identifier !== request.body.identifier ||
-          key.revocable === false,
+          key.identifier !== request.body.identifier || key.revocable === false,
       )
     }
     response.json({ success: true, data: { accepted: true } })

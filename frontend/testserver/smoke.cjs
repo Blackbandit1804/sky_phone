@@ -65,6 +65,8 @@ const browserDataRequests = [
   ['skyride:history', {}],
   ['skyride:get-player-coords', {}],
   ['weather:get', {}],
+  ['weazel-news:context', {}],
+  ['weazel-news:list', { category: null, offset: 0, search: '' }],
 ]
 
 async function post(baseUrl, endpoint, body = {}) {
@@ -104,7 +106,89 @@ async function verifyStatefulActions(baseUrl) {
     true,
   )
   gallery = await expectSuccess(baseUrl, 'gallery:list', {}, true)
-  assert.equal(gallery.find((item) => item.id === gallery[0].id)?.favorite, true)
+  assert.equal(
+    gallery.find((item) => item.id === gallery[0].id)?.favorite,
+    true,
+  )
+
+  const articlePhotos = gallery
+    .filter((item) => item.mediaType === 'photo')
+    .slice(0, 7)
+  assert.equal(
+    articlePhotos.length,
+    7,
+    'gallery:list did not include enough photos for Weazel News',
+  )
+  const weazelContext = await expectSuccess(
+    baseUrl,
+    'weazel-news:context',
+    {},
+    true,
+  )
+  assert.equal(weazelContext.maximumImages, 6)
+  const createdArticleResponse = await expectSuccess(
+    baseUrl,
+    'weazel-news:create',
+    {
+      body: 'Created by the browser mock smoke test with several photos.',
+      category: 'news',
+      imageMediaIds: articlePhotos.slice(0, 3).map((item) => item.id),
+      status: 'published',
+      title: 'Browser test Weazel article',
+    },
+    true,
+  )
+  const createdArticle = createdArticleResponse.article
+  assert.deepEqual(
+    createdArticle.images.map((image) => image.mediaId),
+    articlePhotos.slice(0, 3).map((item) => item.id),
+    'weazel-news:create did not preserve image order',
+  )
+  assert.equal(createdArticle.imageMediaId, articlePhotos[0].id)
+
+  const updatedArticleResponse = await expectSuccess(
+    baseUrl,
+    'weazel-news:update',
+    {
+      body: createdArticle.body,
+      category: 'business',
+      id: createdArticle.id,
+      imageMediaIds: [articlePhotos[2].id, articlePhotos[0].id],
+      revision: createdArticle.revision,
+      status: 'draft',
+      title: 'Updated browser test Weazel article',
+    },
+    true,
+  )
+  const updatedArticle = updatedArticleResponse.article
+  assert.deepEqual(
+    updatedArticle.images.map((image) => image.mediaId),
+    [articlePhotos[2].id, articlePhotos[0].id],
+    'weazel-news:update did not preserve the reordered images',
+  )
+  assert.equal(updatedArticle.imageMediaId, articlePhotos[2].id)
+
+  const loadedArticleResponse = await expectSuccess(
+    baseUrl,
+    'weazel-news:get',
+    { id: updatedArticle.id, manage: true },
+    true,
+  )
+  assert.deepEqual(loadedArticleResponse.article.images, updatedArticle.images)
+
+  const tooManyImages = await post(baseUrl, 'weazel-news:create', {
+    body: 'This article must be rejected because it has too many photos.',
+    category: 'news',
+    imageMediaIds: articlePhotos.map((item) => item.id),
+    status: 'draft',
+    title: 'Invalid Weazel article',
+  })
+  assert.equal(tooManyImages.success, false)
+  assert.equal(tooManyImages.error, 'invalid_attachment')
+  await expectSuccess(baseUrl, 'weazel-news:delete', {
+    id: updatedArticle.id,
+    revision: updatedArticle.revision,
+  })
 
   const memoBootstrap = await expectSuccess(
     baseUrl,

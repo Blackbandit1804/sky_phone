@@ -2,6 +2,7 @@ Config.WeazelNews = {
     Enabled = true,
     PageSize = 20,
     MaximumOffset = 10000,
+    MaximumImages = 6,
     SearchMaxLength = 80,
     DraftTitleMinLength = 1,
     DraftBodyMinLength = 1,

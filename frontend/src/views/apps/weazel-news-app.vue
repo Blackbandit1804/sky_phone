@@ -1,37 +1,39 @@
 <script setup lang="ts">
 import {
+  SkyActionButton,
+  SkyActionGroup,
+  SkyActionSheet,
+  SkyActionsLabel,
+  SkyAppPage,
   SkyButton,
   SkyCard,
   SkyDialog,
   SkyDialogButton,
+  SkyEmptyState,
+  SkyField,
   SkyIcon,
   SkyLink,
   SkyList,
-  SkyField,
   SkyListItem,
   SkyNavbar,
-  SkyNavbarBackLink,
-  SkyAppPage,
+  SkyPillNavigation,
+  SkyScrollArea,
   SkySpinner,
   SkySearchbar,
   SkySegmented,
   SkySegmentedButton,
-  SkySheet,
-  SkyTabBar,
-  SkyTabButton,
   SkyToast,
-  SkyToolbarPane,
 } from '@/ui'
 import {
   BriefcaseBusiness,
   Building2,
+  Camera,
   CalendarDays,
-  Check,
-  ChevronDown,
   ChevronRight,
   FileText,
   House,
   ImagePlus,
+  Images,
   LayoutGrid,
   Megaphone,
   Newspaper,
@@ -59,13 +61,12 @@ import { WEAZEL_NEWS_CATEGORY_IDS } from '@/types/weazel-news'
 
 type MainTab = 'home' | 'categories' | 'search' | 'editorial'
 type Screen = 'main' | 'detail' | 'composer'
-type ComposerChoice = 'category' | 'status'
-type ComposerChoiceOption = { label: string; value: string }
-type SelectedCover = { id: number; url: string }
+type ComposerOption = { label: string; value: string }
+type SelectedImage = { id: number; url: string }
 type ComposerContext = {
   article: WeazelNewsArticle | null
-  cover: SelectedCover | null
   draft: WeazelNewsArticleDraft
+  images: SelectedImage[]
   originTab: MainTab
 }
 
@@ -82,21 +83,23 @@ const selectedCategory = ref<WeazelNewsCategoryId | null>(null)
 const searchQuery = ref('')
 const submittedSearchQuery = ref('')
 const searchSubmitted = ref(false)
+const searchPending = ref(false)
 const editorialStatus = ref<WeazelNewsManageStatus>('all')
 const editingArticle = ref<WeazelNewsArticle | null>(null)
-const selectedCover = ref<SelectedCover | null>(null)
+const selectedImages = ref<SelectedImage[]>([])
+const photoSourceOpened = ref(false)
 const deleteTarget = ref<WeazelNewsArticle | null>(null)
 const deleteDialogOpened = ref(false)
-const composerChoice = ref<ComposerChoice | null>(null)
 const toastOpened = ref(false)
 const toastText = ref('')
 let toastTimer: number | undefined
+let searchTimer: number | undefined
 
 function emptyDraft(): WeazelNewsArticleDraft {
   return {
     body: '',
     category: 'news',
-    imageMediaId: null,
+    imageMediaIds: [],
     status: 'draft',
     title: '',
   }
@@ -115,22 +118,35 @@ const categoryIcons = {
 const featuredArticle = computed(() => news.publicItems[0] ?? null)
 const secondaryArticles = computed(() => news.publicItems.slice(1))
 const selectedArticle = computed(() => news.selected)
-const composerChoiceOptions = computed<ComposerChoiceOption[]>(() =>
-  composerChoice.value === 'status'
-    ? [
-        { label: t('composer.statusDraft'), value: 'draft' },
-        { label: t('composer.statusPublished'), value: 'published' },
-      ]
-    : WEAZEL_NEWS_CATEGORY_IDS.map((category) => ({
-        label: categoryLabel(category),
-        value: category,
-      })),
+const maximumImages = computed(() => news.context?.maximumImages ?? 6)
+const activeTabIndex = computed(() =>
+  (['home', 'categories', 'search', 'editorial'] as MainTab[]).indexOf(
+    activeTab.value,
+  ),
 )
-const composerChoiceLabel = computed(() =>
-  composerChoice.value === 'status'
-    ? t('composer.status')
-    : t('composer.category'),
+const categoryOptions = computed<ComposerOption[]>(() =>
+  WEAZEL_NEWS_CATEGORY_IDS.map((category) => ({
+    label: categoryLabel(category),
+    value: category,
+  })),
 )
+const statusOptions = computed<ComposerOption[]>(() => [
+  { label: t('composer.statusDraft'), value: 'draft' },
+  { label: t('composer.statusPublished'), value: 'published' },
+])
+const detailImages = computed<SelectedImage[]>(() => {
+  const article = selectedArticle.value
+  if (!article) return []
+  if (article.images?.length) {
+    return article.images.map((image) => ({
+      id: image.mediaId,
+      url: image.url,
+    }))
+  }
+  return article.imageMediaId && article.imageUrl
+    ? [{ id: article.imageMediaId, url: article.imageUrl }]
+    : []
+})
 const knownErrors = new Set([
   'feature_disabled',
   'invalid_article',
@@ -166,7 +182,7 @@ const currentSurfaceLoading = computed(() => {
   }
   if (activeTab.value === 'categories') return news.contextLoading
   if (activeTab.value === 'search') {
-    return searchSubmitted.value && news.publicLoading
+    return searchSubmitted.value && (searchPending.value || news.publicLoading)
   }
   return news.publicLoading
 })
@@ -176,7 +192,9 @@ function t(path: string, replacements: Record<string, string> = {}): string {
 }
 
 function eventValue(event: Event): string {
-  return (event.target as HTMLInputElement | HTMLTextAreaElement).value
+  return (
+    event.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+  ).value
 }
 
 function categoryLabel(category: WeazelNewsCategoryId | null): string {
@@ -249,9 +267,34 @@ async function selectCategory(
 }
 
 async function submitSearch(): Promise<void> {
+  if (searchTimer !== undefined) {
+    window.clearTimeout(searchTimer)
+    searchTimer = undefined
+  }
+  submittedSearchQuery.value = searchQuery.value.trim()
+  if (!submittedSearchQuery.value) {
+    clearSearch()
+    return
+  }
+  searchSubmitted.value = true
+  searchPending.value = false
+  await news.loadPublic({ search: submittedSearchQuery.value })
+}
+
+function queueSearch(event: Event): void {
+  searchQuery.value = eventValue(event)
+  if (searchTimer !== undefined) window.clearTimeout(searchTimer)
+  if (!searchQuery.value.trim()) {
+    clearSearch()
+    return
+  }
   submittedSearchQuery.value = searchQuery.value.trim()
   searchSubmitted.value = true
-  await news.loadPublic({ search: submittedSearchQuery.value })
+  searchPending.value = true
+  searchTimer = window.setTimeout(() => {
+    searchTimer = undefined
+    void submitSearch()
+  }, 250)
 }
 
 async function loadMoreSearch(): Promise<void> {
@@ -263,9 +306,14 @@ async function loadMoreSearch(): Promise<void> {
 }
 
 function clearSearch(): void {
+  if (searchTimer !== undefined) {
+    window.clearTimeout(searchTimer)
+    searchTimer = undefined
+  }
   searchQuery.value = ''
   submittedSearchQuery.value = ''
   searchSubmitted.value = false
+  searchPending.value = false
   news.publicError = ''
   news.error = ''
 }
@@ -293,7 +341,7 @@ function closeDetail(): void {
 function createArticle(): void {
   if (!news.context?.canManage) return
   editingArticle.value = null
-  selectedCover.value = null
+  selectedImages.value = []
   draft.value = emptyDraft()
   screen.value = 'composer'
 }
@@ -301,14 +349,18 @@ function createArticle(): void {
 function editArticle(article: WeazelNewsArticle): void {
   if (!news.context?.canManage) return
   editingArticle.value = article
-  selectedCover.value =
-    article.imageMediaId && article.imageUrl
-      ? { id: article.imageMediaId, url: article.imageUrl }
-      : null
+  selectedImages.value = article.images?.length
+    ? article.images.map((image) => ({
+        id: image.mediaId,
+        url: image.url,
+      }))
+    : article.imageMediaId && article.imageUrl
+      ? [{ id: article.imageMediaId, url: article.imageUrl }]
+      : []
   draft.value = {
     body: article.body,
     category: article.category,
-    imageMediaId: article.imageMediaId ?? null,
+    imageMediaIds: selectedImages.value.map((image) => image.id),
     status: article.status,
     title: article.title,
   }
@@ -316,41 +368,75 @@ function editArticle(article: WeazelNewsArticle): void {
 }
 
 function closeComposer(): void {
-  composerChoice.value = null
+  photoSourceOpened.value = false
   screen.value = editingArticle.value ? 'detail' : 'main'
 }
 
-function selectComposerChoice(option: ComposerChoiceOption): void {
-  if (composerChoice.value === 'category') {
-    draft.value.category = option.value as WeazelNewsCategoryId
-  } else if (composerChoice.value === 'status') {
-    draft.value.status = option.value as WeazelNewsArticleDraft['status']
+function updateCategory(value: string): void {
+  if (WEAZEL_NEWS_CATEGORY_IDS.includes(value as WeazelNewsCategoryId)) {
+    draft.value.category = value as WeazelNewsCategoryId
   }
-  composerChoice.value = null
 }
 
-function chooseCover(): void {
+function updateStatus(value: string): void {
+  if (value === 'draft' || value === 'published') {
+    draft.value.status = value
+  }
+}
+
+function syncImageMediaIds(): void {
+  draft.value.imageMediaIds = selectedImages.value.map((image) => image.id)
+}
+
+function openPhotoSourcePicker(): void {
+  if (selectedImages.value.length >= maximumImages.value) return
+  photoSourceOpened.value = true
+}
+
+function closePhotoSourcePicker(): void {
+  photoSourceOpened.value = false
+}
+
+function openArticleMediaApp(app: 'camera' | 'photos'): void {
+  const remaining = maximumImages.value - selectedImages.value.length
+  if (remaining < 1) return
+  closePhotoSourcePicker()
   messageMedia.begin(
-    'weazel-news:cover',
+    'weazel-news:article-images',
     'photo',
     '/apps/weazel-news?compose=1',
-    1,
+    app === 'photos' ? remaining : 1,
     {
       article: editingArticle.value,
-      cover: selectedCover.value,
-      draft: { ...draft.value },
+      draft: {
+        ...draft.value,
+        imageMediaIds: [...draft.value.imageMediaIds],
+      },
+      images: selectedImages.value.map((image) => ({ ...image })),
       originTab: activeTab.value,
     } satisfies ComposerContext,
   )
   void router.push({
-    path: '/apps/photos',
+    path: `/apps/${app}`,
     query: { mediaAttachment: 'photo' },
   })
 }
 
-function removeCover(): void {
-  selectedCover.value = null
-  draft.value.imageMediaId = null
+function makePrimaryImage(index: number): void {
+  if (index < 1 || index >= selectedImages.value.length) return
+  const next = [...selectedImages.value]
+  const [image] = next.splice(index, 1)
+  if (!image) return
+  next.unshift(image)
+  selectedImages.value = next
+  syncImageMediaIds()
+}
+
+function removeImage(index: number): void {
+  selectedImages.value = selectedImages.value.filter(
+    (_, imageIndex) => imageIndex !== index,
+  )
+  syncImageMediaIds()
 }
 
 async function saveArticle(
@@ -376,6 +462,7 @@ async function saveArticle(
   const payload: WeazelNewsArticleDraft = {
     ...draft.value,
     body,
+    imageMediaIds: selectedImages.value.map((image) => image.id),
     status: nextStatus,
     title,
   }
@@ -432,19 +519,32 @@ async function loadMoreManaged(): Promise<void> {
 }
 
 async function initialize(): Promise<void> {
-  const selection =
-    messageMedia.consumeMany<ComposerContext>('weazel-news:cover')
+  const selection = messageMedia.consumeMany<ComposerContext>(
+    'weazel-news:article-images',
+  )
   if (selection?.context) {
     editingArticle.value = selection.context.article
-    selectedCover.value = selection.context.cover
-    draft.value = selection.context.draft
+    selectedImages.value = [...selection.context.images]
+    draft.value = {
+      ...selection.context.draft,
+      imageMediaIds: [...selection.context.draft.imageMediaIds],
+    }
     activeTab.value = selection.context.originTab
     screen.value = 'composer'
   }
-  const media = selection?.media[0]
-  if (media) {
-    selectedCover.value = { id: media.id, url: media.url }
-    draft.value.imageMediaId = media.id
+  if (selection?.media.length) {
+    const knownIds = new Set(selectedImages.value.map((image) => image.id))
+    for (const media of selection.media) {
+      if (
+        knownIds.has(media.id) ||
+        selectedImages.value.length >= maximumImages.value
+      ) {
+        continue
+      }
+      knownIds.add(media.id)
+      selectedImages.value.push({ id: media.id, url: media.url })
+    }
+    syncImageMediaIds()
   }
 
   await news.loadContext()
@@ -458,6 +558,7 @@ onMounted(() => void initialize())
 
 onBeforeUnmount(() => {
   if (toastTimer !== undefined) window.clearTimeout(toastTimer)
+  if (searchTimer !== undefined) window.clearTimeout(searchTimer)
 })
 </script>
 
@@ -478,7 +579,7 @@ onBeforeUnmount(() => {
         </template>
       </sky-navbar>
 
-      <div class="weazel-scroll">
+      <sky-scroll-area padded with-tabbar class="weazel-scroll">
         <template v-if="activeTab === 'home'">
           <header class="weazel-section-heading">
             <div>
@@ -654,7 +755,7 @@ onBeforeUnmount(() => {
               :value="searchQuery"
               :placeholder="t('search.placeholder')"
               :aria-label="t('accessibility.search')"
-              @input="searchQuery = eventValue($event)"
+              @input="queueSearch"
               @submit.prevent="submitSearch"
             />
             <button
@@ -688,14 +789,14 @@ onBeforeUnmount(() => {
               t('retry')
             }}</sky-button>
           </div>
-          <div
+          <sky-empty-state
             v-else-if="searchSubmitted && !news.publicItems.length"
-            class="weazel-state weazel-state--compact"
+            compact
+            :title="t('search.emptyTitle')"
+            :body="t('search.emptyBody')"
           >
-            <Search :size="34" />
-            <strong>{{ t('search.emptyTitle') }}</strong>
-            <span>{{ t('search.emptyBody') }}</span>
-          </div>
+            <template #icon><Search :size="34" /></template>
+          </sky-empty-state>
           <div v-else-if="searchSubmitted" class="weazel-card-list">
             <sky-card
               v-for="article in news.publicItems"
@@ -876,78 +977,74 @@ onBeforeUnmount(() => {
             </sky-button>
           </template>
         </template>
-      </div>
+      </sky-scroll-area>
 
-      <sky-tab-bar
-        component="nav"
-        icons
-        labels
-        class="weazel-tabbar"
-        inner-class="weazel-tabbar__inner"
-        :aria-label="t('navigation')"
+      <sky-pill-navigation
+        layout="full"
+        class="weazel-navigation"
+        :label="t('navigation')"
       >
-        <sky-toolbar-pane class="weazel-tabbar__pane">
-          <sky-tab-button
-            component="button"
-            class="weazel-tabbar__link"
+        <sky-segmented
+          strong
+          rounded
+          navigation
+          :active-index="activeTabIndex"
+          :aria-label="t('navigation')"
+          :item-count="4"
+        >
+          <sky-segmented-button
+            type="button"
             :active="activeTab === 'home'"
-            :link-props="{ type: 'button' }"
             @click="selectTab('home')"
           >
-            <template #icon
-              ><sky-icon><House :size="22" /></sky-icon
-            ></template>
-            <template #label>{{ t('tabs.home') }}</template>
-          </sky-tab-button>
-          <sky-tab-button
-            component="button"
-            class="weazel-tabbar__link"
+            <span class="weazel-navigation__item">
+              <sky-icon :size="20"><House :size="20" /></sky-icon>
+              <span>{{ t('tabs.home') }}</span>
+            </span>
+          </sky-segmented-button>
+          <sky-segmented-button
+            type="button"
             :active="activeTab === 'categories'"
-            :link-props="{ type: 'button' }"
             @click="selectTab('categories')"
           >
-            <template #icon
-              ><sky-icon><LayoutGrid :size="22" /></sky-icon
-            ></template>
-            <template #label>{{ t('tabs.categories') }}</template>
-          </sky-tab-button>
-          <sky-tab-button
-            component="button"
-            class="weazel-tabbar__link"
+            <span class="weazel-navigation__item">
+              <sky-icon :size="20"><LayoutGrid :size="20" /></sky-icon>
+              <span>{{ t('tabs.categories') }}</span>
+            </span>
+          </sky-segmented-button>
+          <sky-segmented-button
+            type="button"
             :active="activeTab === 'search'"
-            :link-props="{ type: 'button' }"
             @click="selectTab('search')"
           >
-            <template #icon
-              ><sky-icon><Search :size="22" /></sky-icon
-            ></template>
-            <template #label>{{ t('tabs.search') }}</template>
-          </sky-tab-button>
-          <sky-tab-button
-            component="button"
-            class="weazel-tabbar__link"
+            <span class="weazel-navigation__item">
+              <sky-icon :size="20"><Search :size="20" /></sky-icon>
+              <span>{{ t('tabs.search') }}</span>
+            </span>
+          </sky-segmented-button>
+          <sky-segmented-button
+            type="button"
             :active="activeTab === 'editorial'"
-            :link-props="{ type: 'button' }"
             @click="selectTab('editorial')"
           >
-            <template #icon
-              ><sky-icon><UserRound :size="22" /></sky-icon
-            ></template>
-            <template #label>{{ t('tabs.editorial') }}</template>
-          </sky-tab-button>
-        </sky-toolbar-pane>
-      </sky-tab-bar>
+            <span class="weazel-navigation__item">
+              <sky-icon :size="20"><UserRound :size="20" /></sky-icon>
+              <span>{{ t('tabs.editorial') }}</span>
+            </span>
+          </sky-segmented-button>
+        </sky-segmented>
+      </sky-pill-navigation>
     </template>
 
     <template v-else-if="screen === 'detail' && selectedArticle">
-      <sky-navbar class="weazel-navbar" :title="t('article.readMore')">
-        <template #left>
-          <sky-navbar-back-link
-            component="button"
-            :text="t('back')"
-            @click="closeDetail"
-          />
-        </template>
+      <sky-navbar
+        class="weazel-navbar"
+        :title="t('article.readMore')"
+        show-back
+        back-appearance="surface"
+        :back-label="t('back')"
+        @back="closeDetail"
+      >
         <template v-if="news.context?.canManage && detailManaged" #right>
           <sky-link
             component="button"
@@ -961,13 +1058,31 @@ onBeforeUnmount(() => {
           </sky-link>
         </template>
       </sky-navbar>
-      <article class="weazel-detail-scroll">
-        <img
-          v-if="selectedArticle.imageUrl"
-          class="weazel-detail-cover"
-          :src="selectedArticle.imageUrl"
-          :alt="t('article.coverAlt', { title: selectedArticle.title })"
-        />
+      <sky-scroll-area as="article" class="weazel-detail-scroll">
+        <div
+          v-if="detailImages.length"
+          class="weazel-detail-gallery"
+          :aria-label="t('accessibility.articleImages')"
+        >
+          <img
+            v-for="image in detailImages"
+            :key="image.id"
+            class="weazel-detail-cover"
+            :src="image.url"
+            :alt="
+              t('article.coverAlt', {
+                title: selectedArticle.title,
+              })
+            "
+          />
+          <span
+            v-if="detailImages.length > 1"
+            class="weazel-detail-count"
+            aria-hidden="true"
+          >
+            <Images :size="13" /> {{ detailImages.length }}
+          </span>
+        </div>
         <div v-else class="weazel-detail-masthead">
           <span>W</span><Newspaper :size="38" />
         </div>
@@ -999,9 +1114,6 @@ onBeforeUnmount(() => {
           v-if="news.context?.canManage && detailManaged"
           class="weazel-detail-actions"
         >
-          <sky-button rounded tonal @click="editArticle(selectedArticle)">
-            <Pencil :size="18" /> {{ t('editorial.edit') }}
-          </sky-button>
           <sky-button
             rounded
             tonal
@@ -1011,67 +1123,92 @@ onBeforeUnmount(() => {
             <Trash2 :size="18" /> {{ t('editorial.delete') }}
           </sky-button>
         </div>
-      </article>
+      </sky-scroll-area>
     </template>
 
     <template v-else-if="screen === 'composer'">
       <sky-navbar
         class="weazel-navbar"
         :title="t(editingArticle ? 'composer.editTitle' : 'composer.newTitle')"
-      >
-        <template #left>
-          <sky-navbar-back-link
-            component="button"
-            :text="t('back')"
-            @click="closeComposer"
-          />
-        </template>
-      </sky-navbar>
-      <div class="weazel-composer-scroll">
-        <section class="weazel-composer-cover">
-          <img
-            v-if="selectedCover"
-            :src="selectedCover.url"
-            :alt="t('composer.coverAlt')"
-          />
-          <div v-else>
-            <ImagePlus :size="34" /><span>{{ t('composer.cover') }}</span>
-          </div>
-          <div class="weazel-cover-actions">
-            <sky-button
-              rounded
-              tonal
-              class="weazel-cover-picker"
-              @click="chooseCover"
-            >
-              <ImagePlus aria-hidden="true" />
-              <span class="weazel-cover-picker__label">
+        show-back
+        back-appearance="surface"
+        :back-label="t('back')"
+        @back="closeComposer"
+      />
+      <sky-scroll-area padded class="weazel-composer-scroll">
+        <section class="weazel-composer-media">
+          <header class="weazel-composer-media__header">
+            <div>
+              <strong>{{ t('composer.photos') }}</strong>
+              <span>
                 {{
-                  t(
-                    selectedCover
-                      ? 'composer.changeCover'
-                      : 'composer.chooseCover',
-                  )
+                  t('composer.photoCount', {
+                    count: String(selectedImages.length),
+                    maximum: String(maximumImages),
+                  })
                 }}
               </span>
-            </sky-button>
+            </div>
             <sky-button
-              v-if="selectedCover"
+              v-if="selectedImages.length < maximumImages"
               rounded
-              clear
-              class="weazel-danger weazel-cover-remove"
-              @click="removeCover"
+              small
+              tonal
+              @click="openPhotoSourcePicker"
             >
-              {{ t('composer.removeCover') }}
+              <ImagePlus :size="17" /> {{ t('composer.addPhotos') }}
             </sky-button>
+          </header>
+
+          <div v-if="selectedImages.length" class="weazel-image-grid">
+            <article
+              v-for="(image, index) in selectedImages"
+              :key="image.id"
+              class="weazel-image-preview"
+              :class="{ 'is-primary': index === 0 }"
+            >
+              <img :src="image.url" :alt="t('composer.coverAlt')" />
+              <span v-if="index === 0" class="weazel-image-primary">
+                {{ t('composer.primaryPhoto') }}
+              </span>
+              <div class="weazel-image-actions">
+                <sky-button
+                  v-if="index > 0"
+                  rounded
+                  small
+                  tonal
+                  @click="makePrimaryImage(index)"
+                >
+                  {{ t('composer.makePrimary') }}
+                </sky-button>
+                <sky-button
+                  rounded
+                  small
+                  clear
+                  class="weazel-danger"
+                  :aria-label="t('accessibility.removePhoto')"
+                  @click="removeImage(index)"
+                >
+                  <X :size="16" />
+                </sky-button>
+              </div>
+            </article>
           </div>
+          <button
+            v-else
+            type="button"
+            class="weazel-image-empty"
+            @click="openPhotoSourcePicker"
+          >
+            <ImagePlus :size="34" />
+            <strong>{{ t('composer.addPhotos') }}</strong>
+            <span>{{ t('composer.photoSourceHint') }}</span>
+          </button>
         </section>
 
-        <sky-list nested :dividers="false" class="weazel-composer-list">
+        <sky-list inset strong :dividers="false" class="weazel-composer-list">
           <sky-field
-            outline
             class="weazel-composer-field"
-            input-class="weazel-composer-input"
             maxlength="160"
             :label="t('composer.title')"
             :placeholder="t('composer.titlePlaceholder')"
@@ -1079,71 +1216,44 @@ onBeforeUnmount(() => {
             @input="draft.title = eventValue($event)"
           />
           <sky-field
-            outline
             class="weazel-composer-field"
             type="textarea"
+            :rows="8"
             maxlength="12000"
             :label="t('composer.body')"
             :placeholder="t('composer.bodyPlaceholder')"
             :value="draft.body"
-            input-class="weazel-composer-input weazel-body-input"
             @input="draft.body = eventValue($event)"
           />
-          <sky-list-item
-            link
-            link-component="button"
-            :chevron="false"
-            class="weazel-choice-trigger"
-            content-class="weazel-choice-trigger__content"
-            inner-class="weazel-choice-trigger__inner"
-            :link-props="{
-              type: 'button',
-              'aria-haspopup': 'dialog',
-              'aria-expanded': composerChoice === 'category',
-            }"
-            @click="composerChoice = 'category'"
-          >
-            <template #inner>
-              <span class="weazel-choice-trigger__copy">
-                <small>{{ t('composer.category') }}</small>
-                <strong>{{ categoryLabel(draft.category) }}</strong>
-              </span>
-              <ChevronDown
-                class="weazel-choice-trigger__icon"
-                :class="{ 'is-open': composerChoice === 'category' }"
-              />
-            </template>
-          </sky-list-item>
-          <sky-list-item
+          <sky-field
+            type="select"
+            dropdown
+            :label="t('composer.category')"
+            :options="categoryOptions"
+            :model-value="draft.category"
+            @update:model-value="updateCategory"
+          />
+          <sky-field
             v-if="editingArticle"
-            link
-            link-component="button"
-            :chevron="false"
-            class="weazel-choice-trigger"
-            content-class="weazel-choice-trigger__content"
-            inner-class="weazel-choice-trigger__inner"
-            :link-props="{
-              type: 'button',
-              'aria-haspopup': 'dialog',
-              'aria-expanded': composerChoice === 'status',
-            }"
-            @click="composerChoice = 'status'"
-          >
-            <template #inner>
-              <span class="weazel-choice-trigger__copy">
-                <small>{{ t('composer.status') }}</small>
-                <strong>{{ statusLabel(draft.status) }}</strong>
-              </span>
-              <ChevronDown
-                class="weazel-choice-trigger__icon"
-                :class="{ 'is-open': composerChoice === 'status' }"
-              />
-            </template>
-          </sky-list-item>
+            type="select"
+            dropdown
+            :label="t('composer.status')"
+            :options="statusOptions"
+            :model-value="draft.status"
+            @update:model-value="updateStatus"
+          />
         </sky-list>
 
         <div class="weazel-composer-actions">
           <template v-if="!editingArticle">
+            <sky-button
+              large
+              rounded
+              :disabled="news.mutating"
+              @click="saveArticle('published')"
+            >
+              {{ t('composer.publish') }}
+            </sky-button>
             <sky-button
               large
               rounded
@@ -1152,14 +1262,6 @@ onBeforeUnmount(() => {
               @click="saveArticle('draft')"
             >
               {{ t('composer.saveDraft') }}
-            </sky-button>
-            <sky-button
-              large
-              rounded
-              :disabled="news.mutating"
-              @click="saveArticle('published')"
-            >
-              {{ t('composer.publish') }}
             </sky-button>
           </template>
           <sky-button
@@ -1172,75 +1274,34 @@ onBeforeUnmount(() => {
             {{ t('composer.saveChanges') }}
           </sky-button>
         </div>
-      </div>
+      </sky-scroll-area>
     </template>
 
-    <sky-sheet
-      :opened="composerChoice !== null"
-      class="weazel-choice-sheet"
-      @backdropclick="composerChoice = null"
+    <sky-action-sheet
+      :opened="photoSourceOpened"
+      :aria-label="t('composer.addPhotos')"
+      @backdropclick="closePhotoSourcePicker"
+      @escape="closePhotoSourcePicker"
     >
-      <section
-        v-if="composerChoice"
-        class="weazel-choice-sheet__content"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="composerChoiceLabel"
-      >
-        <div class="weazel-choice-sheet__handle" aria-hidden="true" />
-        <header class="weazel-choice-sheet__header">
-          <h2>{{ composerChoiceLabel }}</h2>
-          <sky-link
-            component="button"
-            icon-only
-            class="weazel-choice-sheet__close"
-            :aria-label="phone.t('Common.close')"
-            :link-props="{ type: 'button' }"
-            @click="composerChoice = null"
-          >
-            <X />
-          </sky-link>
-        </header>
-        <sky-list
-          nested
-          :dividers="false"
-          class="weazel-choice-options"
-          role="listbox"
-        >
-          <sky-list-item
-            v-for="option in composerChoiceOptions"
-            :key="option.value"
-            link
-            link-component="button"
-            :chevron="false"
-            :title="option.label"
-            :link-props="{
-              type: 'button',
-              role: 'option',
-              'aria-selected':
-                composerChoice === 'category'
-                  ? option.value === draft.category
-                  : option.value === draft.status,
-            }"
-            class="weazel-choice-option"
-            content-class="weazel-choice-option__content"
-            inner-class="weazel-choice-option__inner"
-            title-wrap-class="weazel-choice-option__title"
-            @click="selectComposerChoice(option)"
-          >
-            <template #after>
-              <Check
-                v-if="
-                  composerChoice === 'category'
-                    ? option.value === draft.category
-                    : option.value === draft.status
-                "
-              />
-            </template>
-          </sky-list-item>
-        </sky-list>
-      </section>
-    </sky-sheet>
+      <sky-action-group>
+        <sky-actions-label>{{ t('composer.addPhotos') }}</sky-actions-label>
+        <sky-action-button bold @click="openArticleMediaApp('photos')">
+          <span class="weazel-photo-source">
+            <Images :size="20" /> {{ t('composer.choosePhotos') }}
+          </span>
+        </sky-action-button>
+        <sky-action-button @click="openArticleMediaApp('camera')">
+          <span class="weazel-photo-source">
+            <Camera :size="20" /> {{ t('composer.takePhoto') }}
+          </span>
+        </sky-action-button>
+      </sky-action-group>
+      <sky-action-group>
+        <sky-action-button @click="closePhotoSourcePicker">
+          {{ phone.t('Common.cancel') }}
+        </sky-action-button>
+      </sky-action-group>
+    </sky-action-sheet>
 
     <sky-dialog
       :opened="deleteDialogOpened"
@@ -1293,12 +1354,6 @@ onBeforeUnmount(() => {
 }
 
 .weazel-navbar {
-  --sky-safe-area-top: 46px;
-  position: absolute;
-  z-index: 10;
-  top: 0;
-  right: 0;
-  left: 0;
   color: var(--weazel-text);
 }
 
@@ -1339,19 +1394,11 @@ onBeforeUnmount(() => {
 .weazel-scroll,
 .weazel-detail-scroll,
 .weazel-composer-scroll {
-  position: absolute;
-  inset: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 100px 14px 86px;
-  padding: 12.4cqh 1.7cqh 10.6cqh;
   scrollbar-width: none;
 }
 
-.weazel-detail-scroll,
-.weazel-composer-scroll {
-  padding-bottom: 32px;
-  padding-bottom: 4cqh;
+.weazel-detail-scroll {
+  padding-bottom: calc(var(--sky-safe-area-bottom) + var(--sky-space-6));
 }
 
 .weazel-scroll::-webkit-scrollbar,
@@ -1803,99 +1850,73 @@ onBeforeUnmount(() => {
   color: #34c759;
 }
 
-.weazel-tabbar {
-  position: absolute !important;
-  z-index: 20;
-  right: 9px;
-  right: 1.1cqh;
-  bottom: 25px;
-  bottom: 3.1cqh;
-  left: 9px;
-  left: 1.1cqh;
-  width: auto !important;
-  padding: 0 !important;
-  color: var(--weazel-text);
-  overflow: hidden;
-}
-
-.weazel-tabbar :deep(> div:first-child) {
-  height: 100% !important;
-}
-
-.weazel-tabbar :deep(.weazel-tabbar__inner) {
-  width: 100% !important;
-  height: 50px !important;
-  height: 6.2cqh !important;
-  max-width: none !important;
-  gap: 0 !important;
-  padding: 0 3px !important;
-  padding: 0 0.37cqh !important;
-}
-
-.weazel-tabbar :deep(.weazel-tabbar__pane) {
-  width: 100% !important;
-  max-width: none !important;
-  display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 0;
-}
-
-.weazel-tabbar :deep(.weazel-tabbar__link) {
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: none !important;
-  justify-content: center;
-  overflow: hidden;
-  padding: 0 !important;
-}
-
-.weazel-tabbar :deep(.weazel-tabbar__link > span) {
+.weazel-navigation__item {
   min-width: 0;
-  gap: 1px;
-  gap: 0.12cqh;
-  padding: 3px 0 !important;
-  padding: 0.37cqh 0 !important;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  font-size: 10px;
+  line-height: 1.1;
 }
 
-.weazel-tabbar :deep(.weazel-tabbar__link.sky-link) {
-  padding-right: 0 !important;
-  padding-left: 0 !important;
-}
-
-.weazel-tabbar :deep(.sky-tab-button__icon),
-.weazel-tabbar :deep(.sky-icon) {
-  width: 22px !important;
-  width: 2.72cqh !important;
-  height: 22px !important;
-  height: 2.72cqh !important;
-}
-
-.weazel-tabbar :deep(.sky-tab-button__label) {
-  width: 100%;
+.weazel-navigation__item > span:last-child {
+  max-width: 100%;
   overflow: hidden;
-  font-size: 9.5px;
-  font-size: 1.18cqh;
-  line-height: 1.15;
-  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.weazel-tabbar :deep(.text-primary) {
-  color: #d71920 !important;
+.weazel-detail-gallery {
+  position: relative;
+  width: 100%;
+  height: 240px;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
 }
 
-.weazel-detail-cover,
-.weazel-detail-masthead {
-  width: calc(100% + 30px);
+.weazel-detail-gallery::-webkit-scrollbar {
+  display: none;
+}
+
+.weazel-detail-cover {
+  width: 100%;
+  max-width: none;
   height: 240px;
-  margin: 0 -15px;
+  display: block;
+  flex: 0 0 100%;
   object-fit: cover;
+  scroll-snap-align: start;
+}
+
+.weazel-detail-masthead {
+  width: 100%;
+  height: 240px;
+}
+
+.weazel-detail-count {
+  position: absolute;
+  right: var(--sky-page-gutter);
+  bottom: var(--sky-space-3);
+  padding: 4px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--sky-radius-pill);
+  background: rgb(0 0 0 / 58%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
 }
 
 .weazel-detail-copy {
-  padding: 22px 4px 10px;
+  padding: 22px calc(var(--sky-page-gutter) + var(--sky-safe-area-right)) 10px;
+  padding-left: calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
 }
 
 .weazel-detail-copy h1 {
@@ -1945,15 +1966,18 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
 }
 
-.weazel-detail-actions,
-.weazel-composer-actions,
-.weazel-cover-actions {
+.weazel-detail-actions {
   display: flex;
   gap: 10px;
 }
 
-.weazel-detail-actions > *,
-.weazel-composer-actions > * {
+.weazel-detail-actions {
+  padding-right: calc(var(--sky-page-gutter) + var(--sky-safe-area-right));
+  padding-left: calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
+}
+
+.weazel-detail-actions > * {
+  width: 100%;
   flex: 1;
 }
 
@@ -1961,347 +1985,166 @@ onBeforeUnmount(() => {
   color: #ff453a !important;
 }
 
-.weazel-composer-cover {
+.weazel-composer-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sky-space-2);
+  margin: var(--sky-space-4) 0 0;
+}
+
+.weazel-composer-actions > * {
+  width: 100%;
+}
+
+.weazel-composer-media {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: var(--sky-space-4);
   overflow: hidden;
-  margin-bottom: 14px;
   border: 1px solid var(--weazel-line);
-  border-radius: 20px;
+  border-radius: var(--sky-radius-card);
   background: var(--weazel-surface);
 }
 
-.weazel-composer-cover > img,
-.weazel-composer-cover > div:first-child {
+.weazel-composer-media__header {
+  min-height: var(--sky-touch-target);
+  padding: var(--sky-space-2) var(--sky-space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sky-space-2);
+  border-bottom: 1px solid var(--weazel-line);
+}
+
+.weazel-composer-media__header > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.weazel-composer-media__header strong {
+  color: var(--weazel-text);
+  font-size: 14px;
+}
+
+.weazel-composer-media__header span {
+  color: var(--weazel-muted);
+  font-size: 11px;
+}
+
+.weazel-image-grid {
+  padding: var(--sky-space-2);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sky-space-2);
+}
+
+.weazel-image-preview {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--sky-radius-control);
+  background: var(--weazel-surface-strong);
+}
+
+.weazel-image-preview.is-primary {
+  aspect-ratio: 16 / 9;
+  grid-column: 1 / -1;
+}
+
+.weazel-image-preview img {
   width: 100%;
-  height: 190px;
+  height: 100%;
+  display: block;
   object-fit: cover;
 }
 
-.weazel-composer-cover > div:first-child {
+.weazel-image-primary {
+  position: absolute;
+  top: var(--sky-space-2);
+  left: var(--sky-space-2);
+  padding: 4px 8px;
+  border-radius: var(--sky-radius-pill);
+  background: rgb(0 0 0 / 64%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.weazel-image-actions {
+  position: absolute;
+  right: var(--sky-space-1);
+  bottom: var(--sky-space-1);
+  left: var(--sky-space-1);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sky-space-1);
+}
+
+.weazel-image-actions > :first-child:not(:last-child) {
+  min-width: 0;
+  flex: 1;
+}
+
+.weazel-image-actions :deep(.sky-button) {
+  min-height: 34px;
+  border-color: rgb(255 255 255 / 14%);
+  background: rgb(17 17 17 / 78%);
+  color: #fff;
+  backdrop-filter: blur(12px);
+}
+
+.weazel-image-empty {
+  width: 100%;
+  min-height: 184px;
+  padding: var(--sky-space-5);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sky-space-2);
+  border: 0;
+  background: transparent;
   color: var(--weazel-muted);
+  font: inherit;
+  cursor: pointer;
 }
 
-.weazel-cover-actions {
-  padding: 10px;
+.weazel-image-empty strong {
+  color: var(--weazel-text);
+  font-size: 15px;
 }
 
-.weazel-cover-actions > * {
-  height: 36px !important;
-  height: 4.45cqh !important;
-  min-width: 0;
-  flex: 1 1 0;
-  padding-block: 0 !important;
-}
-
-.weazel-cover-picker {
-  gap: 6px;
-  gap: 0.74cqh;
-  padding-inline: 10px !important;
-  padding-inline: 1.24cqh !important;
-  font-size: 12px !important;
-  font-size: 1.48cqh !important;
-  line-height: 1.15;
-}
-
-.weazel-cover-picker :deep(svg) {
-  width: 16px;
-  width: 1.98cqh;
-  height: 16px;
-  height: 1.98cqh;
-  flex: none;
-}
-
-.weazel-cover-picker__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.weazel-cover-remove {
-  padding-inline: 8px !important;
-  padding-inline: 1cqh !important;
-  font-size: 12px !important;
-  font-size: 1.48cqh !important;
+.weazel-image-empty span {
+  max-width: 250px;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .weazel-composer-list {
-  margin: 0 !important;
-  overflow: visible;
-  background: transparent !important;
+  margin: 0 0 var(--sky-space-4) !important;
+  overflow: hidden;
+  background: var(--weazel-surface) !important;
 }
 
 .weazel-composer-list :deep(.weazel-composer-field) {
-  margin-block: 13px !important;
-  margin-block: 1.61cqh !important;
+  margin-block: 0 !important;
 }
 
-.weazel-composer-list :deep(.weazel-composer-field > .relative) {
-  margin-inline: 0 !important;
-  padding-inline-start: 0 !important;
-  border-radius: 9px !important;
-  border-radius: 1.11cqh !important;
+.weazel-composer-list :deep(.sky-field__textarea) {
+  min-height: 180px;
+  resize: vertical;
 }
 
-.weazel-composer-list :deep(.weazel-composer-field > .relative > .w-full) {
-  padding-block: 0 !important;
-  padding-inline-end: 0 !important;
-}
-
-.weazel-composer-list
-  :deep(.weazel-composer-field > .relative > .w-full > .relative) {
-  margin-top: -7px !important;
-  margin-top: -0.87cqh !important;
-  margin-bottom: -7px !important;
-  margin-bottom: -0.87cqh !important;
-}
-
-.weazel-composer-list :deep(.weazel-composer-field .text-xs) {
-  margin-top: -11px !important;
-  margin-top: -1.36cqh !important;
-  font-size: 10px !important;
-  font-size: 1.24cqh !important;
-  line-height: 1.25;
-}
-
-.weazel-composer-list :deep(.weazel-composer-field .text-xs > div) {
-  top: -1px !important;
-  top: -0.12cqh !important;
-  margin: -1px !important;
-  margin: -0.12cqh !important;
-  padding: 2px 4px !important;
-  padding: 0.25cqh 0.5cqh !important;
-}
-
-.weazel-composer-list :deep(.weazel-composer-input) {
-  height: 44px !important;
-  height: 5.45cqh !important;
-  padding-inline: 2px !important;
-  padding-inline: 0.25cqh !important;
-  color: var(--weazel-text);
-  font-size: 13px !important;
-  font-size: 1.61cqh !important;
-  line-height: 1.35;
-}
-
-.weazel-composer-list :deep(.weazel-body-input) {
-  height: 210px !important;
-  height: 26cqh !important;
-  min-height: 210px !important;
-  min-height: 26cqh !important;
-  padding-block: 8px !important;
-  padding-block: 1cqh !important;
-  resize: none;
-}
-
-.weazel-choice-trigger {
-  margin-block: 13px;
-  margin-block: 1.61cqh;
-}
-
-.weazel-composer-list :deep(.weazel-choice-trigger__content) {
-  min-height: 44px;
-  min-height: 5.45cqh;
-  padding-inline: 10px !important;
-  padding-inline: 1.24cqh !important;
-  border: 1px solid var(--weazel-line);
-  border-radius: 9px;
-  border-radius: 1.11cqh;
-  background: var(--weazel-surface);
-}
-
-.weazel-composer-list :deep(.weazel-choice-trigger__inner) {
-  min-width: 0;
-  display: flex;
+.weazel-photo-source {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  gap: 1cqh;
-  padding: 0 !important;
-}
-
-.weazel-choice-trigger__copy {
-  min-width: 0;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  gap: 0.25cqh;
-  text-align: left;
-}
-
-.weazel-choice-trigger__copy small {
-  color: var(--weazel-muted);
-  font-size: 10px;
-  font-size: 1.24cqh;
-  line-height: 1.15;
-}
-
-.weazel-choice-trigger__copy strong {
-  overflow: hidden;
-  color: var(--weazel-text);
-  font-size: 13px;
-  font-size: 1.61cqh;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.weazel-choice-trigger__icon {
-  width: 16px;
-  width: 1.98cqh;
-  height: 16px;
-  height: 1.98cqh;
-  flex: none;
-  color: var(--weazel-muted);
-  transition: transform 0.18s ease;
-}
-
-.weazel-choice-trigger__icon.is-open {
-  transform: rotate(180deg);
-}
-
-.weazel-choice-sheet {
-  right: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  border-radius: 18px 18px 0 0 !important;
-  border-radius: 2.23cqh 2.23cqh 0 0 !important;
-  background: var(--weazel-surface) !important;
-  color: var(--weazel-text);
-}
-
-.weazel-choice-sheet__content {
-  max-height: 436px;
-  max-height: 54cqh;
-  overflow-y: auto;
-  padding: 6px 10px 20px;
-  padding: 0.74cqh 1.24cqh 2.48cqh;
-  border-radius: 18px 18px 0 0;
-  border-radius: 2.23cqh 2.23cqh 0 0;
-  background: var(--weazel-surface);
-  color: var(--weazel-text);
-  scrollbar-width: none;
-}
-
-.weazel-choice-sheet__content::-webkit-scrollbar {
-  display: none;
-}
-
-.weazel-choice-sheet__handle {
-  width: 34px;
-  width: 4.2cqh;
-  height: 4px;
-  height: 0.5cqh;
-  margin: 0 auto 6px;
-  margin: 0 auto 0.74cqh;
-  border-radius: 999px;
-  background: var(--weazel-line);
-}
-
-.weazel-choice-sheet__header {
-  min-height: 36px;
-  min-height: 4.45cqh;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  gap: 1cqh;
-  padding-inline: 4px;
-  padding-inline: 0.5cqh;
-}
-
-.weazel-choice-sheet__header h2 {
-  margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 16px;
-  font-size: 1.98cqh;
-  line-height: 1.15;
-}
-
-.weazel-choice-sheet__close {
-  width: 30px !important;
-  width: 3.71cqh !important;
-  height: 30px !important;
-  height: 3.71cqh !important;
-  min-width: 30px !important;
-  min-width: 3.71cqh !important;
-  padding: 0 !important;
-  border-radius: 999px;
-  background: var(--weazel-surface-strong);
-  color: var(--weazel-muted);
-}
-
-.weazel-choice-sheet__close :deep(svg) {
-  width: 15px;
-  width: 1.86cqh;
-  height: 15px;
-  height: 1.86cqh;
-}
-
-.weazel-choice-options {
-  margin: 5px 0 0 !important;
-  margin: 0.62cqh 0 0 !important;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__content) {
-  min-height: 40px;
-  min-height: 4.95cqh;
-  padding-inline: 8px !important;
-  padding-inline: 1cqh !important;
-  border-radius: 8px;
-  border-radius: 1cqh;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__inner) {
-  min-width: 0;
-  padding: 0 !important;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__title) {
-  min-height: 40px !important;
-  min-height: 4.95cqh !important;
-  font-size: 13px !important;
-  font-size: 1.61cqh !important;
-  line-height: 1.2;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__title > div:first-child) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__title > div:nth-child(2)) {
-  gap: 2px;
-  gap: 0.25cqh;
-  padding-inline-start: 3px;
-  padding-inline-start: 0.37cqh;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__title svg) {
-  width: 16px;
-  width: 1.98cqh;
-  height: 16px;
-  height: 1.98cqh;
-  color: #d71920;
-}
-
-.weazel-composer-actions {
-  margin: 16px 0 5px;
-}
-
-.weazel-composer-actions > * {
-  height: 44px !important;
-  height: 5.45cqh !important;
-  padding: 0 8px !important;
-  padding: 0 1cqh !important;
-  font-size: 14px !important;
-  font-size: 1.73cqh !important;
-  line-height: 1.15;
+  justify-content: center;
+  gap: var(--sky-space-2);
 }
 </style>

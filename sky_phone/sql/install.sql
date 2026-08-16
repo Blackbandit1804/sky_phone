@@ -1244,3 +1244,15 @@ CREATE TABLE IF NOT EXISTS `sky_phone_weazel_articles` (
     KEY `idx_sky_phone_weazel_media` (`image_media_id`),
     FOREIGN KEY (`image_media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_weazel_article_media` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `article_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `media_id` BIGINT UNSIGNED NOT NULL,
+    `position` TINYINT UNSIGNED NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_weazel_article_position` (`article_id`,`position`),
+    UNIQUE KEY `uniq_sky_phone_weazel_article_media` (`article_id`,`media_id`),
+    FOREIGN KEY (`article_id`) REFERENCES `sky_phone_weazel_articles` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
