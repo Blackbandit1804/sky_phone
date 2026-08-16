@@ -12,7 +12,6 @@ import {
   SkyField,
   SkyListItem,
   SkyNavbar,
-  SkyNavbarBackLink,
   SkyAppPage,
   SkyPillNavigation,
   SkySegmented,
@@ -674,13 +673,11 @@ onBeforeUnmount(() => {
       class="music-navbar"
       title-class="music-navbar-title"
       :title="activePlaylist ? activePlaylist.name : phone.t('Apps.music.name')"
+      :show-back="Boolean(activePlaylist)"
+      back-appearance="surface"
+      :back-label="phone.t('Apps.music.tabs.playlists')"
+      @back="closePlaylist"
     >
-      <template v-if="activePlaylist" #left>
-        <sky-navbar-back-link
-          :text="phone.t('Apps.music.tabs.playlists')"
-          @click="closePlaylist"
-        />
-      </template>
       <template #right>
         <sky-link
           v-if="activePlaylist"

@@ -9,6 +9,18 @@ const navigationSource = source.slice(
 )
 
 describe('MusicApp Sky pill navigation contract', () => {
+  it('uses the centered surface back action owned by SkyNavbar for playlists', () => {
+    const navbarTag = source.match(/<sky-navbar\b[^>]*>/is)?.[0]
+
+    expect(navbarTag).toBeDefined()
+    expect(navbarTag).toContain(':show-back="Boolean(activePlaylist)"')
+    expect(navbarTag).toContain('back-appearance="surface"')
+    expect(navbarTag).toContain('Apps.music.tabs.playlists')
+    expect(navbarTag).toContain('@back="closePlaylist"')
+    expect(source).not.toContain('SkyNavbarBackLink,')
+    expect(source).not.toContain('<sky-navbar-back-link')
+  })
+
   it('inherits the central safe areas for the iPhone header', () => {
     const appRuleStart = source.indexOf('.music-app {')
     const appRule = source.slice(
