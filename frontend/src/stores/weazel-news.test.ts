@@ -115,6 +115,37 @@ describe('Weazel News store', () => {
     expect(store.publicHasMore).toBe(false)
   })
 
+  it('normalizes the public response to newest first without changing images', async () => {
+    const older = {
+      ...article,
+      id: 'older-article',
+      publishedAt: (article.publishedAt ?? 0) - 1_000,
+    }
+    const newer = {
+      ...article,
+      id: 'newer-article',
+      images: [...article.images].reverse(),
+      publishedAt: (article.publishedAt ?? 0) + 1_000,
+    }
+    mockNuiCall.mockResolvedValueOnce({
+      data: { hasMore: false, items: [older, newer] },
+      success: true,
+    })
+    const store = useWeazelNewsStore()
+
+    expect(await store.loadPublic()).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledWith('weazel-news:list', {
+      category: null,
+      offset: 0,
+      search: '',
+    })
+    expect(store.publicItems.map((item) => item.id)).toEqual([
+      'newer-article',
+      'older-article',
+    ])
+    expect(store.publicItems[0]?.images).toEqual(newer.images)
+  })
+
   it('replaces stale search results with a successful empty response', async () => {
     mockNuiCall.mockResolvedValueOnce({
       data: { hasMore: false, items: [] },

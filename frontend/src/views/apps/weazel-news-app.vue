@@ -5,6 +5,7 @@ import {
   SkyCard,
   SkyDialog,
   SkyDialogButton,
+  SkyDropdown,
   SkyEmptyState,
   SkyField,
   SkyIcon,
@@ -25,6 +26,8 @@ import {
   Building2,
   Camera,
   CalendarDays,
+  ChevronDown,
+  ChevronLeft,
   ChevronRight,
   FileText,
   House,
@@ -57,7 +60,6 @@ import { WEAZEL_NEWS_CATEGORY_IDS } from '@/types/weazel-news'
 
 type MainTab = 'home' | 'categories' | 'search' | 'editorial'
 type Screen = 'main' | 'detail' | 'composer'
-type ComposerOption = { label: string; value: string }
 type SelectedImage = { id: number; url: string }
 type ComposerContext = {
   article: WeazelNewsArticle | null
@@ -83,6 +85,11 @@ const searchPending = ref(false)
 const editorialStatus = ref<WeazelNewsManageStatus>('all')
 const editingArticle = ref<WeazelNewsArticle | null>(null)
 const selectedImages = ref<SelectedImage[]>([])
+const detailImageIndex = ref(0)
+const categoryDropdownOpened = ref(false)
+const categoryDropdownTarget = ref<HTMLElement | null>(null)
+const statusDropdownOpened = ref(false)
+const statusDropdownTarget = ref<HTMLElement | null>(null)
 const deleteTarget = ref<WeazelNewsArticle | null>(null)
 const deleteDialogOpened = ref(false)
 const toastOpened = ref(false)
@@ -119,15 +126,24 @@ const activeTabIndex = computed(() =>
     activeTab.value,
   ),
 )
-const categoryOptions = computed<ComposerOption[]>(() =>
+const categoryDropdownItems = computed(() =>
   WEAZEL_NEWS_CATEGORY_IDS.map((category) => ({
+    checked: draft.value.category === category,
+    id: category,
     label: categoryLabel(category),
-    value: category,
   })),
 )
-const statusOptions = computed<ComposerOption[]>(() => [
-  { label: t('composer.statusDraft'), value: 'draft' },
-  { label: t('composer.statusPublished'), value: 'published' },
+const statusDropdownItems = computed(() => [
+  {
+    checked: draft.value.status === 'draft',
+    id: 'draft',
+    label: t('composer.statusDraft'),
+  },
+  {
+    checked: draft.value.status === 'published',
+    id: 'published',
+    label: t('composer.statusPublished'),
+  },
 ])
 const detailImages = computed<SelectedImage[]>(() => {
   const article = selectedArticle.value
@@ -142,6 +158,10 @@ const detailImages = computed<SelectedImage[]>(() => {
     ? [{ id: article.imageMediaId, url: article.imageUrl }]
     : []
 })
+const activeDetailImage = computed(
+  () =>
+    detailImages.value[detailImageIndex.value] ?? detailImages.value[0] ?? null,
+)
 const knownErrors = new Set([
   'feature_disabled',
   'invalid_article',
@@ -177,7 +197,7 @@ const currentSurfaceLoading = computed(() => {
   }
   if (activeTab.value === 'categories') return news.contextLoading
   if (activeTab.value === 'search') {
-    return searchSubmitted.value && (searchPending.value || news.publicLoading)
+    return searchPending.value || news.publicLoading
   }
   return news.publicLoading
 })
@@ -236,14 +256,26 @@ async function loadHome(): Promise<void> {
   await news.loadPublic({ category: selectedCategory.value })
 }
 
+function cancelQueuedSearch(): void {
+  if (searchTimer !== undefined) {
+    window.clearTimeout(searchTimer)
+    searchTimer = undefined
+  }
+  searchPending.value = false
+}
+
 async function selectTab(tab: MainTab): Promise<void> {
+  if (tab !== 'search') cancelQueuedSearch()
   activeTab.value = tab
   screen.value = 'main'
   news.error = ''
 
   if (tab === 'home') await loadHome()
   if (tab === 'categories') await news.loadContext()
-  if (tab === 'search' && searchSubmitted.value) await submitSearch()
+  if (tab === 'search') {
+    if (searchSubmitted.value) await submitSearch()
+    else await loadLatestSearch()
+  }
   if (tab === 'editorial') await loadEditorial()
 }
 
@@ -268,7 +300,7 @@ async function submitSearch(): Promise<void> {
   }
   submittedSearchQuery.value = searchQuery.value.trim()
   if (!submittedSearchQuery.value) {
-    clearSearch()
+    await clearSearch()
     return
   }
   searchSubmitted.value = true
@@ -280,7 +312,7 @@ function queueSearch(event: Event): void {
   searchQuery.value = eventValue(event)
   if (searchTimer !== undefined) window.clearTimeout(searchTimer)
   if (!searchQuery.value.trim()) {
-    clearSearch()
+    void clearSearch()
     return
   }
   submittedSearchQuery.value = searchQuery.value.trim()
@@ -288,6 +320,7 @@ function queueSearch(event: Event): void {
   searchPending.value = true
   searchTimer = window.setTimeout(() => {
     searchTimer = undefined
+    if (activeTab.value !== 'search') return
     void submitSearch()
   }, 250)
 }
@@ -300,7 +333,16 @@ async function loadMoreSearch(): Promise<void> {
   })
 }
 
-function clearSearch(): void {
+async function loadLatestSearch(): Promise<void> {
+  await news.loadPublic({ search: '' })
+}
+
+async function retrySearch(): Promise<void> {
+  if (searchSubmitted.value) await submitSearch()
+  else await loadLatestSearch()
+}
+
+async function clearSearch(): Promise<void> {
   if (searchTimer !== undefined) {
     window.clearTimeout(searchTimer)
     searchTimer = undefined
@@ -311,6 +353,7 @@ function clearSearch(): void {
   searchPending.value = false
   news.publicError = ''
   news.error = ''
+  await loadLatestSearch()
 }
 
 async function openArticle(
@@ -321,12 +364,14 @@ async function openArticle(
     showToast(errorKey(news.detailError))
     return
   }
+  detailImageIndex.value = 0
   detailManaged.value = managed
   screen.value = 'detail'
 }
 
 function closeDetail(): void {
   screen.value = 'main'
+  detailImageIndex.value = 0
   news.selected = null
   if (activeTab.value === 'editorial' && news.context?.canManage) {
     void news.loadManaged(editorialStatus.value)
@@ -337,6 +382,7 @@ function createArticle(): void {
   if (!news.context?.canManage) return
   editingArticle.value = null
   selectedImages.value = []
+  closeComposerDropdowns()
   draft.value = emptyDraft()
   screen.value = 'composer'
 }
@@ -344,6 +390,7 @@ function createArticle(): void {
 function editArticle(article: WeazelNewsArticle): void {
   if (!news.context?.canManage) return
   editingArticle.value = article
+  closeComposerDropdowns()
   selectedImages.value = article.images?.length
     ? article.images.map((image) => ({
         id: image.mediaId,
@@ -363,7 +410,27 @@ function editArticle(article: WeazelNewsArticle): void {
 }
 
 function closeComposer(): void {
+  closeComposerDropdowns()
   screen.value = editingArticle.value ? 'detail' : 'main'
+}
+
+function closeComposerDropdowns(): void {
+  categoryDropdownOpened.value = false
+  statusDropdownOpened.value = false
+}
+
+function toggleCategoryDropdown(event: MouseEvent): void {
+  if (!(event.currentTarget instanceof HTMLElement)) return
+  categoryDropdownTarget.value = event.currentTarget
+  statusDropdownOpened.value = false
+  categoryDropdownOpened.value = !categoryDropdownOpened.value
+}
+
+function toggleStatusDropdown(event: MouseEvent): void {
+  if (!(event.currentTarget instanceof HTMLElement)) return
+  statusDropdownTarget.value = event.currentTarget
+  categoryDropdownOpened.value = false
+  statusDropdownOpened.value = !statusDropdownOpened.value
 }
 
 function updateCategory(value: string): void {
@@ -376,6 +443,53 @@ function updateStatus(value: string): void {
   if (value === 'draft' || value === 'published') {
     draft.value.status = value
   }
+}
+
+function selectCategoryDropdownItem(id: string): void {
+  updateCategory(id)
+  closeComposerDropdowns()
+}
+
+function selectStatusDropdownItem(id: string): void {
+  updateStatus(id)
+  closeComposerDropdowns()
+}
+
+function selectDetailImage(index: number): void {
+  if (index < 0 || index >= detailImages.value.length) return
+  detailImageIndex.value = index
+}
+
+function showPreviousDetailImage(): void {
+  const count = detailImages.value.length
+  if (count < 2) return
+  detailImageIndex.value = (detailImageIndex.value - 1 + count) % count
+}
+
+function showNextDetailImage(): void {
+  const count = detailImages.value.length
+  if (count < 2) return
+  detailImageIndex.value = (detailImageIndex.value + 1) % count
+}
+
+let detailSwipeStartX: number | null = null
+
+function beginDetailImageSwipe(event: TouchEvent): void {
+  detailSwipeStartX = event.changedTouches.item(0)?.clientX ?? null
+}
+
+function finishDetailImageSwipe(event: TouchEvent): void {
+  const endX = event.changedTouches.item(0)?.clientX
+  if (detailSwipeStartX === null || endX === undefined) return
+  const distance = endX - detailSwipeStartX
+  detailSwipeStartX = null
+  if (Math.abs(distance) < 44) return
+  if (distance < 0) showNextDetailImage()
+  else showPreviousDetailImage()
+}
+
+function cancelDetailImageSwipe(): void {
+  detailSwipeStartX = null
 }
 
 function syncImageMediaIds(): void {
@@ -462,6 +576,7 @@ async function saveArticle(
 
   editingArticle.value = article
   news.selected = article
+  detailImageIndex.value = 0
   detailManaged.value = true
   screen.value = 'detail'
   showToast(wasEditing ? 'feedback.updated' : 'feedback.created')
@@ -541,6 +656,8 @@ async function initialize(): Promise<void> {
 onMounted(() => void initialize())
 
 onBeforeUnmount(() => {
+  categoryDropdownTarget.value = null
+  statusDropdownTarget.value = null
   if (toastTimer !== undefined) window.clearTimeout(toastTimer)
   if (searchTimer !== undefined) window.clearTimeout(searchTimer)
 })
@@ -769,7 +886,7 @@ onBeforeUnmount(() => {
             <Newspaper :size="34" />
             <strong>{{ t('states.errorTitle') }}</strong>
             <span>{{ contextualError }}</span>
-            <sky-button rounded small @click="submitSearch">{{
+            <sky-button rounded small @click="retrySearch">{{
               t('retry')
             }}</sky-button>
           </div>
@@ -781,7 +898,15 @@ onBeforeUnmount(() => {
           >
             <template #icon><Search :size="34" /></template>
           </sky-empty-state>
-          <div v-else-if="searchSubmitted" class="weazel-card-list">
+          <div
+            v-else-if="!news.publicItems.length"
+            class="weazel-state weazel-state--compact"
+          >
+            <FileText :size="34" />
+            <strong>{{ t('states.emptyTitle') }}</strong>
+            <span>{{ t('states.emptyBody') }}</span>
+          </div>
+          <div v-else class="weazel-card-list">
             <sky-card
               v-for="article in news.publicItems"
               :key="article.id"
@@ -801,9 +926,7 @@ onBeforeUnmount(() => {
             </sky-card>
           </div>
           <sky-button
-            v-if="
-              searchSubmitted && news.publicHasMore && !currentSurfaceLoading
-            "
+            v-if="news.publicHasMore && !currentSurfaceLoading"
             class="weazel-load-more"
             tonal
             rounded
@@ -1046,25 +1169,77 @@ onBeforeUnmount(() => {
         <div
           v-if="detailImages.length"
           class="weazel-detail-gallery"
+          role="group"
           :aria-label="t('accessibility.articleImages')"
+          :tabindex="detailImages.length > 1 ? 0 : undefined"
+          @keydown.left.prevent="showPreviousDetailImage"
+          @keydown.right.prevent="showNextDetailImage"
+          @touchstart.passive="beginDetailImageSwipe"
+          @touchend.passive="finishDetailImageSwipe"
+          @touchcancel="cancelDetailImageSwipe"
         >
           <img
-            v-for="image in detailImages"
-            :key="image.id"
+            v-if="activeDetailImage"
+            :key="activeDetailImage.id"
             class="weazel-detail-cover"
-            :src="image.url"
+            :src="activeDetailImage.url"
             :alt="
               t('article.coverAlt', {
                 title: selectedArticle.title,
               })
             "
           />
+          <template v-if="detailImages.length > 1">
+            <sky-button
+              icon-only
+              rounded
+              tonal
+              class="weazel-detail-gallery-control is-previous"
+              :aria-label="t('accessibility.previousPhoto')"
+              @click="showPreviousDetailImage"
+            >
+              <ChevronLeft :size="22" />
+            </sky-button>
+            <sky-button
+              icon-only
+              rounded
+              tonal
+              class="weazel-detail-gallery-control is-next"
+              :aria-label="t('accessibility.nextPhoto')"
+              @click="showNextDetailImage"
+            >
+              <ChevronRight :size="22" />
+            </sky-button>
+            <div
+              class="weazel-detail-pagination"
+              role="group"
+              :aria-label="t('accessibility.articleImages')"
+            >
+              <button
+                v-for="(image, index) in detailImages"
+                :key="image.id"
+                type="button"
+                :class="{ 'is-active': detailImageIndex === index }"
+                :aria-current="detailImageIndex === index ? 'true' : undefined"
+                :aria-label="
+                  t('accessibility.showPhoto', {
+                    current: String(index + 1),
+                    total: String(detailImages.length),
+                  })
+                "
+                @click="selectDetailImage(index)"
+              >
+                <span></span>
+              </button>
+            </div>
+          </template>
           <span
             v-if="detailImages.length > 1"
             class="weazel-detail-count"
             aria-hidden="true"
           >
-            <Images :size="13" /> {{ detailImages.length }}
+            <Images :size="13" /> {{ detailImageIndex + 1 }} /
+            {{ detailImages.length }}
           </span>
         </div>
         <div v-else class="weazel-detail-masthead">
@@ -1210,23 +1385,55 @@ onBeforeUnmount(() => {
             :value="draft.body"
             @input="draft.body = eventValue($event)"
           />
-          <sky-field
-            type="select"
-            dropdown
-            :label="t('composer.category')"
-            :options="categoryOptions"
-            :model-value="draft.category"
-            @update:model-value="updateCategory"
-          />
-          <sky-field
+          <sky-list-item
+            link
+            link-component="button"
+            :chevron="false"
+            :title="t('composer.category')"
+            :aria-label="`${t('composer.category')}: ${categoryLabel(draft.category)}`"
+            :link-props="{
+              id: 'weazel-news-category-trigger',
+              'aria-controls': 'weazel-news-category-dropdown',
+              'aria-expanded': categoryDropdownOpened,
+              'aria-haspopup': 'menu',
+              type: 'button',
+            }"
+            @click="toggleCategoryDropdown"
+          >
+            <template #after>
+              <span class="weazel-composer-select-value">
+                {{ categoryLabel(draft.category) }}
+                <ChevronDown :size="17" aria-hidden="true" />
+              </span>
+            </template>
+          </sky-list-item>
+          <sky-list-item
             v-if="editingArticle"
-            type="select"
-            dropdown
-            :label="t('composer.status')"
-            :options="statusOptions"
-            :model-value="draft.status"
-            @update:model-value="updateStatus"
-          />
+            link
+            link-component="button"
+            :chevron="false"
+            :title="t('composer.status')"
+            :aria-label="
+              t('accessibility.status', {
+                status: statusLabel(draft.status),
+              })
+            "
+            :link-props="{
+              id: 'weazel-news-status-trigger',
+              'aria-controls': 'weazel-news-status-dropdown',
+              'aria-expanded': statusDropdownOpened,
+              'aria-haspopup': 'menu',
+              type: 'button',
+            }"
+            @click="toggleStatusDropdown"
+          >
+            <template #after>
+              <span class="weazel-composer-select-value">
+                {{ statusLabel(draft.status) }}
+                <ChevronDown :size="17" aria-hidden="true" />
+              </span>
+            </template>
+          </sky-list-item>
         </sky-list>
 
         <div class="weazel-composer-actions">
@@ -1261,6 +1468,35 @@ onBeforeUnmount(() => {
         </div>
       </sky-scroll-area>
     </template>
+
+    <sky-dropdown
+      id="weazel-news-category-dropdown"
+      class="weazel-composer-dropdown sky-ui-provider"
+      :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+      :items="categoryDropdownItems"
+      :label="t('composer.category')"
+      :opened="categoryDropdownOpened"
+      placement="auto"
+      :target="categoryDropdownTarget"
+      @backdropclick="closeComposerDropdowns"
+      @escape="closeComposerDropdowns"
+      @positionerror="closeComposerDropdowns"
+      @select="selectCategoryDropdownItem"
+    />
+    <sky-dropdown
+      id="weazel-news-status-dropdown"
+      class="weazel-composer-dropdown sky-ui-provider"
+      :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+      :items="statusDropdownItems"
+      :label="t('composer.status')"
+      :opened="statusDropdownOpened"
+      placement="auto"
+      :target="statusDropdownTarget"
+      @backdropclick="closeComposerDropdowns"
+      @escape="closeComposerDropdowns"
+      @positionerror="closeComposerDropdowns"
+      @select="selectStatusDropdownItem"
+    />
 
     <sky-dialog
       :opened="deleteDialogOpened"
@@ -1622,16 +1858,36 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 2;
   top: 50%;
-  right: 14px;
-  width: 30px;
-  height: 30px;
+  right: 7px;
+  width: var(--sky-touch-target);
+  min-width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
+  min-height: var(--sky-touch-target);
   display: grid;
   place-items: center;
   transform: translateY(-50%);
   border: 0;
-  border-radius: 999px;
-  background: var(--weazel-line);
+  padding: 0;
+  background: transparent;
   color: var(--weazel-muted);
+}
+
+.weazel-search-clear::before {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--sky-radius-pill);
+  background: var(--weazel-line);
+  content: '';
+}
+
+.weazel-search-clear:focus-visible {
+  outline: 2px solid var(--sky-app-accent, #007aff);
+  outline-offset: -2px;
+}
+
+.weazel-search-clear > svg {
+  position: relative;
 }
 
 .weazel-access-content {
@@ -1831,15 +2087,14 @@ onBeforeUnmount(() => {
   position: relative;
   width: 100%;
   height: 240px;
-  display: flex;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
+  overflow: hidden;
+  touch-action: pan-y;
 }
 
-.weazel-detail-gallery::-webkit-scrollbar {
-  display: none;
+.weazel-detail-gallery:focus-visible,
+.weazel-detail-pagination button:focus-visible {
+  outline: 2px solid var(--sky-app-accent, #007aff);
+  outline-offset: -2px;
 }
 
 .weazel-detail-cover {
@@ -1847,9 +2102,62 @@ onBeforeUnmount(() => {
   max-width: none;
   height: 240px;
   display: block;
-  flex: 0 0 100%;
   object-fit: cover;
-  scroll-snap-align: start;
+}
+
+.weazel-detail-gallery-control {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  width: var(--sky-touch-target) !important;
+  height: var(--sky-touch-target) !important;
+  min-width: var(--sky-touch-target) !important;
+  min-height: var(--sky-touch-target) !important;
+  transform: translateY(-50%);
+  background: rgb(0 0 0 / 58%) !important;
+  color: #fff !important;
+}
+
+.weazel-detail-gallery-control.is-previous {
+  left: var(--sky-space-2);
+}
+
+.weazel-detail-gallery-control.is-next {
+  right: var(--sky-space-2);
+}
+
+.weazel-detail-pagination {
+  position: absolute;
+  z-index: 2;
+  right: 50%;
+  bottom: 0;
+  display: flex;
+  transform: translateX(50%);
+}
+
+.weazel-detail-pagination button {
+  width: var(--sky-touch-target);
+  min-width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
+  min-height: var(--sky-touch-target);
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.weazel-detail-pagination span {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--sky-radius-pill);
+  background: rgb(255 255 255 / 55%);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+}
+
+.weazel-detail-pagination button.is-active span {
+  width: 16px;
+  background: #fff;
 }
 
 .weazel-detail-masthead {
@@ -1859,8 +2167,9 @@ onBeforeUnmount(() => {
 
 .weazel-detail-count {
   position: absolute;
+  z-index: 2;
   right: var(--sky-page-gutter);
-  bottom: var(--sky-space-3);
+  top: var(--sky-space-3);
   padding: 4px 9px;
   display: inline-flex;
   align-items: center;
@@ -2097,6 +2406,13 @@ onBeforeUnmount(() => {
 .weazel-composer-list :deep(.sky-field__textarea) {
   min-height: 180px;
   resize: vertical;
+}
+
+.weazel-composer-select-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sky-space-1);
+  color: var(--weazel-muted);
 }
 
 .weazel-photo-source-actions {

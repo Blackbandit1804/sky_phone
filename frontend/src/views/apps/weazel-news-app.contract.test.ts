@@ -132,10 +132,36 @@ describe('Weazel News article detail contract', () => {
       /@click\s*=\s*["']\s*editArticle\s*\(\s*selectedArticle\s*\)\s*["']/,
     )
   })
+
+  it('provides explicit controls and touch gestures for multiple article images', () => {
+    const paginationButtonRule =
+      source.match(/\.weazel-detail-pagination button\s*\{[^}]*\}/s)?.[0] ?? ''
+
+    expect(detailSource).toContain(':key="activeDetailImage.id"')
+    expect(detailSource).toContain('role="group"')
+    expect(detailSource).toContain('@click="showPreviousDetailImage"')
+    expect(detailSource).toContain('@click="showNextDetailImage"')
+    expect(detailSource).toContain('@click="selectDetailImage(index)"')
+    expect(detailSource).toContain(
+      '@keydown.left.prevent="showPreviousDetailImage"',
+    )
+    expect(detailSource).toContain(
+      '@keydown.right.prevent="showNextDetailImage"',
+    )
+    expect(detailSource).toContain(
+      '@touchstart.passive="beginDetailImageSwipe"',
+    )
+    expect(detailSource).toContain('@touchend.passive="finishDetailImageSwipe"')
+    expect(detailSource).toContain("t('accessibility.previousPhoto')")
+    expect(detailSource).toContain("t('accessibility.nextPhoto')")
+    expect(paginationButtonRule).toContain('width: var(--sky-touch-target)')
+    expect(paginationButtonRule).toContain('height: var(--sky-touch-target)')
+  })
 })
 
 describe('Weazel News empty search contract', () => {
   it('uses the shared compact empty state when no article matches', () => {
+    const clearButtonRule = styleRule('.weazel-search-clear')
     const emptyStateTag = searchSource.match(
       /<(?:SkyEmptyState|sky-empty-state)\b[^>]*>/is,
     )?.[0]
@@ -143,24 +169,64 @@ describe('Weazel News empty search contract', () => {
     expect(searchSource).not.toBe('')
     expect(emptyStateTag).toBeDefined()
     expect(emptyStateTag).toMatch(/\bcompact\b/i)
-    expect(emptyStateTag).toMatch(/!\s*news\.publicItems\.length/)
+    expect(emptyStateTag).toMatch(
+      /searchSubmitted\s*&&\s*!\s*news\.publicItems\.length/,
+    )
     expect(emptyStateTag).toContain("t('search.emptyTitle')")
     expect(emptyStateTag).toContain("t('search.emptyBody')")
+    expect(clearButtonRule).toContain('width: var(--sky-touch-target)')
+    expect(clearButtonRule).toContain('height: var(--sky-touch-target)')
+  })
+
+  it('loads and lists the latest articles before a query is submitted', () => {
+    expect(source).toContain("await news.loadPublic({ search: '' })")
+    expect(source).toContain("if (tab !== 'search') cancelQueuedSearch()")
+    expect(source).toContain("if (activeTab.value !== 'search') return")
+    expect(searchSource).toContain('<div v-else class="weazel-card-list">')
+    expect(searchSource).toMatch(
+      /v-for\s*=\s*["']article\s+in\s+news\.publicItems["']/,
+    )
+    expect(searchSource).not.toContain(
+      'v-else-if="searchSubmitted" class="weazel-card-list"',
+    )
   })
 })
 
 describe('Weazel News article composer contract', () => {
-  it('uses the central SkyField select for the article category', () => {
-    const categorySelect = openingTags('SkyField', 'sky-field').find(
-      (tag) =>
-        /\btype\s*=\s*["']select["']/i.test(tag) && /draft\.category/.test(tag),
+  it('uses checked central SkyDropdown menus for category and status', () => {
+    const categoryTrigger = openingTags(
+      'SkyListItem',
+      'sky-list-item',
+      composerSource,
+    ).find((tag) => /weazel-news-category-trigger/.test(tag))
+    const statusTrigger = openingTags(
+      'SkyListItem',
+      'sky-list-item',
+      composerSource,
+    ).find((tag) => /weazel-news-status-trigger/.test(tag))
+    const dropdowns = openingTags('SkyDropdown', 'sky-dropdown', composerSource)
+    const categoryDropdown = dropdowns.find((tag) =>
+      /categoryDropdownItems/.test(tag),
+    )
+    const statusDropdown = dropdowns.find((tag) =>
+      /statusDropdownItems/.test(tag),
     )
 
-    expect(categorySelect).toBeDefined()
-    expect(categorySelect).toMatch(/:options\s*=/i)
-    expect(categorySelect).toMatch(/\bdropdown\b/i)
-    expect(categorySelect).toContain("t('composer.category')")
-    expect(composerSource).not.toContain("composerChoice = 'category'")
+    expect(categoryTrigger).toBeDefined()
+    expect(categoryTrigger).toContain("'aria-expanded': categoryDropdownOpened")
+    expect(categoryTrigger).toContain("'aria-haspopup': 'menu'")
+    expect(statusTrigger).toBeDefined()
+    expect(statusTrigger).toContain("'aria-expanded': statusDropdownOpened")
+    expect(statusTrigger).toContain("'aria-haspopup': 'menu'")
+    expect(categoryDropdown).toBeDefined()
+    expect(categoryDropdown).toContain(':opened="categoryDropdownOpened"')
+    expect(statusDropdown).toBeDefined()
+    expect(statusDropdown).toContain(':opened="statusDropdownOpened"')
+    expect(source).toContain('checked: draft.value.category === category')
+    expect(source).toContain("checked: draft.value.status === 'draft'")
+    expect(composerSource).not.toMatch(
+      /<(?:SkyField|sky-field)\b[^>]*\btype\s*=\s*["']select["']/i,
+    )
   })
 
   it('keeps Photos and Camera directly visible in the composer', () => {
