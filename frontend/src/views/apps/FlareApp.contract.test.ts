@@ -42,8 +42,8 @@ describe('FlareApp profile editing contract', () => {
     const mediaApp = source.slice(mediaAppStart, mediaAppEnd)
 
     expect(source.match(/@click="openPhotoSourcePicker"/g)).toHaveLength(2)
-    expect(source).toContain(
-      '<sky-action-sheet\n      id="flare-photo-source-sheet"',
+    expect(source).toMatch(
+      /<sky-action-sheet\s+id=["']flare-photo-source-sheet["']/,
     )
     expect(source).toContain(
       '<sky-action-button bold @click="openProfileMediaApp(\'photos\')">',
