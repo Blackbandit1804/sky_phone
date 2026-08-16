@@ -2938,6 +2938,7 @@ label.sky-list-item__row {
 .sky-navbar-back-link__chevron {
   width: 12px;
   height: 12px;
+  display: block;
   border-bottom: 2px solid currentColor;
   border-left: 2px solid currentColor;
   transform: rotate(45deg);

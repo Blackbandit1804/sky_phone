@@ -268,6 +268,9 @@ describe('SkyNavbar', () => {
     expect(controlsStyles).toMatch(
       /\.sky-navbar-back-link:active:not\(:disabled\)\s*\{[^}]*opacity:\s*0\.5;[^}]*transition-duration:\s*0ms;/s,
     )
+    expect(controlsStyles).toMatch(
+      /\.sky-navbar-back-link__chevron\s*\{[^}]*width:\s*12px;[^}]*height:\s*12px;[^}]*display:\s*block;/s,
+    )
     expect(controlsStyles).not.toMatch(
       /\.sky-navbar-back-link:active:not\(:disabled\)\s*\{[^}]*--sky-app-accent-soft/s,
     )
