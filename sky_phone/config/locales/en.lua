@@ -1580,6 +1580,7 @@ Locales["en"] = {
             },
             map = {
                 name = "Map", controls = "Map controls", currentLocation = "Current Location",
+                locationUnavailable = "Your current location is unavailable.",
                 imageError = "The map image could not be loaded.", switchStyle = "Switch Map Type",
                 addMarker = "Add Marker", placeMarker = "Place Marker", placeMarkerHint = "Move the map until the crosshair is over the destination.",
                 addHere = "Add Here", newMarker = "New Marker", newMarkerDescription = "Give this saved place a name and color.",

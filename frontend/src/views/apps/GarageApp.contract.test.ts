@@ -31,10 +31,19 @@ describe('GarageApp Sky UI contract', () => {
     expect(source).not.toContain('overview.system')
   })
 
-  it('raises only the Garage title block', () => {
+  it('raises the Garage title and subtitle when no navbar action exists', () => {
     expect(source).toContain('class="garage-navbar"')
     expect(source).toMatch(
-      /\.garage-navbar :deep\(\.sky-navbar__title-container > div\)\s*\{[^}]*translateY\(-20px\)/s,
+      /\.garage-navbar :deep\(\.sky-navbar__title-container > div\)\s*\{[^}]*translateY\(-30px\)/s,
+    )
+  })
+
+  it('centers filter labels and counters inside their segmented controls', () => {
+    expect(source).toMatch(
+      /\.garage-filters :deep\(button\)\s*\{[^}]*height: 36px;[^}]*align-items: center;[^}]*line-height: 1;/s,
+    )
+    expect(source).toMatch(
+      /\.garage-filters span,\s*\.garage-filters small\s*\{[^}]*height: 18px;[^}]*align-items: center;[^}]*line-height: 1;/s,
     )
   })
 

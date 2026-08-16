@@ -15,19 +15,29 @@ const cayoMapCoordinates = {
   height: 1994.4,
 }
 
-const cayoTerritoryBounds = {
-  maxX: 7542.07,
-  minY: -7170.07,
+const cayoLayerBounds = {
+  minX: cayoMapCoordinates.centerX - cayoMapCoordinates.width / 2,
+  minY:
+    defaultMainlandCoordinates.yFlipOffset -
+    (cayoMapCoordinates.centerY + cayoMapCoordinates.height / 2),
+  width: cayoMapCoordinates.width,
+  height: cayoMapCoordinates.height,
 }
+
+const mapMaximumX = Math.max(
+  defaultMainlandCoordinates.minX + defaultMainlandCoordinates.width,
+  cayoLayerBounds.minX + cayoLayerBounds.width,
+)
+const mapMaximumY = Math.max(
+  defaultMainlandCoordinates.minY + defaultMainlandCoordinates.height,
+  cayoLayerBounds.minY + cayoLayerBounds.height,
+)
 
 export const defaultMapCoordinates = {
   minX: defaultMainlandCoordinates.minX,
   minY: defaultMainlandCoordinates.minY,
-  width: cayoTerritoryBounds.maxX - defaultMainlandCoordinates.minX,
-  height:
-    defaultMainlandCoordinates.yFlipOffset -
-    cayoTerritoryBounds.minY -
-    defaultMainlandCoordinates.minY,
+  width: mapMaximumX - defaultMainlandCoordinates.minX,
+  height: mapMaximumY - defaultMainlandCoordinates.minY,
   yFlipOffset: defaultMainlandCoordinates.yFlipOffset,
 }
 
@@ -47,12 +57,7 @@ export const defaultMainlandStyle = toDefaultMapLayerStyle(
   defaultMainlandCoordinates,
 )
 export const defaultCayoStyle = toDefaultMapLayerStyle({
-  minX: cayoMapCoordinates.centerX - cayoMapCoordinates.width / 2,
-  minY:
-    defaultMapCoordinates.yFlipOffset -
-    (cayoMapCoordinates.centerY + cayoMapCoordinates.height / 2),
-  width: cayoMapCoordinates.width,
-  height: cayoMapCoordinates.height,
+  ...cayoLayerBounds,
 })
 
 export const clampDefaultMapPoint = (point: MapPoint): MapPoint => ({

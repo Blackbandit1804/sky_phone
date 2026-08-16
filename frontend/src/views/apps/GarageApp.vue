@@ -590,7 +590,7 @@ onBeforeUnmount(() => {
   --garage-separator: var(--sky-hairline);
 }
 .garage-navbar :deep(.sky-navbar__title-container > div) {
-  transform: translateY(-20px);
+  transform: translateY(-30px);
 }
 .garage-scroll {
   padding-top: 0;
@@ -679,12 +679,12 @@ onBeforeUnmount(() => {
   height: 40px;
   min-height: 40px;
   margin-bottom: 13px;
-  padding: 0;
+  padding: 2px;
 }
 .garage-filters :deep(button) {
   min-width: 0;
-  height: 40px;
-  min-height: 40px;
+  height: 36px;
+  min-height: 36px;
   padding-right: 4px;
   padding-left: 4px;
   align-items: center;
@@ -692,14 +692,23 @@ onBeforeUnmount(() => {
   gap: 4px;
   font-size: 11px;
   font-weight: 600;
+  line-height: 1;
 }
 .garage-filters :deep(.sky-segmented__highlight) {
-  top: 0;
-  bottom: 0;
+  top: 2px;
+  bottom: 2px;
+}
+.garage-filters span,
+.garage-filters small {
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 .garage-filters small {
   min-width: 17px;
-  padding: 1px 4px;
+  padding: 0 4px;
   border-radius: var(--sky-radius-pill);
   background: rgb(36 120 255 / 13%);
   font-size: 10px;

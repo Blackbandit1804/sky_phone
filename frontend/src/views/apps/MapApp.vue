@@ -5,6 +5,7 @@ import {
   SkyList,
   SkyField,
   SkyAppPage,
+  SkyGlass,
   SkySpinner,
   SkySheet,
   SkyToast,
@@ -32,6 +33,13 @@ import {
   defaultMapWorldToPercent,
   type MapPoint,
 } from '@/features/map/defaultMapGeometry'
+import {
+  clampMapPan,
+  clientPointToMapPercent,
+  minimumCoverZoom,
+  zoomPanAtPoint,
+  type MapViewportMetrics,
+} from '@/features/map/mapViewport'
 import { useMapStore } from '@/stores/map'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
@@ -47,6 +55,7 @@ const easyShare = useEasyShareStore()
 const mapStyle = ref<MapStyle>('default')
 const zoom = ref(1.1)
 const pan = ref<MapPoint>({ x: 0, y: 0 })
+const viewportSize = ref<MapPoint>({ x: 390, y: 844 })
 const currentLocation = ref<MapPoint | null>(null)
 const mapAspect = ref(
   defaultMapCoordinates.width / defaultMapCoordinates.height,
@@ -55,10 +64,10 @@ const imageError = ref(false)
 const locating = ref(false)
 const viewportRef = ref<HTMLElement | null>(null)
 const canvasRef = ref<HTMLElement | null>(null)
-const locationRef = ref<HTMLElement | null>(null)
 const isPointerDown = ref(false)
 const isPanning = ref(false)
 const placingMarker = ref(false)
+const placementPoint = ref<MapPoint | null>(null)
 const draftCoords = ref<(MapPoint & { z: number }) | null>(null)
 const markerLabel = ref('')
 const markerColor = ref<MapMarkerColor>('blue')
@@ -68,8 +77,9 @@ const toastText = ref('')
 let pointerMoveFrame: number | undefined
 let wheelZoomFrame: number | undefined
 let toastTimer: number | undefined
-let pendingWheelDirection: -1 | 0 | 1 = 0
+let pendingWheelDelta = 0
 let pendingWheelPoint: MapPoint | undefined
+let resizeObserver: ResizeObserver | undefined
 
 const pointerStart = {
   x: 0,
@@ -86,8 +96,7 @@ const mapBounds = {
 }
 const mapOrigin = { x: -336.8, y: -1412.2 }
 const mapScale = { x: -2340 / -1548.1, y: 291 / 189.3 }
-const zoomFactor = 1.35
-const minZoom = 0.7
+const baseMinZoom = 0.7
 const maxZoom = 12.3
 
 const mapStyles = [
@@ -120,10 +129,20 @@ const mapImageUrl = computed(() => {
 })
 const cayoMapImageUrl = `${import.meta.env.BASE_URL}img/maps/cayo-perico.svg`
 
+const canvasWidth = computed(() =>
+  Math.max(
+    viewportSize.value.x * 1.2,
+    viewportSize.value.y * 1.2 * mapAspect.value,
+  ),
+)
 const canvasStyle = computed(() => ({
   aspectRatio: String(mapAspect.value),
   transform: `translate(-50%, -50%) translate(${pan.value.x}px, ${pan.value.y}px) scale(${zoom.value})`,
-  width: 'max(120%, 120vh)',
+  width: `${canvasWidth.value}px`,
+}))
+const placementCrosshairStyle = computed(() => ({
+  left: `${placementPoint.value?.x ?? viewportSize.value.x / 2}px`,
+  top: `${placementPoint.value?.y ?? viewportSize.value.y / 2}px`,
 }))
 
 const mapToWorld = (coords: MapPoint): MapPoint => ({
@@ -216,6 +235,7 @@ function markerErrorText(error?: string): string {
 function setMapStyle(style: MapStyle): void {
   mapStyle.value = style
   imageError.value = false
+  void nextTick(normalizeViewport)
 }
 
 function cycleMapStyle(): void {
@@ -229,37 +249,50 @@ function startMarkerPlacement(): void {
   selectedMarker.value = null
   draftCoords.value = null
   markerError.value = ''
+  placementPoint.value = {
+    x: viewportRef.value?.clientWidth
+      ? viewportRef.value.clientWidth / 2
+      : viewportSize.value.x / 2,
+    y: viewportRef.value?.clientHeight
+      ? viewportRef.value.clientHeight / 2
+      : viewportSize.value.y / 2,
+  }
   placingMarker.value = true
 }
 
 function cancelMarkerPlacement(): void {
   placingMarker.value = false
+  placementPoint.value = null
 }
 
 function openMarkerEditor(): void {
-  const viewport = viewportRef.value?.getBoundingClientRect()
+  const viewportElement = viewportRef.value
+  const viewport = viewportElement?.getBoundingClientRect()
   const canvas = canvasRef.value?.getBoundingClientRect()
-  if (!viewport || !canvas || canvas.width <= 0 || canvas.height <= 0) {
+  if (
+    !viewportElement ||
+    !viewport ||
+    !canvas ||
+    canvas.width <= 0 ||
+    canvas.height <= 0
+  ) {
     showToast(phone.t('Apps.map.errors.request_failed'))
     return
   }
 
-  const percent = {
-    x: Math.min(
-      1,
-      Math.max(
-        0,
-        (viewport.left + viewport.width / 2 - canvas.left) / canvas.width,
-      ),
-    ),
-    y: Math.min(
-      1,
-      Math.max(
-        0,
-        (viewport.top + viewport.height / 2 - canvas.top) / canvas.height,
-      ),
-    ),
+  const renderedScaleX = viewport.width / viewportElement.clientWidth
+  const renderedScaleY = viewport.height / viewportElement.clientHeight
+  const target = placementPoint.value ?? {
+    x: viewportElement.clientWidth / 2,
+    y: viewportElement.clientHeight / 2,
   }
+  const percent = clientPointToMapPercent(
+    {
+      x: viewport.left + target.x * renderedScaleX,
+      y: viewport.top + target.y * renderedScaleY,
+    },
+    canvas,
+  )
   const coords = percentToWorld(percent)
   draftCoords.value = {
     x: Math.round(coords.x * 100) / 100,
@@ -270,6 +303,7 @@ function openMarkerEditor(): void {
   markerColor.value = 'blue'
   markerError.value = ''
   placingMarker.value = false
+  placementPoint.value = null
 }
 
 function updateMarkerLabel(event: Event): void {
@@ -335,30 +369,69 @@ async function setSelectedMarkerWaypoint(): Promise<void> {
   selectedMarker.value = null
 }
 
-function changeZoom(direction: -1 | 1, focalPoint?: MapPoint): void {
-  const targetZoom =
-    direction > 0 ? zoom.value * zoomFactor : zoom.value / zoomFactor
+function viewportMetrics(): MapViewportMetrics | null {
+  const viewport = viewportRef.value
+  const canvas = canvasRef.value
+  if (!viewport || !canvas) return null
+
+  return {
+    canvasHeight: canvas.clientHeight,
+    canvasWidth: canvas.clientWidth,
+    viewportHeight: viewport.clientHeight,
+    viewportWidth: viewport.clientWidth,
+  }
+}
+
+function normalizeViewport(
+  requestedPan: MapPoint = pan.value,
+  requestedZoom: number = zoom.value,
+): void {
+  const metrics = viewportMetrics()
+  if (!metrics) return
   const nextZoom = Math.min(
-    Math.max(Math.round(targetZoom * 1000) / 1000, minZoom),
+    maxZoom,
+    Math.max(minimumCoverZoom(metrics, baseMinZoom), requestedZoom),
+  )
+  zoom.value = Math.round(nextZoom * 1000) / 1000
+  pan.value = clampMapPan(requestedPan, zoom.value, metrics)
+}
+
+function viewportPoint(point: MapPoint): MapPoint | null {
+  const viewport = viewportRef.value
+  const bounds = viewport?.getBoundingClientRect()
+  if (!viewport || !bounds || bounds.width <= 0 || bounds.height <= 0) {
+    return null
+  }
+
+  return {
+    x: (point.x - bounds.left) / (bounds.width / viewport.clientWidth),
+    y: (point.y - bounds.top) / (bounds.height / viewport.clientHeight),
+  }
+}
+
+function changeZoom(targetZoom: number, focalClientPoint?: MapPoint): void {
+  const metrics = viewportMetrics()
+  if (!metrics) return
+  const nextZoom = Math.min(
+    Math.max(
+      Math.round(targetZoom * 1000) / 1000,
+      minimumCoverZoom(metrics, baseMinZoom),
+    ),
     maxZoom,
   )
   if (nextZoom === zoom.value) return
 
-  if (focalPoint && canvasRef.value && viewportRef.value) {
-    const rect = canvasRef.value.getBoundingClientRect()
-    const viewport = viewportRef.value.getBoundingClientRect()
-    const renderedScaleX = viewport.width / viewportRef.value.clientWidth
-    const renderedScaleY = viewport.height / viewportRef.value.clientHeight
-    const offsetX = focalPoint.x - rect.left - rect.width / 2
-    const offsetY = focalPoint.y - rect.top - rect.height / 2
-    const scale = nextZoom / zoom.value
-    pan.value = {
-      x: pan.value.x - (offsetX * (scale - 1)) / renderedScaleX,
-      y: pan.value.y - (offsetY * (scale - 1)) / renderedScaleY,
-    }
-  }
-
+  const focalPoint = focalClientPoint
+    ? viewportPoint(focalClientPoint)
+    : { x: metrics.viewportWidth / 2, y: metrics.viewportHeight / 2 }
+  const nextPan = focalPoint
+    ? zoomPanAtPoint(pan.value, zoom.value, nextZoom, focalPoint, {
+        x: metrics.viewportWidth,
+        y: metrics.viewportHeight,
+      })
+    : pan.value
   zoom.value = nextZoom
+  pan.value = clampMapPan(nextPan, nextZoom, metrics)
 }
 
 function onPointerDown(event: PointerEvent): void {
@@ -388,14 +461,22 @@ function onPointerMove(event: PointerEvent): void {
     if (!viewportElement || !viewport) return
     const renderedScaleX = viewport.width / viewportElement.clientWidth
     const renderedScaleY = viewport.height / viewportElement.clientHeight
-    pan.value = {
+    const metrics = viewportMetrics()
+    const nextPan = {
       x: pointerStart.panX + deltaX / renderedScaleX,
       y: pointerStart.panY + deltaY / renderedScaleY,
     }
+    pan.value = metrics ? clampMapPan(nextPan, zoom.value, metrics) : nextPan
   })
 }
 
-function onPointerUp(): void {
+function onPointerUp(event: PointerEvent): void {
+  if (placingMarker.value && !isPanning.value) {
+    placementPoint.value = viewportPoint({
+      x: event.clientX,
+      y: event.clientY,
+    })
+  }
   isPointerDown.value = false
   isPanning.value = false
 }
@@ -403,15 +484,19 @@ function onPointerUp(): void {
 function onWheel(event: WheelEvent): void {
   event.preventDefault()
   event.stopPropagation()
-  pendingWheelDirection = event.deltaY > 0 ? -1 : 1
+  pendingWheelDelta += event.deltaY
   pendingWheelPoint = { x: event.clientX, y: event.clientY }
   if (wheelZoomFrame) return
   wheelZoomFrame = requestAnimationFrame(() => {
     wheelZoomFrame = undefined
-    if (pendingWheelDirection !== 0) {
-      changeZoom(pendingWheelDirection, pendingWheelPoint)
+    if (pendingWheelDelta !== 0) {
+      const normalizedDelta = Math.min(240, Math.max(-240, pendingWheelDelta))
+      changeZoom(
+        zoom.value * Math.exp(-normalizedDelta * 0.0024),
+        pendingWheelPoint,
+      )
     }
-    pendingWheelDirection = 0
+    pendingWheelDelta = 0
     pendingWheelPoint = undefined
   })
 }
@@ -423,6 +508,7 @@ function onImageLoad(event: Event): void {
       ? defaultMapCoordinates.width / defaultMapCoordinates.height
       : image.naturalWidth / image.naturalHeight
   imageError.value = false
+  void nextTick(normalizeViewport)
 }
 
 async function loadCurrentLocation(center: boolean): Promise<void> {
@@ -434,40 +520,53 @@ async function loadCurrentLocation(center: boolean): Promise<void> {
   currentLocation.value = clampDefaultMapPoint(response.data.coords)
   if (!center) return
 
-  zoom.value = 3
-  pan.value = { x: 0, y: 0 }
   await nextTick()
-  const viewportElement = viewportRef.value
-  const viewport = viewportElement?.getBoundingClientRect()
-  const location = locationRef.value?.getBoundingClientRect()
-  if (!viewportElement || !viewport || !location) return
-  const renderedScaleX = viewport.width / viewportElement.clientWidth
-  const renderedScaleY = viewport.height / viewportElement.clientHeight
-  pan.value = {
-    x:
-      (viewport.left +
-        viewport.width / 2 -
-        (location.left + location.width / 2)) /
-      renderedScaleX,
-    y:
-      (viewport.top +
-        viewport.height / 2 -
-        (location.top + location.height / 2)) /
-      renderedScaleY,
-  }
+  const metrics = viewportMetrics()
+  if (!metrics) return
+  const nextZoom = Math.max(3, minimumCoverZoom(metrics, baseMinZoom))
+  const percent = worldToPercent(currentLocation.value)
+  normalizeViewport(
+    {
+      x: -(percent.x - 0.5) * metrics.canvasWidth * nextZoom,
+      y: -(percent.y - 0.5) * metrics.canvasHeight * nextZoom,
+    },
+    nextZoom,
+  )
 }
 
 function shareCurrentLocation(): void {
+  const location = currentLocation.value
+  if (!location) {
+    showToast(phone.t('Apps.map.locationUnavailable'))
+    return
+  }
+  const coordinates = `${location.x.toFixed(1)}, ${location.y.toFixed(1)}`
   easyShare.open({
     appId: 'map',
-    copyText: phone.t('Apps.map.currentLocation'),
+    copyText: `${phone.t('Apps.map.currentLocation')}\n${coordinates}`,
+    id: `${location.x.toFixed(2)}:${location.y.toFixed(2)}`,
     kind: 'location',
-    link: 'skyphone://location/current',
+    link: `skyphone://location/${location.x.toFixed(2)}/${location.y.toFixed(2)}`,
+    meta: { coords: { ...location } },
+    subtitle: coordinates,
     title: phone.t('Apps.map.currentLocation'),
   })
 }
 
 onMounted(() => {
+  const viewport = viewportRef.value
+  if (viewport) {
+    const updateViewport = (): void => {
+      viewportSize.value = {
+        x: viewport.clientWidth,
+        y: viewport.clientHeight,
+      }
+      void nextTick(normalizeViewport)
+    }
+    resizeObserver = new ResizeObserver(updateViewport)
+    resizeObserver.observe(viewport)
+    updateViewport()
+  }
   void loadCurrentLocation(false)
   void mapStore.load()
 })
@@ -476,11 +575,18 @@ onBeforeUnmount(() => {
   if (pointerMoveFrame) cancelAnimationFrame(pointerMoveFrame)
   if (wheelZoomFrame) cancelAnimationFrame(wheelZoomFrame)
   if (toastTimer) window.clearTimeout(toastTimer)
+  resizeObserver?.disconnect()
 })
 </script>
 
 <template>
-  <sky-app-page class="map-app">
+  <SkyAppPage
+    class="map-app"
+    :label="phone.t('Apps.map.name')"
+    :dark="phone.isDarkMode"
+    accent="#0a84ff"
+    accent-soft="rgba(10, 132, 255, 0.16)"
+  >
     <div
       ref="viewportRef"
       class="map-viewport"
@@ -516,7 +622,6 @@ onBeforeUnmount(() => {
         />
         <div
           v-if="currentLocation && locationStyle"
-          ref="locationRef"
           class="current-location"
           :style="locationStyle"
         >
@@ -546,6 +651,7 @@ onBeforeUnmount(() => {
       <div
         v-if="placingMarker"
         class="map-placement-crosshair"
+        :style="placementCrosshairStyle"
         aria-hidden="true"
       >
         <span></span>
@@ -557,19 +663,19 @@ onBeforeUnmount(() => {
     </div>
 
     <nav class="map-controls" :aria-label="phone.t('Apps.map.controls')">
-      <sky-fab
+      <SkyFab
         component="button"
         type="button"
         class="map-control map-control--share"
-        variant="neutral"
+        variant="primary"
         :aria-label="phone.t('Apps.easyShare.name')"
         @click="shareCurrentLocation"
       >
         <template #icon>
           <Share2 aria-hidden="true" />
         </template>
-      </sky-fab>
-      <sky-fab
+      </SkyFab>
+      <SkyFab
         component="button"
         type="button"
         class="map-control"
@@ -580,8 +686,8 @@ onBeforeUnmount(() => {
         <template #icon>
           <component :is="activeMapStyle.icon" aria-hidden="true" />
         </template>
-      </sky-fab>
-      <sky-fab
+      </SkyFab>
+      <SkyFab
         component="button"
         type="button"
         class="map-control map-control--marker"
@@ -593,8 +699,8 @@ onBeforeUnmount(() => {
         <template #icon>
           <MapPinPlus aria-hidden="true" />
         </template>
-      </sky-fab>
-      <sky-fab
+      </SkyFab>
+      <SkyFab
         component="button"
         type="button"
         class="map-control map-control--location"
@@ -606,23 +712,33 @@ onBeforeUnmount(() => {
         <template #icon>
           <LocateFixed aria-hidden="true" />
         </template>
-      </sky-fab>
+      </SkyFab>
     </nav>
 
-    <section v-if="placingMarker" class="map-placement-panel">
+    <SkyGlass
+      v-if="placingMarker"
+      component="section"
+      class="map-placement-panel"
+    >
       <strong>{{ phone.t('Apps.map.placeMarker') }}</strong>
       <span>{{ phone.t('Apps.map.placeMarkerHint') }}</span>
       <div>
-        <sky-button small rounded outline @click="cancelMarkerPlacement">
+        <SkyButton
+          block
+          rounded
+          tonal
+          variant="secondary"
+          @click="cancelMarkerPlacement"
+        >
           <X :size="16" />
           {{ phone.t('Common.cancel') }}
-        </sky-button>
-        <sky-button small rounded @click="openMarkerEditor">
+        </SkyButton>
+        <SkyButton block rounded @click="openMarkerEditor">
           <MapPin :size="16" />
           {{ phone.t('Apps.map.addHere') }}
-        </sky-button>
+        </SkyButton>
       </div>
-    </section>
+    </SkyGlass>
 
     <div class="map-marker-sheet">
       <sky-sheet
@@ -737,7 +853,7 @@ onBeforeUnmount(() => {
     <sky-toast :opened="Boolean(toastText)" position="center">
       {{ toastText }}
     </sky-toast>
-  </sky-app-page>
+  </SkyAppPage>
 </template>
 
 <style scoped>
@@ -904,6 +1020,9 @@ onBeforeUnmount(() => {
   --sky-glass-solid: rgb(247 247 248 / 92%);
   color: #151515;
 }
+.map-control--share {
+  color: #fff;
+}
 .sky-app-page--dark .map-control {
   --sky-glass-solid: rgb(44 44 46 / 88%);
   color: #fff;
@@ -921,14 +1040,13 @@ onBeforeUnmount(() => {
   bottom: 28px;
   left: 12px;
   display: flex;
-  min-height: 84px;
+  min-height: 112px;
   padding: 12px;
   flex-direction: column;
-  border: 0.5px solid rgb(255 255 255 / 22%);
-  border-radius: 18px;
+  border-color: rgb(255 255 255 / 22%);
+  border-radius: var(--sky-radius-card);
   color: #fff;
-  background: rgb(24 24 27 / 86%);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 32%);
+  background: rgb(24 24 27 / 92%);
   backdrop-filter: blur(22px) saturate(145%);
 }
 
@@ -951,8 +1069,8 @@ onBeforeUnmount(() => {
 }
 
 .map-placement-panel :deep(button) {
-  min-height: 32px;
-  font-size: 11px;
+  min-height: 40px;
+  font-size: 12px;
 }
 
 .map-marker-sheet__content {
