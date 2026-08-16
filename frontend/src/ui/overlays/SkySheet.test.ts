@@ -30,6 +30,19 @@ describe('SkySheet', () => {
     expect(ordinary).not.toContain('sky-sheet__grabber')
   })
 
+  it('can expose the drag handle as an accessible close button', async () => {
+    const clickable = await renderSheet({
+      grabberClickable: true,
+      grabberLabel: 'Close property details',
+      opened: true,
+      swipeToClose: true,
+    })
+
+    expect(clickable).toContain('<button')
+    expect(clickable).toContain('class="sky-sheet__grabber"')
+    expect(clickable).toContain('aria-label="Close property details"')
+  })
+
   it('owns pointer capture, close thresholds, and settling motion', () => {
     const source = readFileSync(
       new URL('./SkySheet.vue', import.meta.url),
@@ -41,6 +54,7 @@ describe('SkySheet', () => {
     )
 
     expect(source).toContain('swipeclose: [event: PointerEvent]')
+    expect(source).toContain('grabberclick: [event: MouseEvent]')
     expect(source).toContain('setPointerCapture(event.pointerId)')
     expect(source).toContain('dragOffset.value >= closeThreshold')
     expect(source).toContain("emit('swipeclose', event)")

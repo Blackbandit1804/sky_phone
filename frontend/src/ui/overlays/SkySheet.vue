@@ -12,6 +12,8 @@ const props = withDefaults(
     ariaModal?: boolean | 'false' | 'true'
     backdrop?: boolean
     component?: string
+    grabberClickable?: boolean
+    grabberLabel?: string
     opened: boolean
     role?: 'alertdialog' | 'dialog' | 'none' | 'presentation'
     swipeToClose?: boolean
@@ -21,12 +23,15 @@ const props = withDefaults(
     ariaModal: true,
     backdrop: true,
     component: 'div',
+    grabberClickable: false,
+    grabberLabel: '',
     tabindex: -1,
   },
 )
 const emit = defineEmits<{
   backdropclick: [event: MouseEvent]
   escape: [event: KeyboardEvent]
+  grabberclick: [event: MouseEvent]
   swipeclose: [event: PointerEvent]
 }>()
 
@@ -200,16 +205,20 @@ useOverlayFocusTrap({
         :aria-describedby="effectiveRole ? ariaDescribedby : undefined"
         :tabindex="tabindex"
       >
-        <div
+        <component
+          :is="grabberClickable ? 'button' : 'div'"
           v-if="swipeToClose"
           class="sky-sheet__grabber"
-          aria-hidden="true"
+          :type="grabberClickable ? 'button' : undefined"
+          :aria-hidden="grabberClickable ? undefined : true"
+          :aria-label="grabberClickable ? grabberLabel : undefined"
+          @click="grabberClickable && emit('grabberclick', $event)"
           @lostpointercapture="finishDrag($event, true)"
           @pointercancel="finishDrag($event, true)"
           @pointerdown="startDrag"
           @pointermove="moveDrag"
           @pointerup="finishDrag($event)"
-        ></div>
+        ></component>
         <slot />
       </component>
     </div>

@@ -363,9 +363,12 @@ onBeforeUnmount(() => {
     <sky-sheet
       :opened="Boolean(selectedProperty)"
       class="house-detail-sheet"
+      grabber-clickable
+      :grabber-label="phone.t('Common.close')"
       swipe-to-close
       @backdropclick="selectedPropertyId = null"
       @escape="selectedPropertyId = null"
+      @grabberclick="selectedPropertyId = null"
       @swipeclose="selectedPropertyId = null"
     >
       <section v-if="selectedProperty" class="house-detail">
@@ -505,7 +508,12 @@ onBeforeUnmount(() => {
               <Plus :size="15" />{{ phone.t('Apps.house.addKey') }}
             </sky-button>
           </header>
-          <sky-list v-if="selectedProperty.keys?.length" inset strong>
+          <sky-list
+            v-if="selectedProperty.keys?.length"
+            inset
+            strong
+            class="house-key-list"
+          >
             <sky-list-item
               v-for="key in selectedProperty.keys"
               :key="key.identifier"
@@ -542,9 +550,12 @@ onBeforeUnmount(() => {
     <sky-sheet
       :opened="candidatesOpened"
       class="house-candidates-sheet"
+      grabber-clickable
+      :grabber-label="phone.t('Common.close')"
       swipe-to-close
       @backdropclick="candidatesOpened = false"
       @escape="candidatesOpened = false"
+      @grabberclick="candidatesOpened = false"
       @swipeclose="candidatesOpened = false"
     >
       <section class="house-candidates">
@@ -635,7 +646,6 @@ onBeforeUnmount(() => {
     linear-gradient(165deg, #26201d 0, #111216 48%, #171d25 100%);
 }
 .house-navbar {
-  --sky-safe-area-top: 46px;
   --sky-navbar-glass: transparent;
   position: absolute;
   z-index: 5;
@@ -648,19 +658,29 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 .house-navbar :deep(.sky-navbar__heading) {
+  width: 100%;
   justify-content: center;
+  grid-column: 1 / -1;
   gap: 1px;
+  padding: 0 var(--sky-page-gutter);
 }
 .house-navbar :deep(.sky-navbar__title) {
   line-height: 24px;
 }
 .house-navbar :deep(.sky-navbar__subtitle) {
+  max-width: 100%;
   margin-top: 0;
+  overflow: visible;
   line-height: 15px;
+  text-overflow: clip;
+  white-space: normal;
 }
 .house-scroll {
   position: absolute;
-  inset: 104px 0 25px;
+  inset: calc(
+      var(--sky-safe-area-top) + var(--sky-navbar-height) + var(--sky-space-3)
+    )
+    0 25px;
   padding: 9px 13px 34px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -685,7 +705,10 @@ onBeforeUnmount(() => {
 }
 .house-state {
   position: absolute;
-  inset: 104px 0 25px;
+  inset: calc(
+      var(--sky-safe-area-top) + var(--sky-navbar-height) + var(--sky-space-3)
+    )
+    0 25px;
   padding: 30px;
   display: flex;
   flex-direction: column;
@@ -1227,6 +1250,13 @@ onBeforeUnmount(() => {
 }
 .house-keys {
   padding: 0 16px;
+}
+.house-key-list {
+  --sky-list-outer-left: 0px;
+  --sky-list-outer-right: 0px;
+  width: 100%;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 .house-keys header {
   margin: 20px 4px 8px;
