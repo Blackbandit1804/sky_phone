@@ -65,4 +65,13 @@ describe('SkySettingsGroup', () => {
       /\.sky-settings-group__title\s*\{[^}]*margin:\s*32px 16px 8px/s,
     )
   })
+
+  it('centers standalone fields without the base field negative margins', () => {
+    expect(settingsStyles).toMatch(
+      /\.sky-settings-group__list\s*>\s*\.sky-field:not\(\.sky-field--has-label\)\s*\.sky-field__inner\s*\{[^}]*display:\s*flex[^}]*justify-content:\s*center/s,
+    )
+    expect(settingsStyles).toMatch(
+      /\.sky-settings-group__list\s*>\s*\.sky-field:not\(\.sky-field--has-label\)\s*\.sky-field__control\s*\{[^}]*margin:\s*0/s,
+    )
+  })
 })

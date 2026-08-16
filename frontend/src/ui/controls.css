@@ -1887,6 +1887,8 @@ label.sky-list-item__row {
   width: 100%;
   min-width: 0;
   height: 28px;
+  position: relative;
+  z-index: 1;
   margin: 0;
   padding: 0;
   flex: 1;

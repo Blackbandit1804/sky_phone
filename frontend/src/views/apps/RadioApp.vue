@@ -291,27 +291,42 @@ onBeforeUnmount(() => {
                 <span class="radio-unit">{{ phone.t('Apps.radio.mhz') }}</span>
               </template>
             </SkyField>
-            <SkyListItem>
+            <SkyListItem
+              media-class="radio-audio-control-icon"
+              :strong-title="false"
+              :title="phone.t('Apps.radio.volume')"
+              title-font-size-ios="radio-audio-control-title"
+            >
               <template #media>
                 <Volume2 :size="20" aria-hidden="true" />
               </template>
-              <SkyRange
-                id="radio-volume"
-                v-model="volumeInput"
-                :aria-label="phone.t('Apps.radio.volume')"
-                :aria-value-text="`${volumeInput}%`"
-                :caption="phone.t('Apps.radio.volume')"
-                :min="0"
-                :max="100"
-                :step="1"
-                @change="saveVolume"
-              >
-                <output for="radio-volume">{{ volumeInput }}%</output>
-              </SkyRange>
+              <template #after>
+                <output class="radio-volume-value" for="radio-volume">
+                  {{ volumeInput }}%
+                </output>
+              </template>
+              <template #inner>
+                <SkyRange
+                  id="radio-volume"
+                  v-model="volumeInput"
+                  class="radio-volume-slider"
+                  :aria-label="phone.t('Apps.radio.volume')"
+                  :aria-value-text="`${volumeInput}%`"
+                  :min="0"
+                  :max="100"
+                  :step="1"
+                  @change="saveVolume"
+                />
+              </template>
             </SkyListItem>
             <SkyListItem
               v-if="radio.data.speakerSupported"
+              inner-class="radio-speaker-content"
+              media-class="radio-audio-control-icon"
+              :aria-busy="radio.speakerPending || undefined"
+              :strong-title="false"
               :title="phone.t('Apps.radio.speaker')"
+              title-font-size-ios="radio-audio-control-title"
               :subtitle="phone.t('Apps.radio.speakerDescription')"
             >
               <template #media>
@@ -333,6 +348,7 @@ onBeforeUnmount(() => {
               v-if="!radio.data.connected"
               block
               large
+              rounded
               :disabled="radio.isLoading"
               @click="connect()"
             >
@@ -342,6 +358,7 @@ onBeforeUnmount(() => {
               v-else
               block
               large
+              rounded
               variant="danger"
               :disabled="radio.isLoading"
               @click="disconnect"
@@ -392,7 +409,7 @@ onBeforeUnmount(() => {
               <Clock3 :size="32" aria-hidden="true" />
             </template>
           </SkyEmptyState>
-          <SkyList v-else inset strong>
+          <SkyList v-else inset strong class="radio-history-list">
             <SkyListItem
               v-for="entry in radio.data.history"
               :key="`${entry.primary}-${entry.secondary}`"
@@ -549,8 +566,39 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.radio-volume-slider {
+  width: 100%;
+}
+
+.radio-volume-value {
+  color: var(--sky-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+}
+
+:deep(.radio-audio-control-icon) {
+  color: var(--sky-text);
+}
+
+:deep(.radio-audio-control-title) {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+:deep(.radio-speaker-content .sky-list-item__subtitle) {
+  color: var(--sky-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 .radio-primary-action {
   margin-top: 12px;
+}
+
+.radio-history-list {
+  margin-top: var(--sky-space-2);
 }
 
 .radio-error {
