@@ -38,6 +38,7 @@ export function layoutSpringboardHomePages(
   grid: readonly HomeSlot[],
   occupiedByPage: ReadonlyMap<number, ReadonlySet<number>>,
   minimumPageCount: number,
+  isRenderable: (item: HomeItem) => boolean = () => true,
 ): SpringboardHomePage[] {
   const pageCount = Math.max(
     1,
@@ -55,7 +56,7 @@ export function layoutSpringboardHomePages(
     for (let offset = 0; offset < HOME_GRID_PAGE_SIZE; offset += 1) {
       const sourceIndex = pageStart + offset
       const item = grid[sourceIndex]
-      if (!item) continue
+      if (!item || !isRenderable(item)) continue
       pending.push({
         item,
         renderKey: homeItemRenderKey(item, appOccurrences),

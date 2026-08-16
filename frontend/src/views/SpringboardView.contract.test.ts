@@ -36,6 +36,15 @@ describe('Springboard page swipe contract', () => {
     expect(folderIconSource).toContain('suppressClick.value = true')
   })
 
+  it('keeps app and folder drags alive independently of element capture', () => {
+    expect(appIconSource).toContain('bindPointerDragSession(window, pointerId')
+    expect(folderIconSource).toContain(
+      'bindPointerDragSession(window, pointerId',
+    )
+    expect(appIconSource).not.toContain('@lostpointercapture')
+    expect(folderIconSource).not.toContain('@lostpointercapture')
+  })
+
   it('separates animated page compensation from immediate pointer movement', () => {
     expect(appIconSource).toContain('springboardPageDragCompensation')
     expect(folderIconSource).toContain('springboardPageDragCompensation')

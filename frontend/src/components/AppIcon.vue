@@ -20,6 +20,7 @@ import {
   springboardPageDragCompensation,
   springboardSwipeIntent,
 } from '@/utils/springboardDrag'
+import { bindPointerDragSession } from '@/utils/pointerDragSession'
 
 const props = withDefaults(
   defineProps<{
@@ -84,6 +85,7 @@ let calendarTimer: number | undefined
 let pointerStart = { x: 0, y: 0 }
 let pointerTarget: HTMLElement | null = null
 let pointerId: number | null = null
+let stopPointerSession: (() => void) | null = null
 
 watch(
   () => props.app.iconImage,
@@ -149,6 +151,12 @@ function onPointerDown(event: PointerEvent): void {
   pointerTarget = event.currentTarget as HTMLElement
   pointerId = event.pointerId
   pointerTarget.setPointerCapture(pointerId)
+  stopPointerSession?.()
+  stopPointerSession = bindPointerDragSession(window, pointerId, {
+    cancel: cancelPointerDrag,
+    move: onPointerMove,
+    up: onPointerUp,
+  })
   pointerStart = { x: event.clientX, y: event.clientY }
   clearHold()
   if (props.editMode) {
@@ -216,6 +224,8 @@ function cancelPointerDrag(): void {
 }
 
 function releasePointerCapture(): void {
+  stopPointerSession?.()
+  stopPointerSession = null
   if (
     pointerTarget &&
     pointerId !== null &&
@@ -274,12 +284,8 @@ onBeforeUnmount(() => {
       @click="launch"
       @contextmenu.prevent
       @keydown="onKeydown"
-      @pointercancel="cancelPointerDrag"
       @pointerdown="onPointerDown"
-      @lostpointercapture="cancelPointerDrag"
       @pointerleave="isDragging || clearHold()"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
     >
       <span class="app-icon-anchor" aria-hidden="true">
         <span

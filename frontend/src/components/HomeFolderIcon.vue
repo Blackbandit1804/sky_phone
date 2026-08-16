@@ -12,6 +12,7 @@ import {
   springboardPageDragCompensation,
   springboardSwipeIntent,
 } from '@/utils/springboardDrag'
+import { bindPointerDragSession } from '@/utils/pointerDragSession'
 
 const props = withDefaults(
   defineProps<{
@@ -48,6 +49,7 @@ let holdTimer: number | undefined
 let pointerStart = { x: 0, y: 0 }
 let pointerTarget: HTMLElement | null = null
 let pointerId: number | null = null
+let stopPointerSession: (() => void) | null = null
 
 const folderName = computed(() => props.folder.name || props.defaultName)
 const dragStyle = computed(() =>
@@ -71,6 +73,8 @@ function clearHold(): void {
 }
 
 function releasePointerCapture(): void {
+  stopPointerSession?.()
+  stopPointerSession = null
   if (
     pointerTarget &&
     pointerId !== null &&
@@ -98,6 +102,12 @@ function onPointerDown(event: PointerEvent): void {
   pointerTarget = event.currentTarget as HTMLElement
   pointerId = event.pointerId
   pointerTarget.setPointerCapture(pointerId)
+  stopPointerSession?.()
+  stopPointerSession = bindPointerDragSession(window, pointerId, {
+    cancel: cancelPointerDrag,
+    move: onPointerMove,
+    up: onPointerUp,
+  })
   pointerStart = { x: event.clientX, y: event.clientY }
   clearHold()
   if (props.editMode) {
@@ -199,12 +209,8 @@ onBeforeUnmount(() => {
       @click="openFolder"
       @contextmenu.prevent
       @keydown="onKeydown"
-      @lostpointercapture="cancelPointerDrag"
-      @pointercancel="cancelPointerDrag"
       @pointerdown="onPointerDown"
       @pointerleave="isDragging || clearHold()"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
     >
       <span class="home-folder-preview" aria-hidden="true">
         <span

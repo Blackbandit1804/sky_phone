@@ -173,6 +173,7 @@ const appPages = computed(() => {
     appStore.homeLayout.grid,
     occupiedByPage,
     lastHomePage,
+    (item) => isHomeFolder(item) || installedAppsById.value.has(item),
   ).map((page) => ({
     ...page,
     cells: page.cells.map((cell, cellIndex) => {
