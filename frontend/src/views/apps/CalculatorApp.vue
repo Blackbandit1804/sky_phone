@@ -1,13 +1,23 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { Calculator, Delete, History, Trash2, X } from 'lucide-vue-next'
+import { computed, nextTick, ref, watch, type Component } from 'vue'
+import {
+  Calculator,
+  Delete,
+  Divide,
+  Equal,
+  History,
+  Minus,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-vue-next'
 
 import {
   useCalculatorStore,
   type CalculatorHistoryEntry,
 } from '@/stores/calculator'
 import { usePhoneStore } from '@/stores/phone'
-import { SkySheet } from '@/ui'
+import { SkyButton, SkyNavbar, SkySheet } from '@/ui'
 import type {
   CalculatorOperator,
   CalculatorUnaryOperation,
@@ -18,6 +28,7 @@ type CalculatorKey = {
   action: () => void
   kind?: 'operator' | 'utility'
   operator?: CalculatorOperator
+  icon?: Component
   disabled?: () => boolean
 }
 
@@ -25,7 +36,7 @@ const calculator = useCalculatorStore()
 const phone = usePhoneStore()
 const historyOpened = ref(false)
 const editingHistory = ref(false)
-const scientificOpened = ref(true)
+const scientificOpened = ref(false)
 const resultDisplay = ref<HTMLElement | null>(null)
 const expressionDisplay = ref<HTMLElement | null>(null)
 
@@ -148,6 +159,7 @@ const basicKeys: CalculatorKey[] = [
     action: () => calculator.chooseOperator('divide'),
     kind: 'operator',
     operator: 'divide',
+    icon: Divide,
   },
   ...['7', '8', '9'].map((value) => ({
     label: value,
@@ -158,6 +170,7 @@ const basicKeys: CalculatorKey[] = [
     action: () => calculator.chooseOperator('multiply'),
     kind: 'operator',
     operator: 'multiply',
+    icon: X,
   },
   ...['4', '5', '6'].map((value) => ({
     label: value,
@@ -168,6 +181,7 @@ const basicKeys: CalculatorKey[] = [
     action: () => calculator.chooseOperator('subtract'),
     kind: 'operator',
     operator: 'subtract',
+    icon: Minus,
   },
   ...['1', '2', '3'].map((value) => ({
     label: value,
@@ -178,11 +192,17 @@ const basicKeys: CalculatorKey[] = [
     action: () => calculator.chooseOperator('add'),
     kind: 'operator',
     operator: 'add',
+    icon: Plus,
   },
   { label: '+/−', action: calculator.toggleSign },
   { label: '0', action: () => calculator.digit('0') },
   { label: ',', action: calculator.decimal },
-  { label: '=', action: calculator.equals, kind: 'operator' },
+  {
+    label: '=',
+    action: calculator.equals,
+    kind: 'operator',
+    icon: Equal,
+  },
 ]
 
 const historyGroups = computed(() => {
@@ -323,9 +343,18 @@ watch([() => calculator.display, expression], async () => {
               calculator.waitingForOperand,
           },
         ]"
+        :aria-label="key.icon ? key.label : undefined"
         @click="key.action"
       >
-        <Delete v-if="key.label === 'delete'" :size="23" />
+        <component
+          :is="key.icon"
+          v-if="key.icon"
+          class="calculator-key__operator-icon"
+          :size="24"
+          :stroke-width="2"
+          aria-hidden="true"
+        />
+        <Delete v-else-if="key.label === 'delete'" :size="23" />
         <span v-else>{{ key.label }}</span>
       </button>
     </section>
@@ -337,31 +366,47 @@ watch([() => calculator.display, expression], async () => {
       @backdropclick="historyOpened = false"
       @escape="historyOpened = false"
     >
-      <section class="calculator-history">
+      <section
+        class="calculator-history sky-ui-provider sky-ui-provider--dark"
+      >
         <div class="calculator-history__handle"></div>
-        <header>
-          <button
-            type="button"
-            class="calculator-history__edit"
-            @click="editingHistory = !editingHistory"
-          >
-            {{
-              phone.t(
-                editingHistory
-                  ? 'Apps.calculator.done'
-                  : 'Apps.calculator.edit',
-              )
-            }}
-          </button>
-          <button
-            type="button"
-            class="calculator-history__close"
-            :aria-label="phone.t('Apps.calculator.closeHistory')"
-            @click="historyOpened = false"
-          >
-            <X :size="23" />
-          </button>
-        </header>
+        <SkyNavbar
+          class="calculator-history__navbar"
+          :scroll-el="null"
+          title=""
+        >
+          <template #left>
+            <SkyButton
+              class="calculator-history__nav-button calculator-history__nav-button--edit"
+              inline
+              rounded
+              type="button"
+              @click="editingHistory = !editingHistory"
+            >
+              <span class="calculator-history__edit-label">
+                {{
+                  phone.t(
+                    editingHistory
+                      ? 'Apps.calculator.done'
+                      : 'Apps.calculator.edit',
+                  )
+                }}
+              </span>
+            </SkyButton>
+          </template>
+          <template #right>
+            <SkyButton
+              class="calculator-history__nav-button calculator-history__nav-button--close"
+              icon-only
+              rounded
+              type="button"
+              :aria-label="phone.t('Apps.calculator.closeHistory')"
+              @click="historyOpened = false"
+            >
+              <X :size="23" />
+            </SkyButton>
+          </template>
+        </SkyNavbar>
 
         <div v-if="historyGroups.length" class="calculator-history__scroll">
           <section v-for="group in historyGroups" :key="group.label">
@@ -418,8 +463,7 @@ watch([() => calculator.display, expression], async () => {
   justify-content: space-between;
 }
 
-.calculator-toolbar button,
-.calculator-history__close {
+.calculator-toolbar button {
   width: 44px;
   height: 44px;
   border: 1px solid rgb(255 255 255 / 10%);
@@ -508,13 +552,13 @@ watch([() => calculator.display, expression], async () => {
 
 .calculator-key--scientific {
   min-height: 38px;
-  border-radius: 19px;
+  border-radius: 999px;
   font-size: 15px;
 }
 
 .calculator-key--basic {
   min-height: 45px;
-  border-radius: 23px;
+  border-radius: 999px;
   font-size: 25px;
   font-weight: 390;
 }
@@ -529,9 +573,26 @@ watch([() => calculator.display, expression], async () => {
   box-shadow: inset 0 1px rgb(255 255 255 / 28%);
 }
 
+.calculator-key__operator-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  margin: 0;
+  pointer-events: none;
+}
+
 .calculator-key--selected {
   background: #f5f5f7;
   color: var(--calculator-orange);
+}
+
+.calculator-key--operator.calculator-key--selected {
+  border-color: #ffc05c;
+  background: linear-gradient(180deg, #e98700, #c96800);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 22%),
+    inset 0 0 0 1px rgb(255 255 255 / 12%);
+  color: #fff;
 }
 
 .calculator-key:disabled {
@@ -566,12 +627,15 @@ watch([() => calculator.display, expression], async () => {
 }
 
 .calculator-app:not(.calculator-app--scientific) .calculator-basic-pad {
+  flex: none;
   gap: 11px 14px;
 }
 
 .calculator-app:not(.calculator-app--scientific) .calculator-key--basic {
-  min-height: 62px;
-  border-radius: 31px;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 1;
+  border-radius: 50%;
   font-size: 29px;
 }
 
@@ -605,21 +669,73 @@ watch([() => calculator.display, expression], async () => {
   background: #77777b;
 }
 
-.calculator-history > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.calculator-history__navbar {
+  --sky-navbar-glass: transparent;
+  --sky-navbar-safe-area-top: 0px;
+  min-height: var(--sky-navbar-height);
+  padding-top: 0;
 }
 
-.calculator-history__edit {
-  min-width: 106px;
-  height: 42px;
-  border: 0;
-  border-radius: 21px;
-  background: #262628;
+.calculator-history__navbar :deep(.sky-navbar__inner) {
+  grid-template-columns: 106px minmax(0, 1fr) 44px;
+  padding-inline: 0;
+  margin-bottom: 6px;
+}
+
+.calculator-history__navbar :deep(.sky-navbar__left),
+.calculator-history__navbar :deep(.sky-navbar__right) {
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.calculator-history__navbar :deep(.calculator-history__nav-button) {
+  height: 44px;
+  min-height: 44px;
+  background: rgb(255 255 255 / 9%);
   color: #fff;
-  font: inherit;
-  font-size: 15px;
+  box-shadow: none;
+}
+
+.calculator-history__navbar :deep(.calculator-history__nav-button:active) {
+  background: rgb(255 255 255 / 14%);
+  filter: none;
+}
+
+.calculator-history__navbar :deep(.calculator-history__nav-button--edit) {
+  width: 106px;
+  min-width: 106px;
+  position: relative;
+  padding: 0;
+}
+
+.calculator-history__navbar :deep(.calculator-history__edit-label) {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  text-align: center;
+  pointer-events: none;
+}
+
+.calculator-history__navbar :deep(.calculator-history__nav-button--close) {
+  min-width: 44px;
+}
+
+@media (hover: hover) {
+  .calculator-history__navbar
+    :deep(.calculator-history__nav-button:hover:not(:disabled)) {
+    background: rgb(255 255 255 / 15%);
+    transform: none;
+    filter: none;
+  }
+}
+
+.calculator-history__navbar :deep(.sky-navbar__background),
+.calculator-history__navbar :deep(.sky-navbar__blur) {
+  display: none;
 }
 
 .calculator-history__scroll {
