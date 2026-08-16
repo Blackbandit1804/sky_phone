@@ -6409,6 +6409,62 @@ button {
   backdrop-filter: blur(32px) saturate(180%);
   -webkit-backdrop-filter: blur(32px) saturate(180%);
 }
+.messages-media-picker-sheet {
+  z-index: 90;
+  --sky-overlay-backdrop: rgb(0 0 0 / 34%);
+  --sky-sheet-background: rgb(247 247 251 / 96%);
+}
+.messages-media-picker-sheet .sky-sheet__panel {
+  height: min(62%, 480px);
+  max-height: 78%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgb(255 255 255 / 76%);
+  border-bottom: 0;
+  border-radius: 30px 30px 0 0;
+  background: var(--sky-sheet-background);
+  box-shadow: 0 -14px 38px rgb(20 26 43 / 18%);
+  backdrop-filter: blur(34px) saturate(180%);
+  -webkit-backdrop-filter: blur(34px) saturate(180%);
+}
+.messages-media-picker-sheet .sky-sheet__grabber {
+  flex: none;
+  height: 27px;
+}
+.messages-media-picker-sheet .messages-media-picker {
+  position: relative;
+  z-index: auto;
+  inset: auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.messages-media-picker-sheet .messages-media-picker > header {
+  height: 44px;
+  padding: 0 18px 0 20px;
+  border-color: rgb(60 60 67 / 14%);
+}
+.messages-media-picker-sheet .messages-media-picker > header strong {
+  font-size: 16px;
+  line-height: 20px;
+}
+.messages-media-picker-sheet .messages-media-picker__contacts,
+.messages-media-picker-sheet .messages-media-picker__gifs {
+  height: calc(100% - 44px);
+  padding-bottom: calc(var(--sky-safe-area-bottom) + 10px);
+  overscroll-behavior: contain;
+}
+.messages-media-picker-sheet .messages-media-picker__contacts {
+  padding-top: 6px;
+}
 .messages-media-picker__photos,
 .messages-media-picker__gifs,
 .messages-media-picker__videos {
@@ -6767,6 +6823,14 @@ button {
   background: rgb(28 28 30 / 91%);
   box-shadow: 0 -10px 34px rgb(0 0 0 / 38%);
   color: #f5f5f7;
+}
+.phone-app.dark .messages-media-picker-sheet {
+  --sky-overlay-backdrop: rgb(0 0 0 / 52%);
+  --sky-sheet-background: rgb(28 28 30 / 96%);
+}
+.phone-app.dark .messages-media-picker-sheet .sky-sheet__panel {
+  border-color: rgb(255 255 255 / 11%);
+  box-shadow: 0 -16px 42px rgb(0 0 0 / 46%);
 }
 .phone-app.dark .messages-gif-search,
 .phone-app.dark .messages-full-emoji-picker__search,

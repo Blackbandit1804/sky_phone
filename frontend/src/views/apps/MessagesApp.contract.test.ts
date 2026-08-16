@@ -6,6 +6,10 @@ const source = readFileSync(
   new URL('./MessagesApp.vue', import.meta.url),
   'utf8',
 )
+const styles = readFileSync(
+  new URL('../../assets/main.css', import.meta.url),
+  'utf8',
+)
 
 describe('MessagesApp Sky UI contract', () => {
   it('uses first-party Sky UI without direct Konsta markup', () => {
@@ -22,6 +26,7 @@ describe('MessagesApp Sky UI contract', () => {
     expect(source).toContain('<SkyPillNavigation')
     expect(source).toContain('<SkySettingsGroup')
     expect(source).toContain('<SkySettingsRow')
+    expect(source).toContain('<SkySheet')
     expect(source).toContain('<SkyToolbar')
     expect(source).not.toContain('<SkySegmented')
   })
@@ -183,6 +188,30 @@ describe('MessagesApp Sky UI contract', () => {
     )
   })
 
+  it('opens contact sharing in a draggable Sky UI bottom sheet', () => {
+    const sheetStart = source.indexOf('class="messages-media-picker-sheet"')
+    const sheetEnd = source.indexOf('</SkySheet>', sheetStart)
+    const sheet = source.slice(sheetStart, sheetEnd)
+
+    expect(sheetStart).toBeGreaterThan(-1)
+    expect(sheetEnd).toBeGreaterThan(sheetStart)
+    expect(sheet).toContain(
+      ':opened="activeCanMessage && attachmentPicker !== null"',
+    )
+    expect(sheet).toContain('swipe-to-close')
+    expect(sheet).toContain('grabber-clickable')
+    expect(sheet).toContain('@backdropclick="closeAttachmentPicker"')
+    expect(sheet).toContain('@escape="closeAttachmentPicker"')
+    expect(sheet).toContain('@grabberclick="closeAttachmentPicker"')
+    expect(sheet).toContain('@swipeclose="closeAttachmentPicker"')
+    expect(sheet).toContain('v-if="attachmentPicker === \'contacts\'"')
+    expect(sheet).toContain('@click="sendContact(contact)"')
+    expect(source).toContain('function closeAttachmentPicker(): void')
+    expect(styles).toMatch(
+      /\.messages-media-picker-sheet \.sky-sheet__panel\s*\{[^}]*border-radius:\s*30px 30px 0 0/s,
+    )
+  })
+
   it('uses a surface back target in the thread and a compact recipient row', () => {
     const threadStart = source.indexOf(
       'class="messages-sky-page messages-sky-thread"',
@@ -278,10 +307,7 @@ describe('MessagesApp Sky UI contract', () => {
     )
     const contactProfile = source.slice(contactProfileStart, threadScrollStart)
     const blockDialogOpened = source.indexOf(':opened="blockDialogOpened"')
-    const blockDialogStart = source.lastIndexOf(
-      '<SkyDialog',
-      blockDialogOpened,
-    )
+    const blockDialogStart = source.lastIndexOf('<SkyDialog', blockDialogOpened)
     const toastStart = source.indexOf('<SkyToast', blockDialogStart)
     const blockDialog = source.slice(blockDialogStart, toastStart)
 

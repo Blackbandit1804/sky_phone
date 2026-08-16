@@ -73,6 +73,7 @@ import {
   SkySearchbar,
   SkySettingsGroup,
   SkySettingsRow,
+  SkySheet,
   SkySpinner,
   SkyToast,
   SkyToolbar,
@@ -616,6 +617,10 @@ function openContactPicker(): void {
   attachmentMenuOpen.value = false
   attachmentPicker.value = 'contacts'
   emojiOpen.value = false
+}
+
+function closeAttachmentPicker(): void {
+  attachmentPicker.value = null
 }
 
 function openEmojiPicker(): void {
@@ -1639,103 +1644,121 @@ onBeforeUnmount(() => {
       </SkyGlass>
     </section>
 
-    <section
-      v-if="activeCanMessage && attachmentPicker"
-      class="messages-media-picker"
-      :aria-hidden="contactDetailsOpen"
-      :inert="contactDetailsOpen || undefined"
+    <SkySheet
+      class="messages-media-picker-sheet"
+      :opened="activeCanMessage && attachmentPicker !== null"
+      :aria-label="
+        phone.t(
+          attachmentPicker === 'contacts'
+            ? 'Apps.messages.contacts'
+            : 'Apps.messages.gifs',
+        )
+      "
+      swipe-to-close
+      grabber-clickable
+      :grabber-label="phone.t('Common.close')"
+      @backdropclick="closeAttachmentPicker"
+      @escape="closeAttachmentPicker"
+      @grabberclick="closeAttachmentPicker"
+      @swipeclose="closeAttachmentPicker"
     >
-      <header>
-        <strong>
-          {{
-            phone.t(
-              attachmentPicker === 'contacts'
-                ? 'Apps.messages.contacts'
-                : 'Apps.messages.gifs',
-            )
-          }}
-        </strong>
-        <SkyLink @click="attachmentPicker = null">
-          {{ phone.t('Common.done') }}
-        </SkyLink>
-      </header>
-      <SkyList
-        v-if="attachmentPicker === 'contacts'"
-        inset
-        strong
-        class="messages-media-picker__contacts"
+      <section
+        class="messages-media-picker"
+        :aria-hidden="contactDetailsOpen"
+        :inert="contactDetailsOpen || undefined"
       >
-        <SkyListItem
-          v-for="contact in calls.contacts"
-          :key="contact.id"
-          link
-          link-component="button"
-          :title="contact.name"
-          :subtitle="contact.organization || contact.phone_number"
-          @click="sendContact(contact)"
+        <header>
+          <strong>
+            {{
+              phone.t(
+                attachmentPicker === 'contacts'
+                  ? 'Apps.messages.contacts'
+                  : 'Apps.messages.gifs',
+              )
+            }}
+          </strong>
+          <SkyLink @click="closeAttachmentPicker">
+            {{ phone.t('Common.done') }}
+          </SkyLink>
+        </header>
+        <SkyList
+          v-if="attachmentPicker === 'contacts'"
+          inset
+          strong
+          class="messages-media-picker__contacts"
         >
-          <template #media>
-            <span class="messages-avatar messages-avatar--small">
-              <img
-                v-if="contact.avatar_url"
-                class="messages-avatar__image"
-                :src="contact.avatar_url"
-                alt=""
-              />
-              <span v-else class="messages-avatar__initials">{{
-                contactInitials(contact.phone_number)
-              }}</span>
-            </span>
-          </template>
-        </SkyListItem>
-        <p v-if="!calls.contacts.length" class="messages-media-picker__empty">
-          {{ phone.t('Apps.messages.noContactsToShare') }}
-        </p>
-      </SkyList>
-      <div v-else class="messages-media-picker__gifs">
-        <SkySearchbar
-          v-model="gifQuery"
-          class="messages-gif-search"
-          :label="phone.t('Apps.messages.searchGifs')"
-          :placeholder="phone.t('Apps.messages.searchGifs')"
-          :clear-label="phone.t('Common.clear')"
-          @input="queueGifSearch"
-          @clear="queueGifSearch"
-        />
-        <button
-          v-for="gif in gifResults"
-          :key="gif.id"
-          type="button"
-          :aria-label="gif.title"
-          :style="{
-            aspectRatio: `${Math.max(1, gif.width)} / ${Math.max(1, gif.height)}`,
-          }"
-          @click="sendAttachment('gif', gif.url)"
-        >
-          <img :src="gif.previewUrl" :alt="gif.title" loading="lazy" />
-        </button>
-        <button
-          v-if="gifResults.length && gifHasMore && !gifLoading"
-          type="button"
-          class="messages-gif-more"
-          @click="loadGifs()"
-        >
-          {{ phone.t('Apps.messages.loadMore') }}
-        </button>
-        <div v-if="gifError && !gifLoading" class="messages-gif-error">
-          <ImagePlay :size="24" />
-          <strong>{{ errorText(gifError) }}</strong>
-          <button type="button" @click="loadGifs(true)">
-            {{ phone.t('Apps.messages.retryGifs') }}
+          <SkyListItem
+            v-for="contact in calls.contacts"
+            :key="contact.id"
+            link
+            link-component="button"
+            :title="contact.name"
+            :subtitle="contact.organization || contact.phone_number"
+            @click="sendContact(contact)"
+          >
+            <template #media>
+              <span class="messages-avatar messages-avatar--small">
+                <img
+                  v-if="contact.avatar_url"
+                  class="messages-avatar__image"
+                  :src="contact.avatar_url"
+                  alt=""
+                />
+                <span v-else class="messages-avatar__initials">{{
+                  contactInitials(contact.phone_number)
+                }}</span>
+              </span>
+            </template>
+          </SkyListItem>
+          <p v-if="!calls.contacts.length" class="messages-media-picker__empty">
+            {{ phone.t('Apps.messages.noContactsToShare') }}
+          </p>
+        </SkyList>
+        <div v-else class="messages-media-picker__gifs">
+          <SkySearchbar
+            v-model="gifQuery"
+            class="messages-gif-search"
+            :label="phone.t('Apps.messages.searchGifs')"
+            :placeholder="phone.t('Apps.messages.searchGifs')"
+            :clear-label="phone.t('Common.clear')"
+            @input="queueGifSearch"
+            @clear="queueGifSearch"
+          />
+          <button
+            v-for="gif in gifResults"
+            :key="gif.id"
+            type="button"
+            :aria-label="gif.title"
+            :style="{
+              aspectRatio: `${Math.max(1, gif.width)} / ${Math.max(1, gif.height)}`,
+            }"
+            @click="sendAttachment('gif', gif.url)"
+          >
+            <img :src="gif.previewUrl" :alt="gif.title" loading="lazy" />
           </button>
+          <button
+            v-if="gifResults.length && gifHasMore && !gifLoading"
+            type="button"
+            class="messages-gif-more"
+            @click="loadGifs()"
+          >
+            {{ phone.t('Apps.messages.loadMore') }}
+          </button>
+          <div v-if="gifError && !gifLoading" class="messages-gif-error">
+            <ImagePlay :size="24" />
+            <strong>{{ errorText(gifError) }}</strong>
+            <button type="button" @click="loadGifs(true)">
+              {{ phone.t('Apps.messages.retryGifs') }}
+            </button>
+          </div>
+          <SkySpinner
+            v-if="gifLoading"
+            class="messages-gif-loading"
+            :label="phone.t('Common.loading')"
+          />
         </div>
-        <SkySpinner
-          v-if="gifLoading"
-          class="messages-gif-loading"
-          :label="phone.t('Common.loading')"
-        />
-      </div>
-    </section>
+      </section>
+    </SkySheet>
 
     <FullEmojiPicker
       v-if="activeCanMessage && emojiOpen"
