@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { EasySharePayload } from '@/types/easyshare'
 import {
   easyShareCrewLinkInviteCode,
+  easyShareDarkChatInviteCode,
   easyShareDestinationAppIds,
   easyShareMusicTarget,
   easyShareRoute,
@@ -89,11 +90,25 @@ describe('EasyShare deep links', () => {
 
   it('accepts the canonical payload id as a CrewLink invite fallback', () => {
     expect(easyShareCrewLinkInviteCode('link', '', 'n1ght247')).toBe('N1GHT247')
+    expect(easyShareCrewLinkInviteCode('profile', '', 'n1ght247')).toBeNull()
+    expect(easyShareCrewLinkInviteCode('link', '', 'invalid-code')).toBeNull()
+  })
+
+  it('extracts a private DarkChat invitation from its profile share', () => {
     expect(
-      easyShareCrewLinkInviteCode('profile', '', 'n1ght247'),
+      easyShareDarkChatInviteCode(
+        'profile',
+        'skyphone://darkchat/invite/dc-7x4k-nova',
+      ),
+    ).toBe('DC-7X4K-NOVA')
+    expect(
+      easyShareDarkChatInviteCode(
+        'link',
+        'skyphone://darkchat/invite/DC-7X4K-NOVA',
+      ),
     ).toBeNull()
     expect(
-      easyShareCrewLinkInviteCode('link', '', 'invalid-code'),
+      easyShareDarkChatInviteCode('profile', 'skyphone://darkchat/invite/bad'),
     ).toBeNull()
   })
 
@@ -113,9 +128,12 @@ describe('EasyShare deep links', () => {
       'skyphone://music/playlist/music-playlist-1',
       { id: 'music-playlist-1', kind: 'playlist' },
     ],
-  ] as const)('extracts the exact shared music target', (kind, link, target) => {
-    expect(easyShareMusicTarget(kind, link)).toEqual(target)
-  })
+  ] as const)(
+    'extracts the exact shared music target',
+    (kind, link, target) => {
+      expect(easyShareMusicTarget(kind, link)).toEqual(target)
+    },
+  )
 
   it('rejects mismatched music share kinds', () => {
     expect(
@@ -128,17 +146,14 @@ describe('EasyShare deep links', () => {
 })
 
 describe('EasyShare destination suggestions', () => {
-  it.each([
-    'document',
-    'link',
-    'location',
-    'note',
-    'text',
-  ] as const)('offers Notes for %s content from another app', (kind) => {
-    expect(
-      easyShareDestinationAppIds(payload({ appId: 'calendar', kind })),
-    ).toEqual(['messages', 'darkchat', 'flare', 'notes'])
-  })
+  it.each(['document', 'link', 'location', 'note', 'text'] as const)(
+    'offers Notes for %s content from another app',
+    (kind) => {
+      expect(
+        easyShareDestinationAppIds(payload({ appId: 'calendar', kind })),
+      ).toEqual(['messages', 'darkchat', 'flare', 'notes'])
+    },
+  )
 
   it.each([
     'contact',
@@ -148,13 +163,16 @@ describe('EasyShare destination suggestions', () => {
     'profile',
     'track',
     'video',
-  ] as const)('does not suggest lossy Notes conversion for %s content', (kind) => {
-    expect(easyShareDestinationAppIds(payload({ kind }))).toEqual([
-      'messages',
-      'darkchat',
-      'flare',
-    ])
-  })
+  ] as const)(
+    'does not suggest lossy Notes conversion for %s content',
+    (kind) => {
+      expect(easyShareDestinationAppIds(payload({ kind }))).toEqual([
+        'messages',
+        'darkchat',
+        'flare',
+      ])
+    },
+  )
 
   it('does not suggest saving a Notes item back into Notes', () => {
     expect(easyShareDestinationAppIds(payload({}))).toEqual([

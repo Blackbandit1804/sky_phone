@@ -57,6 +57,7 @@ import {
   SkyChip,
   SkyDialog,
   SkyDialogButton,
+  SkyDropdown,
   SkyField,
   SkyGlass,
   SkyLink,
@@ -113,6 +114,8 @@ const commentsOpen = ref(false)
 const commentBody = ref('')
 const replyingTo = ref<PicstagramComment | null>(null)
 const actionsOpen = ref(false)
+const postMenuOpened = ref(false)
+const postMenuTarget = ref<HTMLElement | null>(null)
 const reportOpen = ref(false)
 const reportTarget = ref<{
   id: string
@@ -158,6 +161,27 @@ const tabIndex = computed(() =>
 const currentComposeMedia = computed(
   () => selectedMedia.value[composePreviewIndex.value] ?? null,
 )
+const postMenuItems = computed(() => {
+  const post = actionPost.value
+  if (!post) return []
+  if (post.is_owner) {
+    return [
+      { id: 'share', label: t('share') },
+      { id: 'archive', label: t('archive') },
+      {
+        destructive: true,
+        id: 'delete',
+        label: t('deletePost'),
+        separatorBefore: true,
+      },
+    ]
+  }
+  return [
+    { id: 'share', label: t('share') },
+    { id: 'report', label: t('report'), separatorBefore: true },
+    { destructive: true, id: 'block', label: t('block') },
+  ]
+})
 const taggedProfilePosts = computed(() => {
   const handle = currentProfile.value?.handle.trim().toLowerCase()
   if (!handle) return []
@@ -612,9 +636,39 @@ async function saveProfile(): Promise<void> {
   notify(t('profileSaved'))
 }
 
-function showPostActions(post: PicstagramPost): void {
+function showPostActions(event: MouseEvent, post: PicstagramPost): void {
+  event.stopPropagation()
   actionPost.value = post
-  actionsOpen.value = true
+  postMenuTarget.value = event.currentTarget as HTMLElement
+  postMenuOpened.value = true
+}
+
+function dismissPostMenu(): void {
+  postMenuOpened.value = false
+  postMenuTarget.value = null
+}
+
+function selectPostMenuItem(id: string): void {
+  const post = actionPost.value
+  if (!post) return
+  dismissPostMenu()
+  switch (id) {
+    case 'share':
+      sharePost(post)
+      break
+    case 'archive':
+      archiveSelectedPost()
+      break
+    case 'delete':
+      deleteDialogOpen.value = true
+      break
+    case 'report':
+      startReport('post', post.id, t('post'))
+      break
+    case 'block':
+      blockDialogOpen.value = true
+      break
+  }
 }
 
 function showProfileActions(): void {
@@ -979,7 +1033,7 @@ onBeforeUnmount(() => {
                 icon-only
                 class="ps-post-more"
                 :aria-label="t('more')"
-                @click="showPostActions(selectedPost)"
+                @click="showPostActions($event, selectedPost)"
               >
                 <MoreHorizontal />
               </SkyLink>
@@ -1099,7 +1153,7 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else-if="tab === 'home'">
-        <SkyNavbar :title="t('name')" variant="compact">
+        <SkyNavbar class="ps-home-navbar" :title="t('name')" variant="compact">
           <template #left>
             <SkyLink
               component="button"
@@ -1190,7 +1244,7 @@ onBeforeUnmount(() => {
                 icon-only
                 class="ps-post-more"
                 :aria-label="t('more')"
-                @click.stop="showPostActions(post)"
+                @click="showPostActions($event, post)"
               >
                 <MoreHorizontal />
               </SkyLink>
@@ -2054,40 +2108,44 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="ps-edit-fields">
-          <SkyField
-            v-model="profileDraft.displayName"
-            :label="t('displayName')"
-            outline
-          /><SkyField
-            v-model="profileDraft.handle"
-            :label="t('username')"
-            outline
-          /><SkyField
-            v-model="profileDraft.bio"
-            :label="t('bio')"
-            type="textarea"
-            :rows="6"
-            outline
-          />
+          <SkyList inset strong class="ps-edit-field-list">
+            <SkyField
+              v-model="profileDraft.displayName"
+              :label="t('displayName')"
+              maxlength="40"
+            />
+            <SkyField
+              v-model="profileDraft.handle"
+              :label="t('username')"
+              maxlength="24"
+            />
+            <SkyField
+              v-model="profileDraft.bio"
+              :label="t('bio')"
+              type="textarea"
+              :rows="4"
+              maxlength="160"
+            />
+          </SkyList>
           <section class="ps-privacy-control">
+            <span class="ps-privacy-control__icon">
+              <LockKeyhole v-if="profileDraft.private" />
+              <UserRound v-else />
+            </span>
             <div>
-              <strong>{{ t('profileVisibility') }}</strong>
+              <strong>{{
+                t(
+                  profileDraft.private
+                    ? 'privateProfileSetting'
+                    : 'publicProfile',
+                )
+              }}</strong>
               <small>{{ t('privacyHint') }}</small>
             </div>
-            <SkySegmented strong>
-              <SkySegmentedButton
-                :active="!profileDraft.private"
-                @click="profileDraft.private = false"
-              >
-                <UserRound />{{ t('publicProfile') }}
-              </SkySegmentedButton>
-              <SkySegmentedButton
-                :active="profileDraft.private"
-                @click="profileDraft.private = true"
-              >
-                <LockKeyhole />{{ t('privateProfileSetting') }}
-              </SkySegmentedButton>
-            </SkySegmented>
+            <SkyToggle
+              v-model="profileDraft.private"
+              :aria-label="t('privateProfileSetting')"
+            />
           </section>
         </div>
       </section>
@@ -2340,32 +2398,25 @@ onBeforeUnmount(() => {
       </section></SkySheet
     >
 
+    <SkyDropdown
+      :items="postMenuItems"
+      :label="t('more')"
+      :opened="postMenuOpened"
+      placement="auto"
+      :target="postMenuTarget"
+      @backdropclick="dismissPostMenu"
+      @escape="dismissPostMenu"
+      @positionerror="dismissPostMenu"
+      @select="selectPostMenuItem"
+    />
+
     <SkyActionSheet
       :opened="actionsOpen"
       :label="t('more')"
       @backdropclick="actionsOpen = false"
       @escape="actionsOpen = false"
     >
-      <SkyActionGroup v-if="actionPost"
-        ><SkyActionButton
-          v-if="actionPost.is_owner"
-          @click="archiveSelectedPost"
-          >{{ t('archive') }}</SkyActionButton
-        ><SkyActionButton
-          v-if="actionPost.is_owner"
-          @click="((deleteDialogOpen = true), (actionsOpen = false))"
-          >{{ t('deletePost') }}</SkyActionButton
-        ><SkyActionButton
-          v-else
-          @click="startReport('post', actionPost.id, t('post'))"
-          >{{ t('report') }}</SkyActionButton
-        ><SkyActionButton
-          v-if="!actionPost.is_owner"
-          @click="((blockDialogOpen = true), (actionsOpen = false))"
-          >{{ t('block') }}</SkyActionButton
-        ></SkyActionGroup
-      >
-      <SkyActionGroup v-else-if="currentProfile"
+      <SkyActionGroup v-if="currentProfile"
         ><SkyActionButton @click="shareCurrentProfile">{{
           t('shareProfile')
         }}</SkyActionButton
@@ -2581,6 +2632,11 @@ button {
   background: var(--ps-accent);
   font-size: 9px;
   line-height: 16px;
+}
+
+.ps-home-navbar :deep(.sky-navbar__inner) {
+  margin-bottom: 2px;
+  transform: translateY(-3px);
 }
 
 .ps-stories {
@@ -3672,11 +3728,16 @@ button {
   font-size: 12px;
 }
 .ps-edit-fields {
-  padding: 0 var(--sky-page-gutter);
+  padding: 0;
+}
+.ps-edit-field-list {
+  margin-bottom: 0;
 }
 .ps-privacy-control {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0 var(--sky-page-gutter);
   padding: 13px 14px;
   border: 1px solid var(--sky-hairline);
   border-radius: var(--sky-radius-card);
@@ -3684,23 +3745,30 @@ button {
 }
 .ps-privacy-control > div {
   display: grid;
+  min-width: 0;
+  flex: 1;
   gap: 2px;
+}
+.ps-privacy-control__icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ps-accent-soft);
+  color: var(--ps-accent);
 }
 .ps-privacy-control small {
   color: var(--sky-muted);
   font-size: 11px;
   line-height: 1.35;
 }
-.ps-privacy-control :deep(.sky-segmented-button) {
-  min-width: 0;
-  gap: 5px;
-}
-.ps-privacy-control :deep(svg) {
+.ps-privacy-control__icon svg {
   width: 15px;
   height: 15px;
 }
-.ps-fields :deep(.sky-field),
-.ps-edit-fields :deep(.sky-field) {
+.ps-fields :deep(.sky-field) {
   overflow: hidden;
   margin: 0;
   padding: 12px 14px;
@@ -3708,33 +3776,25 @@ button {
   border-radius: var(--sky-radius-card);
   background: var(--sky-surface);
 }
-.ps-fields :deep(.sky-field__inner),
-.ps-edit-fields :deep(.sky-field__inner) {
+.ps-fields :deep(.sky-field__inner) {
   padding: 0;
 }
-.ps-fields :deep(.sky-field__label),
-.ps-edit-fields :deep(.sky-field__label) {
+.ps-fields :deep(.sky-field__label) {
   margin-top: 0;
 }
-.ps-fields :deep(.sky-field__label-text),
-.ps-edit-fields :deep(.sky-field__label-text) {
+.ps-fields :deep(.sky-field__label-text) {
   top: auto;
   margin: 0;
   padding: 0;
   background: transparent;
 }
-.ps-fields :deep(.sky-field__control),
-.ps-edit-fields :deep(.sky-field__control) {
+.ps-fields :deep(.sky-field__control) {
   margin: 0;
   border-radius: calc(var(--sky-radius-control) + 10px);
   background: var(--sky-surface-muted);
 }
-.ps-fields :deep(.sky-field__border),
-.ps-edit-fields :deep(.sky-field__border) {
+.ps-fields :deep(.sky-field__border) {
   display: none;
-}
-.ps-edit-fields :deep(.sky-field__textarea) {
-  padding-inline: 4px;
 }
 .ps-compose-fields :deep(.sky-field) {
   overflow: hidden;

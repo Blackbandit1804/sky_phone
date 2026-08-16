@@ -43,4 +43,10 @@ describe('House app sheets', () => {
       /\.house-key-list\s*\{[^}]*--sky-list-outer-left:\s*0px;[^}]*--sky-list-outer-right:\s*0px;/s,
     )
   })
+
+  it('centers the resident icon above the Give a Key title', () => {
+    expect(source).toMatch(
+      /\.house-candidates > svg\s*\{[^}]*display:\s*block;[^}]*margin:\s*0 auto;/s,
+    )
+  })
 })

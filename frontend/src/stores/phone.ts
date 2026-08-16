@@ -1644,6 +1644,7 @@ const defaultLocales: LocaleTree = {
       noChatsBody:
         'Connect with a Dark-ID or invitation code. There is no public search.',
       newChat: 'New Chat',
+      to: 'To:',
       connectPrivately: 'Connect privately',
       newChatBody:
         'Enter an exact Dark-ID or invitation code. Unknown identities require confirmation.',
@@ -1720,6 +1721,7 @@ const defaultLocales: LocaleTree = {
       shareActivity: 'Share activity status',
       inviteCode: 'Private invitation code',
       copyInvite: 'Copy Invite',
+      shareInvite: 'Share Invite',
       privacyDisclaimer:
         'DarkChat stores messages on the server and does not claim end-to-end encryption.',
       profileActions: 'Account Actions',

@@ -1046,7 +1046,8 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 .house-candidates > svg {
-  margin-top: 0;
+  display: block;
+  margin: 0 auto;
   color: var(--house-accent);
 }
 .house-candidates h2 {

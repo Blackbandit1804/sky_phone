@@ -15,6 +15,18 @@ describe('Picstagram app layout', () => {
     expect(source).toContain('ps-post-more')
     expect(source).toContain('count(post.like_count)')
     expect(source).toContain('count(post.comment_count)')
+    expect(source).toContain('class="ps-home-navbar"')
+    expect(source).toMatch(
+      /\.ps-home-navbar :deep\(\.sky-navbar__inner\)\s*\{[^}]*margin-bottom:\s*2px;[^}]*translateY\(-3px\)/s,
+    )
+  })
+
+  it('uses the central anchored dropdown for image actions', () => {
+    expect(source).toContain('<SkyDropdown')
+    expect(source).toContain(':target="postMenuTarget"')
+    expect(source).toContain('@select="selectPostMenuItem"')
+    expect(source).toContain('showPostActions($event, post)')
+    expect(source).toContain("case 'share':")
   })
 
   it('opens comments independently from post detail and collapses replies', () => {
@@ -51,8 +63,11 @@ describe('Picstagram app layout', () => {
   it('keeps create out of navigation and exposes privacy requests', () => {
     expect(source).toContain(':item-count="4"')
     expect(source).not.toContain('ps-create-tab')
-    expect(source).toContain('profileDraft.private = false')
-    expect(source).toContain('profileDraft.private = true')
+    expect(source).toContain('v-model="profileDraft.private"')
+    expect(source).toContain('class="ps-edit-field-list"')
+    expect(source).toContain('class="ps-privacy-control__icon"')
+    expect(source).not.toContain('profileDraft.private = false')
+    expect(source).not.toContain('profileDraft.private = true')
     expect(source).toContain(
       'respondToFollowRequest(activity.profile_id, true)',
     )

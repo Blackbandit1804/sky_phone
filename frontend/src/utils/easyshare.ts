@@ -40,11 +40,12 @@ export function easyShareRoute(payload: EasySharePayload): {
   path: string
   query: Record<string, string>
 } {
-  const match = payload.link?.match(/^skyphone:\/\/([^/]+)(?:\/([^/]+))?(?:\/(.+))?$/)
+  const match = payload.link?.match(
+    /^skyphone:\/\/([^/]+)(?:\/([^/]+))?(?:\/(.+))?$/,
+  )
   const schemeApp = match?.[1]
   const app = schemeApp ? getPhoneApp(schemeApp) : getPhoneApp(payload.appId)
-  const path =
-    (schemeApp && schemeRoutes[schemeApp]) || app?.route || '/'
+  const path = (schemeApp && schemeRoutes[schemeApp]) || app?.route || '/'
   const query: Record<string, string> = {
     easyShareId: String(payload.id ?? match?.[3] ?? match?.[2] ?? ''),
     easyShareKind: payload.kind,
@@ -73,6 +74,17 @@ export function easyShareCrewLinkInviteCode(
     return id.toUpperCase()
   }
   return null
+}
+
+export function easyShareDarkChatInviteCode(
+  kind: unknown,
+  link: unknown,
+): string | null {
+  if (kind !== 'profile' || typeof link !== 'string') return null
+  const match = link.match(
+    /^skyphone:\/\/darkchat\/invite\/(DC-[A-Z0-9]{4}-[A-Z0-9]{4})$/i,
+  )
+  return match ? match[1].toUpperCase() : null
 }
 
 export type EasyShareMusicTarget =
