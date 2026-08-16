@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import {
-  kButton,
-  kList,
-  kListInput,
-  kPreloader,
-  kSegmented,
-  kSegmentedButton,
-} from 'konsta/vue'
+  SkyButton as kButton,
+  SkyField as kListInput,
+  SkyList as kList,
+  SkySegmented as kSegmented,
+  SkySegmentedButton as kSegmentedButton,
+  SkySpinner as kPreloader,
+} from '@/ui'
 import { computed, ref } from 'vue'
 
 import { useAccountStore } from '@/stores/account'
@@ -36,11 +36,13 @@ const error = ref('')
 
 const canSubmit = computed(() => {
   const normalized = normalizeMailAddress(email.value)
-  const passwordValid = password.value.length >= 6 && password.value.length <= 64
+  const passwordValid =
+    password.value.length >= 6 && password.value.length <= 64
   return Boolean(
     normalized &&
       passwordValid &&
-      (mode.value === 'login' || (confirm.value && confirm.value === password.value)),
+      (mode.value === 'login' ||
+        (confirm.value && confirm.value === password.value)),
   )
 })
 
@@ -101,7 +103,10 @@ async function submit(): Promise<void> {
       <k-segmented-button :active="mode === 'login'" @click="setMode('login')">
         {{ phone.t('Common.appAuth.login') }}
       </k-segmented-button>
-      <k-segmented-button :active="mode === 'register'" @click="setMode('register')">
+      <k-segmented-button
+        :active="mode === 'register'"
+        @click="setMode('register')"
+      >
         {{ phone.t('Common.appAuth.register') }}
       </k-segmented-button>
     </k-segmented>
@@ -144,7 +149,13 @@ async function submit(): Promise<void> {
     <k-button large rounded :disabled="!canSubmit || pending" @click="submit">
       <k-preloader v-if="pending" />
       <template v-else>
-        {{ phone.t(mode === 'login' ? 'Common.appAuth.loginAction' : 'Common.appAuth.registerAction') }}
+        {{
+          phone.t(
+            mode === 'login'
+              ? 'Common.appAuth.loginAction'
+              : 'Common.appAuth.registerAction',
+          )
+        }}
       </template>
     </k-button>
   </section>
@@ -159,7 +170,7 @@ async function submit(): Promise<void> {
   text-align: center;
 }
 .ifruit-app-auth > small {
-  color: var(--k-color-primary);
+  color: var(--sky-app-accent);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;

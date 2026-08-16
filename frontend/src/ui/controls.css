@@ -80,7 +80,7 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: var(--sky-app-accent, #007aff);
-  color: #ffffff;
+  color: var(--sky-button-text, #ffffff);
   font-size: 15px;
   font-weight: 500;
   line-height: 1.2;
@@ -1037,7 +1037,7 @@ label.sky-list-item__row {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  color: inherit;
+  color: var(--sky-list-item-title-color, inherit);
   font-size: 17px;
   font-weight: 400;
   line-height: 24px;

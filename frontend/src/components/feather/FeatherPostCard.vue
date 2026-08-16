@@ -8,7 +8,11 @@ import {
   Share2,
   UserRound,
 } from 'lucide-vue-next'
-import { kButton, kGlass, kIcon } from 'konsta/vue'
+import {
+  SkyButton as kButton,
+  SkyGlass as kGlass,
+  SkyIcon as kIcon,
+} from '@/ui'
 import { computed, ref } from 'vue'
 
 import { usePhoneStore } from '@/stores/phone'
@@ -263,8 +267,8 @@ function relativeTime(timestamp: number): string {
   color: #438cf5;
 }
 .feather-follow {
-  --k-button-bg-color: transparent;
-  --k-button-text-color: var(--feather-blue, #1d9bf0);
+  --sky-app-accent: transparent;
+  --sky-button-text: var(--feather-blue, #1d9bf0);
   width: auto;
   min-width: 58px;
   max-width: 68px;

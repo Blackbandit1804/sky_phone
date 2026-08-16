@@ -1,20 +1,18 @@
 <script setup lang="ts">
 import {
-  kBlock,
-  kButton,
-  kDialog,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kSegmented,
-  kSegmentedButton,
-  kToast,
-} from 'konsta/vue'
+  SkyBlock,
+  SkyDialog,
+  SkyLink,
+  SkyList,
+  SkyField,
+  SkyListItem,
+  SkyNavbarBackLink,
+  SkyAppPage,
+  SkySpinner,
+  SkySegmented,
+  SkySegmentedButton,
+  SkyToast,
+} from '@/ui'
 import {
   Check,
   ChevronLeft,
@@ -74,7 +72,8 @@ const developmentParameters = isDevelopment
   ? new URLSearchParams(window.location.search)
   : null
 const developmentApiEnabled = Boolean(developmentParameters?.has('apiPort'))
-const developmentGalleryState = developmentParameters?.get('galleryMock') ?? null
+const developmentGalleryState =
+  developmentParameters?.get('galleryMock') ?? null
 const filterItems = [
   { id: 'all', label: 'all' },
   { id: 'photo', label: 'photos' },
@@ -122,21 +121,6 @@ const importError = ref('')
 const importing = ref(false)
 const deleteDialogOpened = ref(false)
 const deleteManyDialogOpened = ref(false)
-const cancelButtonColors = {
-  fillBgIos: 'bg-[#8e8e93] active:bg-[#7a7a7f]',
-  fillBgMaterial: 'bg-[#8e8e93] active:bg-[#7a7a7f]',
-  fillTextIos: 'text-white',
-  fillTextMaterial: 'text-white',
-}
-const deleteButtonColors = {
-  fillBgIos: 'bg-[#ff3b30] active:bg-[#d9342b]',
-  fillBgMaterial: 'bg-[#ff3b30] active:bg-[#d9342b]',
-  fillTextIos: 'text-white',
-  fillTextMaterial: 'text-white',
-}
-const filterBarColors = {
-  strongHighlightBgIos: 'bg-[#63636680]',
-}
 const deleting = ref(false)
 const deletingMany = ref(false)
 const favoriting = ref(false)
@@ -178,11 +162,7 @@ const countText = computed(() => {
   const countKey = filter.value === 'all' ? 'all' : `${filter.value}s`
   const count = counts.value[countKey as keyof GalleryCounts]
   const translationKey =
-    count === 1
-      ? filter.value === 'all'
-        ? 'allOne'
-        : filter.value
-      : countKey
+    count === 1 ? (filter.value === 'all' ? 'allOne' : filter.value) : countKey
   return phone.t(`Apps.photos.counts.${translationKey}`, {
     count: new Intl.NumberFormat(phone.lang).format(count),
   })
@@ -195,7 +175,9 @@ const selectedMedia = computed(() =>
 )
 const selectedCountText = computed(() =>
   phone.t('Apps.photos.selection.selected', {
-    count: new Intl.NumberFormat(phone.lang).format(selectedMediaIds.value.length),
+    count: new Intl.NumberFormat(phone.lang).format(
+      selectedMediaIds.value.length,
+    ),
   }),
 )
 const selectedCaptureDay = computed(() => {
@@ -704,7 +686,9 @@ function shareSelected(): void {
     kind: mediaKind,
     link: `skyphone://media/${selected.value.id}`,
     subtitle: formatDate(selected.value.createdAt),
-    title: phone.t(mediaKind === 'video' ? 'Apps.photos.video' : 'Apps.photos.photo'),
+    title: phone.t(
+      mediaKind === 'video' ? 'Apps.photos.video' : 'Apps.photos.photo',
+    ),
   })
 }
 
@@ -719,7 +703,9 @@ async function toggleFavorite(): Promise<void> {
     )
     if (developmentItem) developmentItem.favorite = nextFavorite
     if (favoritesOnly.value && !nextFavorite) {
-      media.value = media.value.filter((entry) => entry.id !== selected.value?.id)
+      media.value = media.value.filter(
+        (entry) => entry.id !== selected.value?.id,
+      )
     }
     favoriting.value = false
     await fetchCounts()
@@ -738,7 +724,9 @@ async function toggleFavorite(): Promise<void> {
       )
       if (developmentItem) developmentItem.favorite = nextFavorite
       if (favoritesOnly.value && !nextFavorite) {
-        media.value = media.value.filter((entry) => entry.id !== selected.value?.id)
+        media.value = media.value.filter(
+          (entry) => entry.id !== selected.value?.id,
+        )
       }
       await fetchCounts()
       return
@@ -980,9 +968,7 @@ function onMessage(event: MessageEvent): void {
     closeMedia()
     showToast(phone.t('Apps.photos.deleted'))
   } else {
-    showToast(
-      phone.t(`Apps.photos.errors.${mediaErrorKey(result.error)}`),
-    )
+    showToast(phone.t(`Apps.photos.errors.${mediaErrorKey(result.error)}`))
   }
 }
 
@@ -1005,25 +991,25 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     v-if="importMode === 'sources'"
     class="gallery-import-page !pt-[44px]"
     :aria-label="phone.t('Apps.photos.import.chooseSource')"
   >
-    <k-navbar :title="phone.t('Apps.photos.import.title')">
+    <sky-navbar :title="phone.t('Apps.photos.import.title')">
       <template #left>
-        <k-navbar-back-link
+        <sky-navbar-back-link
           component="button"
           :text="phone.t('Common.back')"
           @click="closeImport"
         />
       </template>
-    </k-navbar>
-    <k-block class="gallery-import-intro">
+    </sky-navbar>
+    <sky-block class="gallery-import-intro">
       {{ phone.t('Apps.photos.import.chooseSource') }}
-    </k-block>
-    <k-list inset strong>
-      <k-list-item
+    </sky-block>
+    <sky-list inset strong>
+      <sky-list-item
         v-for="source in importSources"
         :key="source.id"
         link
@@ -1044,31 +1030,31 @@ onBeforeUnmount(() => {
       >
         <template #media><Globe2 :size="22" /></template>
         <template #after><ChevronRight :size="18" /></template>
-      </k-list-item>
-    </k-list>
-  </k-page>
+      </sky-list-item>
+    </sky-list>
+  </sky-app-page>
 
-  <k-page
+  <sky-app-page
     v-else-if="importMode === 'form' && importSource"
     class="gallery-import-page !pt-[44px]"
     :aria-label="phone.t('Apps.photos.import.title')"
   >
-    <k-navbar :title="importSource.label">
+    <sky-navbar :title="importSource.label">
       <template #left>
-        <k-navbar-back-link
+        <sky-navbar-back-link
           component="button"
           :text="phone.t('Common.back')"
           @click="backFromImportForm"
         />
       </template>
-    </k-navbar>
+    </sky-navbar>
 
     <div class="gallery-import-form">
       <div class="gallery-import-form-icon"><Link2 :size="34" /></div>
       <h2>{{ phone.t('Apps.photos.import.linkTitle') }}</h2>
       <p>{{ phone.t('Apps.photos.import.linkBody') }}</p>
-      <k-list inset strong class="gallery-import-url-list">
-        <k-list-input
+      <sky-list inset strong class="gallery-import-url-list">
+        <sky-field
           outline
           input-id="gallery-import-url"
           inputmode="url"
@@ -1081,47 +1067,47 @@ onBeforeUnmount(() => {
           @input="updateImportUrl"
           @keyup.enter="commitUrlImport"
         />
-      </k-list>
-      <k-button
+      </sky-list>
+      <sky-button
         class="gallery-import-submit"
         large
         rounded
         :disabled="!importUrl.trim() || importing"
         @click="commitUrlImport"
       >
-        <k-preloader v-if="importing" class="mr-2" />
+        <sky-spinner v-if="importing" class="mr-2" />
         {{ phone.t('Apps.photos.import.action') }}
-      </k-button>
+      </sky-button>
     </div>
-  </k-page>
+  </sky-app-page>
 
-  <k-page
+  <sky-app-page
     v-else-if="!selected"
     class="gallery-page"
     :class="{ '!pt-[44px]': requestedMessageMedia }"
     :aria-label="phone.t('Apps.photos.name')"
   >
-    <k-navbar
+    <sky-navbar
       v-if="requestedMessageMedia"
       :title="phone.t('Apps.photos.name')"
     >
       <template #left>
-        <k-navbar-back-link
+        <sky-navbar-back-link
           component="button"
           :text="phone.t('Common.back')"
           @click="cancelMessageSelection"
         />
       </template>
       <template v-if="multipleSelection" #right>
-        <k-link
+        <sky-link
           component="button"
           :disabled="!selectedMediaIds.length"
           @click="completeMultipleSelection"
         >
           {{ phone.t('Common.done') }}
-        </k-link>
+        </sky-link>
       </template>
-    </k-navbar>
+    </sky-navbar>
     <SkyNavbar
       v-else
       class="gallery-library-navbar"
@@ -1137,7 +1123,11 @@ onBeforeUnmount(() => {
           class="gallery-header-actions sky-ui-provider sky-ui-provider--dark"
         >
           <SkyToolbarPane class="gallery-header-tool gallery-header-tool--text">
-            <SkyButton clear class="gallery-header-action" @click="exitSelectionMode">
+            <SkyButton
+              clear
+              class="gallery-header-action"
+              @click="exitSelectionMode"
+            >
               {{ phone.t('Common.cancel') }}
             </SkyButton>
           </SkyToolbarPane>
@@ -1176,7 +1166,11 @@ onBeforeUnmount(() => {
             </SkyButton>
           </SkyToolbarPane>
           <SkyToolbarPane class="gallery-header-tool gallery-header-tool--text">
-            <SkyButton clear class="gallery-header-action" @click="enterSelectionMode">
+            <SkyButton
+              clear
+              class="gallery-header-action"
+              @click="enterSelectionMode"
+            >
               {{ phone.t('Apps.photos.selection.action') }}
             </SkyButton>
           </SkyToolbarPane>
@@ -1186,12 +1180,12 @@ onBeforeUnmount(() => {
 
     <div ref="galleryContent" class="gallery-content">
       <div v-if="loading" class="gallery-state">
-        <k-preloader />
+        <sky-spinner />
         <span>{{ phone.t('Apps.photos.loading') }}</span>
       </div>
-      <k-block v-else-if="loadError" strong inset class="gallery-error">
+      <sky-block v-else-if="loadError" strong inset class="gallery-error">
         {{ loadError }}
-      </k-block>
+      </sky-block>
       <div v-else-if="!media.length" class="gallery-state gallery-empty">
         <strong>{{ phone.t('Apps.photos.emptyTitle') }}</strong>
         <span>{{ phone.t('Apps.photos.emptyBody') }}</span>
@@ -1213,18 +1207,12 @@ onBeforeUnmount(() => {
           :class="{
             'gallery-tile--selected': selectedMediaIds.includes(entry.id),
           }"
-          :style="
-            {
-              gridColumnStart: bottomRightGridPosition(
-                index,
-                orderedMedia.length,
-              ).column,
-              gridRowStart: bottomRightGridPosition(
-                index,
-                orderedMedia.length,
-              ).row,
-            }
-          "
+          :style="{
+            gridColumnStart: bottomRightGridPosition(index, orderedMedia.length)
+              .column,
+            gridRowStart: bottomRightGridPosition(index, orderedMedia.length)
+              .row,
+          }"
           type="button"
           :aria-pressed="
             selectionMode || multipleSelection
@@ -1275,20 +1263,15 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <k-navbar
+    <sky-navbar
       v-if="!requestedMessageMedia && !selectionMode"
       component="nav"
       class="gallery-filter-navbar"
       :aria-label="phone.t('Apps.photos.name')"
     >
       <template #subnavbar>
-        <k-segmented
-          strong
-          rounded
-          :colors="filterBarColors"
-          :data-active-filter="filter"
-        >
-          <k-segmented-button
+        <sky-segmented strong rounded :data-active-filter="filter">
+          <sky-segmented-button
             v-for="item in filterItems"
             :key="item.id"
             large
@@ -1298,10 +1281,10 @@ onBeforeUnmount(() => {
             @click="filter = item.id"
           >
             {{ phone.t(`Apps.photos.filters.${item.label}`) }}
-          </k-segmented-button>
-        </k-segmented>
+          </sky-segmented-button>
+        </sky-segmented>
       </template>
-    </k-navbar>
+    </sky-navbar>
 
     <SkyToolbar
       v-if="selectionMode"
@@ -1337,9 +1320,9 @@ onBeforeUnmount(() => {
         </SkyButton>
       </SkyToolbarPane>
     </SkyToolbar>
-  </k-page>
+  </sky-app-page>
 
-  <k-page
+  <sky-app-page
     v-else
     class="gallery-detail sky-ui-provider sky-ui-provider--dark"
   >
@@ -1398,7 +1381,7 @@ onBeforeUnmount(() => {
           @loadedmetadata="initializeVideo"
           @error="videoPlaybackError = true"
         ></video>
-        <k-block
+        <sky-block
           v-if="selected.mediaType === 'video' && videoPlaybackError"
           strong
           inset
@@ -1406,7 +1389,7 @@ onBeforeUnmount(() => {
           role="alert"
         >
           {{ phone.t('Apps.photos.errors.unsupported') }}
-        </k-block>
+        </sky-block>
       </div>
     </div>
 
@@ -1495,7 +1478,7 @@ onBeforeUnmount(() => {
         </SkyButton>
       </SkyToolbarPane>
     </SkyToolbar>
-  </k-page>
+  </sky-app-page>
 
   <SkyActionSheet
     class="gallery-sort-sheet sky-ui-provider"
@@ -1554,7 +1537,7 @@ onBeforeUnmount(() => {
     </SkyActionGroup>
   </SkyActionSheet>
 
-  <k-dialog
+  <sky-dialog
     :opened="deleteManyDialogOpened"
     @backdropclick="deleteManyDialogOpened = false"
   >
@@ -1563,54 +1546,48 @@ onBeforeUnmount(() => {
     </template>
     <p>{{ phone.t('Apps.photos.selection.deleteBody') }}</p>
     <template #buttons>
-      <k-button
+      <sky-button
         large
         rounded
-        :colors="cancelButtonColors"
+        variant="secondary"
         @click="deleteManyDialogOpened = false"
       >
         {{ phone.t('Common.cancel') }}
-      </k-button>
-      <k-button
-        large
-        rounded
-        :colors="deleteButtonColors"
-        @click="deleteSelection"
-      >
+      </sky-button>
+      <sky-button large rounded variant="danger" @click="deleteSelection">
         {{ phone.t('Common.delete') }}
-      </k-button>
+      </sky-button>
     </template>
-  </k-dialog>
+  </sky-dialog>
 
-  <k-dialog
+  <sky-dialog
     :opened="deleteDialogOpened"
     @backdropclick="deleteDialogOpened = false"
   >
     <template #title>{{ phone.t('Apps.photos.deleteTitle') }}</template>
     <p>{{ phone.t('Apps.photos.deleteBody') }}</p>
     <template #buttons>
-      <k-button
+      <sky-button
         large
         rounded
-        :colors="cancelButtonColors"
+        variant="secondary"
         @click="deleteDialogOpened = false"
       >
         {{ phone.t('Common.cancel') }}
-      </k-button>
-      <k-button
-        large
-        rounded
-        :colors="deleteButtonColors"
-        @click="deleteSelected"
-      >
+      </sky-button>
+      <sky-button large rounded variant="danger" @click="deleteSelected">
         {{ phone.t('Common.delete') }}
-      </k-button>
+      </sky-button>
     </template>
-  </k-dialog>
+  </sky-dialog>
 
-  <k-toast :opened="toastOpened" position="center" @click="toastOpened = false">
+  <sky-toast
+    :opened="toastOpened"
+    position="center"
+    @click="toastOpened = false"
+  >
     {{ toastText }}
-  </k-toast>
+  </sky-toast>
 </template>
 
 <style scoped>
@@ -1705,9 +1682,7 @@ onBeforeUnmount(() => {
 }
 .gallery-library-navbar :deep(.sky-navbar__title-container) {
   padding-right: calc(200px + var(--sky-safe-area-right));
-  transform: translateY(
-    calc(0px - var(--sky-navbar-collapse-offset) - 30px)
-  );
+  transform: translateY(calc(0px - var(--sky-navbar-collapse-offset) - 30px));
 }
 .gallery-header-actions {
   width: max-content;

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import {
-  kButton,
-  kFab,
-  kList,
-  kListInput,
-  kPage,
-  kPreloader,
-  kSheet,
-  kToast,
-} from 'konsta/vue'
+  SkyButton,
+  SkyFab,
+  SkyList,
+  SkyField,
+  SkyAppPage,
+  SkySpinner,
+  SkySheet,
+  SkyToast,
+} from '@/ui'
 import {
   LocateFixed,
   Map,
@@ -103,15 +103,6 @@ const markerColors: Array<{ id: MapMarkerColor; value: string }> = [
   { id: 'red', value: '#ff453a' },
   { id: 'purple', value: '#bf5af2' },
 ]
-const mapControlColors = {
-  bgIos: 'bg-ios-light-glass dark:bg-ios-dark-glass',
-  activeBgIos: 'active:bg-white/90 dark:active:bg-white/20',
-  textIos: 'text-black dark:text-white',
-}
-const locationControlColors = {
-  ...mapControlColors,
-  textIos: 'text-white',
-}
 const activeMapStyle = computed(
   () => mapStyles.find((style) => style.id === mapStyle.value) ?? mapStyles[0],
 )
@@ -489,7 +480,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page class="map-app">
+  <sky-app-page class="map-app">
     <div
       ref="viewportRef"
       class="map-viewport"
@@ -566,35 +557,35 @@ onBeforeUnmount(() => {
     </div>
 
     <nav class="map-controls" :aria-label="phone.t('Apps.map.controls')">
-      <k-fab
+      <sky-fab
         component="button"
         type="button"
         class="map-control map-control--share"
-        :colors="locationControlColors"
+        variant="neutral"
         :aria-label="phone.t('Apps.easyShare.name')"
         @click="shareCurrentLocation"
       >
         <template #icon>
           <Share2 aria-hidden="true" />
         </template>
-      </k-fab>
-      <k-fab
+      </sky-fab>
+      <sky-fab
         component="button"
         type="button"
         class="map-control"
-        :colors="mapControlColors"
+        variant="neutral"
         :aria-label="`${phone.t('Apps.map.switchStyle')}: ${phone.t(`Apps.map.styles.${mapStyle}`)}`"
         @click="cycleMapStyle"
       >
         <template #icon>
           <component :is="activeMapStyle.icon" aria-hidden="true" />
         </template>
-      </k-fab>
-      <k-fab
+      </sky-fab>
+      <sky-fab
         component="button"
         type="button"
         class="map-control map-control--marker"
-        :colors="locationControlColors"
+        variant="neutral"
         :disabled="placingMarker"
         :aria-label="phone.t('Apps.map.addMarker')"
         @click="startMarkerPlacement"
@@ -602,12 +593,12 @@ onBeforeUnmount(() => {
         <template #icon>
           <MapPinPlus aria-hidden="true" />
         </template>
-      </k-fab>
-      <k-fab
+      </sky-fab>
+      <sky-fab
         component="button"
         type="button"
         class="map-control map-control--location"
-        :colors="locationControlColors"
+        variant="neutral"
         :disabled="locating"
         :aria-label="phone.t('Apps.map.currentLocation')"
         @click="loadCurrentLocation(true)"
@@ -615,138 +606,138 @@ onBeforeUnmount(() => {
         <template #icon>
           <LocateFixed aria-hidden="true" />
         </template>
-      </k-fab>
+      </sky-fab>
     </nav>
 
     <section v-if="placingMarker" class="map-placement-panel">
       <strong>{{ phone.t('Apps.map.placeMarker') }}</strong>
       <span>{{ phone.t('Apps.map.placeMarkerHint') }}</span>
       <div>
-        <k-button small rounded outline @click="cancelMarkerPlacement">
+        <sky-button small rounded outline @click="cancelMarkerPlacement">
           <X :size="16" />
           {{ phone.t('Common.cancel') }}
-        </k-button>
-        <k-button small rounded @click="openMarkerEditor">
+        </sky-button>
+        <sky-button small rounded @click="openMarkerEditor">
           <MapPin :size="16" />
           {{ phone.t('Apps.map.addHere') }}
-        </k-button>
+        </sky-button>
       </div>
     </section>
 
     <div class="map-marker-sheet">
-      <k-sheet
+      <sky-sheet
         :opened="Boolean(draftCoords || selectedMarker)"
         @backdropclick="closeMarkerSheet"
       >
-      <section
-        v-if="draftCoords"
-        class="map-marker-sheet__content"
-        :class="{ 'map-marker-sheet__content--dark': phone.isDarkMode }"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="phone.t('Apps.map.newMarker')"
-      >
-        <h2>{{ phone.t('Apps.map.newMarker') }}</h2>
-        <p>{{ phone.t('Apps.map.newMarkerDescription') }}</p>
-        <k-list inset strong>
-          <k-list-input
-            input-id="map-marker-label"
-            :label="phone.t('Apps.map.markerName')"
-            :placeholder="phone.t('Apps.map.markerNamePlaceholder')"
-            :value="markerLabel"
-            maxlength="40"
-            outline
-            @input="updateMarkerLabel"
-            @keydown.enter="handleEnterAction($event, saveMarker)"
-          />
-        </k-list>
-        <span class="map-marker-sheet__label">{{
-          phone.t('Apps.map.markerColor')
-        }}</span>
-        <div
-          class="map-marker-colors"
-          role="radiogroup"
-          :aria-label="phone.t('Apps.map.markerColor')"
+        <section
+          v-if="draftCoords"
+          class="map-marker-sheet__content"
+          :class="{ 'map-marker-sheet__content--dark': phone.isDarkMode }"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="phone.t('Apps.map.newMarker')"
         >
-          <button
-            v-for="color in markerColors"
-            :key="color.id"
-            type="button"
-            role="radio"
-            :aria-checked="markerColor === color.id"
-            :aria-label="phone.t(`Apps.map.colors.${color.id}`)"
-            :class="{ 'map-marker-color--active': markerColor === color.id }"
-            :style="{ backgroundColor: color.value }"
-            @click="markerColor = color.id"
-          ></button>
-        </div>
-        <p v-if="markerError" class="map-marker-error" role="alert">
-          {{ markerError }}
-        </p>
-        <k-button
-          large
-          rounded
-          :disabled="mapStore.isLoading || !markerLabel.trim()"
-          @click="saveMarker"
-        >
-          <k-preloader v-if="mapStore.isLoading" />
-          <template v-else>{{ phone.t('Apps.map.saveMarker') }}</template>
-        </k-button>
-      </section>
+          <h2>{{ phone.t('Apps.map.newMarker') }}</h2>
+          <p>{{ phone.t('Apps.map.newMarkerDescription') }}</p>
+          <sky-list inset strong>
+            <sky-field
+              input-id="map-marker-label"
+              :label="phone.t('Apps.map.markerName')"
+              :placeholder="phone.t('Apps.map.markerNamePlaceholder')"
+              :value="markerLabel"
+              maxlength="40"
+              outline
+              @input="updateMarkerLabel"
+              @keydown.enter="handleEnterAction($event, saveMarker)"
+            />
+          </sky-list>
+          <span class="map-marker-sheet__label">{{
+            phone.t('Apps.map.markerColor')
+          }}</span>
+          <div
+            class="map-marker-colors"
+            role="radiogroup"
+            :aria-label="phone.t('Apps.map.markerColor')"
+          >
+            <button
+              v-for="color in markerColors"
+              :key="color.id"
+              type="button"
+              role="radio"
+              :aria-checked="markerColor === color.id"
+              :aria-label="phone.t(`Apps.map.colors.${color.id}`)"
+              :class="{ 'map-marker-color--active': markerColor === color.id }"
+              :style="{ backgroundColor: color.value }"
+              @click="markerColor = color.id"
+            ></button>
+          </div>
+          <p v-if="markerError" class="map-marker-error" role="alert">
+            {{ markerError }}
+          </p>
+          <sky-button
+            large
+            rounded
+            :disabled="mapStore.isLoading || !markerLabel.trim()"
+            @click="saveMarker"
+          >
+            <sky-spinner v-if="mapStore.isLoading" />
+            <template v-else>{{ phone.t('Apps.map.saveMarker') }}</template>
+          </sky-button>
+        </section>
 
-      <section
-        v-else-if="selectedMarker"
-        class="map-marker-sheet__content map-marker-sheet__content--details"
-        :class="{ 'map-marker-sheet__content--dark': phone.isDarkMode }"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="selectedMarker.label"
-      >
-        <span
-          class="map-marker-sheet__pin"
-          :style="{ color: markerColorValue(selectedMarker.color) }"
+        <section
+          v-else-if="selectedMarker"
+          class="map-marker-sheet__content map-marker-sheet__content--details"
+          :class="{ 'map-marker-sheet__content--dark': phone.isDarkMode }"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="selectedMarker.label"
         >
-          <MapPin :size="32" fill="currentColor" />
-        </span>
-        <h2>{{ selectedMarker.label }}</h2>
-        <p>
-          {{ selectedMarker.coords.x.toFixed(1) }},
-          {{ selectedMarker.coords.y.toFixed(1) }}
-        </p>
-        <p v-if="markerError" class="map-marker-error" role="alert">
-          {{ markerError }}
-        </p>
-        <k-button
-          large
-          rounded
-          class="map-marker-waypoint"
-          :disabled="mapStore.isLoading"
-          @click="setSelectedMarkerWaypoint"
-        >
-          <Route :size="17" />
-          {{ phone.t('Apps.map.setWaypoint') }}
-        </k-button>
-        <k-button
-          large
-          rounded
-          class="map-marker-delete"
-          :disabled="mapStore.isLoading"
-          @click="deleteSelectedMarker"
-        >
-          <k-preloader v-if="mapStore.isLoading" />
-          <template v-else>
-            <Trash2 :size="17" />
-            {{ phone.t('Apps.map.deleteMarker') }}
-          </template>
-        </k-button>
-      </section>
-      </k-sheet>
+          <span
+            class="map-marker-sheet__pin"
+            :style="{ color: markerColorValue(selectedMarker.color) }"
+          >
+            <MapPin :size="32" fill="currentColor" />
+          </span>
+          <h2>{{ selectedMarker.label }}</h2>
+          <p>
+            {{ selectedMarker.coords.x.toFixed(1) }},
+            {{ selectedMarker.coords.y.toFixed(1) }}
+          </p>
+          <p v-if="markerError" class="map-marker-error" role="alert">
+            {{ markerError }}
+          </p>
+          <sky-button
+            large
+            rounded
+            class="map-marker-waypoint"
+            :disabled="mapStore.isLoading"
+            @click="setSelectedMarkerWaypoint"
+          >
+            <Route :size="17" />
+            {{ phone.t('Apps.map.setWaypoint') }}
+          </sky-button>
+          <sky-button
+            large
+            rounded
+            class="map-marker-delete"
+            :disabled="mapStore.isLoading"
+            @click="deleteSelectedMarker"
+          >
+            <sky-spinner v-if="mapStore.isLoading" />
+            <template v-else>
+              <Trash2 :size="17" />
+              {{ phone.t('Apps.map.deleteMarker') }}
+            </template>
+          </sky-button>
+        </section>
+      </sky-sheet>
     </div>
 
-    <k-toast :opened="Boolean(toastText)" position="center">
+    <sky-toast :opened="Boolean(toastText)" position="center">
       {{ toastText }}
-    </k-toast>
-  </k-page>
+    </sky-toast>
+  </sky-app-page>
 </template>
 
 <style scoped>
@@ -910,7 +901,12 @@ onBeforeUnmount(() => {
 }
 
 .map-control {
-  --color-primary: #8e8e93;
+  --sky-glass-solid: rgb(247 247 248 / 92%);
+  color: #151515;
+}
+.sky-app-page--dark .map-control {
+  --sky-glass-solid: rgb(44 44 46 / 88%);
+  color: #fff;
 }
 
 .map-control svg {

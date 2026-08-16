@@ -1,27 +1,27 @@
 <script setup lang="ts">
 import {
-  kButton,
-  kCard,
-  kDialog,
-  kDialogButton,
-  kIcon,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kSearchbar,
-  kSegmented,
-  kSegmentedButton,
-  kSheet,
-  kTabbar,
-  kTabbarLink,
-  kToast,
-  kToolbarPane,
-} from 'konsta/vue'
+  SkyButton,
+  SkyCard,
+  SkyDialog,
+  SkyDialogButton,
+  SkyIcon,
+  SkyLink,
+  SkyList,
+  SkyField,
+  SkyListItem,
+  SkyNavbar,
+  SkyNavbarBackLink,
+  SkyAppPage,
+  SkySpinner,
+  SkySearchbar,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySheet,
+  SkyTabBar,
+  SkyTabButton,
+  SkyToast,
+  SkyToolbarPane,
+} from '@/ui'
 import {
   BriefcaseBusiness,
   Building2,
@@ -462,22 +462,21 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     component="main"
     class="weazel-app"
     :class="{ 'weazel-app--light': !phone.isDarkMode }"
-    :colors="{ bgIos: 'bg-transparent' }"
     :aria-label="t('name')"
   >
     <template v-if="screen === 'main'">
-      <k-navbar class="weazel-navbar" :center-title="true">
+      <sky-navbar class="weazel-navbar" :center-title="true">
         <template #title>
           <span class="weazel-brand" :aria-label="t('brand')">
             <span><Newspaper :size="16" :stroke-width="2.4" /></span>
             <b>{{ t('brand') }}</b>
           </span>
         </template>
-      </k-navbar>
+      </sky-navbar>
 
       <div class="weazel-scroll">
         <template v-if="activeTab === 'home'">
@@ -498,16 +497,16 @@ onBeforeUnmount(() => {
           </header>
 
           <div v-if="currentSurfaceLoading" class="weazel-state">
-            <k-preloader class="text-[#d71920]" />
+            <sky-spinner class="text-[#d71920]" />
             <span>{{ t('states.loading') }}</span>
           </div>
           <div v-else-if="activeError" class="weazel-state">
             <Newspaper :size="34" />
             <strong>{{ t('states.errorTitle') }}</strong>
             <span>{{ contextualError }}</span>
-            <k-button rounded small @click="loadHome">{{
+            <sky-button rounded small @click="loadHome">{{
               t('retry')
-            }}</k-button>
+            }}</sky-button>
           </div>
           <div v-else-if="!featuredArticle" class="weazel-state">
             <FileText :size="34" />
@@ -515,7 +514,7 @@ onBeforeUnmount(() => {
             <span>{{ t('states.emptyBody') }}</span>
           </div>
           <section v-else :aria-label="t('accessibility.articleList')">
-            <k-card :content-wrap="false" class="weazel-feature-card">
+            <sky-card :content-wrap="false" class="weazel-feature-card">
               <button
                 type="button"
                 :aria-label="
@@ -548,14 +547,14 @@ onBeforeUnmount(() => {
                   </small>
                 </div>
               </button>
-            </k-card>
+            </sky-card>
 
             <div class="weazel-latest-title">
               <span>{{ t('home.latest') }}</span>
               <i></i>
             </div>
             <div class="weazel-card-list">
-              <k-card
+              <sky-card
                 v-for="article in secondaryArticles"
                 :key="article.id"
                 :content-wrap="false"
@@ -581,9 +580,9 @@ onBeforeUnmount(() => {
                   />
                   <span v-else class="weazel-card-mark">W</span>
                 </button>
-              </k-card>
+              </sky-card>
             </div>
-            <k-button
+            <sky-button
               v-if="news.publicHasMore"
               class="weazel-load-more"
               tonal
@@ -597,7 +596,7 @@ onBeforeUnmount(() => {
               "
             >
               {{ t('loadMore') }}
-            </k-button>
+            </sky-button>
           </section>
         </template>
 
@@ -609,13 +608,13 @@ onBeforeUnmount(() => {
               <p>{{ t('categories.subtitle') }}</p>
             </div>
           </header>
-          <k-list
+          <sky-list
             inset
             strong
             class="weazel-category-list"
             :aria-label="t('accessibility.categoryList')"
           >
-            <k-list-item
+            <sky-list-item
               v-for="category in WEAZEL_NEWS_CATEGORY_IDS"
               :key="category"
               link
@@ -635,8 +634,8 @@ onBeforeUnmount(() => {
                   <component :is="categoryIcons[category]" :size="19" />
                 </span>
               </template>
-            </k-list-item>
-          </k-list>
+            </sky-list-item>
+          </sky-list>
         </template>
 
         <template v-else-if="activeTab === 'search'">
@@ -647,7 +646,7 @@ onBeforeUnmount(() => {
             </div>
           </header>
           <div class="weazel-search-shell">
-            <k-searchbar
+            <sky-searchbar
               component="form"
               class="weazel-searchbar"
               input-id="weazel-news-search"
@@ -675,7 +674,7 @@ onBeforeUnmount(() => {
             v-if="currentSurfaceLoading"
             class="weazel-state weazel-state--compact"
           >
-            <k-preloader class="text-[#d71920]" />
+            <sky-spinner class="text-[#d71920]" />
             <span>{{ t('states.loading') }}</span>
           </div>
           <div
@@ -685,9 +684,9 @@ onBeforeUnmount(() => {
             <Newspaper :size="34" />
             <strong>{{ t('states.errorTitle') }}</strong>
             <span>{{ contextualError }}</span>
-            <k-button rounded small @click="submitSearch">{{
+            <sky-button rounded small @click="submitSearch">{{
               t('retry')
-            }}</k-button>
+            }}</sky-button>
           </div>
           <div
             v-else-if="searchSubmitted && !news.publicItems.length"
@@ -698,7 +697,7 @@ onBeforeUnmount(() => {
             <span>{{ t('search.emptyBody') }}</span>
           </div>
           <div v-else-if="searchSubmitted" class="weazel-card-list">
-            <k-card
+            <sky-card
               v-for="article in news.publicItems"
               :key="article.id"
               :content-wrap="false"
@@ -714,9 +713,9 @@ onBeforeUnmount(() => {
                 <img v-if="article.imageUrl" :src="article.imageUrl" alt="" />
                 <ChevronRight v-else :size="20" />
               </button>
-            </k-card>
+            </sky-card>
           </div>
-          <k-button
+          <sky-button
             v-if="
               searchSubmitted && news.publicHasMore && !currentSurfaceLoading
             "
@@ -726,7 +725,7 @@ onBeforeUnmount(() => {
             @click="loadMoreSearch"
           >
             {{ t('loadMore') }}
-          </k-button>
+          </sky-button>
         </template>
 
         <template v-else>
@@ -742,16 +741,16 @@ onBeforeUnmount(() => {
             v-if="currentSurfaceLoading && !news.context"
             class="weazel-state"
           >
-            <k-preloader class="text-[#d71920]" />
+            <sky-spinner class="text-[#d71920]" />
             <span>{{ t('states.loading') }}</span>
           </div>
           <div v-else-if="activeError && !news.context" class="weazel-state">
             <Newspaper :size="34" />
             <strong>{{ t('states.errorTitle') }}</strong>
             <span>{{ contextualError }}</span>
-            <k-button rounded small @click="loadEditorial">{{
+            <sky-button rounded small @click="loadEditorial">{{
               t('retry')
-            }}</k-button>
+            }}</sky-button>
           </div>
           <div v-else-if="!news.context?.canManage" class="weazel-state">
             <UserRound :size="36" />
@@ -759,7 +758,7 @@ onBeforeUnmount(() => {
             <span>{{ t('states.readOnlyBody') }}</span>
           </div>
           <template v-else>
-            <k-card :content-wrap="false" class="weazel-access-card">
+            <sky-card :content-wrap="false" class="weazel-access-card">
               <div class="weazel-access-content">
                 <span class="weazel-access-avatar">W</span>
                 <div class="weazel-access-identity">
@@ -773,7 +772,7 @@ onBeforeUnmount(() => {
                     })
                   }}</small>
                 </div>
-                <k-button
+                <sky-button
                   rounded
                   small
                   class="weazel-new-article"
@@ -781,12 +780,12 @@ onBeforeUnmount(() => {
                   @click="createArticle"
                 >
                   <Plus :size="17" /> {{ t('editorial.newArticle') }}
-                </k-button>
+                </sky-button>
               </div>
-            </k-card>
+            </sky-card>
 
-            <k-segmented strong rounded class="weazel-editorial-filter">
-              <k-segmented-button
+            <sky-segmented strong rounded class="weazel-editorial-filter">
+              <sky-segmented-button
                 v-for="status in [
                   'all',
                   'published',
@@ -797,14 +796,14 @@ onBeforeUnmount(() => {
                 @click="changeEditorialStatus(status)"
               >
                 {{ t(`editorial.${status === 'draft' ? 'drafts' : status}`) }}
-              </k-segmented-button>
-            </k-segmented>
+              </sky-segmented-button>
+            </sky-segmented>
 
             <div
               v-if="currentSurfaceLoading"
               class="weazel-state weazel-state--compact"
             >
-              <k-preloader class="text-[#d71920]" />
+              <sky-spinner class="text-[#d71920]" />
             </div>
             <div
               v-else-if="activeError"
@@ -813,9 +812,9 @@ onBeforeUnmount(() => {
               <Newspaper :size="34" />
               <strong>{{ t('states.errorTitle') }}</strong>
               <span>{{ contextualError }}</span>
-              <k-button rounded small @click="loadEditorial">{{
+              <sky-button rounded small @click="loadEditorial">{{
                 t('retry')
-              }}</k-button>
+              }}</sky-button>
             </div>
             <div
               v-else-if="!news.managedItems.length"
@@ -825,14 +824,14 @@ onBeforeUnmount(() => {
               <strong>{{ t('states.noManagedTitle') }}</strong>
               <span>{{ t('states.noManagedBody') }}</span>
             </div>
-            <k-list
+            <sky-list
               v-else
               inset
               strong
               class="weazel-editorial-list"
               :aria-label="t('accessibility.editorialList')"
             >
-              <k-list-item
+              <sky-list-item
                 v-for="article in news.managedItems"
                 :key="article.id"
                 link
@@ -860,9 +859,9 @@ onBeforeUnmount(() => {
                     {{ statusLabel(article.status) }}
                   </span>
                 </template>
-              </k-list-item>
-            </k-list>
-            <k-button
+              </sky-list-item>
+            </sky-list>
+            <sky-button
               v-if="
                 news.managedItems.length &&
                 news.managedHasMore &&
@@ -874,12 +873,12 @@ onBeforeUnmount(() => {
               @click="loadMoreManaged"
             >
               {{ t('loadMore') }}
-            </k-button>
+            </sky-button>
           </template>
         </template>
       </div>
 
-      <k-tabbar
+      <sky-tab-bar
         component="nav"
         icons
         labels
@@ -887,8 +886,8 @@ onBeforeUnmount(() => {
         inner-class="weazel-tabbar__inner"
         :aria-label="t('navigation')"
       >
-        <k-toolbar-pane class="weazel-tabbar__pane">
-          <k-tabbar-link
+        <sky-toolbar-pane class="weazel-tabbar__pane">
+          <sky-tab-button
             component="button"
             class="weazel-tabbar__link"
             :active="activeTab === 'home'"
@@ -896,11 +895,11 @@ onBeforeUnmount(() => {
             @click="selectTab('home')"
           >
             <template #icon
-              ><k-icon><House :size="22" /></k-icon
+              ><sky-icon><House :size="22" /></sky-icon
             ></template>
             <template #label>{{ t('tabs.home') }}</template>
-          </k-tabbar-link>
-          <k-tabbar-link
+          </sky-tab-button>
+          <sky-tab-button
             component="button"
             class="weazel-tabbar__link"
             :active="activeTab === 'categories'"
@@ -908,11 +907,11 @@ onBeforeUnmount(() => {
             @click="selectTab('categories')"
           >
             <template #icon
-              ><k-icon><LayoutGrid :size="22" /></k-icon
+              ><sky-icon><LayoutGrid :size="22" /></sky-icon
             ></template>
             <template #label>{{ t('tabs.categories') }}</template>
-          </k-tabbar-link>
-          <k-tabbar-link
+          </sky-tab-button>
+          <sky-tab-button
             component="button"
             class="weazel-tabbar__link"
             :active="activeTab === 'search'"
@@ -920,11 +919,11 @@ onBeforeUnmount(() => {
             @click="selectTab('search')"
           >
             <template #icon
-              ><k-icon><Search :size="22" /></k-icon
+              ><sky-icon><Search :size="22" /></sky-icon
             ></template>
             <template #label>{{ t('tabs.search') }}</template>
-          </k-tabbar-link>
-          <k-tabbar-link
+          </sky-tab-button>
+          <sky-tab-button
             component="button"
             class="weazel-tabbar__link"
             :active="activeTab === 'editorial'"
@@ -932,25 +931,25 @@ onBeforeUnmount(() => {
             @click="selectTab('editorial')"
           >
             <template #icon
-              ><k-icon><UserRound :size="22" /></k-icon
+              ><sky-icon><UserRound :size="22" /></sky-icon
             ></template>
             <template #label>{{ t('tabs.editorial') }}</template>
-          </k-tabbar-link>
-        </k-toolbar-pane>
-      </k-tabbar>
+          </sky-tab-button>
+        </sky-toolbar-pane>
+      </sky-tab-bar>
     </template>
 
     <template v-else-if="screen === 'detail' && selectedArticle">
-      <k-navbar class="weazel-navbar" :title="t('article.readMore')">
+      <sky-navbar class="weazel-navbar" :title="t('article.readMore')">
         <template #left>
-          <k-navbar-back-link
+          <sky-navbar-back-link
             component="button"
             :text="t('back')"
             @click="closeDetail"
           />
         </template>
         <template v-if="news.context?.canManage && detailManaged" #right>
-          <k-link
+          <sky-link
             component="button"
             icon-only
             :aria-label="
@@ -959,9 +958,9 @@ onBeforeUnmount(() => {
             @click="editArticle(selectedArticle)"
           >
             <Pencil :size="19" />
-          </k-link>
+          </sky-link>
         </template>
-      </k-navbar>
+      </sky-navbar>
       <article class="weazel-detail-scroll">
         <img
           v-if="selectedArticle.imageUrl"
@@ -1000,34 +999,34 @@ onBeforeUnmount(() => {
           v-if="news.context?.canManage && detailManaged"
           class="weazel-detail-actions"
         >
-          <k-button rounded tonal @click="editArticle(selectedArticle)">
+          <sky-button rounded tonal @click="editArticle(selectedArticle)">
             <Pencil :size="18" /> {{ t('editorial.edit') }}
-          </k-button>
-          <k-button
+          </sky-button>
+          <sky-button
             rounded
             tonal
             class="weazel-danger"
             @click="requestDelete(selectedArticle)"
           >
             <Trash2 :size="18" /> {{ t('editorial.delete') }}
-          </k-button>
+          </sky-button>
         </div>
       </article>
     </template>
 
     <template v-else-if="screen === 'composer'">
-      <k-navbar
+      <sky-navbar
         class="weazel-navbar"
         :title="t(editingArticle ? 'composer.editTitle' : 'composer.newTitle')"
       >
         <template #left>
-          <k-navbar-back-link
+          <sky-navbar-back-link
             component="button"
             :text="t('back')"
             @click="closeComposer"
           />
         </template>
-      </k-navbar>
+      </sky-navbar>
       <div class="weazel-composer-scroll">
         <section class="weazel-composer-cover">
           <img
@@ -1039,7 +1038,7 @@ onBeforeUnmount(() => {
             <ImagePlus :size="34" /><span>{{ t('composer.cover') }}</span>
           </div>
           <div class="weazel-cover-actions">
-            <k-button
+            <sky-button
               rounded
               tonal
               class="weazel-cover-picker"
@@ -1055,8 +1054,8 @@ onBeforeUnmount(() => {
                   )
                 }}
               </span>
-            </k-button>
-            <k-button
+            </sky-button>
+            <sky-button
               v-if="selectedCover"
               rounded
               clear
@@ -1064,12 +1063,12 @@ onBeforeUnmount(() => {
               @click="removeCover"
             >
               {{ t('composer.removeCover') }}
-            </k-button>
+            </sky-button>
           </div>
         </section>
 
-        <k-list nested :dividers="false" class="weazel-composer-list">
-          <k-list-input
+        <sky-list nested :dividers="false" class="weazel-composer-list">
+          <sky-field
             outline
             class="weazel-composer-field"
             input-class="weazel-composer-input"
@@ -1079,7 +1078,7 @@ onBeforeUnmount(() => {
             :value="draft.title"
             @input="draft.title = eventValue($event)"
           />
-          <k-list-input
+          <sky-field
             outline
             class="weazel-composer-field"
             type="textarea"
@@ -1090,7 +1089,7 @@ onBeforeUnmount(() => {
             input-class="weazel-composer-input weazel-body-input"
             @input="draft.body = eventValue($event)"
           />
-          <k-list-item
+          <sky-list-item
             link
             link-component="button"
             :chevron="false"
@@ -1114,8 +1113,8 @@ onBeforeUnmount(() => {
                 :class="{ 'is-open': composerChoice === 'category' }"
               />
             </template>
-          </k-list-item>
-          <k-list-item
+          </sky-list-item>
+          <sky-list-item
             v-if="editingArticle"
             link
             link-component="button"
@@ -1140,12 +1139,12 @@ onBeforeUnmount(() => {
                 :class="{ 'is-open': composerChoice === 'status' }"
               />
             </template>
-          </k-list-item>
-        </k-list>
+          </sky-list-item>
+        </sky-list>
 
         <div class="weazel-composer-actions">
           <template v-if="!editingArticle">
-            <k-button
+            <sky-button
               large
               rounded
               tonal
@@ -1153,17 +1152,17 @@ onBeforeUnmount(() => {
               @click="saveArticle('draft')"
             >
               {{ t('composer.saveDraft') }}
-            </k-button>
-            <k-button
+            </sky-button>
+            <sky-button
               large
               rounded
               :disabled="news.mutating"
               @click="saveArticle('published')"
             >
               {{ t('composer.publish') }}
-            </k-button>
+            </sky-button>
           </template>
-          <k-button
+          <sky-button
             v-else
             large
             rounded
@@ -1171,12 +1170,12 @@ onBeforeUnmount(() => {
             @click="saveArticle()"
           >
             {{ t('composer.saveChanges') }}
-          </k-button>
+          </sky-button>
         </div>
       </div>
     </template>
 
-    <k-sheet
+    <sky-sheet
       :opened="composerChoice !== null"
       class="weazel-choice-sheet"
       @backdropclick="composerChoice = null"
@@ -1191,7 +1190,7 @@ onBeforeUnmount(() => {
         <div class="weazel-choice-sheet__handle" aria-hidden="true" />
         <header class="weazel-choice-sheet__header">
           <h2>{{ composerChoiceLabel }}</h2>
-          <k-link
+          <sky-link
             component="button"
             icon-only
             class="weazel-choice-sheet__close"
@@ -1200,15 +1199,15 @@ onBeforeUnmount(() => {
             @click="composerChoice = null"
           >
             <X />
-          </k-link>
+          </sky-link>
         </header>
-        <k-list
+        <sky-list
           nested
           :dividers="false"
           class="weazel-choice-options"
           role="listbox"
         >
-          <k-list-item
+          <sky-list-item
             v-for="option in composerChoiceOptions"
             :key="option.value"
             link
@@ -1238,35 +1237,35 @@ onBeforeUnmount(() => {
                 "
               />
             </template>
-          </k-list-item>
-        </k-list>
+          </sky-list-item>
+        </sky-list>
       </section>
-    </k-sheet>
+    </sky-sheet>
 
-    <k-dialog
+    <sky-dialog
       :opened="deleteDialogOpened"
       @backdropclick="deleteDialogOpened = false"
     >
       <template #title>{{ t('delete.title') }}</template>
       <p>{{ t('delete.body') }}</p>
       <template #buttons>
-        <k-dialog-button @click="deleteDialogOpened = false">
+        <sky-dialog-button @click="deleteDialogOpened = false">
           {{ t('delete.cancel') }}
-        </k-dialog-button>
-        <k-dialog-button strong class="text-red-500" @click="confirmDelete">
+        </sky-dialog-button>
+        <sky-dialog-button strong class="text-red-500" @click="confirmDelete">
           {{ t('delete.confirm') }}
-        </k-dialog-button>
+        </sky-dialog-button>
       </template>
-    </k-dialog>
+    </sky-dialog>
 
-    <k-toast
+    <sky-toast
       :opened="toastOpened"
       position="center"
       @click="toastOpened = false"
     >
       {{ toastText }}
-    </k-toast>
-  </k-page>
+    </sky-toast>
+  </sky-app-page>
 </template>
 
 <style scoped>
@@ -1294,7 +1293,7 @@ onBeforeUnmount(() => {
 }
 
 .weazel-navbar {
-  --k-safe-area-top: 46px;
+  --sky-safe-area-top: 46px;
   position: absolute;
   z-index: 10;
   top: 0;
@@ -1639,7 +1638,7 @@ onBeforeUnmount(() => {
   padding: 1.1cqh;
 }
 
-.weazel-access-card :deep(.k-card-content) {
+.weazel-access-card :deep(.sky-card__content) {
   padding: 0 !important;
 }
 
@@ -1859,20 +1858,20 @@ onBeforeUnmount(() => {
   padding: 0.37cqh 0 !important;
 }
 
-.weazel-tabbar :deep(.weazel-tabbar__link.k-link) {
+.weazel-tabbar :deep(.weazel-tabbar__link.sky-link) {
   padding-right: 0 !important;
   padding-left: 0 !important;
 }
 
-.weazel-tabbar :deep(.k-tabbar-link-icon),
-.weazel-tabbar :deep(.k-icon) {
+.weazel-tabbar :deep(.sky-tab-button__icon),
+.weazel-tabbar :deep(.sky-icon) {
   width: 22px !important;
   width: 2.72cqh !important;
   height: 22px !important;
   height: 2.72cqh !important;
 }
 
-.weazel-tabbar :deep(.k-tabbar-link-label) {
+.weazel-tabbar :deep(.sky-tab-button__label) {
   width: 100%;
   overflow: hidden;
   font-size: 9.5px;

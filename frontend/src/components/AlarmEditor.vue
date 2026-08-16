@@ -1,25 +1,21 @@
 <script setup lang="ts">
 import {
-  kBlock,
-  kBlockTitle,
-  kButton,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kNavbar,
-} from 'konsta/vue'
+  SkyBlock as kBlock,
+  SkyBlockTitle as kBlockTitle,
+  SkyButton as kButton,
+  SkyField as kListInput,
+  SkyLink as kLink,
+  SkyList as kList,
+  SkyListItem as kListItem,
+  SkyNavbar as kNavbar,
+} from '@/ui'
 import { ChevronRight, Check, X } from 'lucide-vue-next'
 import { reactive, ref } from 'vue'
 
 import AlarmSoundMenu from '@/components/AlarmSoundMenu.vue'
 import { usePhoneStore } from '@/stores/phone'
 import TimeWheelPicker from '@/components/TimeWheelPicker.vue'
-import {
-  type Alarm,
-  type AlarmDraft,
-  WEEKDAY_IDS,
-} from '@/utils/alarms'
+import { type Alarm, type AlarmDraft, WEEKDAY_IDS } from '@/utils/alarms'
 
 const props = defineProps<{ alarm?: Alarm }>()
 const emit = defineEmits<{
@@ -44,14 +40,6 @@ const draft = reactive<AlarmDraft>({
   time: props.alarm?.time ?? '07:00',
   weekdays: [...(props.alarm?.weekdays ?? [])],
 })
-const dangerColors = {
-  tonalBgIos: 'bg-red-500/15 active:bg-red-500/25',
-  tonalTextIos: 'text-red-500',
-}
-const saveLinkColors = {
-  navbarTextIos: 'text-[#ff9f0a]',
-}
-
 function setNote(event: Event): void {
   draft.note = (event.target as HTMLInputElement).value.slice(0, 80)
 }
@@ -97,7 +85,7 @@ function toggleWeekday(weekday: number): void {
       <k-link
         component="button"
         icon-only
-        :colors="saveLinkColors"
+        class="clock-alarm-save"
         :link-props="{ type: 'button' }"
         :aria-label="phone.t('Common.save')"
         @click="save"
@@ -168,8 +156,7 @@ function toggleWeekday(weekday: number): void {
       v-if="alarm"
       large
       rounded
-      tonal
-      :colors="dangerColors"
+      variant="danger"
       class="clock-alarm-delete"
       @click="emit('delete')"
     >

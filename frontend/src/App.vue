@@ -10,6 +10,7 @@ import {
 } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { SkyProvider } from '@/ui'
 import PhoneHomeIndicator from '@/components/PhoneHomeIndicator.vue'
 import PhoneControlCenter from '@/components/PhoneControlCenter.vue'
 import PhoneMediaCapture from '@/components/PhoneMediaCapture.vue'
@@ -293,7 +294,6 @@ const activeAppId = computed(() =>
 const WHITE_STATUS_BAR_APP_IDS = new Set([
   'calculator',
   'camera',
-  'darkchat',
   'fliptok',
   'neon-drop',
   'sky-flappy',
@@ -331,9 +331,7 @@ const activitySuspended = ref(false)
 const simPicker = ref<SimPickerPayload | null>(null)
 const setupRequired = computed(
   () =>
-    !(
-      isDevelopment && setupDevelopmentSkipped.value
-    ) &&
+    !(isDevelopment && setupDevelopmentSkipped.value) &&
     (!phone.preferences.settings.setupCompleted ||
       (isDevelopment &&
         developmentParameters.has('setupPreview') &&
@@ -494,7 +492,10 @@ async function bootstrapUnlockedPhoneData(): Promise<void> {
     try {
       await task()
     } catch (error) {
-      console.error('[sky_phone] Failed to bootstrap unlocked phone data.', error)
+      console.error(
+        '[sky_phone] Failed to bootstrap unlocked phone data.',
+        error,
+      )
     }
   }
 }
@@ -1476,7 +1477,6 @@ onBeforeUnmount(() => {
                 :style="phoneDisplayStyle"
                 :class="{
                   dark: phone.isDarkMode,
-                  'phone-app--darkchat': route.params.appId === 'darkchat',
                   'phone-app--light': !phone.isDarkMode,
                   'phone-app--messages': route.params.appId === 'messages',
                   'phone-app--status-light':
@@ -1498,19 +1498,25 @@ onBeforeUnmount(() => {
                   @lock="lockPhone"
                 />
                 <SpringboardView v-if="!isDevelopmentRoute && !setupRequired" />
-                <RouterView v-slot="{ Component }">
-                  <Transition :name="appTransitionName">
-                    <component
-                      :is="Component"
-                      v-if="
-                        !setupRequired && (isAppRoute || isDevelopmentRoute)
-                      "
-                      :key="
-                        isDevelopmentRoute ? String(route.name) : route.path
-                      "
-                    />
-                  </Transition>
-                </RouterView>
+                <SkyProvider
+                  class="phone-app-theme"
+                  :dark="phone.isDarkMode"
+                  safe-areas
+                >
+                  <RouterView v-slot="{ Component }">
+                    <Transition :name="appTransitionName">
+                      <component
+                        :is="Component"
+                        v-if="
+                          !setupRequired && (isAppRoute || isDevelopmentRoute)
+                        "
+                        :key="
+                          isDevelopmentRoute ? String(route.name) : route.path
+                        "
+                      />
+                    </Transition>
+                  </RouterView>
+                </SkyProvider>
                 <PhoneHomeIndicator v-if="!isLocked && !setupRequired" />
                 <PhoneControlCenter
                   v-if="!setupRequired"

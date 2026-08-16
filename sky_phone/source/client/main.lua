@@ -12,7 +12,8 @@ local active_call_payload = nil
 local call_channel = 0
 local nui_generation = 0
 local activity_suspended = false
-local movement_only_input = false
+local phone_game_input = false
+local phone_cursor_disabled = false
 
 Bridge.Debug("debug", "[sky_phone] Client script initialized.", { always = true })
 
@@ -297,6 +298,7 @@ local function update_nui_focus()
         call_focus = call_focus,
         camera_active = camera_active,
         camera_nui_focused = camera_nui_focused,
+        cursor_disabled = phone_cursor_disabled,
         is_open = is_open,
         notification_focus = notification_focus,
         payphone_focus = payphone_focus,
@@ -304,7 +306,10 @@ local function update_nui_focus()
     })
     SetNuiFocus(focus.focused, focus.cursor)
     SetNuiFocusKeepInput(focus.keep_input)
-    movement_only_input = focus.movement_only
+    phone_game_input = focus.game_input
+    if not phone_game_input then
+        phone_cursor_disabled = false
+    end
     TriggerEvent("sky_phone:client:cameraFocusApplied", {
         active = camera_active,
         cursor = focus.cursor,
@@ -315,8 +320,12 @@ end
 
 CreateThread(function()
     while true do
-        if movement_only_input then
-            SkyPhoneFocus.ApplyMovementOnlyControls()
+        if phone_game_input then
+            SkyPhoneFocus.ApplyGameInputControls()
+            if IsDisabledControlJustPressed(0, 19) then
+                phone_cursor_disabled = not phone_cursor_disabled
+                update_nui_focus()
+            end
             Wait(0)
         else
             Wait(250)
@@ -1001,6 +1010,8 @@ AddEventHandler("onResourceStop", function(resource_name)
     sim_picker_payload = nil
     active_call_payload = nil
     activity_suspended = false
+    phone_game_input = false
+    phone_cursor_disabled = false
     SetNuiFocusKeepInput(false)
     SetNuiFocus(false, false)
 

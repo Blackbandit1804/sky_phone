@@ -44,7 +44,7 @@ local camera_state = {
     front_camera = false,
     front_camera_handle = nil,
     front_camera_offset = nil,
-    front_camera_rotation = nil,
+    front_camera_target_offset = nil,
     game_input = false,
     landscape = false,
     locked = false,
@@ -97,19 +97,12 @@ local function capture_front_camera_transform(ped)
         + vector3(0.0, 0.0, head_height + front_camera_height)
     local target_offset = (right_vector * (front_camera_side_offset * 0.25))
         + vector3(0.0, 0.0, head_height + front_camera_target_height)
-    local direction = target_offset - camera_offset
-    local horizontal_length = math.sqrt((direction.x * direction.x) + (direction.y * direction.y))
-    local rotation = vector3(
-        math.deg(math.atan(direction.z, horizontal_length)),
-        0.0,
-        math.deg(math.atan(-direction.x, direction.y))
-    )
-    return camera_offset, rotation
+    return camera_offset, target_offset
 end
 
 local function apply_front_camera(ped)
     if not camera_state.front_camera_handle or not DoesCamExist(camera_state.front_camera_handle) then
-        camera_state.front_camera_offset, camera_state.front_camera_rotation =
+        camera_state.front_camera_offset, camera_state.front_camera_target_offset =
             capture_front_camera_transform(ped)
         camera_state.front_camera_handle = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
         SetCamFov(camera_state.front_camera_handle, front_camera_fov)
@@ -119,19 +112,18 @@ local function apply_front_camera(ped)
 
     local ped_position = GetEntityCoords(ped)
     local camera_position = ped_position + camera_state.front_camera_offset
-    local rotation = camera_state.front_camera_rotation
+    local target_position = ped_position + camera_state.front_camera_target_offset
     SetCamCoord(
         camera_state.front_camera_handle,
         camera_position.x,
         camera_position.y,
         camera_position.z
     )
-    SetCamRot(
+    PointCamAtCoord(
         camera_state.front_camera_handle,
-        rotation.x,
-        rotation.y,
-        rotation.z,
-        2
+        target_position.x,
+        target_position.y,
+        target_position.z
     )
 end
 
@@ -142,7 +134,7 @@ local function clear_front_camera()
     end
     camera_state.front_camera_handle = nil
     camera_state.front_camera_offset = nil
-    camera_state.front_camera_rotation = nil
+    camera_state.front_camera_target_offset = nil
 end
 
 local function apply_rear_camera_view()

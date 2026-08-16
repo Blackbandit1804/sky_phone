@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { kBadge } from 'konsta/vue'
+import { SkyBadge as kBadge } from '@/ui'
 import { Minus } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -100,10 +100,6 @@ const unreadCount = computed(() => {
   if (props.app.id === 'companies') return companies.unreadCount
   return 0
 })
-const notificationBadgeColors = {
-  bg: 'bg-[#ff3b30]',
-  text: 'text-white',
-}
 const calendarWeekday = computed(() =>
   new Intl.DateTimeFormat(phone.lang, { weekday: 'short' })
     .format(calendarToday.value)
@@ -142,11 +138,6 @@ function launch(event: MouseEvent): void {
 
   void router.push(props.app.route)
 }
-const removeBadgeColors = {
-  bg: 'bg-[#8e8e93]',
-  text: 'text-black',
-}
-
 function clearHold(): void {
   if (holdTimer !== undefined) window.clearTimeout(holdTimer)
   holdTimer = undefined
@@ -321,7 +312,7 @@ onBeforeUnmount(() => {
           v-if="unreadCount"
           class="app-icon-badge"
           :small="compact"
-          :colors="notificationBadgeColors"
+          tone="danger"
         >
           {{ unreadCount > 99 ? '99+' : unreadCount }}
         </k-badge>
@@ -343,7 +334,7 @@ onBeforeUnmount(() => {
       @click.stop="emit('remove')"
       @pointerdown.stop
     >
-      <k-badge class="app-icon-remove__badge" :colors="removeBadgeColors">
+      <k-badge class="app-icon-remove__badge" tone="neutral">
         <Minus :size="15" :stroke-width="3" aria-hidden="true" />
       </k-badge>
     </button>

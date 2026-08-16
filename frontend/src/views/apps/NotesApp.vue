@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import {
-  kBlock,
-  kBlockTitle,
-  kLink,
-  kList,
-  kListButton,
-  kListItem,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-} from 'konsta/vue'
+  SkyBlock,
+  SkyBlockTitle,
+  SkyLink,
+  SkyList,
+  SkyListButton,
+  SkyListItem,
+  SkyNavbar,
+  SkyNavbarBackLink,
+  SkyAppPage,
+} from '@/ui'
 import {
   Ellipsis,
   Pin,
@@ -183,16 +183,20 @@ function shareNote(): void {
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     v-if="!editorOpened"
     class="notes-list-page"
     :aria-label="phone.t('Apps.notes.name')"
   >
-    <k-navbar large transparent :title="phone.t('Apps.notes.name')" />
+    <sky-navbar
+      variant="large"
+      transparent
+      :title="phone.t('Apps.notes.name')"
+    />
 
     <SkyScrollArea as="main" class="notes-list-scroll">
-      <k-list v-if="visibleNotes.length" strong inset>
-        <k-list-item
+      <sky-list v-if="visibleNotes.length" strong inset>
+        <sky-list-item
           v-for="note in visibleNotes"
           :key="note.id"
           href="#"
@@ -205,25 +209,25 @@ function shareNote(): void {
           <template v-if="note.pinned" #after>
             <Pin :size="15" aria-hidden="true" />
           </template>
-        </k-list-item>
-      </k-list>
+        </sky-list-item>
+      </sky-list>
 
       <template v-else>
-        <k-block-title large>{{
+        <sky-block-title large>{{
           phone.t(
             searchQuery ? 'Apps.notes.noResults' : 'Apps.notes.emptyTitle',
           )
-        }}</k-block-title>
-        <k-block strong inset>{{
+        }}</sky-block-title>
+        <sky-block strong inset>{{
           phone.t(
             searchQuery ? 'Apps.notes.noResultsBody' : 'Apps.notes.emptyBody',
           )
-        }}</k-block>
-        <k-list v-if="!searchQuery" strong inset>
-          <k-list-button link-component="button" @click="createNote">
+        }}</sky-block>
+        <sky-list v-if="!searchQuery" strong inset>
+          <sky-list-button link-component="button" @click="createNote">
             {{ phone.t('Apps.notes.newNote') }}
-          </k-list-button>
-        </k-list>
+          </sky-list-button>
+        </sky-list>
       </template>
     </SkyScrollArea>
 
@@ -249,12 +253,12 @@ function shareNote(): void {
         </template>
       </SkyFab>
     </SkyToolbar>
-  </k-page>
+  </sky-app-page>
 
-  <k-page v-else class="notes-editor-page !pt-[44px] !pb-0">
-    <k-navbar :title="phone.t('Apps.notes.note')">
+  <sky-app-page v-else class="notes-editor-page !pt-[44px] !pb-0">
+    <sky-navbar :title="phone.t('Apps.notes.note')">
       <template #left>
-        <k-navbar-back-link
+        <sky-navbar-back-link
           component="button"
           :text="phone.t('Apps.notes.back')"
           :aria-label="phone.t('Apps.notes.back')"
@@ -262,16 +266,16 @@ function shareNote(): void {
         />
       </template>
       <template #right>
-        <k-link
+        <sky-link
           component="button"
           icon-only
           :aria-label="phone.t('Apps.notes.actions')"
           @click="openMenu"
         >
           <Ellipsis :size="22" />
-        </k-link>
+        </sky-link>
       </template>
-    </k-navbar>
+    </sky-navbar>
 
     <div class="notes-editor-layout">
       <NotesRichTextEditor
@@ -321,7 +325,7 @@ function shareNote(): void {
         </SkyButton>
       </div>
     </SkyActionSheet>
-  </k-page>
+  </sky-app-page>
 </template>
 
 <style scoped>

@@ -5,18 +5,21 @@ defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
   defineProps<{
-    ariaLabel: string
+    ariaLabel?: string
     component?: 'a' | 'button'
     disabled?: boolean
     href?: string
+    linkProps?: Record<string, unknown>
     showText?: boolean
     text?: string
     type?: 'button' | 'reset' | 'submit'
   }>(),
   {
     component: 'button',
+    ariaLabel: '',
     disabled: false,
     href: undefined,
+    linkProps: () => ({}),
     showText: false,
     text: '',
     type: 'button',
@@ -28,7 +31,7 @@ const emit = defineEmits<{
 }>()
 
 const accessibleLabel = computed(
-  () => props.ariaLabel || (props.showText ? props.text : undefined),
+  () => props.ariaLabel || props.text || undefined,
 )
 const elementProps = computed<Record<string, unknown>>(() => {
   const common = {
@@ -37,6 +40,7 @@ const elementProps = computed<Record<string, unknown>>(() => {
 
   if (props.component === 'a') {
     return {
+      ...props.linkProps,
       ...common,
       'aria-disabled': props.disabled || undefined,
       href: props.disabled ? undefined : props.href,
@@ -45,9 +49,10 @@ const elementProps = computed<Record<string, unknown>>(() => {
   }
 
   return {
+    ...props.linkProps,
     ...common,
     disabled: props.disabled,
-    type: props.type,
+    type: props.linkProps.type ?? props.type,
   }
 })
 

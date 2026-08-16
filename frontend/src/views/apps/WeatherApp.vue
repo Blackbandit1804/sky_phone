@@ -73,12 +73,18 @@ const rainDrops = [
   '--rain-opacity': opacity,
 }))
 const snowFlakes = [
-  ['4%', '1.8s', '-1.2s', '0.4'], ['12%', '2.6s', '-0.5s', '0.65'],
-  ['19%', '2.1s', '-1.7s', '0.45'], ['27%', '2.9s', '-0.9s', '0.7'],
-  ['36%', '2.3s', '-1.4s', '0.55'], ['44%', '3.1s', '-0.2s', '0.45'],
-  ['53%', '2s', '-1.8s', '0.7'], ['62%', '2.7s', '-1.1s', '0.48'],
-  ['70%', '2.2s', '-0.7s', '0.6'], ['78%', '3s', '-1.6s', '0.42'],
-  ['87%', '2.4s', '-0.3s', '0.68'], ['95%', '2.8s', '-1.3s', '0.5'],
+  ['4%', '1.8s', '-1.2s', '0.4'],
+  ['12%', '2.6s', '-0.5s', '0.65'],
+  ['19%', '2.1s', '-1.7s', '0.45'],
+  ['27%', '2.9s', '-0.9s', '0.7'],
+  ['36%', '2.3s', '-1.4s', '0.55'],
+  ['44%', '3.1s', '-0.2s', '0.45'],
+  ['53%', '2s', '-1.8s', '0.7'],
+  ['62%', '2.7s', '-1.1s', '0.48'],
+  ['70%', '2.2s', '-0.7s', '0.6'],
+  ['78%', '3s', '-1.6s', '0.42'],
+  ['87%', '2.4s', '-0.3s', '0.68'],
+  ['95%', '2.8s', '-1.3s', '0.5'],
 ].map(([left, duration, delay, opacity]) => ({
   '--snow-delay': delay,
   '--snow-duration': duration,
@@ -166,7 +172,6 @@ watch(
     cooldownToastTimer = setTimeout(closeCooldownToast, 2800)
   },
 )
-
 </script>
 
 <template>
@@ -208,10 +213,7 @@ watch(
       aria-hidden="true"
     ></div>
     <div v-if="isNight" class="weather-app__stars" aria-hidden="true"></div>
-    <SkyNavbar
-      class="weather-navbar"
-      :title="phone.t('Apps.weather.name')"
-    />
+    <SkyNavbar class="weather-navbar" :title="phone.t('Apps.weather.name')" />
 
     <SkyScrollArea
       v-if="forecast"
@@ -257,44 +259,29 @@ watch(
         class="weather-details"
         :aria-label="phone.t('Apps.weather.details')"
       >
-        <SkyCard
-          :content-wrap="false"
-          class="weather-detail-card"
-        >
+        <SkyCard :content-wrap="false" class="weather-detail-card">
           <ThermometerSun :size="18" />
           <span>{{ phone.t('Apps.weather.feelsLike') }}</span>
           <strong>{{ forecast.feelsLike }}°</strong>
         </SkyCard>
-        <SkyCard
-          :content-wrap="false"
-          class="weather-detail-card"
-        >
+        <SkyCard :content-wrap="false" class="weather-detail-card">
           <Wind :size="18" />
           <span>{{ phone.t('Apps.weather.wind') }}</span>
           <strong>{{ forecast.windSpeed }} km/h</strong>
         </SkyCard>
-        <SkyCard
-          :content-wrap="false"
-          class="weather-detail-card"
-        >
+        <SkyCard :content-wrap="false" class="weather-detail-card">
           <Droplets :size="18" />
           <span>{{ phone.t('Apps.weather.humidity') }}</span>
           <strong>{{ forecast.humidity }}%</strong>
         </SkyCard>
-        <SkyCard
-          :content-wrap="false"
-          class="weather-detail-card"
-        >
+        <SkyCard :content-wrap="false" class="weather-detail-card">
           <Umbrella :size="18" />
           <span>{{ phone.t('Apps.weather.rain') }}</span>
           <strong>{{ forecast.rainChance }}%</strong>
         </SkyCard>
       </section>
 
-      <SkyCard
-        :content-wrap="false"
-        class="weather-panel weather-hourly-panel"
-      >
+      <SkyCard :content-wrap="false" class="weather-panel weather-hourly-panel">
         <h2><Gauge :size="15" />{{ phone.t('Apps.weather.hourly') }}</h2>
         <div class="weather-hourly">
           <div
@@ -315,10 +302,7 @@ watch(
     </SkyScrollArea>
 
     <div v-else class="weather-empty">
-      <SkySpinner
-        v-if="weather.isLoading"
-        :label="phone.t('Common.loading')"
-      />
+      <SkySpinner v-if="weather.isLoading" :label="phone.t('Common.loading')" />
       <CloudSun v-else :size="52" :stroke-width="1.4" />
       <strong>{{
         phone.t(

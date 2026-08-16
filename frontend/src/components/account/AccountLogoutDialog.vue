@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { kDialog, kDialogButton } from 'konsta/vue'
+import { SkyDialog as kDialog, SkyDialogButton as kDialogButton } from '@/ui'
 
 import { useAppAuthStore, type AppAuthId } from '@/stores/app-auth'
 import { useCrewLinkStore } from '@/stores/crewlink'
@@ -39,7 +39,9 @@ function confirmLogout(): void {
 
 <template>
   <k-dialog :opened="opened" @backdropclick="close">
-    <template #title>{{ phone.t('Common.signOutTitle', { app: appName }) }}</template>
+    <template #title>{{
+      phone.t('Common.signOutTitle', { app: appName })
+    }}</template>
     <p>{{ phone.t('Common.signOutBody', { app: appName }) }}</p>
     <template #buttons>
       <k-dialog-button @click="close">

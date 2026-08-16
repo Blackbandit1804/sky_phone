@@ -1777,7 +1777,7 @@ onBeforeUnmount(() => {
   <SkyAppPage
     class="darkchat-page dc-ios"
     :label="t('name')"
-    :dark="true"
+    :dark="phone.isDarkMode"
     accent="#0a84ff"
     accent-soft="rgb(10 132 255 / 18%)"
   >

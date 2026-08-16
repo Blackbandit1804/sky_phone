@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import {
-  kBlock,
-  kButton,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kPage,
-  kSegmented,
-  kSegmentedButton,
-  kToggle,
-} from 'konsta/vue'
+  SkyBlock,
+  SkyButton,
+  SkyLink,
+  SkyList,
+  SkyField,
+  SkyListItem,
+  SkyNavbar,
+  SkyAppPage,
+  SkyTabBar,
+  SkyTabButton,
+  SkyToggle,
+} from '@/ui'
 import {
   AlarmClock,
   ChevronRight,
@@ -107,26 +107,6 @@ const tabs = [
   { id: 'stopwatch', icon: Timer },
   { id: 'timer', icon: TimerReset },
 ] as const
-const tabBarColors = {
-  strongHighlightBgIos: 'bg-[#e5e5ea] dark:bg-[#2c2c2e]',
-}
-const secondaryActionColors = {
-  tonalBgIos:
-    'bg-[#e5e5ea] active:bg-[#d1d1d6] dark:bg-[#2c2c2e] dark:active:bg-[#3a3a3c]',
-  tonalTextIos: 'text-black dark:text-white',
-}
-const positiveActionColors = {
-  fillBgIos:
-    'bg-[#d9f7df] active:bg-[#c7efcf] dark:bg-[#103a20] dark:active:bg-[#174d2a]',
-  fillTextIos: 'text-[#248a3d] dark:text-[#30d158]',
-}
-const toggleColors = {
-  checkedBgIos: 'bg-[#30d158]',
-}
-const dangerActionColors = {
-  fillBgIos: 'bg-red-500 active:bg-red-600',
-  fillTextIos: 'text-white',
-}
 const weekdayKeys = [
   'sunday',
   'monday',
@@ -227,7 +207,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page component="main" class="native-app clock-app">
+  <sky-app-page component="main" class="native-app clock-app">
     <AlarmSoundMenu
       v-if="timerSoundMenuOpen"
       :back-label="phone.t('Apps.clock.tabs.timer')"
@@ -245,30 +225,25 @@ onBeforeUnmount(() => {
     />
 
     <template v-else>
-      <k-navbar
+      <sky-navbar
         v-if="tab !== 'stopwatch'"
         :title="phone.t(`Apps.clock.tabs.${tab}`)"
-        :inner-class="
-          tab === 'world' || tab === 'timer'
-            ? 'clock-navbar__empty-inner'
-            : ''
-        "
-        large
+        variant="large"
         transparent
         class="clock-navbar"
       >
         <template #left>
-          <k-link
+          <sky-link
             v-if="tab === 'alarm'"
             component="button"
             :link-props="{ type: 'button' }"
             @click="toggleAlarmEditing"
           >
             {{ phone.t(alarmsEditing ? 'Common.done' : 'Common.edit') }}
-          </k-link>
+          </sky-link>
         </template>
         <template #right>
-          <k-link
+          <sky-link
             v-if="tab === 'alarm'"
             component="button"
             icon-only
@@ -277,24 +252,24 @@ onBeforeUnmount(() => {
             @click="openAlarmEditor()"
           >
             <Plus />
-          </k-link>
+          </sky-link>
         </template>
-      </k-navbar>
+      </sky-navbar>
 
-      <k-block component="section" nested class="clock-content">
-        <k-block v-if="tab === 'world'" nested class="clock-world-now">
+      <sky-block component="section" nested class="clock-content">
+        <sky-block v-if="tab === 'world'" nested class="clock-world-now">
           <span class="clock-world-location">{{
             phone.t('Apps.clock.location')
           }}</span>
           <time class="clock-world-time">{{ currentTime }}</time>
           <span class="clock-world-zone">{{ currentTimeZone }}</span>
-        </k-block>
+        </sky-block>
 
-        <k-list
+        <sky-list
           v-else-if="tab === 'alarm'"
           class="clock-konsta-list clock-alarm-list"
         >
-          <k-list-item
+          <sky-list-item
             v-for="alarm in clock.alarms"
             :key="alarm.id"
             link
@@ -307,38 +282,37 @@ onBeforeUnmount(() => {
             @click="openAlarmEditor(alarm.id)"
           >
             <template v-if="alarmsEditing" #media>
-              <k-button
+              <sky-button
                 rounded
                 small
                 inline
-                :colors="dangerActionColors"
+                variant="danger"
                 class="clock-alarm-remove"
                 :aria-label="phone.t('Apps.clock.alarm.delete')"
                 @click.stop="clock.deleteAlarm(alarm.id)"
               >
                 <Minus aria-hidden="true" />
-              </k-button>
+              </sky-button>
             </template>
             <template #after>
               <span v-if="!alarmsEditing" @click.stop>
-                <k-toggle
+                <sky-toggle
                   :checked="alarm.enabled"
-                  :colors="toggleColors"
+                  style="--sky-app-accent: #30d158"
                   :aria-label="`${alarm.time}, ${alarmSubtitle(alarm)}`"
                   @change="clock.toggleAlarm(alarm.id)"
                 />
               </span>
             </template>
-          </k-list-item>
-        </k-list>
+          </sky-list-item>
+        </sky-list>
 
-        <k-block v-else-if="tab === 'stopwatch'" nested class="clock-tool">
+        <sky-block v-else-if="tab === 'stopwatch'" nested class="clock-tool">
           <div class="clock-digits">{{ formatStopwatch(stopwatchValue) }}</div>
           <div class="clock-actions">
-            <k-button
+            <sky-button
               rounded
-              tonal
-              :colors="secondaryActionColors"
+              variant="secondary"
               class="clock-action-button"
               @click="
                 clock.stopwatchStartedAt === null
@@ -353,13 +327,16 @@ onBeforeUnmount(() => {
                     : 'Apps.clock.lap',
                 )
               }}
-            </k-button>
-            <k-button
+            </sky-button>
+            <sky-button
               rounded
-              :colors="
+              :variant="
+                clock.stopwatchStartedAt === null ? 'primary' : 'danger'
+              "
+              :style="
                 clock.stopwatchStartedAt === null
-                  ? positiveActionColors
-                  : dangerActionColors
+                  ? { '--sky-app-accent': '#30d158' }
+                  : undefined
               "
               class="clock-action-button"
               @click="
@@ -375,19 +352,19 @@ onBeforeUnmount(() => {
                     : 'Common.stop',
                 )
               }}
-            </k-button>
+            </sky-button>
           </div>
-          <k-list dividers class="clock-konsta-list clock-lap-list">
-            <k-list-item
+          <sky-list dividers class="clock-konsta-list clock-lap-list">
+            <sky-list-item
               v-for="(lap, index) in clock.laps"
               :key="index"
               :title="`${phone.t('Apps.clock.lap')} ${clock.laps.length - index}`"
               :after="formatStopwatch(lap)"
             />
-          </k-list>
-        </k-block>
+          </sky-list>
+        </sky-block>
 
-        <k-block v-else nested class="clock-tool clock-timer">
+        <sky-block v-else nested class="clock-tool clock-timer">
           <div
             v-if="clock.timerStartedAt !== null"
             class="timer-ring"
@@ -423,26 +400,26 @@ onBeforeUnmount(() => {
             :seconds-unit-label="phone.t('Apps.clock.timer.secondsShort')"
           />
 
-          <k-list
+          <sky-list
             strong
             inset
             class="clock-konsta-list clock-timer-settings clock-timer-note"
           >
-            <k-list-input
+            <sky-field
               :label="phone.t('Apps.clock.timer.note')"
               :placeholder="phone.t('Apps.clock.timer.notePlaceholder')"
               :value="clock.timerNote"
               maxlength="80"
               @input="setTimerNote"
             />
-          </k-list>
+          </sky-list>
 
-          <k-list
+          <sky-list
             strong
             inset
             class="clock-konsta-list clock-timer-settings clock-timer-sound"
           >
-            <k-list-item
+            <sky-list-item
               link
               :chevron="false"
               :title="phone.t('Apps.clock.timer.sound')"
@@ -454,25 +431,25 @@ onBeforeUnmount(() => {
                   <ChevronRight aria-hidden="true" />
                 </span>
               </template>
-            </k-list-item>
-          </k-list>
+            </sky-list-item>
+          </sky-list>
 
           <div class="clock-actions">
-            <k-button
+            <sky-button
               rounded
-              tonal
-              :colors="secondaryActionColors"
+              variant="secondary"
               class="clock-action-button"
               @click="clock.resetTimer()"
             >
               {{ phone.t('Common.reset') }}
-            </k-button>
-            <k-button
+            </sky-button>
+            <sky-button
               rounded
-              :colors="
+              :variant="clock.timerStartedAt === null ? 'primary' : 'danger'"
+              :style="
                 clock.timerStartedAt === null
-                  ? positiveActionColors
-                  : dangerActionColors
+                  ? { '--sky-app-accent': '#30d158' }
+                  : undefined
               "
               class="clock-action-button"
               :disabled="clock.timerStartedAt === null && timerValue <= 0"
@@ -489,39 +466,32 @@ onBeforeUnmount(() => {
                     : 'Common.pause',
                 )
               }}
-            </k-button>
+            </sky-button>
           </div>
-        </k-block>
-      </k-block>
+        </sky-block>
+      </sky-block>
 
-      <k-navbar component="nav" :aria-label="phone.t('Apps.clock.name')">
-        <template #subnavbar>
-          <k-segmented
-            strong
-            rounded
-            :colors="tabBarColors"
-            :data-active-tab="tab"
-          >
-            <k-segmented-button
-              v-for="item in tabs"
-              :key="item.id"
-              large
-              :active="tab === item.id"
-              :class="tab === item.id ? 'text-[#ff9f0a]' : 'text-[#8e8e93]'"
-              :aria-label="phone.t(`Apps.clock.tabs.${item.id}`)"
-              :aria-pressed="tab === item.id"
-              @click="selectTab(item.id)"
-            >
-              <span
-                class="flex flex-col items-center gap-0.5 text-[10px] leading-none"
-              >
-                <component :is="item.icon" class="h-5 w-5" aria-hidden="true" />
-                <span>{{ phone.t(`Apps.clock.tabs.${item.id}`) }}</span>
-              </span>
-            </k-segmented-button>
-          </k-segmented>
-        </template>
-      </k-navbar>
+      <sky-tab-bar
+        icons
+        labels
+        class="clock-tabbar"
+        :aria-label="phone.t('Apps.clock.name')"
+      >
+        <sky-tab-button
+          v-for="item in tabs"
+          :key="item.id"
+          :active="tab === item.id"
+          :aria-label="phone.t(`Apps.clock.tabs.${item.id}`)"
+          @click="selectTab(item.id)"
+        >
+          <template #icon>
+            <component :is="item.icon" aria-hidden="true" />
+          </template>
+          <template #label>
+            {{ phone.t(`Apps.clock.tabs.${item.id}`) }}
+          </template>
+        </sky-tab-button>
+      </sky-tab-bar>
     </template>
-  </k-page>
+  </sky-app-page>
 </template>

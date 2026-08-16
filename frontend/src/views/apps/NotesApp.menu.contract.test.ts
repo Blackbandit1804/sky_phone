@@ -8,8 +8,8 @@ const menuSource = source.slice(
   source.indexOf('</SkyActionSheet>') + '</SkyActionSheet>'.length,
 )
 const listSource = source.slice(
-  source.indexOf('<k-page\n    v-if="!editorOpened"'),
-  source.indexOf('<k-page v-else'),
+  source.indexOf('<sky-app-page\n    v-if="!editorOpened"'),
+  source.indexOf('<sky-app-page v-else'),
 )
 
 describe('NotesApp list controls', () => {

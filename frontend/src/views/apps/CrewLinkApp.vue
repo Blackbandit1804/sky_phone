@@ -1,26 +1,26 @@
 <script setup lang="ts">
 import {
-  kBadge,
-  kBlockTitle,
-  kButton,
-  kCard,
-  kDialog,
-  kDialogButton,
-  kIcon,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kPage,
-  kPreloader,
-  kSheet,
-  kTabbar,
-  kTabbarLink,
-  kToast,
-  kToggle,
-  kToolbarPane,
-} from 'konsta/vue'
+  SkyBadge,
+  SkyBlockTitle,
+  SkyButton,
+  SkyCard,
+  SkyDialog,
+  SkyDialogButton,
+  SkyIcon,
+  SkyLink,
+  SkyList,
+  SkyField,
+  SkyListItem,
+  SkyNavbar,
+  SkyAppPage,
+  SkySpinner,
+  SkySheet,
+  SkyTabBar,
+  SkyTabButton,
+  SkyToast,
+  SkyToggle,
+  SkyToolbarPane,
+} from '@/ui'
 import {
   AlertTriangle,
   Camera,
@@ -1165,7 +1165,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page class="crewlink" :class="{ 'crewlink--dark': phone.isDarkMode }">
+  <sky-app-page
+    class="crewlink"
+    :class="{ 'crewlink--dark': phone.isDarkMode }"
+  >
     <template v-if="!appAuth.isSignedIn('crewlink')">
       <div class="crewlink-onboarding crewlink-auth">
         <AppProfileAuth
@@ -1198,7 +1201,7 @@ onBeforeUnmount(() => {
     <template v-else-if="crew.isLoading && !crew.profile && !crew.error">
       <div class="crewlink-loading">
         <span class="crewlink-logo"><Radio /></span>
-        <k-preloader />
+        <sky-spinner />
         <p>{{ t('connecting') }}</p>
       </div>
     </template>
@@ -1209,9 +1212,9 @@ onBeforeUnmount(() => {
         <small>{{ t('privateNetwork') }}</small>
         <h1>{{ t('signInTitle') }}</h1>
         <p>{{ t('signInBody') }}</p>
-        <k-button large rounded @click="appAuth.signOut('crewlink')">
+        <sky-button large rounded @click="appAuth.signOut('crewlink')">
           {{ t('backToLogin') }}
-        </k-button>
+        </sky-button>
       </div>
     </template>
 
@@ -1223,8 +1226,8 @@ onBeforeUnmount(() => {
         <small>{{ t('welcomeEyebrow') }}</small>
         <h1>{{ t('welcomeTitle') }}</h1>
         <p>{{ t('welcomeBody') }}</p>
-        <k-list inset strong class="crewlink-form-list">
-          <k-list-input
+        <sky-list inset strong class="crewlink-form-list">
+          <sky-field
             input-id="crewlink-username"
             :label="t('username')"
             :placeholder="t('usernamePlaceholder')"
@@ -1234,20 +1237,20 @@ onBeforeUnmount(() => {
             @input="updateValue('username', $event)"
             @keydown.enter="handleEnterAction($event, createProfile)"
           />
-        </k-list>
+        </sky-list>
         <p v-if="formError" class="crewlink-error" role="alert">
           {{ formError }}
         </p>
-        <k-button
+        <sky-button
           large
           rounded
           :disabled="crew.isLoading"
           @click="createProfile"
         >
-          <k-preloader v-if="crew.isLoading" />
+          <sky-spinner v-if="crew.isLoading" />
           <template v-else>{{ t('createProfile') }}</template>
-        </k-button>
-        <k-button
+        </sky-button>
+        <sky-button
           large
           rounded
           outline
@@ -1255,7 +1258,7 @@ onBeforeUnmount(() => {
           @click="logoutDialogOpen = true"
         >
           <LogOut />{{ phone.t('Common.signOut') }}
-        </k-button>
+        </sky-button>
         <small class="crewlink-privacy"
           ><ShieldCheck />{{ t('privacyNote') }}</small
         >
@@ -1263,7 +1266,7 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else>
-      <k-navbar
+      <sky-navbar
         v-if="activeGroup"
         class="crewlink-navbar"
         :subtitle="headerSubtitle"
@@ -1286,7 +1289,7 @@ onBeforeUnmount(() => {
             <span><UserPlus /></span>
             <strong>{{ t('joinGroup') }}</strong>
           </button>
-          <k-button
+          <sky-button
             large
             rounded
             outline
@@ -1294,7 +1297,7 @@ onBeforeUnmount(() => {
             @click="logoutDialogOpen = true"
           >
             <LogOut />{{ phone.t('Common.signOut') }}
-          </k-button>
+          </sky-button>
         </section>
 
         <template v-else>
@@ -1445,12 +1448,12 @@ onBeforeUnmount(() => {
                 <small>{{ t('placeOnMapBody') }}</small>
               </div>
               <div>
-                <k-button rounded outline @click="cancelPingPlacement">
+                <sky-button rounded outline @click="cancelPingPlacement">
                   {{ phone.t('Common.cancel') }}
-                </k-button>
-                <k-button rounded @click="confirmPingPlacement">
+                </sky-button>
+                <sky-button rounded @click="confirmPingPlacement">
                   <MapPin />{{ t('addHere') }}
-                </k-button>
+                </sky-button>
               </div>
             </div>
 
@@ -1497,12 +1500,12 @@ onBeforeUnmount(() => {
                 }}
               </p>
               <div>
-                <k-badge class="crewlink-group-badge">{{
+                <sky-badge class="crewlink-group-badge">{{
                   roleLabel(activeGroup.role)
-                }}</k-badge>
-                <k-badge class="crewlink-group-badge">{{
+                }}</sky-badge>
+                <sky-badge class="crewlink-group-badge">{{
                   t('private')
-                }}</k-badge>
+                }}</sky-badge>
               </div>
             </div>
 
@@ -1534,9 +1537,9 @@ onBeforeUnmount(() => {
             </div>
 
             <template v-if="crew.invitations.length">
-              <k-block-title>{{ t('pendingInvitations') }}</k-block-title>
+              <sky-block-title>{{ t('pendingInvitations') }}</sky-block-title>
               <div class="crewlink-invitations crewlink-invitations--inline">
-                <k-card v-for="invite in crew.invitations" :key="invite.id">
+                <sky-card v-for="invite in crew.invitations" :key="invite.id">
                   <div class="crewlink-invite-card">
                     <i :style="{ background: colourValue(invite.colour) }"
                       ><Users
@@ -1561,15 +1564,15 @@ onBeforeUnmount(() => {
                       <Check />
                     </button>
                   </div>
-                </k-card>
+                </sky-card>
               </div>
             </template>
 
-            <k-block-title class="crewlink-members-title">{{
+            <sky-block-title class="crewlink-members-title">{{
               t(activeGroup.memberCount === 1 ? 'member' : 'members')
-            }}</k-block-title>
-            <k-list inset strong class="crewlink-member-list">
-              <k-list-item
+            }}</sky-block-title>
+            <sky-list inset strong class="crewlink-member-list">
+              <sky-list-item
                 v-for="member in activeGroup.members"
                 :key="member.id"
                 :link="member.id !== crew.profile?.id && canModerate"
@@ -1607,8 +1610,8 @@ onBeforeUnmount(() => {
                     :class="`role-${member.role}`"
                   />
                 </template>
-              </k-list-item>
-            </k-list>
+              </sky-list-item>
+            </sky-list>
           </section>
 
           <section
@@ -1626,7 +1629,7 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <div v-if="activeGroup.pings.length" class="crewlink-ping-list">
-              <k-card
+              <sky-card
                 v-for="ping in activeGroup.pings"
                 :key="ping.id"
                 :content-wrap="false"
@@ -1662,7 +1665,7 @@ onBeforeUnmount(() => {
                     <Trash2 />
                   </button>
                 </article>
-              </k-card>
+              </sky-card>
             </div>
             <div v-else class="crewlink-empty-state">
               <span><CircleDot /></span>
@@ -1695,8 +1698,8 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <k-list inset strong>
-              <k-list-item
+            <sky-list inset strong>
+              <sky-list-item
                 :title="t('editProfile')"
                 :subtitle="t('editProfileBody')"
                 link
@@ -1712,48 +1715,48 @@ onBeforeUnmount(() => {
                     <UserRound v-else :size="20" />
                   </span>
                 </template>
-              </k-list-item>
-              <k-list-item
+              </sky-list-item>
+              <sky-list-item
                 link
                 link-component="button"
                 :title="phone.t('Apps.easyShare.shareProfile')"
                 @click="shareProfile"
               >
                 <template #media><Share2 :size="20" /></template>
-              </k-list-item>
-            </k-list>
+              </sky-list-item>
+            </sky-list>
 
-            <k-block-title>{{ t('privacyVisibility') }}</k-block-title>
-            <k-list inset strong>
-              <k-list-item
+            <sky-block-title>{{ t('privacyVisibility') }}</sky-block-title>
+            <sky-list inset strong>
+              <sky-list-item
                 :title="t('shareOnMap')"
                 :subtitle="t('shareOnMapBody')"
               >
                 <template #media><MapIcon :size="20" /></template>
                 <template #after
-                  ><k-toggle
+                  ><sky-toggle
                     :checked="crew.profile.mapVisible"
                     :disabled="pendingVisibility !== null"
                     @click.stop.prevent="updateVisibility('mapVisible')"
                 /></template>
-              </k-list-item>
-              <k-list-item
+              </sky-list-item>
+              <sky-list-item
                 :title="t('overheadLabels')"
                 :subtitle="t('overheadLabelsBody')"
               >
                 <template #media><Eye :size="20" /></template>
                 <template #after
-                  ><k-toggle
+                  ><sky-toggle
                     :checked="crew.profile.overheadVisible"
                     :disabled="pendingVisibility !== null"
                     @click.stop.prevent="updateVisibility('overheadVisible')"
                 /></template>
-              </k-list-item>
-            </k-list>
+              </sky-list-item>
+            </sky-list>
 
-            <k-block-title>{{ t('yourGroups') }}</k-block-title>
-            <k-list inset strong>
-              <k-list-item
+            <sky-block-title>{{ t('yourGroups') }}</sky-block-title>
+            <sky-list inset strong>
+              <sky-list-item
                 v-for="group in crew.groups"
                 :key="group.id"
                 :title="group.name"
@@ -1773,37 +1776,37 @@ onBeforeUnmount(() => {
                     :size="18"
                     :style="{ color: colourValue(group.colour) }"
                 /></template>
-              </k-list-item>
-              <k-list-item
+              </sky-list-item>
+              <sky-list-item
                 :title="t('createAnotherGroup')"
                 link
                 @click="openSheet('create-group')"
                 ><template #media><Plus :size="20" /></template
-              ></k-list-item>
-              <k-list-item
+              ></sky-list-item>
+              <sky-list-item
                 :title="t('joinWithCode')"
                 link
                 @click="openSheet('join-group')"
                 ><template #media><UserPlus :size="20" /></template
-              ></k-list-item>
-            </k-list>
+              ></sky-list-item>
+            </sky-list>
 
-            <k-block-title>{{ t('account') }}</k-block-title>
-            <k-list inset strong>
-              <k-list-item
+            <sky-block-title>{{ t('account') }}</sky-block-title>
+            <sky-list inset strong>
+              <sky-list-item
                 :title="t('externalApi')"
                 :subtitle="t('externalApiBody')"
                 ><template #media><Sparkles :size="20" /></template
-              ></k-list-item>
-              <k-list-item
+              ></sky-list-item>
+              <sky-list-item
                 :title="phone.t('Common.signOut')"
                 class="crewlink-danger-row"
                 link
                 @click="logoutDialogOpen = true"
               >
                 <template #media><LogOut :size="20" /></template>
-              </k-list-item>
-              <k-list-item
+              </sky-list-item>
+              <sky-list-item
                 :title="
                   activeGroup.isOwner ? t('deleteGroup') : t('leaveGroup')
                 "
@@ -1816,13 +1819,13 @@ onBeforeUnmount(() => {
                 "
               >
                 <template #media><Trash2 :size="20" /></template>
-              </k-list-item>
-            </k-list>
+              </sky-list-item>
+            </sky-list>
           </section>
         </template>
       </main>
 
-      <k-tabbar
+      <sky-tab-bar
         v-if="activeGroup && !placingPing"
         component="nav"
         icons
@@ -1831,26 +1834,26 @@ onBeforeUnmount(() => {
         inner-class="crewlink-tabbar__inner"
         :aria-label="t('navigation')"
       >
-        <k-toolbar-pane class="crewlink-tabbar__pane">
-          <k-tabbar-link
+        <sky-toolbar-pane class="crewlink-tabbar__pane">
+          <sky-tab-button
             component="button"
             :active="activeTab === 'map'"
             :link-props="{ type: 'button' }"
             @click="activeTab = 'map'"
             ><template #label>{{ t('map') }}</template
             ><template #icon
-              ><k-icon><MapIcon /></k-icon></template
-          ></k-tabbar-link>
-          <k-tabbar-link
+              ><sky-icon><MapIcon /></sky-icon></template
+          ></sky-tab-button>
+          <sky-tab-button
             component="button"
             :active="activeTab === 'group'"
             :link-props="{ type: 'button' }"
             @click="activeTab = 'group'"
             ><template #label>{{ t('crew') }}</template
             ><template #icon
-              ><k-icon><Users /></k-icon></template
-          ></k-tabbar-link>
-          <k-tabbar-link
+              ><sky-icon><Users /></sky-icon></template
+          ></sky-tab-button>
+          <sky-tab-button
             component="button"
             :active="activeTab === 'pings'"
             :link-props="{ type: 'button' }"
@@ -1858,54 +1861,54 @@ onBeforeUnmount(() => {
           >
             <template #label>{{ t('pings') }}</template>
             <template #icon>
-              <k-icon>
+              <sky-icon>
                 <span class="crewlink-pings-icon">
                   <MapPin />
-                  <k-badge
+                  <sky-badge
                     v-if="activeGroup.pings.length"
                     small
                     class="crewlink-pings-badge"
-                    >{{ activeGroup.pings.length }}</k-badge
+                    >{{ activeGroup.pings.length }}</sky-badge
                   >
                 </span>
-              </k-icon>
+              </sky-icon>
             </template>
-          </k-tabbar-link>
-          <k-tabbar-link
+          </sky-tab-button>
+          <sky-tab-button
             component="button"
             :active="activeTab === 'profile'"
             :link-props="{ type: 'button' }"
             @click="activeTab = 'profile'"
             ><template #label>{{ t('profile') }}</template
             ><template #icon
-              ><k-icon><UserRound /></k-icon></template
-          ></k-tabbar-link>
-        </k-toolbar-pane>
-      </k-tabbar>
+              ><sky-icon><UserRound /></sky-icon></template
+          ></sky-tab-button>
+        </sky-toolbar-pane>
+      </sky-tab-bar>
     </template>
 
-    <k-sheet :opened="Boolean(sheet)" @backdropclick="closeSheet">
+    <sky-sheet :opened="Boolean(sheet)" @backdropclick="closeSheet">
       <section
         v-if="sheet"
-        class="crewlink-sheet__content"
+        class="crewlink-sheet__panel__content"
         role="dialog"
         aria-modal="true"
       >
-        <k-link
+        <sky-link
           component="button"
-          class="crewlink-sheet__close"
+          class="crewlink-sheet__panel__close"
           :link-props="{ type: 'button' }"
           :aria-label="phone.t('Common.close')"
           @click="closeSheet"
           ><X
-        /></k-link>
+        /></sky-link>
 
         <template v-if="sheet === 'create-group'">
-          <span class="crewlink-sheet__icon"><Users /></span>
+          <span class="crewlink-sheet__panel__icon"><Users /></span>
           <h2>{{ t('createGroup') }}</h2>
           <p>{{ t('createGroupBody') }}</p>
-          <k-list inset strong class="crewlink-form-list"
-            ><k-list-input
+          <sky-list inset strong class="crewlink-form-list"
+            ><sky-field
               input-id="crewlink-group-name"
               :label="t('groupName')"
               :placeholder="t('groupNamePlaceholder')"
@@ -1913,7 +1916,7 @@ onBeforeUnmount(() => {
               maxlength="32"
               outline
               @input="updateValue('groupName', $event)"
-          /></k-list>
+          /></sky-list>
           <span class="crewlink-field-label">{{ t('groupColour') }}</span>
           <div class="crewlink-colours" role="radiogroup">
             <button
@@ -1930,21 +1933,21 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
-          <k-button
+          <sky-button
             large
             rounded
             :disabled="crew.isLoading"
             @click="createGroup"
-            >{{ t('createCrew') }}</k-button
+            >{{ t('createCrew') }}</sky-button
           >
         </template>
 
         <template v-else-if="sheet === 'join-group'">
-          <span class="crewlink-sheet__icon"><UserPlus /></span>
+          <span class="crewlink-sheet__panel__icon"><UserPlus /></span>
           <h2>{{ t('joinWithCode') }}</h2>
           <p>{{ t('joinWithCodeBody') }}</p>
-          <k-list inset strong class="crewlink-form-list"
-            ><k-list-input
+          <sky-list inset strong class="crewlink-form-list"
+            ><sky-field
               input-id="crewlink-invite-code"
               :label="t('inviteCode')"
               :placeholder="t('inviteCodePlaceholder')"
@@ -1953,21 +1956,21 @@ onBeforeUnmount(() => {
               outline
               @input="updateValue('inviteCode', $event)"
               @keydown.enter="handleEnterAction($event, joinGroup)"
-          /></k-list>
+          /></sky-list>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
-          <k-button
+          <sky-button
             large
             rounded
             :disabled="crew.isLoading"
             @click="joinGroup"
-            >{{ t('joinCrew') }}</k-button
+            >{{ t('joinCrew') }}</sky-button
           >
           <template v-if="crew.invitations.length">
-            <k-block-title class="crewlink-join-invitations-title">{{
+            <sky-block-title class="crewlink-join-invitations-title">{{
               t('pendingInvitations')
-            }}</k-block-title>
+            }}</sky-block-title>
             <div class="crewlink-invitations crewlink-invitations--join">
-              <k-card v-for="invite in crew.invitations" :key="invite.id">
+              <sky-card v-for="invite in crew.invitations" :key="invite.id">
                 <div class="crewlink-invite-card">
                   <i :style="{ background: colourValue(invite.colour) }"
                     ><Users
@@ -1992,13 +1995,13 @@ onBeforeUnmount(() => {
                     <Check />
                   </button>
                 </div>
-              </k-card>
+              </sky-card>
             </div>
           </template>
         </template>
 
         <template v-else-if="sheet === 'nearby'">
-          <span class="crewlink-sheet__icon"><Radio /></span>
+          <span class="crewlink-sheet__panel__icon"><Radio /></span>
           <h2>{{ t('peopleNearby') }}</h2>
           <p>
             {{
@@ -2007,14 +2010,14 @@ onBeforeUnmount(() => {
               })
             }}
           </p>
-          <k-preloader v-if="crew.isLoading" />
-          <k-list
+          <sky-spinner v-if="crew.isLoading" />
+          <sky-list
             v-else-if="nearbyPlayers.length"
             inset
             strong
             class="crewlink-nearby-list"
           >
-            <k-list-item
+            <sky-list-item
               v-for="player in nearbyPlayers"
               :key="player.source"
               class="crewlink-nearby-item"
@@ -2033,33 +2036,33 @@ onBeforeUnmount(() => {
                 ></template
               >
               <template #after
-                ><k-button
+                ><sky-button
                   small
                   rounded
                   class="crewlink-nearby-invite"
                   @click="inviteNearby(player)"
-                  >{{ t('invite') }}</k-button
+                  >{{ t('invite') }}</sky-button
                 ></template
               >
-            </k-list-item>
-          </k-list>
-          <div v-else class="crewlink-sheet-empty">
+            </sky-list-item>
+          </sky-list>
+          <div v-else class="crewlink-sheet__panel-empty">
             <EyeOff /><strong>{{ t('nobodyNearby') }}</strong
             ><span>{{ t('nobodyNearbyBody') }}</span>
           </div>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
-          <k-button
+          <sky-button
             large
             rounded
             outline
             class="crewlink-nearby-rescan"
             @click="loadNearby"
-            ><RefreshCw />{{ t('scanAgain') }}</k-button
+            ><RefreshCw />{{ t('scanAgain') }}</sky-button
           >
         </template>
 
         <template v-else-if="sheet === 'ping'">
-          <span class="crewlink-sheet__icon"><MapPin /></span>
+          <span class="crewlink-sheet__panel__icon"><MapPin /></span>
           <h2 class="crewlink-ping-title">{{ t('newPing') }}</h2>
           <p class="crewlink-ping-description">{{ t('newPingBody') }}</p>
           <div class="crewlink-ping-types">
@@ -2079,8 +2082,8 @@ onBeforeUnmount(() => {
               }}</span>
             </button>
           </div>
-          <k-list inset strong class="crewlink-form-list crewlink-ping-form"
-            ><k-list-input
+          <sky-list inset strong class="crewlink-form-list crewlink-ping-form"
+            ><sky-field
               input-id="crewlink-ping-label"
               input-class="crewlink-ping-label-input"
               :label="t('pingLabel')"
@@ -2089,9 +2092,9 @@ onBeforeUnmount(() => {
               maxlength="48"
               outline
               @input="updateValue('pingLabel', $event)"
-          /></k-list>
-          <k-list inset strong class="crewlink-ping-location-list">
-            <k-list-item
+          /></sky-list>
+          <sky-list inset strong class="crewlink-ping-location-list">
+            <sky-list-item
               :title="t('placeOnMap')"
               :subtitle="t('positionSelected')"
               link
@@ -2099,32 +2102,32 @@ onBeforeUnmount(() => {
             >
               <template #media><Crosshair :size="22" /></template>
               <template #after><MapPinned :size="19" /></template>
-            </k-list-item>
-          </k-list>
+            </sky-list-item>
+          </sky-list>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
-          <k-button
+          <sky-button
             large
             rounded
             class="crewlink-share-ping"
             :disabled="crew.isLoading"
             @click="createPing"
-            ><Flag />{{ t('sharePing') }}</k-button
+            ><Flag />{{ t('sharePing') }}</sky-button
           >
         </template>
 
         <template v-else-if="sheet === 'edit-group' && activeGroup">
-          <span class="crewlink-sheet__icon"><Settings2 /></span>
+          <span class="crewlink-sheet__panel__icon"><Settings2 /></span>
           <h2>{{ t('manageCrew') }}</h2>
           <p>{{ t('manageCrewBody') }}</p>
-          <k-list inset strong class="crewlink-form-list"
-            ><k-list-input
+          <sky-list inset strong class="crewlink-form-list"
+            ><sky-field
               input-id="crewlink-edit-name"
               :label="t('groupName')"
               :value="groupName"
               maxlength="32"
               outline
               @input="updateValue('groupName', $event)"
-          /></k-list>
+          /></sky-list>
           <span class="crewlink-field-label">{{ t('groupColour') }}</span>
           <div class="crewlink-colours">
             <button
@@ -2138,31 +2141,31 @@ onBeforeUnmount(() => {
               <Check />
             </button>
           </div>
-          <k-list inset strong>
-            <k-list-item
+          <sky-list inset strong>
+            <sky-list-item
               :title="t('memberPings')"
               :subtitle="t('memberPingsBody')"
               ><template #after
-                ><k-toggle
+                ><sky-toggle
                   :checked="activeGroup.allowMemberPings"
                   :disabled="pendingGroupSetting !== null"
                   @click.stop.prevent="
                     toggleGroupSetting('allowMemberPings')
                   " /></template
-            ></k-list-item>
-            <k-list-item
+            ></sky-list-item>
+            <sky-list-item
               :title="t('allowOverhead')"
               :subtitle="t('allowOverheadBody')"
               ><template #after
-                ><k-toggle
+                ><sky-toggle
                   :checked="activeGroup.overheadAllowed"
                   :disabled="pendingGroupSetting !== null"
                   @click.stop.prevent="
                     toggleGroupSetting('overheadAllowed')
                   " /></template
-            ></k-list-item>
-          </k-list>
-          <k-card v-if="activeGroup.inviteCode"
+            ></sky-list-item>
+          </sky-list>
+          <sky-card v-if="activeGroup.inviteCode"
             ><div class="crewlink-code-card">
               <small>{{ t('inviteCode') }}</small
               ><strong>{{ activeGroup.inviteCode }}</strong
@@ -2170,16 +2173,16 @@ onBeforeUnmount(() => {
               ><button type="button" @click="rotateInviteCode">
                 <RefreshCw />
               </button></div
-          ></k-card>
+          ></sky-card>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
-          <k-button large rounded @click="saveGroup">{{
+          <sky-button large rounded @click="saveGroup">{{
             phone.t('Common.save')
-          }}</k-button>
+          }}</sky-button>
         </template>
 
         <template v-else-if="sheet === 'member' && selectedMember">
           <span
-            class="crewlink-sheet__avatar"
+            class="crewlink-sheet__panel__avatar"
             :style="{ '--crew': activeColour }"
             >{{ memberInitials(selectedMember) }}</span
           >
@@ -2188,11 +2191,11 @@ onBeforeUnmount(() => {
             {{ roleLabel(selectedMember.role) }} ·
             {{ memberStatus(selectedMember) }}
           </p>
-          <k-block-title class="crewlink-role-title">{{
+          <sky-block-title class="crewlink-role-title">{{
             t('assignRole')
-          }}</k-block-title>
-          <k-list inset strong class="crewlink-role-list">
-            <k-list-item
+          }}</sky-block-title>
+          <sky-list inset strong class="crewlink-role-list">
+            <sky-list-item
               v-for="role in editableRoles"
               :key="role"
               class="crewlink-role-item"
@@ -2211,24 +2214,24 @@ onBeforeUnmount(() => {
               <template #after
                 ><Check v-if="role === selectedMember.role" :size="18"
               /></template>
-            </k-list-item>
-          </k-list>
+            </sky-list-item>
+          </sky-list>
           <div class="crewlink-member-actions">
-            <k-button
+            <sky-button
               v-if="activeGroup?.isOwner"
               large
               rounded
               outline
               @click="confirmAction = 'transfer-owner'"
-              ><Crown />{{ t('transferOwnership') }}</k-button
+              ><Crown />{{ t('transferOwnership') }}</sky-button
             >
-            <k-button
+            <sky-button
               large
               rounded
               tonal
               class="crewlink-danger-button"
               @click="confirmAction = 'remove-member'"
-              ><Trash2 />{{ t('removeMember') }}</k-button
+              ><Trash2 />{{ t('removeMember') }}</sky-button
             >
           </div>
         </template>
@@ -2250,14 +2253,14 @@ onBeforeUnmount(() => {
           <h2>{{ t('editProfile') }}</h2>
           <p>{{ t('editProfileBody') }}</p>
           <div class="crewlink-profile-editor__media-actions">
-            <k-button rounded outline @click="openProfileMedia('photos')">
+            <sky-button rounded outline @click="openProfileMedia('photos')">
               <Images :size="16" />{{ t('gallery') }}
-            </k-button>
-            <k-button rounded outline @click="openProfileMedia('camera')">
+            </sky-button>
+            <sky-button rounded outline @click="openProfileMedia('camera')">
               <Camera :size="16" />{{ t('camera') }}
-            </k-button>
+            </sky-button>
           </div>
-          <k-button
+          <sky-button
             v-if="
               selectedProfilePhoto ||
               (crew.profile.avatarUrl && !profileAvatarRemoved)
@@ -2268,9 +2271,9 @@ onBeforeUnmount(() => {
             @click="removeProfilePhoto"
           >
             <Trash2 :size="15" />{{ t('removeProfilePhoto') }}
-          </k-button>
-          <k-list inset strong class="crewlink-form-list"
-            ><k-list-input
+          </sky-button>
+          <sky-list inset strong class="crewlink-form-list"
+            ><sky-field
               input-id="crewlink-edit-username"
               :label="t('username')"
               :value="username"
@@ -2278,38 +2281,38 @@ onBeforeUnmount(() => {
               outline
               @input="updateValue('username', $event)"
               @keydown.enter="handleEnterAction($event, saveProfile)"
-          /></k-list>
+          /></sky-list>
           <p v-if="formError" class="crewlink-error">{{ formError }}</p>
-          <k-button
+          <sky-button
             large
             rounded
             :disabled="crew.isLoading"
             @click="saveProfile"
           >
-            <k-preloader v-if="crew.isLoading" />
+            <sky-spinner v-if="crew.isLoading" />
             <template v-else>{{ phone.t('Common.save') }}</template>
-          </k-button>
+          </sky-button>
         </template>
       </section>
-    </k-sheet>
+    </sky-sheet>
 
-    <k-sheet
+    <sky-sheet
       :opened="Boolean(selectedMember && !sheet)"
       @backdropclick="selectedMember = null"
     >
       <section
         v-if="selectedMember"
-        class="crewlink-sheet__content crewlink-member-preview"
+        class="crewlink-sheet__panel__content crewlink-member-preview"
       >
-        <k-link
+        <sky-link
           component="button"
-          class="crewlink-sheet__close"
+          class="crewlink-sheet__panel__close"
           :link-props="{ type: 'button' }"
           @click="selectedMember = null"
           ><X
-        /></k-link>
+        /></sky-link>
         <span
-          class="crewlink-sheet__avatar"
+          class="crewlink-sheet__panel__avatar"
           :style="{ '--crew': activeColour }"
         >
           <img
@@ -2324,33 +2327,33 @@ onBeforeUnmount(() => {
           {{ roleLabel(selectedMember.role) }} ·
           {{ memberStatus(selectedMember) }}
         </p>
-        <k-button
+        <sky-button
           v-if="selectedMember.coords"
           large
           rounded
           @click="routeToSelectedMember"
-          ><Route />{{ t('setRoute') }}</k-button
+          ><Route />{{ t('setRoute') }}</sky-button
         >
       </section>
-    </k-sheet>
+    </sky-sheet>
 
-    <k-sheet
+    <sky-sheet
       :opened="Boolean(selectedPing)"
       @backdropclick="selectedPing = null"
     >
       <section
         v-if="selectedPing"
-        class="crewlink-sheet__content crewlink-member-preview"
+        class="crewlink-sheet__panel__content crewlink-member-preview"
       >
-        <k-link
+        <sky-link
           component="button"
-          class="crewlink-sheet__close"
+          class="crewlink-sheet__panel__close"
           :link-props="{ type: 'button' }"
           @click="selectedPing = null"
           ><X
-        /></k-link>
+        /></sky-link>
         <span
-          class="crewlink-sheet__icon"
+          class="crewlink-sheet__panel__icon"
           :style="{ background: pingColours[selectedPing.type] }"
           ><component :is="pingIcons[selectedPing.type]" /></span
         ><small>{{ t(`pingTypes.${selectedPing.type}`) }}</small>
@@ -2359,11 +2362,11 @@ onBeforeUnmount(() => {
           {{ t('sharedBy', { username: selectedPing.creatorUsername }) }} ·
           {{ expiresIn(selectedPing.expiresAt) }}
         </p>
-        <k-button large rounded @click="routeToSelectedPing"
-          ><Navigation />{{ t('setRoute') }}</k-button
+        <sky-button large rounded @click="routeToSelectedPing"
+          ><Navigation />{{ t('setRoute') }}</sky-button
         >
       </section>
-    </k-sheet>
+    </sky-sheet>
 
     <AccountLogoutDialog
       v-model:opened="logoutDialogOpen"
@@ -2372,32 +2375,32 @@ onBeforeUnmount(() => {
       @logged-out="activeTab = 'map'"
     />
 
-    <k-dialog
+    <sky-dialog
       :opened="Boolean(confirmAction)"
       @backdropclick="cancelConfirmation"
     >
       <template #title>{{ t(`confirm.${confirmAction}.title`) }}</template>
       <p>{{ t(`confirm.${confirmAction}.body`) }}</p>
       <template #buttons
-        ><k-dialog-button
+        ><sky-dialog-button
           class="crewlink-dialog-cancel"
           type="button"
           :aria-label="phone.t('Common.cancel')"
           @click="cancelConfirmation"
-          >{{ phone.t('Common.cancel') }}</k-dialog-button
-        ><k-dialog-button
+          >{{ phone.t('Common.cancel') }}</sky-dialog-button
+        ><sky-dialog-button
           strong
           type="button"
           @click="performConfirmedAction"
-          >{{ t('confirmAction') }}</k-dialog-button
+          >{{ t('confirmAction') }}</sky-dialog-button
         ></template
       >
-    </k-dialog>
+    </sky-dialog>
 
-    <k-toast :opened="Boolean(toastText)" position="center">{{
+    <sky-toast :opened="Boolean(toastText)" position="center">{{
       toastText
-    }}</k-toast>
-  </k-page>
+    }}</sky-toast>
+  </sky-app-page>
 </template>
 
 <style scoped>
@@ -2406,8 +2409,8 @@ onBeforeUnmount(() => {
   --cl-surface: rgba(255, 255, 255, 0.84);
   --cl-text: #102034;
   --cl-muted: #6e7c8d;
-  --k-safe-area-top: 46px;
-  --k-safe-area-bottom: 25px;
+  --sky-safe-area-top: 46px;
+  --sky-safe-area-bottom: 25px;
   position: relative;
   height: 100%;
   background: var(--cl-bg);
@@ -2424,7 +2427,7 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 .crewlink-navbar {
-  --k-safe-area-top: 46px;
+  --sky-safe-area-top: 46px;
   position: absolute;
   z-index: 20;
   top: 0;
@@ -2447,7 +2450,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 .crewlink-content--empty {
-  inset: var(--k-safe-area-top) 0 var(--k-safe-area-bottom);
+  inset: var(--sky-safe-area-top) 0 var(--sky-safe-area-bottom);
 }
 .crewlink-scroll-tab {
   height: 100%;
@@ -2643,7 +2646,7 @@ onBeforeUnmount(() => {
   gap: 7px;
   margin: 0;
 }
-.crewlink-invitations--join :deep(.k-card) {
+.crewlink-invitations--join :deep(.sky-card) {
   margin: 0;
 }
 .crewlink-invite-card {
@@ -2691,13 +2694,13 @@ onBeforeUnmount(() => {
 .crewlink-map-tab {
   height: 100%;
   padding-top: 94px;
-  padding-bottom: calc(80px + var(--k-safe-area-bottom));
+  padding-bottom: calc(80px + var(--sky-safe-area-bottom));
   display: flex;
   flex-direction: column;
   background: #09131c;
 }
 .crewlink-content--placing .crewlink-map-tab {
-  padding-bottom: var(--k-safe-area-bottom);
+  padding-bottom: var(--sky-safe-area-bottom);
 }
 .crewlink-map-summary {
   height: 64px;
@@ -2956,7 +2959,7 @@ onBeforeUnmount(() => {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-.crewlink-ping-placement :deep(.k-button) {
+.crewlink-ping-placement :deep(.sky-button) {
   min-height: 44px;
 }
 .crewlink-ping-placement svg {
@@ -3099,7 +3102,7 @@ onBeforeUnmount(() => {
   font-weight: 700 !important;
   color: var(--cl-text) !important;
 }
-.crewlink-member-list :deep(.k-list-item) {
+.crewlink-member-list :deep(.sky-list-item) {
   min-height: 70px;
 }
 .crewlink-member-title {
@@ -3209,7 +3212,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 8px;
 }
-.crewlink-ping-list :deep(.k-card) {
+.crewlink-ping-list :deep(.sky-card) {
   margin: 0;
 }
 .crewlink-ping-list article {
@@ -3349,7 +3352,7 @@ onBeforeUnmount(() => {
   width: 18px;
 }
 .crewlink-danger-row {
-  --k-list-item-title-text-color: #e44760;
+  --sky-list-item-title-color: #e44760;
 }
 .crewlink-danger-button {
   color: #e44760 !important;
@@ -3397,10 +3400,10 @@ onBeforeUnmount(() => {
   gap: 8px;
   margin-top: 12px;
 }
-.crewlink-member-actions :deep(.k-button) {
+.crewlink-member-actions :deep(.sky-button) {
   margin-top: 0;
 }
-.crewlink-sheet__content {
+.crewlink-sheet__panel__content {
   position: relative;
   max-height: 82vh;
   overflow-y: auto;
@@ -3410,7 +3413,7 @@ onBeforeUnmount(() => {
   background: var(--cl-bg);
   border-radius: 24px 24px 0 0;
 }
-.crewlink-sheet__close {
+.crewlink-sheet__panel__close {
   position: absolute;
   right: 14px;
   top: 12px;
@@ -3422,11 +3425,11 @@ onBeforeUnmount(() => {
   color: var(--cl-muted);
   background: rgba(125, 145, 160, 0.15);
 }
-.crewlink-sheet__close svg {
+.crewlink-sheet__panel__close svg {
   width: 17px;
 }
-.crewlink-sheet__icon,
-.crewlink-sheet__avatar {
+.crewlink-sheet__panel__icon,
+.crewlink-sheet__panel__avatar {
   width: 56px;
   height: 56px;
   margin: 0 auto 9px;
@@ -3437,25 +3440,25 @@ onBeforeUnmount(() => {
   background: linear-gradient(145deg, #27d9ed, #287cff);
   box-shadow: 0 10px 25px rgba(31, 139, 205, 0.22);
 }
-.crewlink-sheet__avatar {
+.crewlink-sheet__panel__avatar {
   background: linear-gradient(145deg, var(--crew), #29415a);
   font-weight: 900;
 }
-.crewlink-sheet__icon svg {
+.crewlink-sheet__panel__icon svg {
   width: 26px;
 }
-.crewlink-sheet__content h2 {
+.crewlink-sheet__panel__content h2 {
   margin: 4px 0;
   font-size: 23px;
   line-height: 1.2;
 }
-.crewlink-sheet__content > p {
+.crewlink-sheet__panel__content > p {
   margin: 0 10px 13px;
   color: var(--cl-muted);
   font-size: 13px;
   line-height: 1.45;
 }
-.crewlink-sheet__content :deep(.button) {
+.crewlink-sheet__panel__content :deep(.button) {
   width: 100%;
   margin-top: 9px;
   font-size: 13px;
@@ -3535,7 +3538,7 @@ onBeforeUnmount(() => {
   font-size: 12px !important;
   margin: 8px !important;
 }
-.crewlink-sheet-empty {
+.crewlink-sheet__panel-empty {
   padding: 25px;
   display: flex;
   flex-direction: column;
@@ -3543,20 +3546,20 @@ onBeforeUnmount(() => {
   gap: 5px;
   color: var(--cl-muted);
 }
-.crewlink-sheet-empty svg {
+.crewlink-sheet__panel-empty svg {
   width: 34px;
 }
-.crewlink-sheet-empty strong {
+.crewlink-sheet__panel-empty strong {
   color: var(--cl-text);
 }
-.crewlink-sheet-empty span {
+.crewlink-sheet__panel-empty span {
   font-size: 11px;
 }
 .crewlink-ping-title {
   font-size: 25px !important;
   line-height: 30px !important;
 }
-.crewlink-sheet__content > .crewlink-ping-description {
+.crewlink-sheet__panel__content > .crewlink-ping-description {
   font-size: 14px;
   line-height: 19px;
 }
@@ -3590,7 +3593,7 @@ onBeforeUnmount(() => {
   width: 22px;
   height: 22px;
 }
-.crewlink-ping-form :deep(.k-list-input .text-xs) {
+.crewlink-ping-form :deep(.sky-field .text-xs) {
   font-size: 14px !important;
   font-weight: 600;
   line-height: 18px;
@@ -3599,7 +3602,7 @@ onBeforeUnmount(() => {
   font-size: 16px !important;
   line-height: 20px;
 }
-.crewlink-ping-location-list :deep(.k-list-item) {
+.crewlink-ping-location-list :deep(.sky-list-item) {
   min-height: 70px;
 }
 .crewlink-ping-location-copy {
@@ -3618,7 +3621,7 @@ onBeforeUnmount(() => {
   font-size: 14px;
   line-height: 18px;
 }
-.crewlink-sheet__content :deep(.crewlink-share-ping) {
+.crewlink-sheet__panel__content :deep(.crewlink-share-ping) {
   font-size: 16px;
 }
 .crewlink-code-card {
@@ -3671,17 +3674,17 @@ onBeforeUnmount(() => {
   gap: 2px;
   padding: 0;
 }
-.crewlink-tabbar :deep(.crewlink-tabbar__pane > .k-link) {
+.crewlink-tabbar :deep(.crewlink-tabbar__pane > .sky-link) {
   min-width: 0 !important;
   max-width: none !important;
   flex: 1 1 25% !important;
   padding-inline: 2px !important;
 }
-.crewlink-tabbar :deep(.k-tabbar-link-label) {
+.crewlink-tabbar :deep(.sky-tab-button__label) {
   font-size: 9px;
   line-height: 11px;
 }
-.crewlink-tabbar :deep(.k-icon) {
+.crewlink-tabbar :deep(.sky-icon) {
   width: 23px;
   height: 23px;
 }
@@ -3716,7 +3719,7 @@ onBeforeUnmount(() => {
   line-height: 11px;
   pointer-events: none;
 }
-.crewlink-sheet__content :deep(.crewlink-nearby-rescan) {
+.crewlink-sheet__panel__content :deep(.crewlink-nearby-rescan) {
   margin-top: 16px;
   margin-bottom: 10px;
 }
@@ -3754,10 +3757,10 @@ onBeforeUnmount(() => {
   height: 100%;
   object-fit: cover;
 }
-.crewlink-sheet__avatar {
+.crewlink-sheet__panel__avatar {
   overflow: hidden;
 }
-.crewlink-sheet__avatar img {
+.crewlink-sheet__panel__avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -3791,7 +3794,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   margin: 4px 0 8px;
 }
-.crewlink-profile-editor__media-actions :deep(.k-button) {
+.crewlink-profile-editor__media-actions :deep(.sky-button) {
   min-width: 0;
   margin-top: 0;
   gap: 6px;

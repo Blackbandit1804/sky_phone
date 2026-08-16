@@ -7,7 +7,7 @@ defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
   defineProps<{
-    clearLabel: string
+    clearLabel?: string
     cancelLabel?: string
     cancelButton?: boolean
     clearButton?: boolean
@@ -29,6 +29,7 @@ const props = withDefaults(
     cancelButton: false,
     cancelLabel: '',
     clearButton: true,
+    clearLabel: '',
     component: 'div',
     disableButton: false,
     disableLabel: '',
@@ -167,7 +168,7 @@ function disable(event: MouseEvent): void {
         v-if="clearButton && localValue"
         class="sky-searchbar__clear"
         type="button"
-        :aria-label="clearLabel"
+        :aria-label="clearLabel || 'Clear search'"
         :disabled="disabled"
         @pointerdown.prevent
         @click="clear($event)"

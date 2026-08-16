@@ -51,6 +51,21 @@ describe('SkyTabBar', () => {
     expect(html).toContain('sky-tabbar--labels')
   })
 
+  it('keeps migrated component and styling hooks on their intended layers', async () => {
+    const html = await renderToString(
+      createSSRApp(SkyTabBar, {
+        bgClass: 'custom-background',
+        component: 'footer',
+        innerClass: 'custom-inner',
+        label: 'Navigation',
+      }),
+    )
+
+    expect(html).toMatch(/^<footer/)
+    expect(html).toContain('sky-tabbar__background custom-background')
+    expect(html).toContain('sky-tabbar__inner custom-inner')
+  })
+
   it('matches the Konsta iOS glass, density, and moving highlight contract', () => {
     expect(foundation).toMatch(
       /\.sky-tabbar\s*\{[^}]*--sky-tabbar-pane-height:\s*48px[^}]*padding-right:\s*calc\(var\(--sky-safe-area-right\) \+ 16px\)[^}]*padding-bottom:\s*calc\(var\(--sky-safe-area-bottom\) \+ 16px\)/s,

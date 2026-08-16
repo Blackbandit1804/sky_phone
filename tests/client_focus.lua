@@ -1,14 +1,9 @@
-local disabled_control_group = nil
-local enabled_controls = {}
+local disabled_controls = {}
 local firing_disabled = false
 
-function DisableAllControlActions(group)
-    disabled_control_group = group
-end
-
-function EnableControlAction(group, control, enabled)
-    assert(group == 0 and enabled, "movement controls must be enabled in the primary input group")
-    enabled_controls[control] = true
+function DisableControlAction(group, control, disabled)
+    assert(group == 0 and disabled, "phone controls must be disabled in the primary input group")
+    disabled_controls[control] = true
 end
 
 function PlayerId()
@@ -29,6 +24,7 @@ local function resolve(overrides)
         call_focus = false,
         camera_active = false,
         camera_nui_focused = true,
+        cursor_disabled = false,
         is_open = false,
         notification_focus = false,
         payphone_focus = false,
@@ -66,19 +62,30 @@ assert(
     movable_phone.cursor
         and movable_phone.focused
         and movable_phone.keep_input
-        and movable_phone.movement_only,
-    "an open phone must keep only movement input when movement is enabled"
+        and movable_phone.game_input,
+    "an open phone must keep GTA input when movement is enabled"
 )
 
-SkyPhoneFocus.ApplyMovementOnlyControls()
-assert(disabled_control_group == 0, "movement filtering must disable the primary input group")
-for _, control in ipairs({ 21, 30, 31, 32, 33, 34, 35 }) do
-    assert(enabled_controls[control], ("movement control %d must stay enabled"):format(control))
+local cursor_disabled_phone = resolve({
+    allow_movement = true,
+    cursor_disabled = true,
+    is_open = true,
+})
+assert(
+    not cursor_disabled_phone.cursor
+        and cursor_disabled_phone.focused
+        and cursor_disabled_phone.keep_input,
+    "toggling Alt must release the NUI cursor while preserving phone and GTA input"
+)
+
+SkyPhoneFocus.ApplyGameInputControls()
+for _, control in ipairs({ 19, 24, 140, 141, 142, 257, 263, 264 }) do
+    assert(disabled_controls[control], ("phone control %d must remain disabled"):format(control))
 end
-assert(not enabled_controls[1] and not enabled_controls[2], "look controls must stay disabled")
-assert(not enabled_controls[24] and not enabled_controls[25], "combat controls must stay disabled")
-assert(not enabled_controls[22], "jump must stay disabled")
-assert(firing_disabled, "player firing must remain disabled while the phone is open")
+assert(not disabled_controls[1] and not disabled_controls[2], "look controls must stay enabled")
+assert(not disabled_controls[21] and not disabled_controls[22], "sprint and jump must stay enabled")
+assert(not disabled_controls[30] and not disabled_controls[31], "movement axes must stay enabled")
+assert(firing_disabled, "player attacks must remain disabled while the phone is open")
 
 local movable_notification = resolve({ allow_movement = true, notification_focus = true })
 assert(
@@ -95,7 +102,7 @@ assert(
     not camera_game_input.cursor
         and camera_game_input.focused
         and camera_game_input.keep_input
-        and not camera_game_input.movement_only,
+        and not camera_game_input.game_input,
     "camera movement must keep keyboard focus without retaining the NUI cursor"
 )
 

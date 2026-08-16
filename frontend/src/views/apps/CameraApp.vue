@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { kFab, kPage } from 'konsta/vue'
+import { SkyFab, SkyAppPage } from '@/ui'
 import {
   ArrowLeft,
   Images,
@@ -73,24 +73,6 @@ const pendingCount = computed(
   () =>
     captures.value.filter((capture) => capture.status === 'uploading').length,
 )
-const controlColors = {
-  bgIos: 'bg-ios-light-glass/75 dark:bg-ios-dark-glass/75',
-  activeBgIos: 'active:bg-white/90 dark:active:bg-white/20',
-  textIos: 'text-black/80 dark:text-white/80',
-}
-const flashColors = computed(() => ({
-  ...controlColors,
-  textIos: flashEnabled.value
-    ? 'text-yellow-500 dark:text-yellow-300'
-    : controlColors.textIos,
-}))
-const microphoneColors = computed(() => ({
-  ...controlColors,
-  textIos: microphoneEnabled.value
-    ? 'text-white'
-    : 'text-red-400',
-}))
-
 function correlationId(): string {
   return `${Date.now()}-${crypto.randomUUID()}`
 }
@@ -472,7 +454,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     class="camera-page"
     :class="{ 'camera-page--landscape': phone.cameraLandscape }"
     :aria-label="phone.t('Apps.camera.name')"
@@ -508,12 +490,13 @@ onBeforeUnmount(() => {
         >
           <ArrowLeft :size="20" />
         </button>
-        <k-fab
+        <sky-fab
           v-else
           component="button"
           type="button"
           class="camera-control"
-          :colors="flashColors"
+          :class="{ 'camera-control--flash-active': flashEnabled }"
+          variant="neutral"
           :aria-label="phone.t('Apps.camera.flash')"
           @click="toggleFlash"
         >
@@ -521,13 +504,14 @@ onBeforeUnmount(() => {
             <Zap v-if="flashEnabled" :size="19" />
             <ZapOff v-else :size="19" />
           </template>
-        </k-fab>
-        <k-fab
+        </sky-fab>
+        <sky-fab
           v-if="mode === 'video'"
           component="button"
           type="button"
           class="camera-control"
-          :colors="microphoneColors"
+          :class="{ 'camera-control--danger': !microphoneEnabled }"
+          variant="neutral"
           :disabled="recording || savingVideo"
           :aria-label="
             phone.t(
@@ -543,7 +527,7 @@ onBeforeUnmount(() => {
             <Mic v-if="microphoneEnabled" :size="19" />
             <MicOff v-else :size="19" />
           </template>
-        </k-fab>
+        </sky-fab>
       </div>
       <span
         v-if="noticeText"
@@ -573,11 +557,11 @@ onBeforeUnmount(() => {
         <LockOpen v-else :size="12" />
         <kbd>{{ phone.t('Apps.camera.spaceKey') }}</kbd>
       </button>
-      <k-fab
+      <sky-fab
         component="button"
         type="button"
         class="camera-control"
-        :colors="controlColors"
+        variant="neutral"
         :disabled="recording || savingVideo"
         :aria-label="
           phone.t(
@@ -589,7 +573,7 @@ onBeforeUnmount(() => {
         @click="toggleOrientation"
       >
         <template #icon><RotateCcwSquare :size="19" /></template>
-      </k-fab>
+      </sky-fab>
     </header>
 
     <div v-if="recording || savingVideo" class="camera-record-status">
@@ -657,16 +641,16 @@ onBeforeUnmount(() => {
           <span></span>
         </button>
 
-        <k-fab
+        <sky-fab
           component="button"
           type="button"
           class="camera-control camera-selfie"
-          :colors="controlColors"
+          variant="neutral"
           :aria-label="phone.t('Apps.camera.flip')"
           @click="toggleFacing"
         >
           <template #icon><RefreshCw :size="20" /></template>
-        </k-fab>
+        </sky-fab>
       </div>
 
       <SkySegmented
@@ -694,7 +678,7 @@ onBeforeUnmount(() => {
         </SkySegmentedButton>
       </SkySegmented>
     </footer>
-  </k-page>
+  </sky-app-page>
 </template>
 
 <style scoped>
@@ -810,7 +794,14 @@ onBeforeUnmount(() => {
   height: 44px;
 }
 .camera-control {
-  --color-primary: transparent;
+  --sky-glass-solid: rgb(28 28 30 / 80%);
+  color: rgb(255 255 255 / 86%);
+}
+.camera-control--flash-active {
+  color: #ffd60a !important;
+}
+.camera-control--danger {
+  color: #ff6961 !important;
 }
 .camera-picker-back {
   width: 44px;

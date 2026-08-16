@@ -60,6 +60,28 @@ describe('SkyNavbar', () => {
     expect(html).toContain('Settings')
   })
 
+  it('keeps migrated boolean sizing and inner hooks compatible', async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(
+            SkyNavbar,
+            {
+              component: 'nav',
+              innerClass: 'custom-inner',
+              large: true,
+              title: 'Clock',
+            },
+            { right: () => h('button', 'Edit') },
+          ),
+      }),
+    )
+
+    expect(html).toMatch(/^<nav/)
+    expect(html).toContain('sky-navbar--large')
+    expect(html).toContain('sky-navbar__inner custom-inner')
+  })
+
   it('renders the extended navigation row only when it has controls', async () => {
     const html = await renderToString(
       createSSRApp({

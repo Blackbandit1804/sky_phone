@@ -279,7 +279,10 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section class="health-metrics" :aria-label="phone.t('Apps.health.snapshot')">
+        <section
+          class="health-metrics"
+          :aria-label="phone.t('Apps.health.snapshot')"
+        >
           <div>
             <MapPin :size="20" aria-hidden="true" />
             <strong>{{ formatDistance(today?.distanceMeters ?? 0) }}</strong>
@@ -304,7 +307,11 @@ onBeforeUnmount(() => {
         <section class="health-section">
           <h2>{{ phone.t('Apps.health.thisWeek') }}</h2>
           <div class="health-week-chart">
-            <div v-for="day in visibleDays" :key="day.date" class="health-week-day">
+            <div
+              v-for="day in visibleDays"
+              :key="day.date"
+              class="health-week-day"
+            >
               <span>{{ weekday(day.date) }}</span>
               <div class="health-week-bar" aria-hidden="true">
                 <i
@@ -317,7 +324,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </section>
-
       </template>
 
       <template v-else-if="activeTab === 'trends'">
@@ -333,11 +339,18 @@ onBeforeUnmount(() => {
           }}</small>
         </section>
 
-        <section class="health-trend-chart" :aria-label="phone.t('Apps.health.trends.dailyActivity')">
+        <section
+          class="health-trend-chart"
+          :aria-label="phone.t('Apps.health.trends.dailyActivity')"
+        >
           <div class="health-goal-line" aria-hidden="true">
             <span>{{ phone.t('Apps.health.trends.goal') }}</span>
           </div>
-          <div v-for="day in visibleDays" :key="day.date" class="health-trend-column">
+          <div
+            v-for="day in visibleDays"
+            :key="day.date"
+            class="health-trend-column"
+          >
             <div class="health-trend-column__bar">
               <i
                 :style="{
@@ -364,7 +377,10 @@ onBeforeUnmount(() => {
             <span>{{ phone.t('Apps.health.distance') }}</span>
             <strong>{{
               formatDistance(
-                visibleDays.reduce((total, day) => total + day.distanceMeters, 0),
+                visibleDays.reduce(
+                  (total, day) => total + day.distanceMeters,
+                  0,
+                ),
               )
             }}</strong>
           </div>
@@ -375,7 +391,10 @@ onBeforeUnmount(() => {
             <span>{{ phone.t('Apps.health.trends.activeTime') }}</span>
             <strong>{{
               formatMinutes(
-                visibleDays.reduce((total, day) => total + day.activeSeconds, 0),
+                visibleDays.reduce(
+                  (total, day) => total + day.activeSeconds,
+                  0,
+                ),
               )
             }}</strong>
           </div>
@@ -384,7 +403,11 @@ onBeforeUnmount(() => {
         <section class="health-section">
           <h2>{{ phone.t('Apps.health.trends.dailyActivity') }}</h2>
           <div class="health-list health-daily-list">
-            <div v-for="day in visibleDays" :key="day.date" class="health-list__row">
+            <div
+              v-for="day in visibleDays"
+              :key="day.date"
+              class="health-list__row"
+            >
               <strong class="health-day-letter">{{ weekday(day.date) }}</strong>
               <span>{{ fullDate(day.date) }}</span>
               <strong>{{ formatNumber(day.steps) }}</strong>
@@ -494,7 +517,9 @@ onBeforeUnmount(() => {
           <section class="health-section">
             <h2>{{ phone.t('Apps.health.medicalId.emergencyContact') }}</h2>
             <div class="health-contact">
-              <span class="health-contact__avatar"><UserRound :size="27" /></span>
+              <span class="health-contact__avatar"
+                ><UserRound :size="27"
+              /></span>
               <div>
                 <strong>{{
                   medicalId?.emergencyName ||
@@ -524,7 +549,6 @@ onBeforeUnmount(() => {
               phone.t('Apps.health.medicalId.emergencyCall')
             }}
           </SkyButton>
-
         </template>
 
         <p v-if="actionError" class="health-action-error" role="alert">

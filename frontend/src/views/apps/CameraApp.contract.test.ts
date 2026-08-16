@@ -91,13 +91,14 @@ describe('Camera app controls', () => {
     )
     expect(cameraClient).toContain('capture_front_camera_transform')
     expect(cameraClient).toContain('forward_vector * front_camera_distance')
+    expect(cameraClient).toContain('front_camera_target_offset')
     expect(cameraClient).toContain('SetCamCoord(')
-    expect(cameraClient).toContain('SetCamRot(')
+    expect(cameraClient).toContain('PointCamAtCoord(')
+    expect(cameraClient).not.toContain('SetCamRot(')
     expect(cameraClient).not.toContain('SetEntityHeading(')
     expect(cameraClient).not.toContain('front_camera_position')
     expect(cameraClient).not.toContain('AttachCamToEntity(')
     expect(cameraClient).not.toContain('PointCamAtEntity(')
-    expect(cameraClient).not.toContain('PointCamAtCoord(')
     expect(cameraView).toContain("window.addEventListener('keyup', onKeyup)")
     expect(cameraView).toContain(
       "nuiCall('camera:setFocus', { focused: true })",

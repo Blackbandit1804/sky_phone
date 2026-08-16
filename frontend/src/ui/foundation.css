@@ -785,6 +785,27 @@
   align-items: stretch;
 }
 
+.sky-tabbar__links > .sky-toolbar-pane {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sky-tabbar__links > .sky-toolbar-pane::after {
+  display: none;
+}
+
+.sky-tabbar__links > .sky-toolbar-pane > .sky-tab-button {
+  min-width: 0;
+  min-height: var(--sky-tabbar-pane-height);
+  flex: 1 1 0;
+}
+
 .sky-tabbar__highlight {
   height: 100%;
   position: absolute;

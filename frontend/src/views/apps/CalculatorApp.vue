@@ -268,7 +268,10 @@ watch([() => calculator.display, expression], async () => {
 <template>
   <main
     class="native-app calculator-app"
-    :class="{ 'calculator-app--scientific': scientificOpened }"
+    :class="{
+      'calculator-app--light': !phone.isDarkMode,
+      'calculator-app--scientific': scientificOpened,
+    }"
     :aria-label="phone.t('Apps.calculator.name')"
   >
     <header class="calculator-toolbar">
@@ -366,9 +369,7 @@ watch([() => calculator.display, expression], async () => {
       @backdropclick="historyOpened = false"
       @escape="historyOpened = false"
     >
-      <section
-        class="calculator-history sky-ui-provider sky-ui-provider--dark"
-      >
+      <section class="calculator-history sky-ui-provider sky-ui-provider--dark">
         <div class="calculator-history__handle"></div>
         <SkyNavbar
           class="calculator-history__navbar"
@@ -571,6 +572,35 @@ watch([() => calculator.display, expression], async () => {
   border-color: #ffb23b;
   background: linear-gradient(180deg, #ffa20c, var(--calculator-orange));
   box-shadow: inset 0 1px rgb(255 255 255 / 28%);
+}
+
+.calculator-app--light {
+  background: var(--sky-bg);
+  color: var(--sky-text);
+}
+
+.calculator-app--light .calculator-toolbar button,
+.calculator-app--light .calculator-key {
+  border-color: var(--sky-hairline);
+  background: linear-gradient(145deg, #ffffff, #e5e5ea);
+  box-shadow: inset 0 1px rgb(255 255 255 / 80%);
+  color: var(--sky-text);
+}
+
+.calculator-app--light .calculator-expression,
+.calculator-app--light .calculator-angle {
+  color: var(--sky-muted);
+}
+
+.calculator-app--light .calculator-key--utility {
+  background: linear-gradient(145deg, #d1d1d6, #aeaeb2);
+  color: #111114;
+}
+
+.calculator-app--light .calculator-key--operator {
+  border-color: #ffb23b;
+  background: linear-gradient(180deg, #ffa20c, var(--calculator-orange));
+  color: #ffffff;
 }
 
 .calculator-key__operator-icon {

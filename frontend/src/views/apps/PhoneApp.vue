@@ -1,18 +1,17 @@
 <script setup lang="ts">
 import {
-  kBlock,
-  kButton,
-  kDialog,
-  kDialogButton,
-  kGlass,
-  kList,
-  kListInput,
-  kNavbar,
-  kPage,
-  kSegmented,
-  kSegmentedButton,
-  kSheet,
-} from 'konsta/vue'
+  SkyBlock,
+  SkyButton,
+  SkyDialog,
+  SkyDialogButton,
+  SkyGlass,
+  SkyList,
+  SkyField,
+  SkyAppPage,
+  SkySheet,
+  SkyTabBar,
+  SkyTabButton,
+} from '@/ui'
 import {
   Camera,
   Check,
@@ -128,20 +127,6 @@ const contactProfileActions = [
   { id: 'mail', icon: Mail },
 ] as const
 const contactAlphabet = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#']
-const tabBarColors = {
-  strongHighlightBgIos: 'bg-[#e5e5ea] dark:bg-[#2c2c2e]',
-}
-const profileNavbarColors = {
-  bgIos: 'bg-transparent',
-}
-const callButtonColors = {
-  fillBgIos: 'bg-[#34c759] active:bg-[#30b350]',
-  fillTextIos: 'text-white',
-}
-const endButtonColors = {
-  fillBgIos: 'bg-[#ff3b30] active:bg-[#e6352b]',
-  fillTextIos: 'text-white',
-}
 const visibleContacts = computed(() => {
   const needle = query.value.trim().toLowerCase()
   if (!needle) return calls.contacts
@@ -690,7 +675,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     class="native-app phone-calls-app"
     :class="{
       'phone-app--light': !phone.isDarkMode,
@@ -731,19 +716,19 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <div class="phone-in-call-keypad__footer">
-              <k-button
+              <sky-button
                 rounded
                 class="phone-in-call-keypad__end"
-                :colors="endButtonColors"
+                variant="danger"
                 @click="calls.hangup()"
               >
                 <PhoneOff />
-              </k-button>
-              <k-button
+              </sky-button>
+              <sky-button
                 clear
                 class="phone-in-call-keypad__hide"
                 @click="callKeypadOpened = false"
-                >{{ phone.t('Apps.phone.hideKeypad') }}</k-button
+                >{{ phone.t('Apps.phone.hideKeypad') }}</sky-button
               >
             </div>
           </div>
@@ -755,7 +740,7 @@ onBeforeUnmount(() => {
             @click.self="callMoreOpened = false"
           >
             <div class="phone-call-more__list">
-              <k-button
+              <sky-button
                 class="phone-call-more__item phone-call-more__contact-card"
                 @click="openCallContact"
               >
@@ -772,37 +757,37 @@ onBeforeUnmount(() => {
                       : 'Apps.phone.addToContacts',
                   )
                 }}</strong>
-              </k-button>
+              </sky-button>
 
-              <k-button
+              <sky-button
                 class="phone-call-more__item"
                 @click="messageActiveCaller"
               >
                 <MessageCircle />
                 <strong>{{ phone.t('Apps.phone.sendMessage') }}</strong>
-              </k-button>
+              </sky-button>
 
-              <k-button
+              <sky-button
                 v-if="activeCallContact"
                 class="phone-call-more__item phone-call-more__item--danger"
                 @click="removeActiveCallerContact"
               >
                 <Delete />
                 <strong>{{ phone.t('Apps.phone.removeContact') }}</strong>
-              </k-button>
+              </sky-button>
 
-              <k-button
+              <sky-button
                 class="phone-call-more__item phone-call-more__item--danger"
                 @click="confirmBlockNumber(calls.activeCall.otherNumber)"
               >
                 <PhoneOff />
                 <strong>{{ phone.t('Apps.phone.blockCaller') }}</strong>
-              </k-button>
+              </sky-button>
             </div>
           </div>
 
           <div v-else key="actions" class="phone-active-call__actions">
-            <k-button
+            <sky-button
               rounded
               class="phone-call-action"
               :class="{
@@ -821,12 +806,12 @@ onBeforeUnmount(() => {
             >
               <Volume2 />
               <span>{{ phone.t('Apps.phone.speaker') }}</span>
-            </k-button>
-            <k-button rounded class="phone-call-action is-disabled" disabled>
+            </sky-button>
+            <sky-button rounded class="phone-call-action is-disabled" disabled>
               <Video />
               <span>{{ phone.t('Apps.phone.faceTime') }}</span>
-            </k-button>
-            <k-button
+            </sky-button>
+            <sky-button
               rounded
               class="phone-call-action"
               :class="{ 'is-active': callMuted }"
@@ -834,22 +819,22 @@ onBeforeUnmount(() => {
             >
               <MicOff />
               <span>{{ phone.t('Apps.phone.mute') }}</span>
-            </k-button>
+            </sky-button>
 
             <div class="phone-call-action-anchor">
-              <k-button
+              <sky-button
                 rounded
                 class="phone-call-action"
                 @click="callMoreOpened = !callMoreOpened"
               >
                 <MoreHorizontal />
                 <span>{{ phone.t('Apps.phone.more') }}</span>
-              </k-button>
+              </sky-button>
             </div>
-            <k-button
+            <sky-button
               rounded
               class="phone-call-action phone-call-action--end"
-              :colors="endButtonColors"
+              variant="danger"
               @click="
                 calls.activeCall.direction === 'incoming' &&
                 calls.activeCall.state === 'ringing'
@@ -866,21 +851,20 @@ onBeforeUnmount(() => {
                     : 'Apps.phone.hangup',
                 )
               }}</span>
-            </k-button>
-            <k-button
+            </sky-button>
+            <sky-button
               v-if="
                 calls.activeCall.direction === 'incoming' &&
                 calls.activeCall.state === 'ringing'
               "
               rounded
               class="phone-call-action phone-call-action--answer"
-              :colors="callButtonColors"
               @click="answerCall"
             >
               <Phone />
               <span>{{ phone.t('Apps.phone.answer') }}</span>
-            </k-button>
-            <k-button
+            </sky-button>
+            <sky-button
               v-else
               rounded
               class="phone-call-action"
@@ -888,7 +872,7 @@ onBeforeUnmount(() => {
             >
               <Grid3X3 />
               <span>{{ phone.t('Apps.phone.keypad') }}</span>
-            </k-button>
+            </sky-button>
           </div>
         </Transition>
       </section>
@@ -901,10 +885,10 @@ onBeforeUnmount(() => {
         :class="{ 'phone-call-content--profile': selectedNumber }"
         @scroll.passive="handlePhoneContentScroll"
       >
-        <k-block v-if="!phone.device?.sim" class="text-center">
+        <sky-block v-if="!phone.device?.sim" class="text-center">
           <h2>{{ phone.t('Apps.phone.noSim') }}</h2>
           <p class="text-[#8e8e93]">{{ phone.t('Apps.phone.noSimBody') }}</p>
-        </k-block>
+        </sky-block>
 
         <template v-else-if="selectedNumber">
           <section
@@ -912,21 +896,21 @@ onBeforeUnmount(() => {
             :class="{ 'phone-contact-detail--compact': contactDetailCompact }"
           >
             <header class="phone-detail-header">
-              <k-button
+              <sky-button
                 rounded
                 class="phone-detail-header-button phone-detail-back"
                 :aria-label="phone.t('Common.back')"
                 @click="closeRecentDetail"
               >
                 <ChevronLeft :size="29" :stroke-width="2.4" />
-              </k-button>
+              </sky-button>
 
               <div class="phone-detail-compact-center">
                 <h2 class="phone-detail-compact-title">
                   {{ selectedDisplayName }}
                 </h2>
                 <div class="phone-detail-compact-actions">
-                  <k-button
+                  <sky-button
                     v-for="action in contactProfileActions"
                     :key="action.id"
                     rounded
@@ -947,11 +931,11 @@ onBeforeUnmount(() => {
                       :size="24"
                       fill="currentColor"
                     />
-                  </k-button>
+                  </sky-button>
                 </div>
               </div>
 
-              <k-button
+              <sky-button
                 v-if="!viewingOwnCard"
                 rounded
                 class="phone-detail-edit"
@@ -964,7 +948,7 @@ onBeforeUnmount(() => {
                     selectedContact ? 'Common.edit' : 'Apps.phone.addContact',
                   )
                 }}
-              </k-button>
+              </sky-button>
               <span v-else class="phone-detail-edit-spacer" />
             </header>
 
@@ -992,7 +976,7 @@ onBeforeUnmount(() => {
               </p>
 
               <div class="phone-contact-actions">
-                <k-button
+                <sky-button
                   v-for="action in contactProfileActions"
                   :key="action.id"
                   rounded
@@ -1009,12 +993,12 @@ onBeforeUnmount(() => {
                   @click="triggerContactAction(action.id)"
                 >
                   <component :is="action.icon" :size="23" fill="currentColor" />
-                </k-button>
+                </sky-button>
               </div>
             </div>
 
             <section v-if="viewingOwnCard" class="phone-profile-content">
-              <k-glass class="phone-own-profile-card">
+              <sky-glass class="phone-own-profile-card">
                 <div>
                   <span><Phone :size="19" /></span>
                   <p>
@@ -1029,16 +1013,16 @@ onBeforeUnmount(() => {
                     <strong>{{ phone.device?.name }}</strong>
                   </p>
                 </div>
-              </k-glass>
-              <k-glass class="phone-profile-card phone-profile-single-option">
+              </sky-glass>
+              <sky-glass class="phone-profile-card phone-profile-single-option">
                 <button type="button" @click="shareOwnProfile">
                   <span>{{ phone.t('Apps.easyShare.shareProfile') }}</span>
                 </button>
-              </k-glass>
+              </sky-glass>
             </section>
 
             <section v-else class="phone-profile-content">
-              <k-glass class="phone-profile-card phone-profile-info-card">
+              <sky-glass class="phone-profile-card phone-profile-info-card">
                 <button
                   type="button"
                   :disabled="selectedContact?.canCall === false"
@@ -1067,9 +1051,9 @@ onBeforeUnmount(() => {
                     {{ selectedContact.notes }}
                   </p>
                 </div>
-              </k-glass>
+              </sky-glass>
 
-              <k-glass class="phone-profile-card phone-profile-options-card">
+              <sky-glass class="phone-profile-card phone-profile-options-card">
                 <button
                   type="button"
                   :disabled="selectedContact?.canMessage === false"
@@ -1097,18 +1081,18 @@ onBeforeUnmount(() => {
                     )
                   }}</span>
                 </button>
-              </k-glass>
+              </sky-glass>
 
-              <k-glass class="phone-profile-card phone-profile-single-option">
+              <sky-glass class="phone-profile-card phone-profile-single-option">
                 <button
                   type="button"
                   @click="confirmBlockNumber(selectedNumber)"
                 >
                   <span>{{ phone.t('Apps.phone.blockContact') }}</span>
                 </button>
-              </k-glass>
+              </sky-glass>
 
-              <k-glass class="phone-history-card">
+              <sky-glass class="phone-history-card">
                 <h3>{{ phone.t('Apps.phone.callHistory') }}</h3>
                 <div
                   v-for="recent in selectedHistory"
@@ -1139,7 +1123,7 @@ onBeforeUnmount(() => {
                 <p v-if="!selectedHistory.length" class="phone-history-empty">
                   {{ phone.t('Apps.phone.noCallHistory') }}
                 </p>
-              </k-glass>
+              </sky-glass>
             </section>
           </section>
         </template>
@@ -1233,9 +1217,9 @@ onBeforeUnmount(() => {
                 </button>
               </article>
             </div>
-            <k-block v-else class="text-center text-[#8e8e93]">{{
+            <sky-block v-else class="text-center text-[#8e8e93]">{{
               phone.t('Apps.phone.noRecents')
-            }}</k-block>
+            }}</sky-block>
           </section>
         </template>
 
@@ -1348,9 +1332,9 @@ onBeforeUnmount(() => {
                 </button>
               </section>
             </div>
-            <k-block v-else class="text-center text-[#8e8e93]">{{
+            <sky-block v-else class="text-center text-[#8e8e93]">{{
               phone.t('Apps.phone.noContacts')
-            }}</k-block>
+            }}</sky-block>
 
             <nav
               v-if="!query"
@@ -1451,220 +1435,203 @@ onBeforeUnmount(() => {
           {{ error }}
         </p>
       </div>
-      <k-navbar
-        component="nav"
-        class="phone-bottom-navbar"
-        inner-class="hidden"
-        :colors="selectedNumber ? profileNavbarColors : undefined"
+      <sky-tab-bar
+        icons
+        labels
+        class="phone-bottom-tabbar"
         :aria-label="phone.t('Apps.phone.name')"
       >
-        <template #subnavbar>
-          <k-segmented
-            strong
-            rounded
-            :colors="tabBarColors"
-            :data-active-tab="tab"
-          >
-            <k-segmented-button
-              v-for="item in tabs"
-              :key="item.id"
-              large
-              :active="tab === item.id"
-              :class="tab === item.id ? 'text-[#007aff]' : 'text-[#8e8e93]'"
-              :aria-label="phone.t(`Apps.phone.${item.id}`)"
-              :aria-pressed="tab === item.id"
-              @click="selectTab(item.id)"
-            >
-              <span
-                class="flex flex-col items-center gap-0.5 text-[10px] leading-none"
-              >
-                <component :is="item.icon" class="h-5 w-5" />
-                <span>{{ phone.t(`Apps.phone.${item.id}`) }}</span>
-              </span>
-            </k-segmented-button>
-          </k-segmented>
-        </template>
-      </k-navbar>
+        <sky-tab-button
+          v-for="item in tabs"
+          :key="item.id"
+          :active="tab === item.id"
+          :aria-label="phone.t(`Apps.phone.${item.id}`)"
+          @click="selectTab(item.id)"
+        >
+          <template #icon>
+            <component :is="item.icon" aria-hidden="true" />
+          </template>
+          <template #label>{{ phone.t(`Apps.phone.${item.id}`) }}</template>
+        </sky-tab-button>
+      </sky-tab-bar>
     </template>
-  </k-page>
+  </sky-app-page>
 
   <div class="phone-contact-editor-sheet">
-    <k-sheet
-      :opened="editorOpened"
-      @backdropclick="editorOpened = false"
-    >
-    <section
-      class="phone-contact-editor"
-      :class="{ 'phone-contact-editor--light': !phone.isDarkMode }"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="
-        phone.t(
-          editingContact?.readonly
-            ? 'Apps.phone.officialContact'
-            : editingContact
-              ? 'Apps.phone.editContact'
-              : 'Apps.phone.addContact',
-        )
-      "
-    >
-      <header class="phone-contact-editor__header">
-        <k-button
-          rounded
-          class="phone-contact-editor__header-button"
-          :aria-label="phone.t('Common.cancel')"
-          @click="editorOpened = false"
-        >
-          <X :size="27" />
-        </k-button>
-        <h2>
-          {{
-            phone.t(
-              editingContact?.readonly
-                ? 'Apps.phone.officialContact'
-                : editingContact
-                  ? 'Apps.phone.editContact'
-                  : 'Apps.phone.newContact',
-            )
-          }}
-        </h2>
-        <k-button
-          v-if="!editingContact?.readonly"
-          rounded
-          class="phone-contact-editor__header-button"
-          :aria-label="phone.t('Common.save')"
-          @click="saveContact"
-        >
-          <Check :size="28" :stroke-width="2.2" />
-        </k-button>
-      </header>
-
-      <div class="phone-contact-editor__scroll">
-        <div class="phone-contact-editor__photo">
-          <div
-            class="phone-contact-editor__avatar-wrap"
-            :class="{
-              'phone-contact-editor__avatar-wrap--has-photo': contactAvatarUrl,
-            }"
+    <sky-sheet :opened="editorOpened" @backdropclick="editorOpened = false">
+      <section
+        class="phone-contact-editor"
+        :class="{ 'phone-contact-editor--light': !phone.isDarkMode }"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="
+          phone.t(
+            editingContact?.readonly
+              ? 'Apps.phone.officialContact'
+              : editingContact
+                ? 'Apps.phone.editContact'
+                : 'Apps.phone.addContact',
+          )
+        "
+      >
+        <header class="phone-contact-editor__header">
+          <sky-button
+            rounded
+            class="phone-contact-editor__header-button"
+            :aria-label="phone.t('Common.cancel')"
+            @click="editorOpened = false"
           >
-            <button
-              class="phone-contact-editor__avatar"
-              type="button"
-              :aria-label="phone.t('Apps.phone.choosePhoto')"
-              :disabled="editingContact?.readonly"
-              @click="openContactPhotoPicker('photos')"
-            >
-              <img v-if="contactAvatarUrl" :src="contactAvatarUrl" alt="" />
-              <span v-else-if="contactEditorInitials">{{
-                contactEditorInitials
-              }}</span>
-              <UserRound v-else :size="72" :stroke-width="1.35" />
-            </button>
-            <k-button
-              v-if="contactAvatarUrl && !editingContact?.readonly"
-              rounded
-              class="phone-contact-editor__remove-photo"
-              :aria-label="phone.t('Apps.phone.removePhoto')"
-              @click="removeContactPhoto"
-            >
-              <Delete :size="25" />
-              <span>{{ phone.t('Apps.phone.removePhoto') }}</span>
-            </k-button>
-          </div>
-          <div
+            <X :size="27" />
+          </sky-button>
+          <h2>
+            {{
+              phone.t(
+                editingContact?.readonly
+                  ? 'Apps.phone.officialContact'
+                  : editingContact
+                    ? 'Apps.phone.editContact'
+                    : 'Apps.phone.newContact',
+              )
+            }}
+          </h2>
+          <sky-button
             v-if="!editingContact?.readonly"
-            class="phone-contact-editor__photo-actions"
+            rounded
+            class="phone-contact-editor__header-button"
+            :aria-label="phone.t('Common.save')"
+            @click="saveContact"
           >
-            <k-button
-              small
-              rounded
-              tonal
-              @click="openContactPhotoPicker('photos')"
+            <Check :size="28" :stroke-width="2.2" />
+          </sky-button>
+        </header>
+
+        <div class="phone-contact-editor__scroll">
+          <div class="phone-contact-editor__photo">
+            <div
+              class="phone-contact-editor__avatar-wrap"
+              :class="{
+                'phone-contact-editor__avatar-wrap--has-photo':
+                  contactAvatarUrl,
+              }"
             >
-              <Images :size="18" />
-              {{ phone.t('Apps.phone.chooseGallery') }}
-            </k-button>
-            <k-button
-              small
-              rounded
-              tonal
-              @click="openContactPhotoPicker('camera')"
+              <button
+                class="phone-contact-editor__avatar"
+                type="button"
+                :aria-label="phone.t('Apps.phone.choosePhoto')"
+                :disabled="editingContact?.readonly"
+                @click="openContactPhotoPicker('photos')"
+              >
+                <img v-if="contactAvatarUrl" :src="contactAvatarUrl" alt="" />
+                <span v-else-if="contactEditorInitials">{{
+                  contactEditorInitials
+                }}</span>
+                <UserRound v-else :size="72" :stroke-width="1.35" />
+              </button>
+              <sky-button
+                v-if="contactAvatarUrl && !editingContact?.readonly"
+                rounded
+                class="phone-contact-editor__remove-photo"
+                :aria-label="phone.t('Apps.phone.removePhoto')"
+                @click="removeContactPhoto"
+              >
+                <Delete :size="25" />
+                <span>{{ phone.t('Apps.phone.removePhoto') }}</span>
+              </sky-button>
+            </div>
+            <div
+              v-if="!editingContact?.readonly"
+              class="phone-contact-editor__photo-actions"
             >
-              <Camera :size="18" />
-              {{ phone.t('Apps.phone.takePhoto') }}
-            </k-button>
+              <sky-button
+                small
+                rounded
+                tonal
+                @click="openContactPhotoPicker('photos')"
+              >
+                <Images :size="18" />
+                {{ phone.t('Apps.phone.chooseGallery') }}
+              </sky-button>
+              <sky-button
+                small
+                rounded
+                tonal
+                @click="openContactPhotoPicker('camera')"
+              >
+                <Camera :size="18" />
+                {{ phone.t('Apps.phone.takePhoto') }}
+              </sky-button>
+            </div>
           </div>
-        </div>
 
-        <k-list strong inset class="phone-contact-editor__name-list">
-          <k-list-input
-            :value="contactFirstName"
-            :placeholder="phone.t('Apps.phone.firstName')"
-            autocomplete="given-name"
-            :readonly="editingContact?.readonly"
-            @input="contactFirstName = eventValue($event)"
-          />
-          <k-list-input
-            :value="contactLastName"
-            :placeholder="phone.t('Apps.phone.lastName')"
-            autocomplete="family-name"
-            :readonly="editingContact?.readonly"
-            @input="contactLastName = eventValue($event)"
-          />
-          <k-list-input
-            :value="contactOrganization"
-            :placeholder="phone.t('Apps.phone.companyOrGroup')"
-            autocomplete="organization"
-            :readonly="editingContact?.readonly"
-            @input="contactOrganization = eventValue($event)"
-          />
-        </k-list>
+          <sky-list strong inset class="phone-contact-editor__name-list">
+            <sky-field
+              :value="contactFirstName"
+              :placeholder="phone.t('Apps.phone.firstName')"
+              autocomplete="given-name"
+              :readonly="editingContact?.readonly"
+              @input="contactFirstName = eventValue($event)"
+            />
+            <sky-field
+              :value="contactLastName"
+              :placeholder="phone.t('Apps.phone.lastName')"
+              autocomplete="family-name"
+              :readonly="editingContact?.readonly"
+              @input="contactLastName = eventValue($event)"
+            />
+            <sky-field
+              :value="contactOrganization"
+              :placeholder="phone.t('Apps.phone.companyOrGroup')"
+              autocomplete="organization"
+              :readonly="editingContact?.readonly"
+              @input="contactOrganization = eventValue($event)"
+            />
+          </sky-list>
 
-        <k-list strong inset class="phone-contact-editor__number-list">
-          <k-list-input
-            :value="contactNumber"
-            :label="phone.t('Apps.phone.mobile')"
-            :placeholder="phone.t('Apps.phone.phoneNumber')"
-            inputmode="tel"
-            autocomplete="tel"
-            :readonly="editingContact?.readonly"
-            @input="contactNumber = eventValue($event)"
+          <sky-list strong inset class="phone-contact-editor__number-list">
+            <sky-field
+              :value="contactNumber"
+              :label="phone.t('Apps.phone.mobile')"
+              :placeholder="phone.t('Apps.phone.phoneNumber')"
+              inputmode="tel"
+              autocomplete="tel"
+              :readonly="editingContact?.readonly"
+              @input="contactNumber = eventValue($event)"
+            >
+              <template #media>
+                <span class="phone-contact-editor__add-icon"
+                  ><Plus :size="19"
+                /></span>
+              </template>
+            </sky-field>
+          </sky-list>
+
+          <sky-list strong inset class="phone-contact-editor__notes-list">
+            <sky-field
+              :value="contactNotes"
+              type="textarea"
+              :placeholder="phone.t('Apps.phone.notes')"
+              :maxlength="500"
+              autocapitalize="sentences"
+              :readonly="editingContact?.readonly"
+              @input="contactNotes = eventValue($event)"
+            />
+          </sky-list>
+
+          <p v-if="error" class="phone-contact-editor__error">{{ error }}</p>
+
+          <sky-button
+            v-if="editingContact && !editingContact.readonly"
+            class="phone-contact-editor__delete"
+            @click="deleteEditedContact"
           >
-            <template #media>
-              <span class="phone-contact-editor__add-icon"
-                ><Plus :size="19"
-              /></span>
-            </template>
-          </k-list-input>
-        </k-list>
-
-        <k-list strong inset class="phone-contact-editor__notes-list">
-          <k-list-input
-            :value="contactNotes"
-            type="textarea"
-            :placeholder="phone.t('Apps.phone.notes')"
-            :maxlength="500"
-            autocapitalize="sentences"
-            :readonly="editingContact?.readonly"
-            @input="contactNotes = eventValue($event)"
-          />
-        </k-list>
-
-        <p v-if="error" class="phone-contact-editor__error">{{ error }}</p>
-
-        <k-button
-          v-if="editingContact && !editingContact.readonly"
-          class="phone-contact-editor__delete"
-          @click="deleteEditedContact"
-        >
-          {{ phone.t('Apps.phone.deleteContact') }}
-        </k-button>
-      </div>
-    </section>
-    </k-sheet>
+            {{ phone.t('Apps.phone.deleteContact') }}
+          </sky-button>
+        </div>
+      </section>
+    </sky-sheet>
   </div>
 
-  <k-dialog
+  <sky-dialog
     :opened="blockDialogOpened"
     @backdropclick="blockDialogOpened = false"
   >
@@ -1677,14 +1644,14 @@ onBeforeUnmount(() => {
       }}
     </p>
     <template #buttons>
-      <k-dialog-button @click="blockDialogOpened = false">{{
+      <sky-dialog-button @click="blockDialogOpened = false">{{
         phone.t('Common.cancel')
-      }}</k-dialog-button>
-      <k-dialog-button strong @click="blockNumber">{{
+      }}</sky-dialog-button>
+      <sky-dialog-button strong @click="blockNumber">{{
         phone.t('Apps.phone.block')
-      }}</k-dialog-button>
+      }}</sky-dialog-button>
     </template>
-  </k-dialog>
+  </sky-dialog>
 </template>
 
 <style scoped>
@@ -2163,15 +2130,16 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
-.phone-bottom-navbar {
-  padding-top: 6px !important;
+.phone-bottom-tabbar {
+  --sky-app-accent: #007aff;
 }
 
 .phone-recents,
 .phone-contacts,
 .phone-contact-detail {
   min-height: 100%;
-  padding: 8px 15px 16px;
+  padding: 8px 15px
+    calc(var(--sky-tabbar-height) + var(--sky-safe-area-bottom) + 16px);
 }
 
 .phone-contacts {
@@ -2366,7 +2334,8 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding: 56px 24px 24px;
+  padding: 56px 24px
+    calc(var(--sky-tabbar-height) + var(--sky-safe-area-bottom) + 16px);
 }
 
 .phone-keypad-number {
@@ -2610,7 +2579,9 @@ onBeforeUnmount(() => {
 @media (max-height: 690px) {
   .phone-keypad {
     padding-top: 20px;
-    padding-bottom: 12px;
+    padding-bottom: calc(
+      var(--sky-tabbar-height) + var(--sky-safe-area-bottom) + 8px
+    );
   }
 
   .phone-keypad-suggestions {
@@ -3343,7 +3314,7 @@ onBeforeUnmount(() => {
   color: rgba(255, 255, 255, 0.62);
 }
 
-.phone-contact-editor-sheet :deep(.k-sheet) {
+.phone-contact-editor-sheet :deep(.sky-sheet__panel) {
   width: 100%;
   height: calc(100% - 52px);
   max-height: calc(100% - 52px);

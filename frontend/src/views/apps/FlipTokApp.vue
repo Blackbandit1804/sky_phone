@@ -1363,7 +1363,7 @@ onBeforeUnmount(() => {
 <template>
   <SkyAppPage
     class="fliptok-page"
-    :dark="true"
+    :dark="phone.isDarkMode"
     :label="t('name')"
     accent="#ff2d55"
     accent-soft="rgba(255, 45, 85, 0.18)"

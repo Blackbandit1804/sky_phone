@@ -6,6 +6,7 @@ import {
   onMounted,
   onUpdated,
   ref,
+  useAttrs,
   type CSSProperties,
 } from 'vue'
 
@@ -15,24 +16,37 @@ defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
   defineProps<{
+    bgClass?: string
+    component?: string
     floating?: boolean
     icons?: boolean
-    label: string
+    innerClass?: string
+    label?: string
     labels?: boolean
   }>(),
   {
+    bgClass: '',
+    component: 'nav',
     floating: true,
     icons: true,
+    innerClass: '',
+    label: '',
     labels: true,
   },
 )
 
+const attrs = useAttrs()
 const links = ref<HTMLElement | null>(null)
 const hasLinks = ref(false)
 const pressed = ref(false)
 const highlightWidth = ref('0%')
 const highlightTransform = ref('translateX(0%)')
 const transitionTimingFunction = ref('')
+const accessibleLabel = computed(() => {
+  if (props.label) return props.label
+  const attribute = attrs['aria-label']
+  return typeof attribute === 'string' && attribute ? attribute : undefined
+})
 let activeIndex = 0
 let newActiveIndex = 0
 let touchRect: DOMRect | null = null
@@ -191,7 +205,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <nav
+  <component
+    :is="component"
     v-bind="$attrs"
     class="sky-tabbar"
     :class="{
@@ -199,11 +214,11 @@ onBeforeUnmount(() => {
       'sky-tabbar--icons': props.icons,
       'sky-tabbar--labels': props.labels,
     }"
-    :aria-label="props.label"
+    :aria-label="accessibleLabel"
   >
     <span class="sky-tabbar__blur" aria-hidden="true" />
-    <span class="sky-tabbar__background" aria-hidden="true" />
-    <div class="sky-tabbar__inner">
+    <span class="sky-tabbar__background" :class="bgClass" aria-hidden="true" />
+    <div class="sky-tabbar__inner" :class="innerClass">
       <SkyGlass class="sky-tabbar__pane">
         <div ref="links" class="sky-tabbar__links">
           <slot />
@@ -220,5 +235,5 @@ onBeforeUnmount(() => {
         </span>
       </SkyGlass>
     </div>
-  </nav>
+  </component>
 </template>

@@ -9,6 +9,7 @@ const props = withDefaults(
     disabled?: boolean
     href?: string
     iconOnly?: boolean
+    linkProps?: Record<string, unknown>
     type?: 'button' | 'reset' | 'submit'
   }>(),
   {
@@ -16,6 +17,7 @@ const props = withDefaults(
     disabled: false,
     href: undefined,
     iconOnly: false,
+    linkProps: () => ({}),
     type: 'button',
   },
 )
@@ -27,6 +29,7 @@ const emit = defineEmits<{
 const elementProps = computed<Record<string, unknown>>(() => {
   if (props.component === 'a') {
     return {
+      ...props.linkProps,
       'aria-disabled': props.disabled || undefined,
       href: props.disabled ? undefined : props.href,
       tabindex: props.disabled ? -1 : 0,
@@ -34,8 +37,9 @@ const elementProps = computed<Record<string, unknown>>(() => {
   }
 
   return {
+    ...props.linkProps,
     disabled: props.disabled,
-    type: props.type,
+    type: props.linkProps.type ?? props.type,
   }
 })
 
