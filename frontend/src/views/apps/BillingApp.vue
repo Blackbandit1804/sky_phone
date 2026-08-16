@@ -77,14 +77,6 @@ const t = (key: string, values?: Record<string, string | number>) =>
       ),
   )
 
-const title = computed(() =>
-  screen.value === 'detail'
-    ? t('detail.title')
-    : tab.value === 'overview'
-      ? t('name')
-      : t(`tabs.${tab.value}`),
-)
-
 const visibleInvoices = computed(() => {
   if (tab.value !== 'history') return billing.invoices
   return billing.invoices.filter((invoice) =>
@@ -258,27 +250,18 @@ onBeforeUnmount(() => {
     accent="#1784ff"
     accent-soft="rgba(23, 132, 255, 0.16)"
     :class="{
-      'billing-app--home': screen === 'main' && tab === 'overview',
       'billing-app--light': !phone.isDarkMode,
-      'billing-app--section': screen !== 'main' || tab !== 'overview',
     }"
   >
-    <SkyNavbar
-      class="billing-navbar"
-      :subtitle="
-        screen === 'main' && tab === 'overview' ? undefined : t('name')
-      "
-      :title="screen === 'main' && tab === 'overview' ? t('name') : title"
-    >
+    <SkyNavbar class="billing-navbar" :title="t('name')">
       <template v-if="screen === 'detail'" #left>
         <SkyNavbarBackLink :ariaLabel="t('back')" @click="goBack" />
       </template>
-      <template v-else-if="tab === 'overview'" #title>
-        <ReceiptText
-          class="billing-navbar__brand-mark"
-          :size="30"
-          :stroke-width="1.8"
-        />
+      <template #title>
+        <span class="billing-navbar__brand">
+          <ReceiptText :size="22" :stroke-width="2" />
+          <strong>{{ t('name') }}</strong>
+        </span>
       </template>
     </SkyNavbar>
 
@@ -420,19 +403,24 @@ onBeforeUnmount(() => {
         </SkyCard>
 
         <div v-if="billing.detail.canPay" class="billing-detail__actions">
-          <SkyButton block rounded large @click="paymentOpen = true">
-            <WalletCards :size="18" />
+          <SkyButton
+            class="billing-action billing-action--pay"
+            @click="paymentOpen = true"
+          >
+            <WalletCards :size="16" />
             {{ t('payment.payNow') }}
-            <ChevronRight class="billing-action-chevron" :size="18" />
+            <ChevronRight class="billing-action-chevron" :size="16" />
           </SkyButton>
-          <SkyLink
+          <SkyButton
             v-if="billing.detail.canDispute"
-            component="button"
-            type="button"
+            class="billing-action billing-action--dispute"
+            variant="secondary"
             @click="disputeInvoice"
           >
+            <ShieldAlert :size="16" />
             {{ t('detail.dispute') }}
-          </SkyLink>
+            <ChevronRight class="billing-action-chevron" :size="16" />
+          </SkyButton>
         </div>
       </template>
     </section>
@@ -563,6 +551,17 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else>
+        <header class="billing-view-heading">
+          <span class="billing-view-heading__icon">
+            <Inbox v-if="tab === 'inbox'" :size="20" />
+            <History v-else :size="20" />
+          </span>
+          <div>
+            <small>{{ t('name') }}</small>
+            <h1>{{ t(`tabs.${tab}`) }}</h1>
+          </div>
+        </header>
+
         <div
           v-if="tab === 'inbox' && billing.overview?.supportsSent"
           class="billing-filter-panel"
@@ -808,18 +807,36 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, #07090c 88%, transparent);
   backdrop-filter: blur(18px);
 }
-.billing-app--section .billing-navbar {
-  border-bottom: 1px solid var(--billing-border);
-}
 .billing-app--light .billing-navbar {
   --sky-navbar-glass: color-mix(in srgb, #f5f7fa 91%, transparent);
   background: color-mix(in srgb, #f5f7fa 88%, transparent);
 }
-.billing-navbar__brand-mark {
-  display: block;
+.billing-navbar::after {
+  position: absolute;
+  right: 0;
+  bottom: -18px;
+  left: 0;
+  height: 18px;
+  background: linear-gradient(to bottom, rgb(7 9 12 / 88%), transparent);
+  content: '';
+  pointer-events: none;
+}
+.billing-app--light .billing-navbar::after {
+  background: linear-gradient(to bottom, rgb(245 247 250 / 88%), transparent);
+}
+.billing-navbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: #ff6f67;
+  font-size: 22px;
+  font-weight: 850;
+  letter-spacing: -0.8px;
   filter: drop-shadow(0 3px 8px rgb(0 0 0 / 18%));
-  transform: translateY(4px);
+  transform: translateY(3px);
+}
+.billing-navbar__brand strong {
+  font: inherit;
 }
 .billing-scroll {
   position: absolute;
@@ -829,6 +846,36 @@ onBeforeUnmount(() => {
 }
 .billing-main {
   padding: 13px 12px 76px;
+}
+.billing-view-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 4px 13px;
+}
+.billing-view-heading__icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(23 132 255 / 20%);
+  border-radius: 12px;
+  color: var(--billing-blue);
+  background: rgb(23 132 255 / 12%);
+}
+.billing-view-heading small {
+  color: #7f8995;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.billing-view-heading h1 {
+  margin: 1px 0 0;
+  font-size: 23px;
+  line-height: 1;
+  letter-spacing: -0.025em;
 }
 .billing-detail {
   padding: 14px 12px 28px;
@@ -871,14 +918,8 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.billing-summary__item--open svg {
-  color: #4da0ff;
-}
-.billing-summary__item--due svg {
-  color: #f1ad35;
-}
-.billing-summary__item--overdue svg {
-  color: #ff625d;
+.billing-summary__item svg {
+  color: #fff;
 }
 .billing-filter-panel {
   display: grid;
@@ -952,12 +993,12 @@ onBeforeUnmount(() => {
 }
 .billing-invoice-card {
   display: grid;
-  min-height: 108px;
+  min-height: 88px;
   align-items: center;
   grid-template-columns: 45px minmax(0, 1fr) auto;
   gap: 10px;
   border-radius: 16px;
-  padding: 13px;
+  padding: 11px 13px;
   box-shadow: 0 10px 24px rgb(0 0 0 / 18%);
 }
 .billing-issuer-mark {
@@ -991,13 +1032,23 @@ onBeforeUnmount(() => {
 }
 .billing-invoice-card__amount {
   display: grid;
+  align-items: center;
+  grid-template-columns: auto 17px;
   justify-items: end;
-  gap: 8px;
+  column-gap: 6px;
+  row-gap: 5px;
+}
+.billing-invoice-card__amount .billing-status {
+  grid-column: 1 / -1;
 }
 .billing-invoice-card__amount strong {
+  grid-column: 1;
+  grid-row: 2;
   font-size: 16px;
 }
 .billing-invoice-card__amount svg {
+  grid-column: 2;
+  grid-row: 2;
   color: #74808c;
 }
 .billing-status {
@@ -1223,7 +1274,7 @@ onBeforeUnmount(() => {
 .billing-detail__section-title {
   margin: 17px 4px 7px;
   color: #89939f;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1231,6 +1282,8 @@ onBeforeUnmount(() => {
 .billing-panel,
 .billing-note {
   margin-top: 12px;
+  margin-right: 0;
+  margin-left: 0;
   border: 1px solid var(--billing-border);
   border-radius: 16px;
   background: color-mix(in srgb, var(--billing-panel) 94%, transparent);
@@ -1303,15 +1356,63 @@ onBeforeUnmount(() => {
 }
 .billing-detail__actions {
   display: grid;
-  justify-items: center;
-  gap: 13px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   margin-top: 16px;
 }
 .billing-detail__actions :deep(.sky-button) {
   width: 100%;
+  height: 44px;
+  min-height: 44px;
+  justify-content: flex-start;
+  border-radius: 14px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.billing-detail__actions :deep(.billing-action--pay) {
+  background: var(--billing-blue);
+  box-shadow: 0 8px 22px rgb(23 132 255 / 18%);
+}
+.billing-detail__actions :deep(.billing-action--dispute) {
+  border-color: var(--billing-border);
+  color: #f6f7f9;
+  background: color-mix(in srgb, var(--billing-panel) 94%, transparent);
+}
+.billing-app--light .billing-detail__actions :deep(.billing-action--dispute) {
+  color: #111827;
 }
 .billing-action-chevron {
   margin-left: auto;
+  transition: transform 160ms ease;
+}
+@media (hover: hover) {
+  .billing-detail__actions :deep(.billing-action:hover) {
+    transform: translateY(-2px);
+  }
+  .billing-detail__actions :deep(.billing-action--pay:hover) {
+    background: #369bff;
+    box-shadow: 0 10px 26px rgb(23 132 255 / 32%);
+  }
+  .billing-detail__actions :deep(.billing-action--dispute:hover) {
+    border-color: rgb(255 255 255 / 20%);
+    background: color-mix(in srgb, var(--billing-panel) 88%, white);
+  }
+  .billing-app--light
+    .billing-detail__actions
+    :deep(.billing-action--dispute:hover) {
+    border-color: rgb(15 23 42 / 18%);
+    background: #eef2f7;
+  }
+  .billing-detail__actions
+    :deep(.billing-action:hover .billing-action-chevron) {
+    transform: translateX(2px);
+  }
 }
 :global(.billing-tab-button) {
   width: auto !important;
@@ -1412,7 +1513,8 @@ onBeforeUnmount(() => {
   .billing-search :deep(.sky-searchbar__control),
   .billing-detail__hero,
   .billing-panel,
-  .billing-note {
+  .billing-note,
+  .billing-detail__actions :deep(.billing-action--dispute) {
     background: var(--billing-panel);
   }
   .billing-detail__hero--paid {
