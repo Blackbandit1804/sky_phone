@@ -9,6 +9,17 @@ const navigationSource = source.slice(
 )
 
 describe('MusicApp Sky pill navigation contract', () => {
+  it('inherits the central safe areas for the iPhone header', () => {
+    const appRuleStart = source.indexOf('.music-app {')
+    const appRule = source.slice(
+      appRuleStart,
+      source.indexOf('}', appRuleStart) + 1,
+    )
+
+    expect(appRule).not.toContain('--sky-safe-area-top:')
+    expect(appRule).not.toContain('--sky-safe-area-bottom:')
+  })
+
   it('uses the full-width sliding Glass navigation outside playlists', () => {
     expect(source).not.toContain('kTabbar')
     expect(source).not.toContain('kTabbarLink')
@@ -52,6 +63,17 @@ describe('MusicApp Sky pill navigation contract', () => {
       'var(--sky-safe-area-bottom) + var(--sky-tabbar-height) + var(--sky-space-2)',
     )
     expect(source).toContain('--music-mini-player-height: 58px')
+    const miniPlayerRuleStart = source.indexOf('.music-mini-player {')
+    const miniPlayerRule = source.slice(
+      miniPlayerRuleStart,
+      source.indexOf('}', miniPlayerRuleStart) + 1,
+    )
+    expect(miniPlayerRule).toContain(
+      'right: calc(var(--sky-safe-area-right) + var(--sky-space-4))',
+    )
+    expect(miniPlayerRule).toContain(
+      'left: calc(var(--sky-safe-area-left) + var(--sky-space-4))',
+    )
     expect(source).toMatch(
       /\.music-app--playlist \.music-scroll\s*\{[^}]*padding-bottom:\s*42px/s,
     )

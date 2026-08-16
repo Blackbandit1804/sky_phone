@@ -8,12 +8,31 @@ const source = readFileSync(
 )
 
 describe('FlareApp profile editing contract', () => {
-  it('offers Gallery and Camera as profile photo sources', () => {
+  it('offers Gallery and Camera directly while creating an account', () => {
+    const onboardingStart = source.indexOf(
+      '<template v-else-if="!flare.profile">',
+    )
+    const onboardingEnd = source.indexOf(
+      '<template v-else-if="activeMatch">',
+      onboardingStart,
+    )
+    const onboarding = source.slice(onboardingStart, onboardingEnd)
+
+    expect(onboardingStart).toBeGreaterThan(-1)
+    expect(onboardingEnd).toBeGreaterThan(onboardingStart)
+    expect(onboarding).toContain('flare-photo-onboarding-sources')
+    expect(onboarding).toContain("openProfileMediaApp('photos')")
+    expect(onboarding).toContain("openProfileMediaApp('camera')")
+    expect(onboarding).toContain("phone.t('Apps.flare.choosePhotos')")
+    expect(onboarding).toContain("phone.t('Apps.flare.takePhoto')")
+  })
+
+  it('uses the central source picker when editing profile photos', () => {
     const mediaAppStart = source.indexOf('function openProfileMediaApp')
     const mediaAppEnd = source.indexOf('function removeDraftPhoto')
     const mediaApp = source.slice(mediaAppStart, mediaAppEnd)
 
-    expect(source.match(/@click="openPhotoSourcePicker"/g)).toHaveLength(2)
+    expect(source.match(/@click="openPhotoSourcePicker"/g)).toHaveLength(1)
     expect(source).toContain('<sky-action-sheet')
     expect(source).toContain(
       '<sky-action-button bold @click="openProfileMediaApp(\'photos\')">',
