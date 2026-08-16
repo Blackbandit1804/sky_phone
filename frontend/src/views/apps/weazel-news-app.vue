@@ -1,9 +1,5 @@
 <script setup lang="ts">
 import {
-  SkyActionButton,
-  SkyActionGroup,
-  SkyActionSheet,
-  SkyActionsLabel,
   SkyAppPage,
   SkyButton,
   SkyCard,
@@ -87,7 +83,6 @@ const searchPending = ref(false)
 const editorialStatus = ref<WeazelNewsManageStatus>('all')
 const editingArticle = ref<WeazelNewsArticle | null>(null)
 const selectedImages = ref<SelectedImage[]>([])
-const photoSourceOpened = ref(false)
 const deleteTarget = ref<WeazelNewsArticle | null>(null)
 const deleteDialogOpened = ref(false)
 const toastOpened = ref(false)
@@ -368,7 +363,6 @@ function editArticle(article: WeazelNewsArticle): void {
 }
 
 function closeComposer(): void {
-  photoSourceOpened.value = false
   screen.value = editingArticle.value ? 'detail' : 'main'
 }
 
@@ -388,19 +382,9 @@ function syncImageMediaIds(): void {
   draft.value.imageMediaIds = selectedImages.value.map((image) => image.id)
 }
 
-function openPhotoSourcePicker(): void {
-  if (selectedImages.value.length >= maximumImages.value) return
-  photoSourceOpened.value = true
-}
-
-function closePhotoSourcePicker(): void {
-  photoSourceOpened.value = false
-}
-
 function openArticleMediaApp(app: 'camera' | 'photos'): void {
   const remaining = maximumImages.value - selectedImages.value.length
   if (remaining < 1) return
-  closePhotoSourcePicker()
   messageMedia.begin(
     'weazel-news:article-images',
     'photo',
@@ -1149,15 +1133,6 @@ onBeforeUnmount(() => {
                 }}
               </span>
             </div>
-            <sky-button
-              v-if="selectedImages.length < maximumImages"
-              rounded
-              small
-              tonal
-              @click="openPhotoSourcePicker"
-            >
-              <ImagePlus :size="17" /> {{ t('composer.addPhotos') }}
-            </sky-button>
           </header>
 
           <div v-if="selectedImages.length" class="weazel-image-grid">
@@ -1194,16 +1169,26 @@ onBeforeUnmount(() => {
               </div>
             </article>
           </div>
-          <button
-            v-else
-            type="button"
-            class="weazel-image-empty"
-            @click="openPhotoSourcePicker"
-          >
+          <div v-else class="weazel-image-empty">
             <ImagePlus :size="34" />
             <strong>{{ t('composer.addPhotos') }}</strong>
             <span>{{ t('composer.photoSourceHint') }}</span>
-          </button>
+          </div>
+          <div
+            v-if="selectedImages.length < maximumImages"
+            class="weazel-photo-source-actions"
+            role="group"
+            :aria-label="t('composer.addPhotos')"
+          >
+            <sky-button rounded tonal @click="openArticleMediaApp('photos')">
+              <Images :size="19" />
+              <span>{{ t('composer.choosePhotos') }}</span>
+            </sky-button>
+            <sky-button rounded tonal @click="openArticleMediaApp('camera')">
+              <Camera :size="19" />
+              <span>{{ t('composer.takePhoto') }}</span>
+            </sky-button>
+          </div>
         </section>
 
         <sky-list inset strong :dividers="false" class="weazel-composer-list">
@@ -1276,32 +1261,6 @@ onBeforeUnmount(() => {
         </div>
       </sky-scroll-area>
     </template>
-
-    <sky-action-sheet
-      :opened="photoSourceOpened"
-      :aria-label="t('composer.addPhotos')"
-      @backdropclick="closePhotoSourcePicker"
-      @escape="closePhotoSourcePicker"
-    >
-      <sky-action-group>
-        <sky-actions-label>{{ t('composer.addPhotos') }}</sky-actions-label>
-        <sky-action-button bold @click="openArticleMediaApp('photos')">
-          <span class="weazel-photo-source">
-            <Images :size="20" /> {{ t('composer.choosePhotos') }}
-          </span>
-        </sky-action-button>
-        <sky-action-button @click="openArticleMediaApp('camera')">
-          <span class="weazel-photo-source">
-            <Camera :size="20" /> {{ t('composer.takePhoto') }}
-          </span>
-        </sky-action-button>
-      </sky-action-group>
-      <sky-action-group>
-        <sky-action-button @click="closePhotoSourcePicker">
-          {{ phone.t('Common.cancel') }}
-        </sky-action-button>
-      </sky-action-group>
-    </sky-action-sheet>
 
     <sky-dialog
       :opened="deleteDialogOpened"
@@ -2100,7 +2059,7 @@ onBeforeUnmount(() => {
 
 .weazel-image-empty {
   width: 100%;
-  min-height: 184px;
+  min-height: 148px;
   padding: var(--sky-space-5);
   display: flex;
   align-items: center;
@@ -2111,7 +2070,6 @@ onBeforeUnmount(() => {
   background: transparent;
   color: var(--weazel-muted);
   font: inherit;
-  cursor: pointer;
 }
 
 .weazel-image-empty strong {
@@ -2141,10 +2099,19 @@ onBeforeUnmount(() => {
   resize: vertical;
 }
 
-.weazel-photo-source {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.weazel-photo-source-actions {
+  padding: 0 var(--sky-space-3) var(--sky-space-3);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--sky-space-2);
+}
+
+.weazel-photo-source-actions :deep(.sky-button) {
+  width: 100%;
+  min-height: var(--sky-touch-target);
+  height: auto;
+  padding: var(--sky-space-2) var(--sky-space-3);
+  line-height: 1.2;
+  white-space: normal;
 }
 </style>

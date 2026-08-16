@@ -43,7 +43,7 @@ const detailSource = sectionBetween(
 )
 const composerSource = sectionBetween(
   /<template\s+v-else-if=["']screen\s*===\s*['"]composer['"][^>]*>/i,
-  /<(?:SkyActionSheet|sky-action-sheet|SkySheet|sky-sheet)\b/i,
+  /<(?:SkyDialog|sky-dialog)\b/i,
 )
 const searchSource = sectionBetween(
   /<template\s+v-else-if=["']activeTab\s*===\s*['"]search['"][^>]*>/i,
@@ -163,20 +163,14 @@ describe('Weazel News article composer contract', () => {
     expect(composerSource).not.toContain("composerChoice = 'category'")
   })
 
-  it('offers Photos and Camera through the shared action sheet', () => {
-    const actionSheet = source.match(
-      /<(?:SkyActionSheet|sky-action-sheet)\b[\s\S]*?<\/(?:SkyActionSheet|sky-action-sheet)>/i,
-    )?.[0]
-
-    expect(actionSheet).toBeDefined()
-    expect(actionSheet).toMatch(
-      /<(?:SkyActionButton|sky-action-button)\b[\s\S]*?(?:photos|gallery)/i,
-    )
-    expect(actionSheet).toMatch(
-      /<(?:SkyActionButton|sky-action-button)\b[\s\S]*?camera/i,
-    )
-    expect(actionSheet).toMatch(/@backdropclick\s*=/i)
-    expect(actionSheet).toMatch(/@escape\s*=/i)
+  it('keeps Photos and Camera directly visible in the composer', () => {
+    expect(composerSource).toContain('class="weazel-photo-source-actions"')
+    expect(composerSource).toContain('@click="openArticleMediaApp(\'photos\')"')
+    expect(composerSource).toContain('@click="openArticleMediaApp(\'camera\')"')
+    expect(composerSource).toContain("t('composer.choosePhotos')")
+    expect(composerSource).toContain("t('composer.takePhoto')")
+    expect(source).not.toContain('photoSourceOpened')
+    expect(source).not.toMatch(/<(?:SkyActionSheet|sky-action-sheet)\b/i)
   })
 
   it('round-trips and previews multiple article images', () => {
