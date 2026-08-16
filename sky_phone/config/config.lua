@@ -259,6 +259,9 @@ Config.Mail = {
     MaxRecipients = 10,
     PageSize = 50,
     AuthAttemptsPerMinute = 5,
+    MailboxNameMaxLength = 50,
+    MaxMailboxes = 20,
+    MailboxRequestsPerMinute = 12,
     DeleteBatchSize = 50,
     DeleteRequestsPerMinute = 12,
 }

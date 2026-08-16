@@ -29,4 +29,30 @@ describe('phone locale fallback', () => {
       'Remove from favorites',
     )
   })
+
+  it('keeps mailbox and filter copy translated with a partial server locale', () => {
+    const phone = usePhoneStore()
+    phone.open({ locales: { Apps: { mail: { name: 'Mail' } } } })
+
+    expect(phone.t('Apps.mail.newMailbox')).toBe('New Mailbox')
+    expect(phone.t('Apps.mail.mailboxNamePlaceholder')).toBe('Mailbox name')
+    expect(phone.t('Apps.mail.filterTitle')).toBe('Filter')
+    expect(phone.t('Apps.mail.filterUnreadLabel')).toBe('Unread')
+    expect(phone.t('Apps.mail.errors.mailbox_exists')).toBe(
+      'A mailbox with that name already exists.',
+    )
+  })
+
+  it('keeps provider capability copy translated with a partial server locale', () => {
+    const phone = usePhoneStore()
+    phone.open({ locales: { Apps: { radio: { name: 'Radio' } } } })
+
+    expect(phone.t('Apps.radio.notSupported')).toBe('Not supported')
+    expect(phone.t('Apps.radio.providerFeatureUnavailable')).toBe(
+      'Not supported by this voice service',
+    )
+    expect(phone.t('Apps.radio.displayNamePlaceholder')).toBe(
+      'Character name',
+    )
+  })
 })

@@ -58,12 +58,37 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_mailboxes",
+        columns = {
+            { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
+            { name = "account_id", type = "BIGINT UNSIGNED NOT NULL" },
+            { name = "name", type = "VARCHAR(50) NOT NULL" },
+            { name = "sort_order", type = "SMALLINT UNSIGNED NOT NULL DEFAULT 0" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "id",
+        uniqueKeys = {
+            { name = "uniq_sky_phone_mailbox_name", columns = "(`account_id`, `name`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_mailboxes", columns = "(`account_id`, `sort_order`, `id`)" },
+        },
+        foreignKeys = {
+            {
+                column = "account_id",
+                references = "`sky_phone_accounts` (`id`) ON DELETE CASCADE",
+            },
+        },
+        tableOptions = "ENGINE=InnoDB",
+    },
+    {
         name = "sky_phone_mail_entries",
         columns = {
             { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },
             { name = "message_id", type = "CHAR(36) NOT NULL" },
             { name = "account_id", type = "BIGINT UNSIGNED NOT NULL" },
             { name = "folder", type = "ENUM('inbox', 'sent') NOT NULL" },
+            { name = "mailbox_id", type = "BIGINT UNSIGNED NULL" },
             { name = "read_at", type = "DATETIME NULL" },
             { name = "trashed_at", type = "DATETIME NULL" },
         },
@@ -76,6 +101,7 @@ local schema = {
         },
         indexes = {
             { name = "idx_sky_phone_mailbox", columns = "(`account_id`, `folder`, `trashed_at`, `id`)" },
+            { name = "idx_sky_phone_custom_mailbox", columns = "(`account_id`, `mailbox_id`, `trashed_at`, `id`)" },
         },
         foreignKeys = {
             {

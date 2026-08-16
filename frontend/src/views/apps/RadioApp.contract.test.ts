@@ -114,8 +114,45 @@ describe('RadioApp Sky UI contract', () => {
       /:deep\(\.radio-speaker-content \.sky-list-item__subtitle\)\s*\{[^}]*color:\s*var\(--sky-muted\)[^}]*font-size:\s*12px[^}]*line-height:\s*16px/s,
     )
     expect(source).toContain(':aria-busy="radio.speakerPending || undefined"')
-    expect(source).toContain(
-      ':disabled="!radio.data.connected || radio.speakerPending"',
+    expect(source).toContain('!radio.data.speakerSupported ||')
+    expect(source).toContain('!radio.data.connected ||')
+    expect(source).toContain('radio.speakerPending')
+  })
+
+  it('keeps provider capability rows stable when PMA lacks secondary and speaker support', () => {
+    const secondaryFieldStart = source.lastIndexOf(
+      '<SkyField',
+      source.indexOf("phone.t('Apps.radio.secondaryFrequency')"),
+    )
+    const secondaryField = source.slice(
+      secondaryFieldStart,
+      source.indexOf('</SkyField>', secondaryFieldStart),
+    )
+    const speakerRowStart = source.lastIndexOf(
+      '<SkyListItem',
+      source.indexOf("phone.t('Apps.radio.speaker')"),
+    )
+    const speakerRow = source.slice(
+      speakerRowStart,
+      source.indexOf('</SkyListItem>', speakerRowStart),
+    )
+
+    expect(secondaryField.slice(0, secondaryField.indexOf('>'))).not.toContain(
+      'v-if="radio.data.secondarySupported"',
+    )
+    expect(secondaryField).toContain(
+      ':disabled="!radio.data.secondarySupported"',
+    )
+    expect(secondaryField).toContain("'Apps.radio.notSupported'")
+    expect(speakerRow).not.toContain('v-if="radio.data.speakerSupported"')
+    expect(speakerRow).toContain(':disabled="!radio.data.speakerSupported"')
+    expect(source).toContain("'Apps.radio.providerFeatureUnavailable'")
+  })
+
+  it('uses compact profile placeholders without dropping the full guidance', () => {
+    expect(source.match(/class="radio-profile-field"/g)).toHaveLength(2)
+    expect(source).toMatch(
+      /:deep\(\.radio-profile-field \.sky-field__input\)\s*\{[^}]*min-width:\s*0[^}]*font-size:\s*15px/s,
     )
   })
 

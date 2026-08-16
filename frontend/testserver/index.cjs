@@ -85,6 +85,10 @@ function memoWaveform(phase = 0) {
 
 let authenticated = true
 let draft = null
+let mockMailboxes = [
+  { count: 0, id: 7, name: 'Projects', sort_order: 0 },
+]
+let nextMockMailboxId = 8
 const radioData = {
   badge: '231',
   badgeEnabled: true,
@@ -3339,15 +3343,31 @@ function counts() {
   return {
     drafts: draft ? 1 : 0,
     inbox: messages.filter(
-      (item) => item.folder === 'inbox' && !item.trashed_at,
+      (item) =>
+        item.folder === 'inbox' && !item.mailbox_id && !item.trashed_at,
     ).length,
-    sent: messages.filter((item) => item.folder === 'sent' && !item.trashed_at)
-      .length,
+    sent: messages.filter(
+      (item) => item.folder === 'sent' && !item.mailbox_id && !item.trashed_at,
+    ).length,
     trash: messages.filter((item) => item.trashed_at).length,
     unread: messages.filter(
-      (item) => item.folder === 'inbox' && !item.trashed_at && !item.is_read,
+      (item) =>
+        item.folder === 'inbox' &&
+        !item.mailbox_id &&
+        !item.trashed_at &&
+        !item.is_read,
     ).length,
   }
+}
+
+function mailboxViews() {
+  return mockMailboxes.map((mailbox) => ({
+    ...mailbox,
+    count: messages.filter(
+      (message) =>
+        message.mailbox_id === mailbox.id && !message.trashed_at,
+    ).length,
+  }))
 }
 
 let flareProfile = {
@@ -9998,17 +10018,104 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: counts() })
     return
   }
+  if (endpoint === 'mail:mailboxes') {
+    response.json({ success: true, data: { mailboxes: mailboxViews() } })
+    return
+  }
+  if (endpoint === 'mail:create-mailbox') {
+    const name = String(request.body.name ?? '').trim()
+    if (!name || name.length > 50) {
+      response.json({ success: false, error: 'invalid_mailbox' })
+      return
+    }
+    if (
+      mockMailboxes.some(
+        (mailbox) => mailbox.name.toLowerCase() === name.toLowerCase(),
+      )
+    ) {
+      response.json({ success: false, error: 'mailbox_exists' })
+      return
+    }
+    if (mockMailboxes.length >= 20) {
+      response.json({ success: false, error: 'mailbox_limit' })
+      return
+    }
+
+    const mailbox = {
+      count: 0,
+      id: nextMockMailboxId,
+      name,
+      sort_order: mockMailboxes.length,
+    }
+    nextMockMailboxId += 1
+    mockMailboxes.push(mailbox)
+    response.json({ success: true, data: mailbox })
+    return
+  }
+  if (endpoint === 'mail:delete-mailbox') {
+    const mailboxId = Number(request.body.id)
+    const mailboxIndex = mockMailboxes.findIndex(
+      (mailbox) => mailbox.id === mailboxId,
+    )
+    if (mailboxIndex < 0) {
+      response.json({ success: false, error: 'mailbox_not_found' })
+      return
+    }
+
+    mockMailboxes.splice(mailboxIndex, 1)
+    for (const message of messages) {
+      if (message.mailbox_id === mailboxId) message.mailbox_id = null
+    }
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'mail:move') {
+    const message = messages.find(
+      (item) => item.id === Number(request.body.id) && !item.trashed_at,
+    )
+    const mailboxId = Number(request.body.mailboxId)
+    const mailboxExists = mockMailboxes.some(
+      (mailbox) => mailbox.id === mailboxId,
+    )
+    if (!message) {
+      response.json({ success: false, error: 'message_not_found' })
+      return
+    }
+    if (mailboxId !== 0 && !mailboxExists) {
+      response.json({ success: false, error: 'mailbox_not_found' })
+      return
+    }
+
+    message.mailbox_id = mailboxId || null
+    response.json({ success: true })
+    return
+  }
   if (endpoint === 'mail:list') {
     const { folder, search = '' } = request.body
+    const mailboxMatch = /^mailbox:(\d+)$/.exec(String(folder))
+    const mailboxId = mailboxMatch ? Number(mailboxMatch[1]) : null
+    if (
+      mailboxId &&
+      !mockMailboxes.some((mailbox) => mailbox.id === mailboxId)
+    ) {
+      response.json({ success: false, error: 'mailbox_not_found' })
+      return
+    }
     let items =
       folder === 'drafts'
         ? draft
           ? [{ ...draft, created_at: draft.updated_at, preview: draft.body }]
           : []
+        : mailboxId
+          ? messages.filter(
+              (item) => item.mailbox_id === mailboxId && !item.trashed_at,
+            )
         : messages.filter((item) =>
             folder === 'trash'
               ? item.trashed_at
-              : item.folder === folder && !item.trashed_at,
+              : item.folder === folder &&
+                !item.mailbox_id &&
+                !item.trashed_at,
           )
     const query = String(search).toLowerCase()
     if (query) {

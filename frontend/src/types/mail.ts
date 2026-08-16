@@ -1,6 +1,28 @@
 import type { DatabaseDateValue } from '@/utils/date'
 
 export type MailFolder = 'inbox' | 'sent' | 'drafts' | 'trash'
+export type MailFolderKey = MailFolder | `mailbox:${number}`
+export type MailReadFilter = 'all' | 'read' | 'unread'
+export type MailDirectionFilter = 'all' | 'inbox' | 'sent'
+export type MailAddressFilter = 'all' | 'from-me' | 'to-me'
+
+export type MailListFilters = {
+  address: MailAddressFilter
+  direction: MailDirectionFilter
+  read: MailReadFilter
+  today: boolean
+}
+
+export type MailMailbox = {
+  count: number
+  id: number
+  name: string
+  sort_order: number
+}
+
+export type MailMailboxesResponse = {
+  mailboxes: MailMailbox[]
+}
 
 export type MailCounts = {
   drafts: number

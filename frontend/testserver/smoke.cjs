@@ -39,6 +39,7 @@ const browserDataRequests = [
   ['housing:key-candidates', { action: 'give' }],
   ['mail:counts', {}],
   ['mail:list', { folder: 'inbox' }],
+  ['mail:mailboxes', {}],
   ['map:getPlayerCoords', {}],
   ['map:markers', {}],
   ['marketplace:counts', {}],
@@ -147,6 +148,10 @@ function verifyBrowserTestData(dataByEndpoint) {
     5,
   )
   expectItems(dataByEndpoint.get('mail:list').items, 'inbox mail', 2)
+  expectItems(
+    dataByEndpoint.get('mail:mailboxes').mailboxes,
+    'custom mailboxes',
+  )
   expectItems(dataByEndpoint.get('map:markers'), 'map markers')
   expectItems(
     dataByEndpoint.get('marketplace:list').items,
@@ -596,6 +601,39 @@ async function verifyStatefulActions(baseUrl) {
   )
   assert.equal(payphoneCall.state, 'connected')
   await expectSuccess(baseUrl, 'payphone:hangup')
+
+  const mailbox = await expectSuccess(
+    baseUrl,
+    'mail:create-mailbox',
+    { name: 'Browser Test' },
+    true,
+  )
+  const mailboxes = await expectSuccess(
+    baseUrl,
+    'mail:mailboxes',
+    {},
+    true,
+  )
+  assert(
+    mailboxes.mailboxes.some((item) => item.id === mailbox.id),
+    'mail:create-mailbox did not update the mock mailbox list',
+  )
+  await expectSuccess(baseUrl, 'mail:move', {
+    id: 2,
+    mailboxId: mailbox.id,
+  })
+  const mailboxItems = await expectSuccess(
+    baseUrl,
+    'mail:list',
+    { folder: `mailbox:${mailbox.id}` },
+    true,
+  )
+  assert(
+    mailboxItems.items.some((message) => message.id === 2),
+    'mail:move did not add the message to the custom mailbox',
+  )
+  await expectSuccess(baseUrl, 'mail:move', { id: 2, mailboxId: 0 })
+  await expectSuccess(baseUrl, 'mail:delete-mailbox', { id: mailbox.id })
 
   const draft = await expectSuccess(
     baseUrl,

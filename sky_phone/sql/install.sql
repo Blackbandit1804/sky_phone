@@ -23,16 +23,30 @@ CREATE TABLE IF NOT EXISTS `sky_phone_mail_messages` (
     FOREIGN KEY (`sender_account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `sky_phone_mailboxes` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `account_id` BIGINT UNSIGNED NOT NULL,
+    `name` VARCHAR(50) NOT NULL,
+    `sort_order` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_mailbox_name` (`account_id`, `name`),
+    KEY `idx_sky_phone_mailboxes` (`account_id`, `sort_order`, `id`),
+    FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS `sky_phone_mail_entries` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `message_id` CHAR(36) NOT NULL,
     `account_id` BIGINT UNSIGNED NOT NULL,
     `folder` ENUM('inbox', 'sent') NOT NULL,
+    `mailbox_id` BIGINT UNSIGNED NULL,
     `read_at` DATETIME NULL,
     `trashed_at` DATETIME NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uniq_sky_phone_mail_entry` (`message_id`, `account_id`, `folder`),
     KEY `idx_sky_phone_mailbox` (`account_id`, `folder`, `trashed_at`, `id`),
+    KEY `idx_sky_phone_custom_mailbox` (`account_id`, `mailbox_id`, `trashed_at`, `id`),
     FOREIGN KEY (`message_id`) REFERENCES `sky_phone_mail_messages` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`account_id`) REFERENCES `sky_phone_accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

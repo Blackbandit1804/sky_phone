@@ -18,6 +18,7 @@ const counts: MailCounts = {
   trash: 4,
   unread: 1,
 }
+const noMailboxes = { mailboxes: [] }
 
 function listItem(id: number): MailListItem {
   return {
@@ -161,6 +162,7 @@ describe('mail store', () => {
         success: true,
       })
       .mockResolvedValueOnce({ data: counts, success: true })
+      .mockResolvedValueOnce({ data: noMailboxes, success: true })
       .mockResolvedValueOnce({
         data: { hasMore: true, items: [listItem(1)] },
         success: true,
@@ -183,6 +185,7 @@ describe('mail store', () => {
   it('removes loaded cloud mail when the device becomes unlinked', async () => {
     mockNuiCall
       .mockResolvedValueOnce({ data: counts, success: true })
+      .mockResolvedValueOnce({ data: noMailboxes, success: true })
       .mockResolvedValueOnce({
         data: { hasMore: true, items: [listItem(1)] },
         success: true,
@@ -234,6 +237,10 @@ describe('mail store', () => {
         resolveCounts = resolve
       }),
     )
+    mockNuiCall.mockResolvedValueOnce({
+      data: noMailboxes,
+      success: true,
+    })
     const mail = useMailStore()
 
     const bootstrap = mail.bootstrap('alex@ifruit.com')
@@ -282,6 +289,7 @@ describe('mail store', () => {
         }),
       )
       .mockResolvedValueOnce({ data: counts, success: true })
+      .mockResolvedValueOnce({ data: noMailboxes, success: true })
     const mail = useMailStore()
     const account = useAccountStore()
 
@@ -296,5 +304,93 @@ describe('mail store', () => {
 
     expect(mail.accountEmail).toBe('morgan@ifruit.com')
     expect(account.email).toBe('morgan@ifruit.com')
+  })
+
+  it('creates an account-owned mailbox and refreshes the mailbox list', async () => {
+    mockNuiCall
+      .mockResolvedValueOnce({
+        data: { count: 0, id: 7, name: 'Projects', sort_order: 1 },
+        success: true,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          mailboxes: [{ count: 0, id: 7, name: 'Projects', sort_order: 1 }],
+        },
+        success: true,
+      })
+    const mail = useMailStore()
+
+    const response = await mail.createMailbox('Projects')
+
+    expect(response.success).toBe(true)
+    expect(mockNuiCall).toHaveBeenNthCalledWith(1, 'mail:create-mailbox', {
+      name: 'Projects',
+    })
+    expect(mockNuiCall).toHaveBeenNthCalledWith(2, 'mail:mailboxes')
+    expect(mail.mailboxes).toEqual([
+      { count: 0, id: 7, name: 'Projects', sort_order: 1 },
+    ])
+  })
+
+  it('loads custom mailbox folders through the regular list contract', async () => {
+    mockNuiCall.mockResolvedValueOnce({
+      data: { hasMore: false, items: [listItem(4)] },
+      success: true,
+    })
+    const mail = useMailStore()
+
+    expect(await mail.loadFolder('mailbox:7')).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledWith('mail:list', {
+      folder: 'mailbox:7',
+      offset: 0,
+      search: '',
+    })
+    expect(mail.folder).toBe('mailbox:7')
+  })
+
+  it('keeps active mail filters in the paginated server request', async () => {
+    mockNuiCall.mockResolvedValueOnce({
+      data: { hasMore: false, items: [listItem(5)] },
+      success: true,
+    })
+    const mail = useMailStore()
+    mail.setListFilters({
+      address: 'to-me',
+      direction: 'all',
+      read: 'unread',
+      today: true,
+    })
+
+    expect(await mail.loadFolder('inbox')).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledWith('mail:list', {
+      filters: {
+        address: 'to-me',
+        direction: 'all',
+        read: 'unread',
+        today: true,
+      },
+      folder: 'inbox',
+      offset: 0,
+      search: '',
+    })
+  })
+
+  it('moves a custom mailbox entry back to its original built-in folder', async () => {
+    mockNuiCall
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ data: counts, success: true })
+      .mockResolvedValueOnce({ data: noMailboxes, success: true })
+      .mockResolvedValueOnce({
+        data: { hasMore: false, items: [] },
+        success: true,
+      })
+    const mail = useMailStore()
+    mail.folder = 'mailbox:7'
+
+    expect(await mail.moveEntry(4, null)).toBe(true)
+    expect(mockNuiCall).toHaveBeenNthCalledWith(1, 'mail:move', {
+      id: 4,
+      mailboxId: 0,
+    })
   })
 })
