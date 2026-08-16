@@ -5,7 +5,6 @@ import {
   SkyCard,
   SkyDialog,
   SkyDialogButton,
-  SkyLink,
   SkyList,
   SkyListItem,
   SkyNavbar,
@@ -28,7 +27,6 @@ import {
   UserRound,
   UsersRound,
   WifiOff,
-  X,
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
@@ -296,14 +294,6 @@ onBeforeUnmount(() => {
         <sky-spinner />
       </div>
       <section v-if="properties.length" class="house-properties">
-        <header class="house-properties__heading">
-          <div>
-            <small>{{ phone.t('Apps.house.properties') }}</small>
-            <h1>{{ phone.t('Apps.house.myHomes') }}</h1>
-          </div>
-          <span class="house-properties__count">{{ properties.length }}</span>
-        </header>
-
         <div class="house-overview" :aria-label="phone.t('Apps.house.myHomes')">
           <span
             ><b>{{ ownedCount }}</b
@@ -373,19 +363,12 @@ onBeforeUnmount(() => {
     <sky-sheet
       :opened="Boolean(selectedProperty)"
       class="house-detail-sheet"
+      swipe-to-close
       @backdropclick="selectedPropertyId = null"
+      @escape="selectedPropertyId = null"
+      @swipeclose="selectedPropertyId = null"
     >
       <section v-if="selectedProperty" class="house-detail">
-        <sky-glass
-          component="button"
-          class="house-detail__close"
-          type="button"
-          :aria-label="phone.t('Common.close')"
-          @click="selectedPropertyId = null"
-        >
-          <X :size="18" />
-        </sky-glass>
-
         <span class="house-detail__mark"><House :size="29" /></span>
         <small>{{ accessLabel(selectedProperty) }}</small>
         <h2>{{ selectedProperty.name }}</h2>
@@ -559,17 +542,12 @@ onBeforeUnmount(() => {
     <sky-sheet
       :opened="candidatesOpened"
       class="house-candidates-sheet"
+      swipe-to-close
       @backdropclick="candidatesOpened = false"
+      @escape="candidatesOpened = false"
+      @swipeclose="candidatesOpened = false"
     >
       <section class="house-candidates">
-        <sky-link
-          component="button"
-          icon-only
-          :aria-label="phone.t('Common.close')"
-          :link-props="{ type: 'button' }"
-          @click="candidatesOpened = false"
-          ><X :size="18"
-        /></sky-link>
         <UsersRound :size="34" />
         <h2>{{ phone.t('Apps.house.chooseResident') }}</h2>
         <p>{{ phone.t('Apps.house.chooseResidentBody') }}</p>
@@ -668,6 +646,17 @@ onBeforeUnmount(() => {
 }
 .house-navbar::after {
   opacity: 0;
+}
+.house-navbar :deep(.sky-navbar__heading) {
+  justify-content: center;
+  gap: 1px;
+}
+.house-navbar :deep(.sky-navbar__title) {
+  line-height: 24px;
+}
+.house-navbar :deep(.sky-navbar__subtitle) {
+  margin-top: 0;
+  line-height: 15px;
 }
 .house-scroll {
   position: absolute;
@@ -903,28 +892,20 @@ onBeforeUnmount(() => {
 }
 :global(.house-detail-sheet),
 :global(.house-candidates-sheet) {
-  --sky-sheet__panel-bg-color: var(--house-bg);
+  --sky-sheet-background: var(--house-bg);
+}
+:global(.house-detail-sheet .sky-sheet__panel),
+:global(.house-candidates-sheet .sky-sheet__panel) {
   height: 88%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border-radius: 28px 28px 0 0;
 }
 .house-detail {
   position: relative;
-  height: 100%;
-  padding: 18px 14px 40px;
-  overflow-y: auto;
+  min-height: calc(100% - 32px);
+  padding: 12px 14px 40px;
   text-align: center;
-}
-.house-detail__close {
-  position: sticky;
-  z-index: 2;
-  top: 0;
-  width: 32px;
-  height: 32px;
-  margin: 0 0 -32px auto;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
 }
 .house-detail__mark {
   width: 83px;
@@ -1037,18 +1018,12 @@ onBeforeUnmount(() => {
   padding: 18px;
 }
 .house-candidates {
-  height: 100%;
-  padding: 19px 14px 35px;
-  overflow-y: auto;
+  min-height: calc(100% - 32px);
+  padding: 12px 14px 35px;
   text-align: center;
 }
-.house-candidates > button {
-  position: absolute;
-  right: 14px;
-  top: 13px;
-}
 .house-candidates > svg {
-  margin-top: 7px;
+  margin-top: 0;
   color: var(--house-accent);
 }
 .house-candidates h2 {
@@ -1112,42 +1087,10 @@ onBeforeUnmount(() => {
   line-height: 1.4;
 }
 .house-properties {
-  padding-top: 14px;
-}
-.house-properties__heading {
-  margin: 0 21px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.house-properties__heading small,
-.house-properties__heading h1 {
-  display: block;
-}
-.house-properties__heading small {
-  color: var(--house-muted);
-  font-size: 12px;
-  line-height: 1.2;
-}
-.house-properties__heading h1 {
-  margin: 2px 0 0;
-  font-size: 25px;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-}
-.house-properties__count {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--house-accent);
-  color: #fff;
-  font-size: 18px;
-  font-weight: 750;
+  padding-top: 4px;
 }
 .house-overview {
-  margin: 0 16px 20px;
+  margin: 0 16px 16px;
   padding: 12px 6px;
   border-radius: 18px;
   display: flex;
@@ -1241,13 +1184,13 @@ onBeforeUnmount(() => {
   line-height: 1.42;
 }
 .house-detail {
-  height: 620px;
-  padding: 18px 0 42px;
+  min-height: calc(100% - 32px);
+  padding: 12px 0 42px;
 }
 .house-detail__mark {
   width: 58px;
   height: 58px;
-  margin: 8px auto 10px;
+  margin: 0 auto 10px;
   border-radius: 18px;
   background: var(--house-accent);
 }
@@ -1295,8 +1238,8 @@ onBeforeUnmount(() => {
   font-size: 16px;
 }
 .house-candidates {
-  height: 620px;
-  padding: 21px 14px 35px;
+  min-height: calc(100% - 32px);
+  padding: 12px 14px 35px;
 }
 .house-candidates h2 {
   margin: 8px 0 5px;
