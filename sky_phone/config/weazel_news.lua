@@ -25,5 +25,6 @@ Config.WeazelNews = {
     -- Framework job name = minimum grade. Every listed job can manage every article.
     AllowedJobs = {
         weazel = 0,
+        reporter = 0,
     },
 }
