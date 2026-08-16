@@ -97,6 +97,7 @@ const authConfirmPassword = ref('')
 const authSubmitting = ref(false)
 const composeKind = ref<ComposeKind>('post')
 const selectedMedia = ref<PhoneMedia[]>([])
+const composePreviewIndex = ref(0)
 const caption = ref('')
 const location = ref('')
 const storyText = ref('')
@@ -152,7 +153,10 @@ const unreadCount = computed(
   () => store.activities.filter((activity) => !activity.read_at).length,
 )
 const tabIndex = computed(() =>
-  ['home', 'explore', 'create', 'activity', 'profile'].indexOf(tab.value),
+  ['home', 'explore', 'activity', 'profile'].indexOf(tab.value),
+)
+const currentComposeMedia = computed(
+  () => selectedMedia.value[composePreviewIndex.value] ?? null,
 )
 const taggedProfilePosts = computed(() => {
   const handle = currentProfile.value?.handle.trim().toLowerCase()
@@ -447,6 +451,7 @@ function openAvatarMedia(source: MediaSource): void {
 
 function resetComposer(): void {
   selectedMedia.value = []
+  composePreviewIndex.value = 0
   caption.value = ''
   location.value = ''
   storyText.value = ''
@@ -455,6 +460,20 @@ function resetComposer(): void {
 
 function removeComposeMedia(id: number): void {
   selectedMedia.value = selectedMedia.value.filter((media) => media.id !== id)
+  composePreviewIndex.value = Math.min(
+    composePreviewIndex.value,
+    Math.max(0, selectedMedia.value.length - 1),
+  )
+}
+
+function moveComposePreview(direction: 1 | -1): void {
+  composePreviewIndex.value = Math.max(
+    0,
+    Math.min(
+      selectedMedia.value.length - 1,
+      composePreviewIndex.value + direction,
+    ),
+  )
 }
 
 function changeComposeSelection(): void {
@@ -762,6 +781,17 @@ function activityProfile(activity: PicstagramActivity): void {
   void openProfile(activity.profile_id)
 }
 
+async function respondToFollowRequest(
+  profileId: string,
+  accept: boolean,
+): Promise<void> {
+  if (!(await store.respondFollow(profileId, accept))) {
+    notify(errorMessage())
+    return
+  }
+  notify(t(accept ? 'requestAccepted' : 'requestDeclined'))
+}
+
 watch(search, (value) => {
   if (searchTimer !== null) window.clearTimeout(searchTimer)
   searchTimer = window.setTimeout(() => {
@@ -791,6 +821,7 @@ onMounted(async () => {
   }>('picstagram:compose')
   if (composeSelection?.media.length) {
     selectedMedia.value = composeSelection.media
+    composePreviewIndex.value = 0
     composeKind.value = composeSelection.context?.kind ?? 'post'
     caption.value = composeSelection.context?.caption ?? ''
     location.value = composeSelection.context?.location ?? ''
@@ -1347,8 +1378,24 @@ onBeforeUnmount(() => {
       <template v-else-if="tab === 'create'">
         <SkyNavbar
           :title="t(composeKind === 'post' ? 'newPost' : 'newStory')"
+          show-back
+          :back-label="phone.t('Common.back')"
+          back-appearance="surface"
           variant="compact"
-        />
+          @back="showTab('home')"
+        >
+          <template #right>
+            <SkyLink
+              component="button"
+              class="ps-publish-link"
+              :disabled="!selectedMedia.length || publishing"
+              @click="publish"
+            >
+              <SkySpinner v-if="publishing" />
+              {{ t(publishing ? 'publishing' : 'share') }}
+            </SkyLink>
+          </template>
+        </SkyNavbar>
         <SkyScrollArea with-tabbar class="ps-screen ps-create">
           <SkySegmented strong>
             <SkySegmentedButton
@@ -1363,33 +1410,61 @@ onBeforeUnmount(() => {
             >
           </SkySegmented>
           <SkyCard class="ps-create-card">
-            <div v-if="selectedMedia.length" class="ps-selection-preview">
-              <div
-                v-for="media in selectedMedia"
-                :key="media.id"
-                class="ps-selection-slide"
-              >
+            <div
+              v-if="selectedMedia.length && currentComposeMedia"
+              class="ps-selection-preview"
+            >
+              <div :key="currentComposeMedia.id" class="ps-selection-slide">
                 <video
-                  v-if="media.mediaType === 'video'"
-                  :src="media.url"
+                  v-if="currentComposeMedia.mediaType === 'video'"
+                  :src="currentComposeMedia.url"
                   autoplay
                   loop
                   muted
                   playsinline
                 />
-                <img v-else :src="media.url" alt="" />
+                <img v-else :src="currentComposeMedia.url" alt="" />
                 <button
+                  class="ps-selection-remove"
                   :aria-label="t('remove')"
-                  @click="removeComposeMedia(media.id)"
+                  @click="removeComposeMedia(currentComposeMedia.id)"
                 >
                   <X />
                 </button>
               </div>
+              <template v-if="selectedMedia.length > 1">
+                <button
+                  class="ps-selection-arrow ps-selection-arrow--left"
+                  :aria-label="t('previousPhoto')"
+                  :disabled="composePreviewIndex === 0"
+                  @click="moveComposePreview(-1)"
+                >
+                  <ChevronLeft />
+                </button>
+                <button
+                  class="ps-selection-arrow ps-selection-arrow--right"
+                  :aria-label="t('nextPhoto')"
+                  :disabled="composePreviewIndex === selectedMedia.length - 1"
+                  @click="moveComposePreview(1)"
+                >
+                  <ChevronRight />
+                </button>
+                <span class="ps-selection-counter">
+                  {{ composePreviewIndex + 1 }}/{{ selectedMedia.length }}
+                </span>
+                <div class="ps-selection-dots" aria-hidden="true">
+                  <span
+                    v-for="(_, index) in selectedMedia"
+                    :key="index"
+                    :class="{ active: composePreviewIndex === index }"
+                  />
+                </div>
+              </template>
               <SkyChip>{{
                 t('selectedPhotos', { count: String(selectedMedia.length) })
               }}</SkyChip>
               <span
-                v-if="selectedMedia[0]?.mediaType === 'video'"
+                v-if="currentComposeMedia.mediaType === 'video'"
                 class="ps-video-preview-badge"
                 ><Video />{{ t('video') }}</span
               >
@@ -1479,22 +1554,6 @@ onBeforeUnmount(() => {
               ><SkyToggle v-model="commentsEnabled"
             /></label>
           </div>
-          <SkyButton
-            large
-            rounded
-            class="ps-publish"
-            :disabled="!selectedMedia.length || publishing"
-            @click="publish"
-            ><SkySpinner v-if="publishing" />{{
-              t(
-                publishing
-                  ? 'publishing'
-                  : composeKind === 'post'
-                    ? 'newPost'
-                    : 'newStory',
-              )
-            }}</SkyButton
-          >
         </SkyScrollArea>
       </template>
 
@@ -1513,6 +1572,9 @@ onBeforeUnmount(() => {
             v-for="activity in store.activities"
             :key="activity.id"
             class="ps-activity-row"
+            :class="{
+              'ps-activity-row--request': activity.kind === 'follow_request',
+            }"
             @click="activityProfile(activity)"
           >
             <span class="ps-avatar"
@@ -1540,13 +1602,13 @@ onBeforeUnmount(() => {
               <SkyButton
                 small
                 rounded
-                @click="store.respondFollow(activity.profile_id, true)"
+                @click="respondToFollowRequest(activity.profile_id, true)"
                 >{{ t('accept') }}</SkyButton
               ><SkyButton
                 small
                 rounded
                 tonal
-                @click="store.respondFollow(activity.profile_id, false)"
+                @click="respondToFollowRequest(activity.profile_id, false)"
                 >{{ t('decline') }}</SkyButton
               >
             </div>
@@ -1584,11 +1646,11 @@ onBeforeUnmount(() => {
           </template>
           <template #title>
             <span class="ps-profile-navbar-title">
-              {{ currentProfile?.display_name ?? t('profile') }}
               <LockKeyhole
                 v-if="currentProfile?.private"
                 :aria-label="t('privateProfileSetting')"
               />
+              {{ currentProfile ? currentProfile.handle : t('profile') }}
             </span>
           </template>
           <template #right
@@ -1641,7 +1703,7 @@ onBeforeUnmount(() => {
                 {{ t('editProfile') }}
               </SkyButton>
               <SkyButton block rounded tonal @click="shareCurrentProfile">
-                <Share2 />{{ t('shareProfile') }}
+                {{ t('shareProfile') }}
               </SkyButton>
             </div>
             <div v-else class="ps-profile-buttons">
@@ -1668,26 +1730,42 @@ onBeforeUnmount(() => {
             ><span>{{ t('privateProfileBody') }}</span>
           </div>
           <template v-else>
-            <SkySegmented strong class="ps-profile-segments"
-              ><SkySegmentedButton
-                :active="profileSection === 'all'"
+            <div
+              class="ps-profile-filters"
+              role="tablist"
+              :aria-label="t('posts')"
+            >
+              <button
+                role="tab"
+                :aria-selected="profileSection === 'all'"
+                :class="{ active: profileSection === 'all' }"
                 :aria-label="t('allPosts')"
                 :title="t('allPosts')"
                 @click="profileSection = 'all'"
-                ><Grid3X3 /></SkySegmentedButton
-              ><SkySegmentedButton
-                :active="profileSection === 'videos'"
+              >
+                <Grid3X3 />
+              </button>
+              <button
+                role="tab"
+                :aria-selected="profileSection === 'videos'"
+                :class="{ active: profileSection === 'videos' }"
                 :aria-label="t('videos')"
                 :title="t('videos')"
                 @click="profileSection = 'videos'"
-                ><Video /></SkySegmentedButton
-              ><SkySegmentedButton
-                :active="profileSection === 'tagged'"
+              >
+                <Video />
+              </button>
+              <button
+                role="tab"
+                :aria-selected="profileSection === 'tagged'"
+                :class="{ active: profileSection === 'tagged' }"
                 :aria-label="t('taggedPosts')"
                 :title="t('taggedPosts')"
                 @click="profileSection = 'tagged'"
-                ><UserRound /></SkySegmentedButton
-            ></SkySegmented>
+              >
+                <UserRound />
+              </button>
+            </div>
             <div class="ps-grid">
               <button
                 v-for="post in profileGrid"
@@ -1719,7 +1797,7 @@ onBeforeUnmount(() => {
         <SkySegmented
           class="ps-navigation-segments"
           :active-index="tabIndex"
-          :item-count="5"
+          :item-count="4"
           :aria-label="t('name')"
           navigation
         >
@@ -1736,14 +1814,6 @@ onBeforeUnmount(() => {
             @click="showTab('explore')"
           >
             <Compass /><small>{{ t('explore') }}</small>
-          </SkySegmentedButton>
-          <SkySegmentedButton
-            :active="tab === 'create'"
-            class="ps-nav-button ps-create-tab"
-            @click="showTab('create')"
-          >
-            <span class="ps-create-icon"><Plus /></span
-            ><small>{{ t('create') }}</small>
           </SkySegmentedButton>
           <SkySegmentedButton
             :active="tab === 'activity'"
@@ -1998,12 +2068,27 @@ onBeforeUnmount(() => {
             type="textarea"
             :rows="6"
             outline
-          /><label class="ps-toggle-row"
-            ><span
-              ><strong>{{ t('privateProfileSetting') }}</strong
-              ><small>{{ t('privacyHint') }}</small></span
-            ><SkyToggle v-model="profileDraft.private"
-          /></label>
+          />
+          <section class="ps-privacy-control">
+            <div>
+              <strong>{{ t('profileVisibility') }}</strong>
+              <small>{{ t('privacyHint') }}</small>
+            </div>
+            <SkySegmented strong>
+              <SkySegmentedButton
+                :active="!profileDraft.private"
+                @click="profileDraft.private = false"
+              >
+                <UserRound />{{ t('publicProfile') }}
+              </SkySegmentedButton>
+              <SkySegmentedButton
+                :active="profileDraft.private"
+                @click="profileDraft.private = true"
+              >
+                <LockKeyhole />{{ t('privateProfileSetting') }}
+              </SkySegmentedButton>
+            </SkySegmented>
+          </section>
         </div>
       </section>
     </SkySheet>
@@ -2480,19 +2565,6 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ps-create-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 22px;
-  color: white;
-  border-radius: 8px;
-  background: var(--ps-accent);
-}
-.ps-create-icon svg {
-  width: 18px;
-  height: 18px;
-}
 .ps-badge-anchor {
   position: relative;
   display: inline-flex;
@@ -2515,7 +2587,7 @@ button {
   display: flex;
   gap: 14px;
   overflow-x: auto;
-  padding: 10px var(--sky-page-gutter) var(--sky-space-4);
+  padding: 4px var(--sky-page-gutter) var(--sky-space-4);
   scrollbar-width: none;
 }
 .ps-stories::-webkit-scrollbar,
@@ -2622,6 +2694,7 @@ button {
   grid-auto-rows: max-content;
   align-content: start;
   gap: var(--sky-space-3);
+  padding-top: 0;
 }
 .ps-feed > .ps-empty {
   min-height: 320px;
@@ -2859,9 +2932,23 @@ button {
   color: var(--sky-muted);
   font-size: 12px;
 }
-.ps-load-more,
-.ps-publish {
+.ps-load-more {
   margin: var(--sky-space-3) var(--sky-page-gutter);
+}
+.ps-publish-link {
+  min-width: 52px;
+  justify-content: flex-end;
+  color: var(--ps-accent) !important;
+  font-size: 13px;
+  font-weight: 750;
+}
+.ps-publish-link:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+.ps-publish-link :deep(.sky-spinner) {
+  width: 16px;
+  height: 16px;
 }
 
 .ps-explore {
@@ -3018,13 +3105,10 @@ button {
 }
 .ps-selection-preview {
   position: relative;
-  display: flex;
-  overflow-x: auto;
-  gap: 3px;
+  overflow: hidden;
   height: 240px;
   border-radius: calc(var(--sky-radius-control) + 10px);
   background: #050505;
-  scroll-snap-type: x mandatory;
 }
 .ps-selection-preview img,
 .ps-selection-preview video {
@@ -3034,10 +3118,10 @@ button {
 }
 .ps-selection-slide {
   position: relative;
-  flex: 0 0 100%;
-  scroll-snap-align: start;
+  width: 100%;
+  height: 100%;
 }
-.ps-selection-slide > button {
+.ps-selection-remove {
   position: absolute;
   top: 9px;
   right: 9px;
@@ -3049,6 +3133,66 @@ button {
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.65);
   color: white;
+}
+.ps-selection-arrow {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.62);
+  color: white;
+  transform: translateY(-50%);
+}
+.ps-selection-arrow:disabled {
+  opacity: 0.22;
+}
+.ps-selection-arrow--left {
+  left: 9px;
+}
+.ps-selection-arrow--right {
+  right: 9px;
+}
+.ps-selection-arrow svg {
+  width: 19px;
+  height: 19px;
+}
+.ps-selection-counter {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  left: 50%;
+  padding: 5px 8px;
+  border-radius: var(--sky-radius-pill);
+  background: rgba(0, 0, 0, 0.62);
+  color: white;
+  font-size: 10px;
+  font-weight: 750;
+  transform: translateX(-50%);
+}
+.ps-selection-dots {
+  position: absolute;
+  z-index: 2;
+  bottom: 12px;
+  left: 50%;
+  display: flex;
+  gap: 4px;
+  transform: translateX(-50%);
+}
+.ps-selection-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+}
+.ps-selection-dots span.active {
+  background: white;
+  transform: scale(1.25);
 }
 .ps-selection-preview > :deep(.sky-chip) {
   position: absolute;
@@ -3124,8 +3268,15 @@ button {
   line-height: 1.35;
 }
 .ps-request-actions {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  gap: 5px;
+}
+.ps-activity-row--request {
+  margin: 6px 0;
+  padding: 10px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-card);
+  background: var(--sky-surface);
 }
 .ps-activity > .ps-empty {
   min-height: 360px;
@@ -3174,8 +3325,7 @@ button {
 }
 .ps-profile-copy,
 .ps-profile-buttons,
-.ps-profile-owner-actions,
-.ps-profile-segments {
+.ps-profile-owner-actions {
   grid-column: 1 / -1;
 }
 .ps-profile-copy > strong {
@@ -3194,11 +3344,8 @@ button {
 }
 .ps-profile-owner-actions {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-}
-.ps-profile-owner-actions svg {
-  width: 16px;
-  height: 16px;
 }
 .ps-profile-buttons :deep(.sky-button) {
   min-width: 0;
@@ -3206,12 +3353,46 @@ button {
 .ps-profile-buttons svg {
   width: 17px;
 }
-.ps-profile-segments {
-  margin-bottom: var(--sky-space-3);
+.ps-profile-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 calc(var(--sky-page-gutter) * -1) 2px;
+  border-top: 1px solid var(--sky-hairline);
+  border-bottom: 1px solid var(--sky-hairline);
 }
-.ps-profile-segments svg {
-  width: 19px;
-  height: 19px;
+.ps-profile-filters button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sky-muted);
+}
+.ps-profile-filters button::after {
+  position: absolute;
+  right: 18%;
+  bottom: -1px;
+  left: 18%;
+  height: 2px;
+  border-radius: var(--sky-radius-pill);
+  background: transparent;
+  content: '';
+}
+.ps-profile-filters button.active {
+  color: var(--sky-text);
+}
+.ps-profile-filters button.active::after {
+  background: var(--sky-text);
+}
+.ps-profile-filters svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.8;
+}
+.ps-profile > .ps-grid {
+  margin-inline: calc(var(--sky-page-gutter) * -1);
 }
 .ps-private {
   min-height: 300px;
@@ -3492,6 +3673,31 @@ button {
 }
 .ps-edit-fields {
   padding: 0 var(--sky-page-gutter);
+}
+.ps-privacy-control {
+  display: grid;
+  gap: 10px;
+  padding: 13px 14px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-card);
+  background: var(--sky-surface);
+}
+.ps-privacy-control > div {
+  display: grid;
+  gap: 2px;
+}
+.ps-privacy-control small {
+  color: var(--sky-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.ps-privacy-control :deep(.sky-segmented-button) {
+  min-width: 0;
+  gap: 5px;
+}
+.ps-privacy-control :deep(svg) {
+  width: 15px;
+  height: 15px;
 }
 .ps-fields :deep(.sky-field),
 .ps-edit-fields :deep(.sky-field) {

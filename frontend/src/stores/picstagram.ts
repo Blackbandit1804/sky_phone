@@ -271,6 +271,8 @@ export const usePicstagramStore = defineStore('picstagram', {
             activity.kind !== 'follow_request' ||
             activity.profile_id !== profileId,
         )
+      if (response.success && accept && this.profile)
+        this.profile.followers += 1
       return response.success
     },
     async loadComments(id: string): Promise<boolean> {

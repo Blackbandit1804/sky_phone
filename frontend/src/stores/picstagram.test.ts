@@ -152,6 +152,21 @@ describe('Picstagram store', () => {
     expect(store.explore[0].like_count).toBe(2)
   })
 
+  it('accepts a private follow request from activity and updates followers', async () => {
+    vi.mocked(nuiCall).mockResolvedValue({ success: true })
+    const store = usePicstagramStore()
+    store.profile = { ...profile, followers: 4 }
+    store.activities = [{ ...activity, kind: 'follow_request' }]
+
+    expect(await store.respondFollow(profile.id, true)).toBe(true)
+    expect(store.activities).toEqual([])
+    expect(store.profile.followers).toBe(5)
+    expect(nuiCall).toHaveBeenCalledWith('picstagram:respond-follow', {
+      accept: true,
+      profileId: profile.id,
+    })
+  })
+
   it('removes a blocked profile from all local surfaces', async () => {
     vi.mocked(nuiCall).mockResolvedValue({ success: true })
     const store = usePicstagramStore()
