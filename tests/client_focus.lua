@@ -1,3 +1,25 @@
+local disabled_controls = {}
+local all_controls_disabled = {}
+local firing_disabled = false
+
+function DisableControlAction(group, control, disabled)
+    assert(group == 0 and disabled, "phone controls must be disabled in the primary input group")
+    disabled_controls[control] = true
+end
+
+function DisableAllControlActions(group)
+    all_controls_disabled[group] = true
+end
+
+function PlayerId()
+    return 7
+end
+
+function DisablePlayerFiring(player, disabled)
+    assert(player == 7, "movement filtering must target the local player")
+    firing_disabled = disabled
+end
+
 dofile("sky_phone/source/client/focus.lua")
 
 local function resolve(overrides)
@@ -7,6 +29,7 @@ local function resolve(overrides)
         call_focus = false,
         camera_active = false,
         camera_nui_focused = true,
+        cursor_disabled = false,
         is_open = false,
         notification_focus = false,
         payphone_focus = false,
@@ -19,25 +42,77 @@ local function resolve(overrides)
 end
 
 local idle = resolve()
-assert(not idle.focused and not idle.keep_input, "idle NUI must release focus and game input override")
+assert(
+    not idle.cursor and not idle.focused and not idle.keep_input,
+    "idle NUI must release focus and game input override"
+)
 
 local minimized_call = resolve()
 assert(not minimized_call.focused, "a replayed call without an attention claim must stay unfocused")
 
 local incoming_call = resolve({ call_focus = true })
-assert(incoming_call.focused and not incoming_call.keep_input, "incoming call attention must focus the NUI")
+assert(
+    incoming_call.cursor and incoming_call.focused and not incoming_call.keep_input,
+    "incoming call attention must focus the NUI"
+)
 
 local stationary_phone = resolve({ is_open = true })
 assert(
-    stationary_phone.focused and not stationary_phone.keep_input,
+    stationary_phone.cursor
+        and stationary_phone.focused
+        and stationary_phone.block_game
+        and not stationary_phone.keep_input,
     "an open phone must block game input when movement is disabled"
 )
 
 local movable_phone = resolve({ allow_movement = true, is_open = true })
 assert(
-    movable_phone.focused and movable_phone.keep_input,
-    "an open phone must keep game input when movement is enabled"
+    movable_phone.cursor
+        and movable_phone.focused
+        and movable_phone.keep_input
+        and movable_phone.game_input
+        and movable_phone.block_game,
+    "an open phone with the cursor active must block GTA hotkeys while keeping NUI input"
 )
+
+local cursor_disabled_phone = resolve({
+    allow_movement = true,
+    cursor_disabled = true,
+    is_open = true,
+})
+assert(
+    not cursor_disabled_phone.cursor
+        and cursor_disabled_phone.focused
+        and cursor_disabled_phone.keep_input
+        and cursor_disabled_phone.game_input
+        and not cursor_disabled_phone.block_game,
+    "toggling Alt must release the NUI cursor while preserving phone and GTA input"
+)
+
+SkyPhoneFocus.ApplyFocusedControls()
+for _, group in ipairs({ 0, 1, 2 }) do
+    assert(all_controls_disabled[group], ("focused phone cursor must block input group %d while typing"):format(group))
+end
+assert(firing_disabled, "focused phone cursor must block attacks while typing")
+
+all_controls_disabled = {}
+firing_disabled = false
+SkyPhoneFocus.ApplyGameInputControls(true)
+for _, control in ipairs({ 19, 24, 140, 141, 142, 257, 263, 264 }) do
+    assert(disabled_controls[control], ("phone control %d must remain disabled"):format(control))
+end
+for _, control in ipairs({ 1, 2, 3, 4, 5, 6 }) do
+    assert(disabled_controls[control], ("look control %d must be disabled while the phone cursor is active"):format(control))
+end
+assert(not disabled_controls[21] and not disabled_controls[22], "sprint and jump must stay enabled")
+assert(not disabled_controls[30] and not disabled_controls[31], "movement axes must stay enabled")
+assert(firing_disabled, "player attacks must remain disabled while the phone is open")
+
+disabled_controls = {}
+firing_disabled = false
+SkyPhoneFocus.ApplyGameInputControls(false)
+assert(not disabled_controls[1] and not disabled_controls[2], "Alt cursor toggle must restore camera look")
+assert(firing_disabled, "player attacks must remain disabled after the cursor is toggled off")
 
 local movable_notification = resolve({ allow_movement = true, notification_focus = true })
 assert(
@@ -51,8 +126,12 @@ local camera_game_input = resolve({
     is_open = true,
 })
 assert(
-    not camera_game_input.focused and camera_game_input.keep_input,
-    "unfocused camera must own game input over the open phone"
+    not camera_game_input.cursor
+        and camera_game_input.focused
+        and camera_game_input.keep_input
+        and camera_game_input.game_input
+        and not camera_game_input.block_look,
+    "camera movement must keep keyboard focus and GTA movement without retaining the NUI cursor"
 )
 
 local focused_camera = resolve({
@@ -62,8 +141,11 @@ local focused_camera = resolve({
     is_open = true,
 })
 assert(
-    focused_camera.focused and not focused_camera.keep_input,
-    "focused camera must override movement configuration until Space releases NUI focus"
+    focused_camera.cursor
+        and focused_camera.focused
+        and not focused_camera.keep_input
+        and not focused_camera.game_input,
+    "focused camera must override movement configuration until Space enables passthrough"
 )
 
 local camera_interrupted_by_call = resolve({
@@ -73,8 +155,10 @@ local camera_interrupted_by_call = resolve({
     is_open = true,
 })
 assert(
-    camera_interrupted_by_call.focused and not camera_interrupted_by_call.keep_input,
-    "incoming call attention must override unfocused camera input"
+    camera_interrupted_by_call.cursor
+        and camera_interrupted_by_call.focused
+        and not camera_interrupted_by_call.keep_input,
+    "incoming call attention must override camera passthrough input"
 )
 
 local camera_after_connected_call = resolve({
@@ -84,8 +168,10 @@ local camera_after_connected_call = resolve({
     is_open = true,
 })
 assert(
-    not camera_after_connected_call.focused and camera_after_connected_call.keep_input,
-    "connected call without an attention claim must restore unfocused camera input"
+    not camera_after_connected_call.cursor
+        and camera_after_connected_call.focused
+        and camera_after_connected_call.keep_input,
+    "connected call without an attention claim must restore camera movement input"
 )
 
 local payphone_closed_behind_phone = resolve({ is_open = true, payphone_focus = false })

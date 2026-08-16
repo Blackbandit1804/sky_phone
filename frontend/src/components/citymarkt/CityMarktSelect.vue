@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Check, ChevronDown } from 'lucide-vue-next'
-import { kGlass } from 'konsta/vue'
+import { SkyGlass as kGlass } from '@/ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 type SelectOption = {

@@ -7,9 +7,12 @@ import type {
   MailComposeDraft,
   MailCounts,
   MailDraft,
-  MailFolder,
+  MailFolderKey,
   MailListItem,
+  MailListFilters,
   MailListResponse,
+  MailMailbox,
+  MailMailboxesResponse,
   MailMessage,
 } from '@/types/mail'
 import { nuiCall } from '@/utils/nui'
@@ -21,15 +24,23 @@ const emptyCounts = (): MailCounts => ({
   trash: 0,
   unread: 0,
 })
+const emptyListFilters = (): MailListFilters => ({
+  address: 'all',
+  direction: 'all',
+  read: 'all',
+  today: false,
+})
 
 export const useMailStore = defineStore('mail', () => {
   const account = useAccountStore()
   const accountEmail = ref('')
   const counts = ref<MailCounts>(emptyCounts())
-  const folder = ref<MailFolder>('inbox')
+  const folder = ref<MailFolderKey>('inbox')
   const hasMore = ref(false)
   const items = ref<MailListItem[]>([])
   const loading = ref(false)
+  const listFilters = ref<MailListFilters>(emptyListFilters())
+  const mailboxes = ref<MailMailbox[]>([])
   const search = ref('')
   let authenticationGeneration = 0
   let folderRequestGeneration = 0
@@ -41,6 +52,8 @@ export const useMailStore = defineStore('mail', () => {
     folderRequestGeneration += 1
     accountEmail.value = ''
     counts.value = emptyCounts()
+    listFilters.value = emptyListFilters()
+    mailboxes.value = []
     items.value = []
     hasMore.value = false
     folder.value = 'inbox'
@@ -57,7 +70,7 @@ export const useMailStore = defineStore('mail', () => {
     sessionGeneration += 1
     folderRequestGeneration += 1
     accountEmail.value = email
-    await refreshCounts()
+    await Promise.all([refreshCounts(), loadMailboxes()])
   }
 
   async function login(email: string, password: string) {
@@ -106,7 +119,7 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function loadFolder(
-    nextFolder: MailFolder,
+    nextFolder: MailFolderKey,
     nextSearch = '',
     append = false,
   ): Promise<boolean> {
@@ -114,10 +127,16 @@ export const useMailStore = defineStore('mail', () => {
     const session = sessionGeneration
     loading.value = true
     const offset = append ? items.value.length : 0
+    const hasFilters =
+      listFilters.value.address !== 'all' ||
+      listFilters.value.direction !== 'all' ||
+      listFilters.value.read !== 'all' ||
+      listFilters.value.today
     const response = await nuiCall<MailListResponse>('mail:list', {
       folder: nextFolder,
       offset,
       search: nextSearch,
+      ...(hasFilters ? { filters: { ...listFilters.value } } : {}),
     })
     if (generation === folderRequestGeneration) loading.value = false
     if (
@@ -149,6 +168,60 @@ export const useMailStore = defineStore('mail', () => {
     ) {
       counts.value = response.data
     }
+  }
+
+  async function loadMailboxes(): Promise<boolean> {
+    const email = accountEmail.value
+    const session = sessionGeneration
+    const response = await nuiCall<MailMailboxesResponse>('mail:mailboxes')
+    if (
+      session !== sessionGeneration ||
+      email !== accountEmail.value ||
+      !response.success ||
+      !response.data
+    ) {
+      return false
+    }
+
+    mailboxes.value = response.data.mailboxes
+    return true
+  }
+
+  async function createMailbox(name: string) {
+    const session = sessionGeneration
+    const response = await nuiCall<MailMailbox>('mail:create-mailbox', { name })
+    if (response.success && session === sessionGeneration) {
+      await loadMailboxes()
+    }
+    return response
+  }
+
+  async function deleteMailbox(id: number): Promise<boolean> {
+    const session = sessionGeneration
+    const response = await nuiCall('mail:delete-mailbox', { id })
+    if (response.success && session === sessionGeneration) {
+      await Promise.all([refreshCounts(), loadMailboxes()])
+    }
+    return response.success
+  }
+
+  async function moveEntry(
+    id: number,
+    mailboxId: number | null,
+  ): Promise<boolean> {
+    const session = sessionGeneration
+    const response = await nuiCall('mail:move', {
+      id,
+      mailboxId: mailboxId ?? 0,
+    })
+    if (response.success && session === sessionGeneration) {
+      await Promise.all([
+        refreshCounts(),
+        loadMailboxes(),
+        loadFolder(folder.value, search.value),
+      ])
+    }
+    return response.success
   }
 
   async function openMessage(id: number): Promise<MailMessage | null> {
@@ -236,16 +309,22 @@ export const useMailStore = defineStore('mail', () => {
     accountEmail,
     bootstrap,
     counts,
+    createMailbox,
     deleteDraft,
+    deleteMailbox,
     deleteMany,
     emptyTrash,
     folder,
     hasMore,
     items,
     loadFolder,
+    loadMailboxes,
+    listFilters,
     loading,
     login,
     logout,
+    mailboxes,
+    moveEntry,
     mutateEntry,
     openDraft,
     openMessage,
@@ -254,6 +333,9 @@ export const useMailStore = defineStore('mail', () => {
     saveDraft,
     search,
     send,
+    setListFilters(nextFilters: MailListFilters) {
+      listFilters.value = { ...nextFilters }
+    },
     setCounts(nextCounts: MailCounts) {
       counts.value = nextCounts
     },

@@ -38,6 +38,16 @@ function mergeArticles(
   return [...merged.values()]
 }
 
+function sortNewestFirst(
+  items: WeazelNewsArticleSummary[],
+): WeazelNewsArticleSummary[] {
+  return [...items].sort(
+    (left, right) =>
+      (right.publishedAt ?? right.updatedAt ?? right.createdAt) -
+      (left.publishedAt ?? left.updatedAt ?? left.createdAt),
+  )
+}
+
 export const useWeazelNewsStore = defineStore('weazel-news', {
   state: () => ({
     context: null as WeazelNewsContext | null,
@@ -106,9 +116,11 @@ export const useWeazelNewsStore = defineStore('weazel-news', {
         this.error = this.publicError
         return false
       }
-      this.publicItems = append
-        ? mergeArticles(this.publicItems, response.data.items)
-        : response.data.items
+      this.publicItems = sortNewestFirst(
+        append
+          ? mergeArticles(this.publicItems, response.data.items)
+          : response.data.items,
+      )
       this.publicHasMore = response.data.hasMore
       this.publicError = ''
       this.error = ''
@@ -202,10 +214,10 @@ export const useWeazelNewsStore = defineStore('weazel-news', {
         ...this.managedItems.filter((item) => item.id !== article.id),
       ]
       if (article.status === 'published') {
-        this.publicItems = [
+        this.publicItems = sortNewestFirst([
           article,
           ...this.publicItems.filter((item) => item.id !== article.id),
-        ]
+        ])
       }
       this.error = ''
       return article
@@ -240,13 +252,10 @@ export const useWeazelNewsStore = defineStore('weazel-news', {
       this.managedItems = replaceArticle(this.managedItems, canonical)
       this.publicItems =
         canonical.status === 'published'
-          ? [
+          ? sortNewestFirst([
               canonical,
               ...this.publicItems.filter((item) => item.id !== canonical.id),
-            ].sort(
-              (left, right) =>
-                (right.publishedAt ?? 0) - (left.publishedAt ?? 0),
-            )
+            ])
           : this.publicItems.filter((item) => item.id !== canonical.id)
       this.error = ''
       return canonical

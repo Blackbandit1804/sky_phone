@@ -9,10 +9,13 @@ const source = readFileSync(
 )
 
 describe('AppStoreAction contract', () => {
-  it('uses an Apple-style cloud download icon instead of GET text', () => {
-    expect(source).toContain("import { CloudDownload } from 'lucide-vue-next'")
+  it('uses localized text for the download button instead of an icon', () => {
     expect(source).toContain('v-if="action === \'get\'"')
-    expect(source).not.toContain("phone.t('Apps.appStore.get')")
+    expect(source).toContain("phone.t('Apps.appStore.get')")
+    expect(source).not.toContain('CloudDownload')
+    expect(source).toContain(
+      ":class=\"{ 'app-store-action--icon': action === 'installing' }\"",
+    )
   })
 
   it('shows a timed circular installation progress with a center stop mark', () => {

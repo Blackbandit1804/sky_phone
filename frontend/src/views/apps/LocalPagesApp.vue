@@ -21,15 +21,15 @@ import {
   X,
 } from 'lucide-vue-next'
 import {
-  kGlass,
-  kIcon,
-  kNavbar,
-  kPage,
-  kSearchbar,
-  kTabbar,
-  kTabbarLink,
-  kToolbarPane,
-} from 'konsta/vue'
+  SkyGlass,
+  SkyIcon,
+  SkyNavbar,
+  SkyAppPage,
+  SkySearchbar,
+  SkyTabBar,
+  SkyTabButton,
+  SkyToolbarPane,
+} from '@/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -731,17 +731,16 @@ onMounted(async () => {
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     component="main"
     class="pages pb-safe-24"
     :class="{ 'pages--light': !phone.isDarkMode }"
-    :colors="{ bgIos: 'bg-transparent' }"
   >
     <template v-if="screen === 'main'">
       <div v-if="!onboardingReady" class="pages__gate-loading">
         {{ phone.t('Common.loading') }}
       </div>
-      <k-navbar
+      <sky-navbar
         v-if="onboardingReady && isAuthenticated && pages.profile?.exists"
         class="pages-navbar"
         :subtitle="
@@ -764,7 +763,7 @@ onMounted(async () => {
         }"
       >
         <template v-if="tab === 'feed'">
-          <k-glass class="pages-hero-glass">
+          <sky-glass class="pages-hero-glass">
             <div class="pages__hero">
               <div>
                 <small>{{ phone.t('Apps.localPages.cityPulse') }}</small
@@ -773,8 +772,8 @@ onMounted(async () => {
               </div>
               <MapPin :size="40" />
             </div>
-          </k-glass>
-          <k-searchbar
+          </sky-glass>
+          <sky-searchbar
             component="form"
             class="pages-searchbar"
             :value="search"
@@ -859,7 +858,7 @@ onMounted(async () => {
                     phone.t('Apps.localPages.profilePhotoHint')
                   }}</small>
                   <div class="pages__profile-photo-actions">
-                    <k-glass
+                    <sky-glass
                       ><button
                         type="button"
                         @click="openProfileMedia('camera')"
@@ -867,9 +866,9 @@ onMounted(async () => {
                         <Camera :size="15" />{{
                           phone.t('Apps.localPages.camera')
                         }}
-                      </button></k-glass
+                      </button></sky-glass
                     >
-                    <k-glass
+                    <sky-glass
                       ><button
                         type="button"
                         @click="openProfileMedia('photos')"
@@ -877,7 +876,7 @@ onMounted(async () => {
                         <Images :size="15" />{{
                           phone.t('Apps.localPages.gallery')
                         }}
-                      </button></k-glass
+                      </button></sky-glass
                     >
                   </div>
                   <button
@@ -892,7 +891,7 @@ onMounted(async () => {
               </div>
               <label>
                 {{ phone.t('Apps.localPages.profileEmail') }}
-                <k-glass
+                <sky-glass
                   class="pages__profile-field pages__profile-field--readonly"
                 >
                   <Mail :size="16" />
@@ -900,12 +899,12 @@ onMounted(async () => {
                     :value="pages.profile?.email || account.email"
                     readonly
                   />
-                </k-glass>
+                </sky-glass>
               </label>
               <label>
                 {{ phone.t('Apps.localPages.profileHandle') }}
                 <span>{{ profileDraft.handle.trim().length }}/24</span>
-                <k-glass class="pages__profile-field">
+                <sky-glass class="pages__profile-field">
                   <b>@</b>
                   <input
                     v-model="profileDraft.handle"
@@ -915,7 +914,7 @@ onMounted(async () => {
                     "
                     autocapitalize="none"
                   />
-                </k-glass>
+                </sky-glass>
                 <small>{{
                   phone.t('Apps.localPages.profileHandleHint')
                 }}</small>
@@ -923,7 +922,9 @@ onMounted(async () => {
               <label>
                 {{ phone.t('Apps.localPages.profileBio') }}
                 <span>{{ profileDraft.bio.trim().length }}/160</span>
-                <k-glass class="pages__profile-field pages__profile-field--bio">
+                <sky-glass
+                  class="pages__profile-field pages__profile-field--bio"
+                >
                   <textarea
                     v-model="profileDraft.bio"
                     maxlength="160"
@@ -931,17 +932,17 @@ onMounted(async () => {
                       phone.t('Apps.localPages.profileBioPlaceholder')
                     "
                   />
-                </k-glass>
+                </sky-glass>
               </label>
               <div class="pages__profile-actions">
-                <k-glass
+                <sky-glass
                   v-if="pages.profile?.exists"
                   class="pages__profile-action"
                   ><button type="button" @click="cancelProfileEdit">
                     {{ phone.t('Apps.localPages.profileCancel') }}
-                  </button></k-glass
+                  </button></sky-glass
                 >
-                <k-glass
+                <sky-glass
                   class="pages__profile-action pages__profile-action--save"
                   ><button
                     type="button"
@@ -949,12 +950,12 @@ onMounted(async () => {
                     @click="saveProfile"
                   >
                     {{ phone.t('Apps.localPages.profileSave') }}
-                  </button></k-glass
+                  </button></sky-glass
                 >
               </div>
             </section>
             <template v-else>
-              <k-glass class="pages-profile-glass">
+              <sky-glass class="pages-profile-glass">
                 <div class="pages__profile">
                   <span
                     ><img
@@ -983,8 +984,8 @@ onMounted(async () => {
                     <Pencil :size="15" />
                   </button>
                 </div>
-              </k-glass>
-              <k-glass class="pages-segmented-glass">
+              </sky-glass>
+              <sky-glass class="pages-segmented-glass">
                 <div class="pages__segmented">
                   <button
                     :class="{ active: profileMode === 'own' }"
@@ -998,9 +999,9 @@ onMounted(async () => {
                     {{ phone.t('Apps.localPages.saved') }}
                   </button>
                 </div>
-              </k-glass>
+              </sky-glass>
             </template>
-            <k-glass
+            <sky-glass
               v-if="!profileEditing && pages.profile?.exists"
               class="pages__logout-glass"
             >
@@ -1012,7 +1013,7 @@ onMounted(async () => {
                 <LogOut :size="16" />
                 {{ phone.t('Common.signOut') }}
               </button>
-            </k-glass>
+            </sky-glass>
           </template>
         </template>
 
@@ -1026,7 +1027,7 @@ onMounted(async () => {
           "
           class="pages__feed"
         >
-          <k-glass
+          <sky-glass
             v-for="post in displayedPosts"
             :key="post.id"
             class="pages-post-glass"
@@ -1112,7 +1113,7 @@ onMounted(async () => {
                 </button>
               </div>
             </article>
-          </k-glass>
+          </sky-glass>
           <div v-if="!displayedPosts.length" class="pages__empty">
             <Compass :size="38" /><strong>{{
               phone.t('Apps.localPages.noPosts')
@@ -1122,7 +1123,7 @@ onMounted(async () => {
         </div>
       </section>
 
-      <k-tabbar
+      <sky-tab-bar
         v-if="isAuthenticated && pages.profile?.exists"
         component="nav"
         icons
@@ -1131,8 +1132,8 @@ onMounted(async () => {
         inner-class="!w-full !max-w-none !gap-0 !px-1"
         :aria-label="phone.t('Apps.localPages.name')"
       >
-        <k-toolbar-pane class="pages__tab-pane">
-          <k-tabbar-link
+        <sky-toolbar-pane class="pages__tab-pane">
+          <sky-tab-button
             component="button"
             :active="tab === 'feed'"
             :link-props="{ class: 'pages-tab-button', type: 'button' }"
@@ -1144,10 +1145,10 @@ onMounted(async () => {
               }}</span></template
             >
             <template #icon
-              ><k-icon><Compass :size="20" /></k-icon
+              ><sky-icon><Compass :size="20" /></sky-icon
             ></template>
-          </k-tabbar-link>
-          <k-tabbar-link
+          </sky-tab-button>
+          <sky-tab-button
             component="button"
             :link-props="{ class: 'pages-tab-button', type: 'button' }"
             @click="selectTab('create')"
@@ -1159,10 +1160,10 @@ onMounted(async () => {
             >
             <template #icon
               ><span class="pages__tab-icon pages__tab-icon--create"
-                ><k-icon><Plus :size="21" /></k-icon></span
+                ><sky-icon><Plus :size="21" /></sky-icon></span
             ></template>
-          </k-tabbar-link>
-          <k-tabbar-link
+          </sky-tab-button>
+          <sky-tab-button
             component="button"
             :active="tab === 'profile'"
             :link-props="{ class: 'pages-tab-button', type: 'button' }"
@@ -1174,25 +1175,25 @@ onMounted(async () => {
               }}</span></template
             >
             <template #icon
-              ><k-icon><UserRound :size="20" /></k-icon
+              ><sky-icon><UserRound :size="20" /></sky-icon
             ></template>
-          </k-tabbar-link>
-        </k-toolbar-pane>
-      </k-tabbar>
+          </sky-tab-button>
+        </sky-toolbar-pane>
+      </sky-tab-bar>
     </template>
 
     <section v-else-if="screen === 'detail' && selected" class="pages__detail">
       <header>
-        <k-glass
+        <sky-glass
           component="button"
           type="button"
           class="pages__detail-control"
           @click="screen = 'main'"
         >
           <ArrowLeft :size="20" />
-        </k-glass>
+        </sky-glass>
         <strong>{{ phone.t('Apps.localPages.post') }}</strong>
-        <k-glass
+        <sky-glass
           v-if="selected.is_owner"
           component="button"
           type="button"
@@ -1200,8 +1201,8 @@ onMounted(async () => {
           @click="removePost"
         >
           <Trash2 :size="18" />
-        </k-glass>
-        <k-glass
+        </sky-glass>
+        <sky-glass
           v-else
           component="button"
           type="button"
@@ -1212,7 +1213,7 @@ onMounted(async () => {
             :size="18"
             :fill="selected.is_saved ? 'currentColor' : 'none'"
           />
-        </k-glass>
+        </sky-glass>
       </header>
       <div class="pages__detail-scroll">
         <div
@@ -1272,7 +1273,7 @@ onMounted(async () => {
           </button>
         </article>
       </div>
-      <k-glass class="pages__detail-actions">
+      <sky-glass class="pages__detail-actions">
         <button
           type="button"
           :class="{ active: selected.is_liked }"
@@ -1292,7 +1293,7 @@ onMounted(async () => {
             :fill="selected.is_saved ? 'currentColor' : 'none'"
           />{{ phone.t('Apps.localPages.save') }}
         </button>
-      </k-glass>
+      </sky-glass>
     </section>
 
     <section
@@ -1300,7 +1301,7 @@ onMounted(async () => {
       class="pages__compose"
       :class="{ 'pages__compose--citymarkt': cityMarktListing }"
     >
-      <k-navbar
+      <sky-navbar
         class="pages-create-navbar"
         center-title
         left-class="pages-create-action pages-create-action--close !min-w-[58px] !h-11 !p-0 !rounded-full"
@@ -1340,9 +1341,9 @@ onMounted(async () => {
             {{ phone.t('Apps.localPages.publish') }}
           </button>
         </template>
-      </k-navbar>
+      </sky-navbar>
       <div class="pages__compose-scroll">
-        <k-glass v-if="cityMarktListing" class="pages__citymarkt-source">
+        <sky-glass v-if="cityMarktListing" class="pages__citymarkt-source">
           <Store :size="19" />
           <span
             ><strong>{{
@@ -1352,7 +1353,7 @@ onMounted(async () => {
               phone.t('Apps.localPages.cityMarktComposeHint')
             }}</small></span
           >
-        </k-glass>
+        </sky-glass>
         <label
           >{{ phone.t('Apps.localPages.title') }}
           <span :class="{ valid: draft.title.trim().length >= 5 }"
@@ -1360,13 +1361,13 @@ onMounted(async () => {
             {{
               phone.t('Apps.citymarkt.minimumCharacters', { minimum: '5' })
             }}</span
-          ><k-glass class="pages__field-glass"
+          ><sky-glass class="pages__field-glass"
             ><input
               v-model="draft.title"
               maxlength="80"
               :placeholder="
                 phone.t('Apps.localPages.titlePlaceholder')
-              " /></k-glass
+              " /></sky-glass
         ></label>
         <label
           >{{ phone.t('Apps.localPages.body') }}
@@ -1375,12 +1376,12 @@ onMounted(async () => {
             {{
               phone.t('Apps.citymarkt.minimumCharacters', { minimum: '10' })
             }}</span
-          ><k-glass class="pages__field-glass pages__field-glass--textarea">
+          ><sky-glass class="pages__field-glass pages__field-glass--textarea">
             <textarea
               v-model="draft.body"
               maxlength="1500"
               :placeholder="phone.t('Apps.localPages.bodyPlaceholder')"
-            /></k-glass
+            /></sky-glass
         ></label>
         <div class="pages__form-row">
           <label
@@ -1412,19 +1413,19 @@ onMounted(async () => {
             }}
           </p>
           <div class="pages__photo-actions">
-            <k-glass
+            <sky-glass
               ><button type="button" @click="openMediaApp('photos')">
                 <span><Images :size="20" /></span>
                 <strong>{{ phone.t('Apps.citymarkt.chooseGallery') }}</strong>
                 <small>{{ phone.t('Apps.citymarkt.chooseGalleryBody') }}</small>
-              </button></k-glass
+              </button></sky-glass
             >
-            <k-glass
+            <sky-glass
               ><button type="button" @click="openMediaApp('camera')">
                 <span><Camera :size="20" /></span>
                 <strong>{{ phone.t('Apps.citymarkt.takePhotos') }}</strong>
                 <small>{{ phone.t('Apps.citymarkt.takePhotosBody') }}</small>
-              </button></k-glass
+              </button></sky-glass
             >
           </div>
           <div class="pages__selected-heading">
@@ -1471,7 +1472,7 @@ onMounted(async () => {
         {{ feedback }}
       </div></Transition
     >
-  </k-page>
+  </sky-app-page>
 </template>
 
 <style scoped>
@@ -2701,7 +2702,7 @@ onMounted(async () => {
   background: #fbfbf6 !important;
 }
 .pages-navbar {
-  --k-safe-area-top: 46px;
+  --sky-safe-area-top: 46px;
   position: absolute;
   z-index: 5;
   top: 0;
@@ -2819,7 +2820,7 @@ onMounted(async () => {
   padding-left: 3px !important;
 }
 .pages-create-navbar {
-  --k-safe-area-top: 46px;
+  --sky-safe-area-top: 46px;
   position: absolute;
   z-index: 5;
   top: 0;

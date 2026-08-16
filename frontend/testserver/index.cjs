@@ -85,6 +85,10 @@ function memoWaveform(phase = 0) {
 
 let authenticated = true
 let draft = null
+let mockMailboxes = [
+  { count: 0, id: 7, name: 'Projects', sort_order: 0 },
+]
+let nextMockMailboxId = 8
 const radioData = {
   badge: '231',
   badgeEnabled: true,
@@ -1114,7 +1118,9 @@ let skyRideAvailableRequests = [
     createdAt: unixTime(-90),
     currency: '$',
     destination: skyRideQuickLocations[1],
+    distanceMeters: 4200,
     driver: null,
+    durationSeconds: 480,
     id: 'skyride-request-demo',
     passenger: {
       avatarUrl:
@@ -1136,7 +1142,9 @@ let skyRideHistory = [
     createdAt: unixTime(-22 * 60 * 60),
     currency: '$',
     destination: skyRideQuickLocations[3],
+    distanceMeters: 4800,
     driver: skyRideDriver,
+    durationSeconds: 620,
     finalPrice: 31,
     id: 'skyride-history-1',
     passenger: skyRidePassenger,
@@ -1150,7 +1158,9 @@ let skyRideHistory = [
     createdAt: unixTime(-3 * 24 * 60 * 60),
     currency: '$',
     destination: skyRideQuickLocations[2],
+    distanceMeters: 18700,
     driver: skyRideDriver,
+    durationSeconds: 1380,
     finalPrice: 68,
     id: 'skyride-history-2',
     passenger: skyRidePassenger,
@@ -2800,6 +2810,7 @@ mockMedia.push(
   })),
 )
 const weazelNewsCategoryIds = ['official', 'events', 'jobs', 'news', 'business']
+const weazelNewsMaxImages = 6
 let weazelNewsSequence = 8
 let weazelNewsArticles = [
   {
@@ -2809,8 +2820,7 @@ let weazelNewsArticles = [
     excerpt:
       'Temporary navigation restrictions are in effect around the southern harbor while crews inspect the main shipping channel.',
     category: 'official',
-    imageUrl: 'https://picsum.photos/seed/weazel-harbor/1200/760',
-    imageMediaId: null,
+    images: weazelNewsImages([15, 13, 20]),
     authorName: 'Avery Brooks',
     createdAt: Date.now() - 35 * 60 * 1000,
     updatedAt: Date.now() - 28 * 60 * 1000,
@@ -2825,8 +2835,7 @@ let weazelNewsArticles = [
     excerpt:
       'Food stands, live performers, and classic cars are coming to Vinewood Boulevard this weekend.',
     category: 'events',
-    imageUrl: 'https://picsum.photos/seed/weazel-vinewood/1200/760',
-    imageMediaId: null,
+    images: weazelNewsImages([11]),
     authorName: 'Maya Chen',
     createdAt: Date.now() - 2 * 60 * 60 * 1000,
     updatedAt: Date.now() - 2 * 60 * 60 * 1000,
@@ -2841,8 +2850,7 @@ let weazelNewsArticles = [
     excerpt:
       'City departments are recruiting new staff across emergency response, transport, and public administration.',
     category: 'jobs',
-    imageUrl: null,
-    imageMediaId: null,
+    images: [],
     authorName: 'Jordan Hayes',
     createdAt: Date.now() - 4 * 60 * 60 * 1000,
     updatedAt: Date.now() - 3 * 60 * 60 * 1000,
@@ -2857,8 +2865,7 @@ let weazelNewsArticles = [
     excerpt:
       'Every lane through Del Perro has reopened after crews cleared an earlier road obstruction.',
     category: 'news',
-    imageUrl: 'https://picsum.photos/seed/weazel-del-perro/1200/760',
-    imageMediaId: null,
+    images: weazelNewsImages([9]),
     authorName: 'Avery Brooks',
     createdAt: Date.now() - 7 * 60 * 60 * 1000,
     updatedAt: Date.now() - 6 * 60 * 60 * 1000,
@@ -2873,8 +2880,7 @@ let weazelNewsArticles = [
     excerpt:
       'Independent downtown retailers are seeing stronger evening trade during a trial of extended opening hours.',
     category: 'business',
-    imageUrl: 'https://picsum.photos/seed/weazel-downtown/1200/760',
-    imageMediaId: null,
+    images: weazelNewsImages([5]),
     authorName: 'Maya Chen',
     createdAt: Date.now() - 26 * 60 * 60 * 1000,
     updatedAt: Date.now() - 25 * 60 * 60 * 1000,
@@ -2889,8 +2895,7 @@ let weazelNewsArticles = [
     excerpt:
       'Local racing teams are preparing vehicles and reviewing safety procedures for the next sanctioned season.',
     category: 'events',
-    imageUrl: 'https://picsum.photos/seed/sky-phone-3/800/600',
-    imageMediaId: 3,
+    images: weazelNewsImages([3, 7]),
     authorName: 'Jordan Hayes',
     createdAt: Date.now() - 55 * 60 * 1000,
     updatedAt: Date.now() - 12 * 60 * 1000,
@@ -2905,8 +2910,7 @@ let weazelNewsArticles = [
     excerpt:
       'The editorial desk is collecting confirmed service notices and transport updates for Monday morning.',
     category: 'official',
-    imageUrl: null,
-    imageMediaId: null,
+    images: [],
     authorName: 'Jordan Hayes',
     createdAt: Date.now() - 18 * 60 * 1000,
     updatedAt: Date.now() - 8 * 60 * 1000,
@@ -2914,7 +2918,7 @@ let weazelNewsArticles = [
     status: 'draft',
     revision: 2,
   },
-]
+].map(syncWeazelNewsArticleImages)
 
 function weazelNewsExcerpt(body) {
   const normalized = body.replace(/\s+/g, ' ').trim()
@@ -2929,6 +2933,24 @@ function weazelNewsImageUrl(imageMediaId) {
     (item) => item.id === imageMediaId && item.mediaType === 'photo',
   )
   return media?.url ?? null
+}
+
+function weazelNewsImages(imageMediaIds) {
+  return imageMediaIds.map((mediaId) => ({
+    mediaId,
+    url: weazelNewsImageUrl(mediaId),
+  }))
+}
+
+function syncWeazelNewsArticleImages(article) {
+  const images = Array.isArray(article.images) ? article.images : []
+  const firstImage = images[0] ?? null
+  return {
+    ...article,
+    imageMediaId: firstImage?.mediaId ?? null,
+    imageUrl: firstImage?.url ?? null,
+    images,
+  }
 }
 
 function validateWeazelNewsDraft(data) {
@@ -2948,24 +2970,45 @@ function validateWeazelNewsDraft(data) {
     return { error: status === 'draft' ? 'invalid_draft' : 'invalid_publish' }
   }
 
-  let imageMediaId = null
-  if (data.imageMediaId !== null && data.imageMediaId !== undefined) {
-    imageMediaId = Number(data.imageMediaId)
+  const requestedImageMediaIds =
+    data.imageMediaIds === undefined
+      ? data.imageMediaId === null || data.imageMediaId === undefined
+        ? []
+        : [data.imageMediaId]
+      : data.imageMediaIds
+  if (
+    !Array.isArray(requestedImageMediaIds) ||
+    requestedImageMediaIds.length > weazelNewsMaxImages
+  ) {
+    return { error: 'invalid_attachment' }
+  }
+
+  const imageMediaIds = []
+  const seenImageMediaIds = new Set()
+  for (const requestedImageMediaId of requestedImageMediaIds) {
+    const imageMediaId = Number(requestedImageMediaId)
     if (
       !Number.isSafeInteger(imageMediaId) ||
+      seenImageMediaIds.has(imageMediaId) ||
       !weazelNewsImageUrl(imageMediaId)
     ) {
       return { error: 'invalid_attachment' }
     }
+    seenImageMediaIds.add(imageMediaId)
+    imageMediaIds.push(imageMediaId)
   }
+
+  const images = weazelNewsImages(imageMediaIds)
+  const firstImage = images[0] ?? null
 
   return {
     article: {
       body,
       category: data.category,
       excerpt: weazelNewsExcerpt(body),
-      imageMediaId,
-      imageUrl: weazelNewsImageUrl(imageMediaId),
+      imageMediaId: firstImage?.mediaId ?? null,
+      imageUrl: firstImage?.url ?? null,
+      images,
       status,
       title,
     },
@@ -3300,15 +3343,31 @@ function counts() {
   return {
     drafts: draft ? 1 : 0,
     inbox: messages.filter(
-      (item) => item.folder === 'inbox' && !item.trashed_at,
+      (item) =>
+        item.folder === 'inbox' && !item.mailbox_id && !item.trashed_at,
     ).length,
-    sent: messages.filter((item) => item.folder === 'sent' && !item.trashed_at)
-      .length,
+    sent: messages.filter(
+      (item) => item.folder === 'sent' && !item.mailbox_id && !item.trashed_at,
+    ).length,
     trash: messages.filter((item) => item.trashed_at).length,
     unread: messages.filter(
-      (item) => item.folder === 'inbox' && !item.trashed_at && !item.is_read,
+      (item) =>
+        item.folder === 'inbox' &&
+        !item.mailbox_id &&
+        !item.trashed_at &&
+        !item.is_read,
     ).length,
   }
+}
+
+function mailboxViews() {
+  return mockMailboxes.map((mailbox) => ({
+    ...mailbox,
+    count: messages.filter(
+      (message) =>
+        message.mailbox_id === mailbox.id && !message.trashed_at,
+    ).length,
+  }))
 }
 
 let flareProfile = {
@@ -3384,6 +3443,11 @@ let flareSuggestions = [
     photoUrls: [],
   },
 ]
+const flareSuggestionFixtures = flareSuggestions.map((profile) => ({
+  ...profile,
+  interests: [...profile.interests],
+  photoUrls: [...profile.photoUrls],
+}))
 const flareMatches = [
   {
     id: 'flare-match-demo-0000-0000-0000000001',
@@ -3449,12 +3513,22 @@ const flareMessages = {
 }
 
 function flareBootstrap() {
+  const hasProfile = Boolean(flareProfile)
   return {
     profile: flareProfile,
-    suggestions: flareProfile.discoverable ? flareSuggestions : [],
-    likes: flareLikes,
-    matches: flareMatches,
+    suggestions:
+      hasProfile && flareProfile.discoverable ? flareSuggestions : [],
+    likes: hasProfile ? flareLikes : [],
+    matches: hasProfile ? flareMatches : [],
   }
+}
+
+function freshFlareSuggestions() {
+  return flareSuggestionFixtures.map((profile) => ({
+    ...profile,
+    interests: [...profile.interests],
+    photoUrls: [...profile.photoUrls],
+  }))
 }
 
 const companyCategories = [
@@ -4822,6 +4896,7 @@ app.post('/api/:endpoint', (request, response) => {
         ...(canManageWeazelNews
           ? { jobGradeLabel: 'Senior Reporter', jobLabel: 'Weazel News' }
           : {}),
+        maximumImages: weazelNewsMaxImages,
       },
     })
     return
@@ -6225,8 +6300,28 @@ app.post('/api/:endpoint', (request, response) => {
         .map(billingInvoice),
     }
   }
+  if (endpoint.startsWith('flare:') && !authenticated) {
+    response.json({ success: false, error: 'not_authenticated' })
+    return
+  }
   if (endpoint === 'flare:bootstrap') {
     response.json({ success: true, data: flareBootstrap() })
+    return
+  }
+  if (endpoint === 'flare:delete-profile') {
+    if (!flareProfile) {
+      response.json({ success: false, error: 'profile_not_found' })
+      return
+    }
+    flareProfile = null
+    flareSuggestions = freshFlareSuggestions()
+    flareLikes = []
+    flareLastSwipe = null
+    flareMatches.splice(0, flareMatches.length)
+    for (const matchId of Object.keys(flareMessages)) {
+      delete flareMessages[matchId]
+    }
+    response.json({ success: true })
     return
   }
   if (endpoint === 'flare:save-profile') {
@@ -6257,13 +6352,17 @@ app.post('/api/:endpoint', (request, response) => {
     flareProfile = {
       ...flareProfile,
       ...request.body,
-      discoverable: flareProfile.discoverable,
+      discoverable: flareProfile?.discoverable ?? true,
       ...photoUpdate,
     }
     response.json({ success: true, data: flareBootstrap() })
     return
   }
   if (endpoint === 'flare:set-discovery') {
+    if (!flareProfile) {
+      response.json({ success: false, error: 'invalid_profile' })
+      return
+    }
     if (typeof request.body.enabled !== 'boolean') {
       response.json({ success: false, error: 'invalid_discovery' })
       return
@@ -6273,7 +6372,7 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'flare:swipe') {
-    if (!flareProfile.discoverable) {
+    if (!flareProfile?.discoverable) {
       response.json({ success: false, error: 'discovery_disabled' })
       return
     }
@@ -7377,7 +7476,9 @@ app.post('/api/:endpoint', (request, response) => {
       createdAt: now,
       currency: quote.option.currency,
       destination: quote.destination,
+      distanceMeters: quote.distanceMeters,
       driver: null,
+      durationSeconds: quote.durationSeconds,
       id: `skyride-ride-${skyRideSequence++}`,
       passenger: skyRidePassenger,
       pickup: quote.pickup,
@@ -7730,9 +7831,7 @@ app.post('/api/:endpoint', (request, response) => {
     const property = mockHousingOverview.properties.find(
       (item) => item.id === request.body.propertyId,
     )
-    const existingNames = new Set(
-      (property?.keys ?? []).map((key) => key.name),
-    )
+    const existingNames = new Set((property?.keys ?? []).map((key) => key.name))
     response.json({
       success: true,
       data: {
@@ -7774,8 +7873,7 @@ app.post('/api/:endpoint', (request, response) => {
     if (request.body.action === 'revoke_key') {
       property.keys = (property.keys ?? []).filter(
         (key) =>
-          key.identifier !== request.body.identifier ||
-          key.revocable === false,
+          key.identifier !== request.body.identifier || key.revocable === false,
       )
     }
     response.json({ success: true, data: { accepted: true } })
@@ -9920,17 +10018,104 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: counts() })
     return
   }
+  if (endpoint === 'mail:mailboxes') {
+    response.json({ success: true, data: { mailboxes: mailboxViews() } })
+    return
+  }
+  if (endpoint === 'mail:create-mailbox') {
+    const name = String(request.body.name ?? '').trim()
+    if (!name || name.length > 50) {
+      response.json({ success: false, error: 'invalid_mailbox' })
+      return
+    }
+    if (
+      mockMailboxes.some(
+        (mailbox) => mailbox.name.toLowerCase() === name.toLowerCase(),
+      )
+    ) {
+      response.json({ success: false, error: 'mailbox_exists' })
+      return
+    }
+    if (mockMailboxes.length >= 20) {
+      response.json({ success: false, error: 'mailbox_limit' })
+      return
+    }
+
+    const mailbox = {
+      count: 0,
+      id: nextMockMailboxId,
+      name,
+      sort_order: mockMailboxes.length,
+    }
+    nextMockMailboxId += 1
+    mockMailboxes.push(mailbox)
+    response.json({ success: true, data: mailbox })
+    return
+  }
+  if (endpoint === 'mail:delete-mailbox') {
+    const mailboxId = Number(request.body.id)
+    const mailboxIndex = mockMailboxes.findIndex(
+      (mailbox) => mailbox.id === mailboxId,
+    )
+    if (mailboxIndex < 0) {
+      response.json({ success: false, error: 'mailbox_not_found' })
+      return
+    }
+
+    mockMailboxes.splice(mailboxIndex, 1)
+    for (const message of messages) {
+      if (message.mailbox_id === mailboxId) message.mailbox_id = null
+    }
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'mail:move') {
+    const message = messages.find(
+      (item) => item.id === Number(request.body.id) && !item.trashed_at,
+    )
+    const mailboxId = Number(request.body.mailboxId)
+    const mailboxExists = mockMailboxes.some(
+      (mailbox) => mailbox.id === mailboxId,
+    )
+    if (!message) {
+      response.json({ success: false, error: 'message_not_found' })
+      return
+    }
+    if (mailboxId !== 0 && !mailboxExists) {
+      response.json({ success: false, error: 'mailbox_not_found' })
+      return
+    }
+
+    message.mailbox_id = mailboxId || null
+    response.json({ success: true })
+    return
+  }
   if (endpoint === 'mail:list') {
     const { folder, search = '' } = request.body
+    const mailboxMatch = /^mailbox:(\d+)$/.exec(String(folder))
+    const mailboxId = mailboxMatch ? Number(mailboxMatch[1]) : null
+    if (
+      mailboxId &&
+      !mockMailboxes.some((mailbox) => mailbox.id === mailboxId)
+    ) {
+      response.json({ success: false, error: 'mailbox_not_found' })
+      return
+    }
     let items =
       folder === 'drafts'
         ? draft
           ? [{ ...draft, created_at: draft.updated_at, preview: draft.body }]
           : []
+        : mailboxId
+          ? messages.filter(
+              (item) => item.mailbox_id === mailboxId && !item.trashed_at,
+            )
         : messages.filter((item) =>
             folder === 'trash'
               ? item.trashed_at
-              : item.folder === folder && !item.trashed_at,
+              : item.folder === folder &&
+                !item.mailbox_id &&
+                !item.trashed_at,
           )
     const query = String(search).toLowerCase()
     if (query) {

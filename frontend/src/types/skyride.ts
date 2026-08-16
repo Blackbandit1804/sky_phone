@@ -87,7 +87,9 @@ export type SkyRideRide = {
   createdAt: number
   currency: string
   destination: SkyRideLocation
+  distanceMeters: number
   driver: SkyRideDriver | null
+  durationSeconds: number
   finalPrice?: number
   id: string
   passenger?: SkyRidePassenger

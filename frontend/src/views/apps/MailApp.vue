@@ -1,31 +1,38 @@
 <script setup lang="ts">
 import {
-  kDialog,
-  kDialogButton,
-  kFab,
-  kLink,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kToast,
-  kToolbar,
-  kToolbarPane,
-} from 'konsta/vue'
+  SkyButton,
+  SkyDialog,
+  SkyDialogButton,
+  SkyFab,
+  SkyField,
+  SkyLink,
+  SkyNavbar,
+  SkyNavbarBackLink,
+  SkySearchbar,
+  SkyAppPage,
+  SkySheet,
+  SkySpinner,
+  SkyToast,
+  SkyToolbar,
+  SkyToolbarPane,
+} from '@/ui'
 import {
-  ArrowLeft,
+  CalendarDays,
   Check,
+  ChevronDown,
   ChevronRight,
   FileText,
+  Folder,
   Forward,
   Inbox,
+  ListFilter,
+  LogOut,
   Mail,
   MailCheck,
   MailOpen,
   Reply,
   ReplyAll,
   RotateCcw,
-  Search,
   Send,
   Share2,
   ShieldCheck,
@@ -45,9 +52,15 @@ import { usePhoneStore } from '@/stores/phone'
 import type {
   MailComposeDraft,
   MailCounts,
+  MailAddressFilter,
+  MailDirectionFilter,
   MailFolder,
+  MailFolderKey,
+  MailListFilters,
   MailListItem,
+  MailMailbox,
   MailMessage,
+  MailReadFilter,
 } from '@/types/mail'
 import {
   buildForwardDraft,
@@ -114,23 +127,101 @@ const ignoredRowClick = ref<string | null>(null)
 const selecting = ref(false)
 const selectedItemKeys = ref<string[]>([])
 const deletingSelected = ref(false)
+const mailFilters = ref<MailListFilters>({
+  address: 'all',
+  direction: 'all',
+  read: 'all',
+  today: false,
+})
+const draftMailFilters = ref<MailListFilters>({ ...mailFilters.value })
+const editingMailboxes = ref(false)
+const mailboxName = ref('')
+const mailboxCreateOpened = ref(false)
+const filtersOpened = ref(false)
+const mailboxMoveOpened = ref(false)
+const mailboxDeleteTarget = ref<MailMailbox | null>(null)
 let draftTimer: ReturnType<typeof setTimeout> | undefined
 let ignoredRowClickTimer: ReturnType<typeof setTimeout> | undefined
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 const authenticated = computed(() => Boolean(mail.accountEmail))
-const folderTitle = computed(() => phone.t(`Apps.mail.${mail.folder}`))
+const folderTitle = computed(() => {
+  const mailboxId = mailboxIdFromFolder(mail.folder)
+  if (mailboxId) {
+    return (
+      mail.mailboxes.find((mailbox) => mailbox.id === mailboxId)?.name ??
+      phone.t('Apps.mail.mailboxes')
+    )
+  }
+  return phone.t(`Apps.mail.${mail.folder}`)
+})
 const selectedItems = computed(() =>
   mail.items.filter((item) =>
     selectedItemKeys.value.includes(mailItemKey(item)),
   ),
+)
+const activeFilterLabels = computed(() => {
+  const labels: string[] = []
+  if (mailFilters.value.read === 'unread') {
+    labels.push(phone.t('Apps.mail.filterUnreadLabel'))
+  } else if (mailFilters.value.read === 'read') {
+    labels.push(phone.t('Apps.mail.filterReadLabel'))
+  }
+  if (mailFilters.value.address === 'to-me') {
+    labels.push(phone.t('Apps.mail.filterToMe'))
+  } else if (mailFilters.value.address === 'from-me') {
+    labels.push(phone.t('Apps.mail.filterFromMe'))
+  }
+  if (mailFilters.value.direction === 'inbox') {
+    labels.push(phone.t('Apps.mail.filterReceived'))
+  } else if (mailFilters.value.direction === 'sent') {
+    labels.push(phone.t('Apps.mail.filterSent'))
+  }
+  if (mailFilters.value.today) {
+    labels.push(phone.t('Apps.mail.filterToday'))
+  }
+  return labels
+})
+const hasActiveFilters = computed(() => activeFilterLabels.value.length > 0)
+const activeFilterSummary = computed(() =>
+  activeFilterLabels.value.length === 1
+    ? (activeFilterLabels.value[0] ?? '')
+    : phone.t('Apps.mail.filterMultiple', {
+        count: String(activeFilterLabels.value.length),
+      }),
+)
+const filterButtonLabel = computed(() =>
+  hasActiveFilters.value
+    ? phone.t('Apps.mail.filterActiveLabel', {
+        filter: activeFilterSummary.value,
+      })
+    : phone.t('Apps.mail.filterTitle'),
+)
+const canFilterFolder = computed(
+  () => mail.folder === 'inbox' || Boolean(mailboxIdFromFolder(mail.folder)),
+)
+const visibleItems = computed(() => mail.items)
+const availableMoveMailboxes = computed(() => {
+  const currentMailboxId = mailboxIdFromFolder(mail.folder)
+  return mail.mailboxes.filter((mailbox) => mailbox.id !== currentMailboxId)
+})
+const canMoveMessage = computed(
+  () =>
+    Boolean(mailboxIdFromFolder(mail.folder)) ||
+    availableMoveMailboxes.value.length > 0,
 )
 const canSend = computed(
   () =>
     Boolean(parseMailRecipients(recipientText.value)) &&
     Boolean(subject.value.trim() || mailPlainText(body.value)) &&
     body.value.length <= 20000 &&
+    !submitting.value,
+)
+const canCreateMailbox = computed(
+  () =>
+    Boolean(mailboxName.value.trim()) &&
+    mailboxName.value.trim().length <= 50 &&
     !submitting.value,
 )
 const editorLabels = computed<MailEditorLabels>(() => ({
@@ -140,6 +231,7 @@ const editorLabels = computed<MailEditorLabels>(() => ({
   numberedList: phone.t('Apps.mail.formatNumberedList'),
   quote: phone.t('Apps.mail.formatQuote'),
   redo: phone.t('Apps.mail.redo'),
+  toolbar: phone.t('Apps.mail.body'),
   undo: phone.t('Apps.mail.undo'),
 }))
 
@@ -165,6 +257,12 @@ function errorText(error?: string): string {
     'not_authenticated',
     'request_failed',
     'invalid_request',
+    'invalid_mailbox',
+    'mailbox_exists',
+    'mailbox_limit',
+    'mailbox_not_found',
+    'message_not_found',
+    'invalid_filter',
   ]
   return phone.t(
     `Apps.mail.errors.${error && known.includes(error) ? error : 'default'}`,
@@ -247,7 +345,7 @@ function mailItemKey(item: MailListItem): string {
 }
 
 function canSwipeRead(item: MailListItem): boolean {
-  return mail.folder === 'inbox' && !item.is_read
+  return item.folder === 'inbox' && !item.is_read
 }
 
 function mailRowStyle(
@@ -482,6 +580,16 @@ function folderCount(folder: MailFolder): number {
   return mail.counts[folder]
 }
 
+function mailboxFolderKey(id: number): `mailbox:${number}` {
+  return `mailbox:${id}`
+}
+
+function mailboxIdFromFolder(folder: MailFolderKey): number | null {
+  if (!folder.startsWith('mailbox:')) return null
+  const id = Number(folder.slice('mailbox:'.length))
+  return Number.isSafeInteger(id) && id > 0 ? id : null
+}
+
 async function submitAuth(): Promise<void> {
   if (
     authMode.value === 'register' &&
@@ -509,17 +617,114 @@ async function submitAuth(): Promise<void> {
 
 async function signOut(): Promise<void> {
   await mail.logout()
+  editingMailboxes.value = false
   selectedMessage.value = null
   screen.value = 'folders'
 }
 
-async function openFolder(folder: MailFolder): Promise<void> {
+async function openFolder(folder: MailFolderKey): Promise<void> {
   clearMailSelection()
+  resetMailFilters()
   if (!(await mail.loadFolder(folder))) {
     showToast(errorText())
     return
   }
   screen.value = 'list'
+}
+
+function resetMailFilters(): void {
+  mailFilters.value = {
+    address: 'all',
+    direction: 'all',
+    read: 'all',
+    today: false,
+  }
+  draftMailFilters.value = { ...mailFilters.value }
+  mail.setListFilters(mailFilters.value)
+}
+
+function openMailFilters(): void {
+  draftMailFilters.value = { ...mailFilters.value }
+  filtersOpened.value = true
+}
+
+function closeMailFilters(): void {
+  draftMailFilters.value = { ...mailFilters.value }
+  filtersOpened.value = false
+}
+
+function toggleDraftReadFilter(filter: Exclude<MailReadFilter, 'all'>): void {
+  draftMailFilters.value.read =
+    draftMailFilters.value.read === filter ? 'all' : filter
+}
+
+function toggleDraftDirectionFilter(
+  filter: Exclude<MailDirectionFilter, 'all'>,
+): void {
+  draftMailFilters.value.direction =
+    draftMailFilters.value.direction === filter ? 'all' : filter
+}
+
+function toggleDraftAddressFilter(
+  filter: Exclude<MailAddressFilter, 'all'>,
+): void {
+  draftMailFilters.value.address =
+    draftMailFilters.value.address === filter ? 'all' : filter
+}
+
+async function applyMailFilters(): Promise<void> {
+  clearMailSelection()
+  mailFilters.value = { ...draftMailFilters.value }
+  mail.setListFilters(mailFilters.value)
+  filtersOpened.value = false
+  if (!(await mail.loadFolder(mail.folder, mail.search))) {
+    showToast(errorText())
+  }
+}
+
+function toggleMailboxEditing(): void {
+  editingMailboxes.value = !editingMailboxes.value
+}
+
+function beginMailboxCreate(): void {
+  mailboxName.value = ''
+  mailboxCreateOpened.value = true
+}
+
+function cancelMailboxCreate(): void {
+  if (submitting.value) return
+  mailboxName.value = ''
+  mailboxCreateOpened.value = false
+}
+
+async function createMailbox(): Promise<void> {
+  if (!canCreateMailbox.value) return
+
+  submitting.value = true
+  const response = await mail.createMailbox(mailboxName.value.trim())
+  submitting.value = false
+  if (!response.success) {
+    showToast(errorText(response.error))
+    return
+  }
+
+  mailboxName.value = ''
+  editingMailboxes.value = true
+  mailboxCreateOpened.value = false
+}
+
+function requestMailboxDelete(mailbox: MailMailbox): void {
+  mailboxDeleteTarget.value = mailbox
+}
+
+async function confirmMailboxDelete(): Promise<void> {
+  const mailbox = mailboxDeleteTarget.value
+  mailboxDeleteTarget.value = null
+  if (!mailbox) return
+
+  if (!(await mail.deleteMailbox(mailbox.id))) {
+    showToast(errorText())
+  }
 }
 
 async function openItem(item: MailListItem): Promise<void> {
@@ -595,11 +800,6 @@ async function closeCompose(): Promise<void> {
   screen.value = composeReturn.value
 }
 
-async function deleteCurrentDraft(): Promise<void> {
-  if (draftId.value) await mail.deleteDraft(draftId.value)
-  screen.value = composeReturn.value
-}
-
 async function sendMessage(): Promise<void> {
   const recipients = parseMailRecipients(recipientText.value)
   if (!recipients || !canSend.value) {
@@ -650,6 +850,37 @@ function shareMessage(): void {
   })
 }
 
+async function moveMessageToMailbox(mailbox: MailMailbox): Promise<void> {
+  if (!selectedMessage.value) return
+
+  const moved = await mail.moveEntry(selectedMessage.value.id, mailbox.id)
+  mailboxMoveOpened.value = false
+  if (!moved) {
+    showToast(errorText())
+    return
+  }
+
+  showToast(phone.t('Apps.mail.movedToMailbox', { mailbox: mailbox.name }))
+  selectedMessage.value = null
+  screen.value = 'list'
+}
+
+async function moveMessageToDefaultMailbox(): Promise<void> {
+  if (!selectedMessage.value) return
+
+  const mailboxName = phone.t(`Apps.mail.${selectedMessage.value.folder}`)
+  const moved = await mail.moveEntry(selectedMessage.value.id, null)
+  mailboxMoveOpened.value = false
+  if (!moved) {
+    showToast(errorText())
+    return
+  }
+
+  showToast(phone.t('Apps.mail.movedToMailbox', { mailbox: mailboxName }))
+  selectedMessage.value = null
+  screen.value = 'list'
+}
+
 async function mutateSelected(
   endpoint: string,
   extra: Record<string, unknown> = {},
@@ -663,8 +894,8 @@ async function mutateSelected(
   screen.value = 'list'
 }
 
-function updateSearch(event: Event): void {
-  const value = eventValue(event)
+function updateSearch(value: string): void {
+  mail.search = value
   if (selecting.value) clearMailSelection()
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
@@ -678,6 +909,7 @@ async function confirmEmptyTrash(): Promise<void> {
 }
 
 function clearMailSearch(): void {
+  if (searchTimer) clearTimeout(searchTimer)
   if (selecting.value) clearMailSelection()
   void mail.loadFolder(mail.folder, '')
 }
@@ -709,6 +941,7 @@ function onMailEvent(event: MessageEvent<MailEvent>): void {
   if (!isTrustedRootMessageSource(event.source, window)) return
   if (event.data.type === 'mail:changed' && event.data.data?.counts) {
     mail.setCounts(event.data.data.counts)
+    void mail.loadMailboxes()
     if (screen.value === 'list' && !deletingSelected.value) {
       void mail.loadFolder(mail.folder, mail.search)
     }
@@ -743,7 +976,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     v-if="!authenticated"
     class="mail-page mail-page--auth"
     :aria-label="phone.t('Apps.mail.loginTitle')"
@@ -839,7 +1072,7 @@ onBeforeUnmount(() => {
         </label>
 
         <button class="mail-auth__submit" type="submit" :disabled="submitting">
-          <k-preloader v-if="submitting" />
+          <sky-spinner v-if="submitting" />
           <template v-else>
             {{
               phone.t(
@@ -849,35 +1082,56 @@ onBeforeUnmount(() => {
           </template>
         </button>
         <p v-if="authMode === 'register'" class="mail-auth__warning">
-          <ShieldCheck :size="14" />
+          <ShieldCheck :size="17" />
           {{ phone.t('Apps.mail.passwordWarning') }}
         </p>
       </form>
     </div>
-  </k-page>
+  </sky-app-page>
 
-  <k-page
+  <sky-app-page
     v-else-if="screen === 'folders'"
     class="mail-page"
     :aria-label="phone.t('Apps.mail.mailboxes')"
   >
-    <div class="mail-screen">
-      <header class="mail-header mail-header--large">
-        <span aria-hidden="true" />
-        <button class="mail-header__text" type="button" @click="signOut">
-          {{ phone.t('Apps.mail.logout') }}
-        </button>
-        <div class="mail-header__title">
-          <small>{{ mail.accountEmail }}</small>
-          <h1>{{ phone.t('Apps.mail.mailboxes') }}</h1>
-        </div>
-      </header>
+    <div class="mail-screen mail-screen--toolbar">
+      <sky-navbar
+        class="mail-navbar mail-folders-navbar"
+        large
+        :title="phone.t('Apps.mail.mailboxes')"
+        :subtitle="mail.accountEmail"
+      >
+        <template #left>
+          <sky-link
+            component="button"
+            icon-only
+            :aria-label="phone.t('Apps.mail.logout')"
+            @click="signOut"
+          >
+            <LogOut :size="20" />
+          </sky-link>
+        </template>
+        <template #right>
+          <sky-link
+            class="mail-folders-navbar__edit"
+            component="button"
+            @click="toggleMailboxEditing"
+          >
+            {{
+              phone.t(
+                editingMailboxes ? 'Common.done' : 'Apps.mail.editMailboxes',
+              )
+            }}
+          </sky-link>
+        </template>
+      </sky-navbar>
 
       <main class="mail-folders">
         <div class="mail-folders__card">
           <button
             class="mail-folder-row"
             type="button"
+            :disabled="editingMailboxes"
             @click="openFolder('inbox')"
           >
             <span class="mail-folder-row__icon"><Inbox :size="22" /></span>
@@ -888,6 +1142,7 @@ onBeforeUnmount(() => {
           <button
             class="mail-folder-row"
             type="button"
+            :disabled="editingMailboxes"
             @click="openFolder('sent')"
           >
             <span class="mail-folder-row__icon"><Send :size="21" /></span>
@@ -898,6 +1153,7 @@ onBeforeUnmount(() => {
           <button
             class="mail-folder-row"
             type="button"
+            :disabled="editingMailboxes"
             @click="openFolder('drafts')"
           >
             <span class="mail-folder-row__icon"><FileText :size="21" /></span>
@@ -908,6 +1164,7 @@ onBeforeUnmount(() => {
           <button
             class="mail-folder-row"
             type="button"
+            :disabled="editingMailboxes"
             @click="openFolder('trash')"
           >
             <span class="mail-folder-row__icon"><Trash2 :size="21" /></span>
@@ -915,87 +1172,129 @@ onBeforeUnmount(() => {
             <span>{{ folderCount('trash') }}</span>
             <ChevronRight :size="19" />
           </button>
+          <template v-for="mailbox in mail.mailboxes" :key="mailbox.id">
+            <div
+              v-if="editingMailboxes"
+              class="mail-folder-row mail-folder-row--editing"
+            >
+              <sky-button
+                class="mail-folder-row__delete"
+                variant="plain"
+                icon-only
+                :aria-label="
+                  phone.t('Apps.mail.deleteMailbox', { mailbox: mailbox.name })
+                "
+                @click="requestMailboxDelete(mailbox)"
+              >
+                <Trash2 :size="18" />
+              </sky-button>
+              <strong>{{ mailbox.name }}</strong>
+              <span>{{ mailbox.count || '' }}</span>
+              <span aria-hidden="true" />
+            </div>
+            <button
+              v-else
+              class="mail-folder-row"
+              type="button"
+              @click="openFolder(mailboxFolderKey(mailbox.id))"
+            >
+              <span class="mail-folder-row__icon"><Folder :size="21" /></span>
+              <strong>{{ mailbox.name }}</strong>
+              <span>{{ mailbox.count || '' }}</span>
+              <ChevronRight :size="19" />
+            </button>
+          </template>
         </div>
       </main>
 
-      <k-fab
-        component="button"
-        class="mail-compose-fab"
-        type="button"
-        :aria-label="phone.t('Apps.mail.compose')"
-        @click="beginCompose()"
+      <sky-toolbar
+        component="footer"
+        class="mail-bottom-toolbar mail-folders-toolbar"
+        :aria-label="
+          phone.t(
+            editingMailboxes ? 'Apps.mail.newMailbox' : 'Apps.mail.compose',
+          )
+        "
       >
-        <template #icon><SquarePen :size="22" /></template>
-      </k-fab>
+        <sky-fab
+          v-if="editingMailboxes"
+          component="button"
+          type="button"
+          variant="neutral"
+          :text="phone.t('Apps.mail.newMailbox')"
+          :aria-label="phone.t('Apps.mail.newMailbox')"
+          @click="beginMailboxCreate"
+        >
+          <template #icon><Folder :size="21" /></template>
+        </sky-fab>
+        <sky-fab
+          v-else
+          component="button"
+          type="button"
+          variant="neutral"
+          :aria-label="phone.t('Apps.mail.compose')"
+          @click="beginCompose()"
+        >
+          <template #icon><SquarePen :size="22" /></template>
+        </sky-fab>
+      </sky-toolbar>
     </div>
-  </k-page>
+  </sky-app-page>
 
-  <k-page
+  <sky-app-page
     v-else-if="screen === 'list'"
     class="mail-page"
     :aria-label="folderTitle"
   >
-    <div class="mail-screen">
-      <header class="mail-header mail-header--list">
-        <k-link
-          component="button"
-          icon-only
-          class="mail-header__back"
-          :aria-label="phone.t('Apps.mail.mailboxes')"
-          @click="goBack"
-        >
-          <ArrowLeft :size="21" />
-        </k-link>
-        <div v-if="mail.items.length" class="mail-header__actions">
-          <k-link
-            v-if="mail.folder === 'trash' && !selecting"
+    <div class="mail-screen mail-screen--toolbar">
+      <sky-navbar
+        class="mail-navbar mail-list-navbar"
+        large
+        :title="folderTitle"
+        :subtitle="
+          selecting
+            ? phone.t('Apps.mail.selectedCount', {
+                count: String(selectedItems.length),
+              })
+            : `${visibleItems.length} ${phone.t('Apps.mail.messages')}`
+        "
+      >
+        <template #left>
+          <sky-navbar-back-link
             component="button"
-            @click="emptyTrashOpened = true"
-          >
-            {{ phone.t('Apps.mail.emptyTrash') }}
-          </k-link>
-          <k-link
-            component="button"
-            :disabled="deletingSelected"
-            @click="toggleMailSelection"
-          >
-            {{ phone.t(selecting ? 'Common.done' : 'Apps.mail.select') }}
-          </k-link>
-        </div>
-        <span v-else />
-        <div class="mail-header__title">
-          <small>{{
-            selecting
-              ? phone.t('Apps.mail.selectedCount', {
-                  count: String(selectedItems.length),
-                })
-              : `${mail.items.length} ${phone.t('Apps.mail.messages')}`
-          }}</small>
-          <h1>{{ folderTitle }}</h1>
-        </div>
-        <label class="mail-search">
-          <Search :size="17" />
-          <input
-            :value="mail.search"
-            :placeholder="phone.t('Apps.mail.search')"
-            @input="updateSearch"
+            :text="phone.t('Apps.mail.mailboxes')"
+            :aria-label="phone.t('Apps.mail.mailboxes')"
+            @click="goBack"
           />
-          <button
-            v-if="mail.search"
-            type="button"
-            :aria-label="phone.t('Common.close')"
-            @click="clearMailSearch"
-          >
-            <X :size="14" />
-          </button>
-        </label>
-      </header>
+        </template>
+        <template v-if="mail.items.length" #right>
+          <div class="mail-navbar__actions">
+            <sky-link
+              v-if="mail.folder === 'trash' && !selecting"
+              component="button"
+              icon-only
+              :aria-label="phone.t('Apps.mail.emptyTrash')"
+              @click="emptyTrashOpened = true"
+            >
+              <Trash2 :size="19" />
+            </sky-link>
+            <sky-link
+              class="mail-navbar__select"
+              component="button"
+              :disabled="deletingSelected"
+              @click="toggleMailSelection"
+            >
+              {{ phone.t(selecting ? 'Common.done' : 'Apps.mail.select') }}
+            </sky-link>
+          </div>
+        </template>
+      </sky-navbar>
 
       <main class="mail-list">
-        <div v-if="mail.loading" class="mail-loading"><k-preloader /></div>
-        <template v-else-if="mail.items.length">
+        <div v-if="mail.loading" class="mail-loading"><sky-spinner /></div>
+        <template v-else-if="visibleItems.length">
           <div
-            v-for="(item, index) in mail.items"
+            v-for="(item, index) in visibleItems"
             :key="`${mail.folder}-${item.id}`"
             class="mail-row-shell"
             :class="mailRowClasses(item)"
@@ -1016,7 +1315,7 @@ onBeforeUnmount(() => {
             <button
               class="mail-row"
               :class="{
-                'mail-row--unread': mail.folder === 'inbox' && !item.is_read,
+                'mail-row--unread': item.folder === 'inbox' && !item.is_read,
                 'mail-row--selecting': selecting,
               }"
               type="button"
@@ -1024,7 +1323,7 @@ onBeforeUnmount(() => {
               @click="handleMailRowClick(item)"
             >
               <span
-                v-if="!selecting && mail.folder === 'inbox' && !item.is_read"
+                v-if="!selecting && item.folder === 'inbox' && !item.is_read"
                 class="mail-row__unread"
               />
               <span v-if="selecting" class="mail-row__selection">
@@ -1062,42 +1361,101 @@ onBeforeUnmount(() => {
             {{ phone.t('Apps.mail.loadMore') }}
           </button>
         </template>
-        <div v-else class="mail-empty">
-          <Mail :size="38" />
-          <h2>
-            {{
-              phone.t(mail.search ? 'Apps.mail.noResults' : 'Apps.mail.noMail')
-            }}
-          </h2>
-          <p>
-            {{
-              phone.t(
-                mail.search
-                  ? 'Apps.mail.noResultsBody'
-                  : 'Apps.mail.noMailBody',
-              )
-            }}
-          </p>
+        <div
+          v-else
+          class="mail-empty"
+          :class="{ 'mail-empty--filtered': hasActiveFilters }"
+        >
+          <template v-if="hasActiveFilters">
+            <h2>{{ phone.t('Apps.mail.noMail') }}</h2>
+          </template>
+          <template v-else>
+            <Mail :size="38" />
+            <h2>
+              {{
+                phone.t(mail.search ? 'Apps.mail.noResults' : 'Apps.mail.noMail')
+              }}
+            </h2>
+            <p>
+              {{
+                phone.t(
+                  mail.search
+                    ? 'Apps.mail.noResultsBody'
+                    : 'Apps.mail.noMailBody',
+                )
+              }}
+            </p>
+          </template>
         </div>
       </main>
 
-      <k-fab
+      <sky-toolbar
         v-if="!selecting"
-        component="button"
-        class="mail-compose-fab"
-        type="button"
-        :aria-label="phone.t('Apps.mail.compose')"
-        @click="beginCompose()"
+        component="footer"
+        class="mail-bottom-toolbar mail-list-toolbar"
+        :aria-label="phone.t('Apps.mail.toolbar')"
       >
-        <template #icon><SquarePen :size="21" /></template>
-      </k-fab>
-      <k-toolbar
+        <sky-fab
+          v-if="hasActiveFilters"
+          component="button"
+          type="button"
+          class="mail-filter-fab mail-filter-fab--active"
+          variant="neutral"
+          :disabled="!canFilterFolder"
+          :aria-label="filterButtonLabel"
+          :aria-pressed="true"
+          @click="openMailFilters"
+        >
+          <template #icon><ListFilter :size="21" /></template>
+          <template #text>
+            <span class="mail-filter-fab__copy">
+              <small>{{ phone.t('Apps.mail.filteredBy') }}</small>
+              <strong>
+                {{ activeFilterSummary }}
+                <ChevronDown :size="15" />
+              </strong>
+            </span>
+          </template>
+        </sky-fab>
+        <sky-fab
+          v-else
+          component="button"
+          type="button"
+          class="mail-filter-fab"
+          variant="neutral"
+          :disabled="!canFilterFolder"
+          :aria-label="filterButtonLabel"
+          :aria-pressed="false"
+          @click="openMailFilters"
+        >
+          <template #icon><ListFilter :size="21" /></template>
+        </sky-fab>
+        <sky-searchbar
+          :model-value="mail.search"
+          :clear-label="phone.t('Common.clear')"
+          :label="phone.t('Apps.mail.search')"
+          :placeholder="phone.t('Apps.mail.search')"
+          @clear="clearMailSearch"
+          @update:model-value="updateSearch"
+        />
+        <sky-fab
+          component="button"
+          type="button"
+          variant="neutral"
+          :aria-label="phone.t('Apps.mail.compose')"
+          @click="beginCompose()"
+        >
+          <template #icon><SquarePen :size="21" /></template>
+        </sky-fab>
+      </sky-toolbar>
+      <sky-toolbar
         v-else
-        class="mail-selection-toolbar"
+        component="footer"
+        class="mail-bottom-toolbar mail-selection-toolbar"
         inner-class="mail-selection-toolbar__inner"
         :outline="false"
       >
-        <k-toolbar-pane class="mail-selection-toolbar__pane">
+        <sky-toolbar-pane class="mail-selection-toolbar__pane">
           <span>
             {{
               phone.t('Apps.mail.selectedCount', {
@@ -1105,29 +1463,29 @@ onBeforeUnmount(() => {
               })
             }}
           </span>
-          <k-link
+          <sky-link
             component="button"
             :disabled="deletingSelected || !selectedItems.length"
             @click="deleteSelectedMessages"
           >
-            <k-preloader v-if="deletingSelected" />
+            <sky-spinner v-if="deletingSelected" />
             <Trash2 v-else :size="18" />
             {{ phone.t('Apps.mail.deleteSelected') }}
-          </k-link>
-        </k-toolbar-pane>
-      </k-toolbar>
+          </sky-link>
+        </sky-toolbar-pane>
+      </sky-toolbar>
     </div>
-  </k-page>
+  </sky-app-page>
 
-  <k-page
+  <sky-app-page
     v-else-if="screen === 'message' && selectedMessage"
     class="mail-page"
     :aria-label="selectedMessage.subject"
   >
-    <div class="mail-screen">
-      <k-navbar class="mail-navbar" :title="folderTitle">
+    <div class="mail-screen mail-screen--toolbar">
+      <sky-navbar class="mail-navbar" :title="folderTitle">
         <template #left>
-          <k-navbar-back-link
+          <sky-navbar-back-link
             component="button"
             :text="folderTitle"
             :aria-label="folderTitle"
@@ -1135,16 +1493,16 @@ onBeforeUnmount(() => {
           />
         </template>
         <template #right>
-          <k-link
+          <sky-link
             component="button"
             icon-only
             :aria-label="phone.t('Apps.mail.compose')"
             @click="beginCompose()"
           >
             <SquarePen :size="20" />
-          </k-link>
+          </sky-link>
         </template>
-      </k-navbar>
+      </sky-navbar>
 
       <article class="mail-message">
         <div class="mail-message__sender">
@@ -1172,13 +1530,14 @@ onBeforeUnmount(() => {
         </div>
       </article>
 
-      <k-toolbar
-        class="mail-action-bar"
+      <sky-toolbar
+        component="footer"
+        class="mail-bottom-toolbar mail-action-bar"
         inner-class="mail-action-bar__inner"
         :outline="false"
       >
-        <k-toolbar-pane class="mail-action-bar__pane">
-          <k-link
+        <sky-toolbar-pane class="mail-action-bar__pane">
+          <sky-link
             component="button"
             icon-only
             type="button"
@@ -1186,8 +1545,8 @@ onBeforeUnmount(() => {
             @click="shareMessage"
           >
             <Share2 :size="20" />
-          </k-link>
-          <k-link
+          </sky-link>
+          <sky-link
             component="button"
             icon-only
             type="button"
@@ -1195,8 +1554,8 @@ onBeforeUnmount(() => {
             @click="composeReply(false)"
           >
             <Reply :size="20" />
-          </k-link>
-          <k-link
+          </sky-link>
+          <sky-link
             component="button"
             icon-only
             type="button"
@@ -1204,8 +1563,8 @@ onBeforeUnmount(() => {
             @click="composeReply(true)"
           >
             <ReplyAll :size="20" />
-          </k-link>
-          <k-link
+          </sky-link>
+          <sky-link
             component="button"
             icon-only
             type="button"
@@ -1213,8 +1572,18 @@ onBeforeUnmount(() => {
             @click="composeForward"
           >
             <Forward :size="20" />
-          </k-link>
-          <k-link
+          </sky-link>
+          <sky-link
+            v-if="canMoveMessage && !selectedMessage.trashed_at"
+            component="button"
+            icon-only
+            type="button"
+            :aria-label="phone.t('Apps.mail.moveToMailbox')"
+            @click="mailboxMoveOpened = true"
+          >
+            <Folder :size="20" />
+          </sky-link>
+          <sky-link
             v-if="selectedMessage.trashed_at"
             component="button"
             icon-only
@@ -1223,8 +1592,8 @@ onBeforeUnmount(() => {
             @click="mutateSelected('mail:restore')"
           >
             <RotateCcw :size="20" />
-          </k-link>
-          <k-link
+          </sky-link>
+          <sky-link
             v-else
             component="button"
             icon-only
@@ -1234,8 +1603,8 @@ onBeforeUnmount(() => {
             @click="mutateSelected('mail:trash')"
           >
             <Trash2 :size="20" />
-          </k-link>
-          <k-link
+          </sky-link>
+          <sky-link
             v-if="selectedMessage.trashed_at"
             component="button"
             icon-only
@@ -1245,8 +1614,8 @@ onBeforeUnmount(() => {
             @click="mutateSelected('mail:delete-forever')"
           >
             <Trash2 :size="20" />
-          </k-link>
-          <k-link
+          </sky-link>
+          <sky-link
             v-else
             component="button"
             icon-only
@@ -1255,44 +1624,42 @@ onBeforeUnmount(() => {
             @click="mutateSelected('mail:set-read', { read: false })"
           >
             <MailOpen :size="20" />
-          </k-link>
-        </k-toolbar-pane>
-      </k-toolbar>
+          </sky-link>
+        </sky-toolbar-pane>
+      </sky-toolbar>
     </div>
-  </k-page>
+  </sky-app-page>
 
-  <k-page v-else-if="screen === 'compose'" class="mail-page">
+  <sky-app-page v-else-if="screen === 'compose'" class="mail-page">
     <div class="mail-screen mail-compose">
-      <k-navbar
+      <sky-navbar
         class="mail-navbar mail-compose__navbar"
-        left-class="mail-compose__nav-side mail-compose__nav-side--left"
-        right-class="mail-compose__nav-side mail-compose__nav-side--right"
-        title-class="mail-compose__nav-title"
         :title="phone.t('Apps.mail.compose')"
       >
         <template #left>
-          <k-link
+          <sky-link
             component="button"
-            class="mail-compose__nav-action"
+            icon-only
             type="button"
+            :aria-label="phone.t('Common.cancel')"
             @click="closeCompose"
           >
-            {{ phone.t('Common.cancel') }}
-          </k-link>
+            <X :size="21" />
+          </sky-link>
         </template>
         <template #right>
-          <k-link
+          <sky-link
             component="button"
-            class="mail-compose__nav-action"
+            icon-only
             type="button"
             :disabled="!canSend"
             :aria-label="phone.t('Common.send')"
             @click="sendMessage"
           >
-            {{ phone.t('Common.send') }}
-          </k-link>
+            <Send :size="20" />
+          </sky-link>
         </template>
-      </k-navbar>
+      </sky-navbar>
 
       <div class="mail-compose__fields">
         <label>
@@ -1332,48 +1699,351 @@ onBeforeUnmount(() => {
         />
       </div>
       <div class="mail-compose__meta">
-        <button v-if="draftId" type="button" @click="deleteCurrentDraft">
-          <Trash2 :size="15" /> {{ phone.t('Apps.mail.deleteDraft') }}
-        </button>
         <span :class="{ 'is-over-limit': body.length > 20000 }">
           {{ body.length.toLocaleString(phone.lang) }} / 20,000
         </span>
       </div>
     </div>
-  </k-page>
+  </sky-app-page>
 
-  <k-dialog
+  <sky-sheet
+    class="mail-modal mail-mailbox-modal"
+    :opened="mailboxCreateOpened"
+    :aria-label="phone.t('Apps.mail.newMailbox')"
+    grabber-clickable
+    :grabber-label="phone.t('Common.cancel')"
+    swipe-to-close
+    @backdropclick="cancelMailboxCreate"
+    @escape="cancelMailboxCreate"
+    @grabberclick="cancelMailboxCreate"
+    @swipeclose="cancelMailboxCreate"
+  >
+    <section class="mail-modal__surface mail-mailbox-create">
+      <header class="mail-modal__navbar">
+        <sky-button
+          class="mail-modal__nav-button"
+          icon-only
+          inline
+          rounded
+          type="button"
+          variant="secondary"
+          :aria-label="phone.t('Common.cancel')"
+          @click="cancelMailboxCreate"
+        >
+          <X :size="20" />
+        </sky-button>
+        <h2>{{ phone.t('Apps.mail.newMailbox') }}</h2>
+        <sky-button
+          class="mail-modal__nav-button"
+          :disabled="!canCreateMailbox"
+          icon-only
+          inline
+          rounded
+          type="button"
+          variant="secondary"
+          :aria-label="phone.t('Common.save')"
+          @click="createMailbox"
+        >
+          <Check :size="20" />
+        </sky-button>
+      </header>
+
+      <form class="mail-mailbox-create__form" @submit.prevent="createMailbox">
+        <sky-field
+          v-model="mailboxName"
+          class="mail-mailbox-create__name"
+          component="div"
+          autofocus
+          clear-button
+          :clear-label="phone.t('Common.clear')"
+          input-id="mail-mailbox-name"
+          :aria-label="phone.t('Apps.mail.mailboxName')"
+          :maxlength="50"
+          :placeholder="phone.t('Apps.mail.mailboxNamePlaceholder')"
+        />
+
+        <section class="mail-mailbox-create__location">
+          <h3>{{ phone.t('Apps.mail.mailboxLocation') }}</h3>
+          <div class="mail-mailbox-create__location-row">
+            <span>{{ mail.accountEmail }}</span>
+            <ChevronRight :size="18" aria-hidden="true" />
+          </div>
+        </section>
+      </form>
+    </section>
+  </sky-sheet>
+
+  <sky-sheet
+    class="mail-modal mail-filter-modal"
+    :opened="filtersOpened"
+    :aria-label="phone.t('Apps.mail.filterTitle')"
+    grabber-clickable
+    :grabber-label="phone.t('Common.cancel')"
+    swipe-to-close
+    @backdropclick="closeMailFilters"
+    @escape="closeMailFilters"
+    @grabberclick="closeMailFilters"
+    @swipeclose="closeMailFilters"
+  >
+    <section class="mail-modal__surface mail-filters">
+      <header class="mail-modal__navbar mail-filters__navbar">
+        <span aria-hidden="true"></span>
+        <h2>{{ phone.t('Apps.mail.filterTitle') }}</h2>
+        <sky-link
+          class="mail-filters__done"
+          component="button"
+          icon-only
+          :aria-label="phone.t('Common.done')"
+          @click="applyMailFilters"
+        >
+          <Check :size="22" />
+        </sky-link>
+      </header>
+
+      <main class="mail-filters__content">
+        <section class="mail-filter-section">
+          <h2>{{ phone.t('Apps.mail.filterStatus') }}</h2>
+          <div class="mail-filter-card">
+            <sky-button
+              block
+              class="mail-filter-row"
+              type="button"
+              variant="plain"
+              :aria-pressed="draftMailFilters.read === 'unread'"
+              @click="toggleDraftReadFilter('unread')"
+            >
+              <Mail :size="20" />
+              <span>{{ phone.t('Apps.mail.filterUnreadLabel') }}</span>
+              <Check
+                v-if="draftMailFilters.read === 'unread'"
+                :size="20"
+                class="mail-filter-row__check"
+              />
+            </sky-button>
+            <sky-button
+              block
+              class="mail-filter-row"
+              type="button"
+              variant="plain"
+              :aria-pressed="draftMailFilters.read === 'read'"
+              @click="toggleDraftReadFilter('read')"
+            >
+              <MailOpen :size="20" />
+              <span>{{ phone.t('Apps.mail.filterReadLabel') }}</span>
+              <Check
+                v-if="draftMailFilters.read === 'read'"
+                :size="20"
+                class="mail-filter-row__check"
+              />
+            </sky-button>
+          </div>
+        </section>
+
+        <section class="mail-filter-section">
+          <h2>{{ phone.t('Apps.mail.filterAddressed') }}</h2>
+          <div class="mail-filter-card">
+            <sky-button
+              block
+              class="mail-filter-row"
+              type="button"
+              variant="plain"
+              :aria-pressed="draftMailFilters.address === 'to-me'"
+              @click="toggleDraftAddressFilter('to-me')"
+            >
+              <Inbox :size="20" />
+              <span>{{ phone.t('Apps.mail.filterToMe') }}</span>
+              <Check
+                v-if="draftMailFilters.address === 'to-me'"
+                :size="20"
+                class="mail-filter-row__check"
+              />
+            </sky-button>
+            <sky-button
+              block
+              class="mail-filter-row"
+              type="button"
+              variant="plain"
+              :aria-pressed="draftMailFilters.address === 'from-me'"
+              @click="toggleDraftAddressFilter('from-me')"
+            >
+              <Send :size="20" />
+              <span>{{ phone.t('Apps.mail.filterFromMe') }}</span>
+              <Check
+                v-if="draftMailFilters.address === 'from-me'"
+                :size="20"
+                class="mail-filter-row__check"
+              />
+            </sky-button>
+          </div>
+        </section>
+
+        <section
+          v-if="mailboxIdFromFolder(mail.folder)"
+          class="mail-filter-section"
+        >
+          <h2>{{ phone.t('Apps.mail.filterDirection') }}</h2>
+          <div class="mail-filter-card">
+            <sky-button
+              block
+              class="mail-filter-row"
+              type="button"
+              variant="plain"
+              :aria-pressed="draftMailFilters.direction === 'inbox'"
+              @click="toggleDraftDirectionFilter('inbox')"
+            >
+              <Inbox :size="20" />
+              <span>{{ phone.t('Apps.mail.filterReceived') }}</span>
+              <Check
+                v-if="draftMailFilters.direction === 'inbox'"
+                :size="20"
+                class="mail-filter-row__check"
+              />
+            </sky-button>
+            <sky-button
+              block
+              class="mail-filter-row"
+              type="button"
+              variant="plain"
+              :aria-pressed="draftMailFilters.direction === 'sent'"
+              @click="toggleDraftDirectionFilter('sent')"
+            >
+              <Send :size="20" />
+              <span>{{ phone.t('Apps.mail.filterSent') }}</span>
+              <Check
+                v-if="draftMailFilters.direction === 'sent'"
+                :size="20"
+                class="mail-filter-row__check"
+              />
+            </sky-button>
+          </div>
+        </section>
+
+        <section class="mail-filter-section">
+          <h2>{{ phone.t('Apps.mail.filterOther') }}</h2>
+          <div class="mail-filter-card">
+            <sky-button
+              block
+              class="mail-filter-row"
+              type="button"
+              variant="plain"
+              :aria-pressed="draftMailFilters.today"
+              @click="draftMailFilters.today = !draftMailFilters.today"
+            >
+              <CalendarDays :size="20" />
+              <span>{{ phone.t('Apps.mail.filterToday') }}</span>
+              <Check
+                v-if="draftMailFilters.today"
+                :size="20"
+                class="mail-filter-row__check"
+              />
+            </sky-button>
+          </div>
+        </section>
+      </main>
+    </section>
+  </sky-sheet>
+
+  <sky-dialog
+    class="mail-dialog"
     :opened="emptyTrashOpened"
     @backdropclick="emptyTrashOpened = false"
   >
     <template #title>{{ phone.t('Apps.mail.emptyTrashTitle') }}</template>
     <p>{{ phone.t('Apps.mail.emptyTrashBody') }}</p>
     <template #buttons>
-      <k-dialog-button @click="emptyTrashOpened = false">
+      <sky-dialog-button @click="emptyTrashOpened = false">
         {{ phone.t('Common.cancel') }}
-      </k-dialog-button>
-      <k-dialog-button strong @click="confirmEmptyTrash">
+      </sky-dialog-button>
+      <sky-dialog-button strong @click="confirmEmptyTrash">
         {{ phone.t('Apps.mail.emptyTrash') }}
-      </k-dialog-button>
+      </sky-dialog-button>
     </template>
-  </k-dialog>
+  </sky-dialog>
 
-  <k-toast :opened="toastOpened" position="center" @click="toastOpened = false">
+  <sky-dialog
+    class="mail-dialog"
+    :opened="mailboxMoveOpened"
+    @backdropclick="mailboxMoveOpened = false"
+  >
+    <template #title>{{ phone.t('Apps.mail.moveToMailbox') }}</template>
+    <div class="mail-mailbox-picker">
+      <sky-button
+        v-if="mailboxIdFromFolder(mail.folder) && selectedMessage"
+        block
+        type="button"
+        variant="secondary"
+        @click="moveMessageToDefaultMailbox"
+      >
+        <Inbox v-if="selectedMessage.folder === 'inbox'" :size="18" />
+        <Send v-else :size="18" />
+        <span>{{ phone.t(`Apps.mail.${selectedMessage.folder}`) }}</span>
+      </sky-button>
+      <sky-button
+        v-for="mailbox in availableMoveMailboxes"
+        :key="mailbox.id"
+        block
+        type="button"
+        variant="secondary"
+        @click="moveMessageToMailbox(mailbox)"
+      >
+        <Folder :size="18" />
+        <span>{{ mailbox.name }}</span>
+      </sky-button>
+    </div>
+    <template #buttons>
+      <sky-dialog-button @click="mailboxMoveOpened = false">
+        {{ phone.t('Common.cancel') }}
+      </sky-dialog-button>
+    </template>
+  </sky-dialog>
+
+  <sky-dialog
+    class="mail-dialog"
+    :opened="Boolean(mailboxDeleteTarget)"
+    @backdropclick="mailboxDeleteTarget = null"
+  >
+    <template #title>{{ phone.t('Apps.mail.deleteMailboxTitle') }}</template>
+    <p>
+      {{
+        phone.t('Apps.mail.deleteMailboxBody', {
+          mailbox: mailboxDeleteTarget?.name ?? '',
+        })
+      }}
+    </p>
+    <template #buttons>
+      <sky-dialog-button @click="mailboxDeleteTarget = null">
+        {{ phone.t('Common.cancel') }}
+      </sky-dialog-button>
+      <sky-dialog-button strong @click="confirmMailboxDelete">
+        {{ phone.t('Common.delete') }}
+      </sky-dialog-button>
+    </template>
+  </sky-dialog>
+
+  <sky-toast
+    :opened="toastOpened"
+    position="center"
+    @click="toastOpened = false"
+  >
     {{ toastText }}
-  </k-toast>
+  </sky-toast>
 </template>
 
 <style scoped>
-.mail-page {
+.mail-page,
+.mail-modal {
   --mail-blue: #0a84ff;
-  --mail-border: #ffffff1a;
-  --mail-muted: #8e8e93;
-  --mail-surface: #1c1c1e;
+  --mail-border: var(--sky-hairline);
+  --mail-muted: var(--sky-muted);
+  --mail-surface: var(--sky-surface);
+}
+
+.mail-page {
   min-height: 0 !important;
   padding: 0 !important;
   overflow: hidden;
-  background: #000 !important;
-  color: #f5f5f7;
+  background: var(--sky-bg) !important;
+  color: var(--sky-text);
 }
 
 .mail-screen {
@@ -1381,8 +2051,14 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: #000;
+  background: var(--sky-bg);
   animation: mail-screen-enter 240ms cubic-bezier(0.22, 0.8, 0.3, 1) both;
+}
+
+.mail-screen--toolbar,
+.mail-compose {
+  display: flex;
+  flex-direction: column;
 }
 
 button,
@@ -1394,91 +2070,31 @@ button {
   color: inherit;
 }
 
-.mail-header {
-  position: relative;
-  z-index: 5;
-  display: grid;
-  grid-template-columns: 54px 1fr 54px;
-  align-items: center;
-  padding: 51px 15px 10px;
-  background: #000e;
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-}
-
-.mail-header > :first-child {
-  justify-self: start;
-}
-
-.mail-header > :nth-child(2) {
-  justify-self: center;
-}
-
-.mail-header > :nth-child(3) {
-  justify-self: end;
-}
-
-.mail-header--large,
-.mail-header--list {
-  grid-template-rows: 40px auto;
-  padding-bottom: 12px;
-}
-
-.mail-header--large {
-  grid-template-columns: 54px 1fr 86px;
-}
-
-.mail-header--large > :nth-child(2) {
-  grid-column: 3;
-  justify-self: end;
-  white-space: nowrap;
-}
-
-.mail-header--large .mail-header__title,
-.mail-header--list .mail-header__title {
-  grid-column: 1 / -1;
-  justify-self: stretch;
-  padding-top: 8px;
-}
-
-.mail-header__title h1 {
-  margin: 0;
-  font-size: 32px;
-  font-weight: 760;
-  line-height: 1.08;
-  letter-spacing: -1.2px;
-}
-
-.mail-header__title small {
-  display: block;
-  margin-bottom: 3px;
-  overflow: hidden;
-  color: var(--mail-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mail-header__text {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  padding: 5px 0;
-  background: none;
-  color: var(--mail-blue);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.mail-header__back {
-  width: 38px;
-  height: 38px;
-  color: var(--mail-blue);
-}
-
 .mail-folders {
-  padding: 8px 15px 90px;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 15px 24px;
+}
+
+.mail-folders-navbar :deep(.sky-navbar__left),
+.mail-folders-navbar :deep(.sky-navbar__right) {
+  min-width: var(--sky-touch-target);
+}
+
+.mail-folders-navbar :deep(.mail-folders-navbar__edit.sky-link),
+.mail-modal__navbar :deep(.sky-link) {
+  width: auto;
+  min-width: var(--sky-touch-target);
+  padding: 0 var(--sky-space-3);
+  color: #fff;
+  font-size: 15px;
+}
+
+.mail-folders-navbar :deep(.mail-folders-navbar__edit.sky-link:focus-visible),
+.mail-modal__navbar :deep(.sky-link:focus-visible) {
+  outline: 0;
+  box-shadow: inset 0 0 0 1px #fff;
 }
 
 .mail-folders__card {
@@ -1491,7 +2107,7 @@ button {
 .mail-folder-row {
   position: relative;
   width: 100%;
-  min-height: 61px;
+  min-height: 52px;
   display: grid;
   grid-template-columns: 36px 1fr auto 18px;
   align-items: center;
@@ -1502,6 +2118,11 @@ button {
   text-align: left;
   cursor: pointer;
   transition: background-color 160ms ease;
+}
+
+.mail-folder-row:disabled {
+  cursor: default;
+  opacity: 1;
 }
 
 .mail-folder-row:not(:last-child)::after {
@@ -1533,69 +2154,297 @@ button {
   color: var(--mail-blue);
 }
 
-.mail-header--list {
-  grid-template-columns: 1fr 1fr;
+.mail-folder-row--editing {
+  grid-template-columns: 36px minmax(0, 1fr) auto 18px;
 }
 
-.mail-header--list > .mail-header__actions {
+.mail-folder-row__delete {
+  width: 32px;
+  min-width: 32px;
+  height: 44px;
+  min-height: 44px;
+  margin-left: -6px;
+  padding: 0;
+  color: #ff453a;
+}
+
+.mail-modal {
+  --sky-overlay-layer: 85;
+}
+
+.mail-modal :deep(.sky-overlay-backdrop) {
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.mail-modal :deep(.sky-sheet__panel) {
+  height: calc(100% - 48px);
+  max-height: calc(100% - 48px);
+  overflow: hidden;
+  border-radius: 26px 26px 0 0;
+  background: var(--sky-bg);
+}
+
+.mail-mailbox-modal :deep(.sky-sheet__panel) {
+  height: auto;
+  background: var(--sky-surface);
+}
+
+.mail-modal__surface {
+  height: calc(100% - 32px);
+  min-height: 0;
   display: flex;
+  flex-direction: column;
+  background: var(--sky-bg);
+}
+
+.mail-mailbox-create {
+  height: auto;
+  background: var(--sky-surface);
+}
+
+.mail-modal__navbar {
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  justify-self: end;
+  gap: var(--sky-space-2);
+  padding: 0 var(--sky-space-3);
+  border-bottom: 1px solid var(--mail-border);
+}
+
+.mail-modal__navbar h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--sky-text);
+  font-size: 16px;
+  font-weight: 650;
+  text-align: center;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.mail-header__actions :deep(.k-link) {
-  border: 0;
-  padding: 4px 0;
-  background: transparent;
-  color: var(--mail-blue);
-  font-size: 12px;
+.mail-modal__navbar > :first-child {
+  justify-self: start;
 }
 
-.mail-header__actions :deep(.k-link:disabled) {
-  opacity: 0.4;
+.mail-modal__navbar > :last-child {
+  justify-self: end;
 }
 
-.mail-search {
-  grid-column: 1 / -1;
-  display: flex;
-  height: 34px;
+.mail-filters__navbar :deep(.mail-filters__done.sky-link) {
+  width: var(--sky-touch-target);
+  min-width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
+  min-height: var(--sky-touch-target);
+  border-radius: 50%;
+  background: var(--mail-blue);
+  color: #fff;
+}
+
+.mail-filters__navbar :deep(.mail-filters__done.sky-link:focus-visible) {
+  outline: 0;
+  box-shadow: inset 0 0 0 1px #fff;
+}
+
+.mail-filters__content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sky-space-4) var(--sky-page-gutter) 28px;
+}
+
+.mail-filter-section + .mail-filter-section {
+  margin-top: var(--sky-space-6);
+}
+
+.mail-filter-section h2 {
+  margin: 0 0 var(--sky-space-2) var(--sky-space-3);
+  color: var(--mail-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mail-filter-card {
+  overflow: hidden;
+  border: 1px solid #ffffff08;
+  border-radius: 20px;
+  background: var(--mail-surface);
+}
+
+.mail-filter-card :deep(.mail-filter-row.sky-button) {
+  position: relative;
+  width: 100%;
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 24px;
   align-items: center;
-  gap: 7px;
-  margin-top: 11px;
-  padding: 0 10px;
-  border-radius: 10px;
-  background: #1c1c1e;
+  gap: var(--sky-space-3);
+  border: 0;
+  border-radius: 0;
+  padding: 0 var(--sky-space-4);
+  background: transparent;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  text-transform: none;
+}
+
+.mail-filter-card :deep(.mail-filter-row + .mail-filter-row::before) {
+  position: absolute;
+  top: 0;
+  right: var(--sky-space-4);
+  left: 52px;
+  height: 1px;
+  background: var(--mail-border);
+  content: '';
+}
+
+.mail-filter-card :deep(.mail-filter-row > svg:first-child) {
+  color: #fff;
+}
+
+.mail-filter-card :deep(.mail-filter-row__check) {
+  color: var(--mail-blue);
+}
+
+.mail-mailbox-create__form {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--sky-space-6);
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sky-space-6) var(--sky-page-gutter)
+    calc(24px + var(--sky-safe-area-bottom));
+}
+
+.mail-modal__navbar :deep(.mail-modal__nav-button.sky-button) {
+  width: var(--sky-touch-target);
+  min-width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
+  min-height: var(--sky-touch-target);
+  padding: 0;
+  border: 1px solid var(--sky-hairline);
+  background: var(--sky-surface-tint);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.mail-modal__navbar :deep(.mail-modal__nav-button.sky-button:focus-visible) {
+  outline: 0;
+  box-shadow: inset 0 0 0 1px #fff;
+}
+
+.mail-mailbox-create__name {
+  min-height: 54px;
+  padding-left: 0;
+  border: 1px solid #ffffff0d;
+  border-radius: 17px;
+  background: var(--sky-surface-variant);
+}
+
+.mail-mailbox-create__name:focus-within {
+  border-color: #ffffff38;
+}
+
+.mail-mailbox-create__form :deep(.mail-mailbox-create__name .sky-field__inner) {
+  align-self: auto;
+  padding: 0 var(--sky-space-4);
+}
+
+.mail-mailbox-create__form :deep(.mail-mailbox-create__name .sky-field__control) {
+  min-height: 52px;
+  margin: 0;
+  color: var(--sky-text);
+}
+
+.mail-mailbox-create__form :deep(.mail-mailbox-create__name .sky-field__input) {
+  height: 52px;
+  color: var(--sky-text);
+  font-size: 15px;
+}
+
+.mail-mailbox-create__form :deep(.mail-mailbox-create__name .sky-field__input::placeholder) {
+  color: var(--mail-muted);
+  opacity: 1;
+}
+
+.mail-mailbox-create__location h3 {
+  margin: 0 0 var(--sky-space-2) var(--sky-space-3);
+  color: var(--mail-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mail-mailbox-create__location-row {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sky-space-3);
+  padding: 0 var(--sky-space-4);
+  border: 1px solid #ffffff0d;
+  border-radius: 17px;
+  background: var(--sky-surface-variant);
+  color: var(--sky-text);
+  font-size: 15px;
+}
+
+.mail-mailbox-create__location-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mail-mailbox-create__location-row svg {
   color: var(--mail-muted);
 }
 
-.mail-search input {
-  min-width: 0;
-  flex: 1;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: #f5f5f7;
-  font-size: 14px;
+.mail-navbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
 }
 
-.mail-search button {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
+.mail-navbar__actions :deep(.sky-link) {
   border: 0;
-  border-radius: 50%;
-  padding: 0;
-  background: #636366;
-  color: #1c1c1e;
+  padding: 4px 0;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+}
+
+.mail-navbar__actions :deep(.sky-link:disabled) {
+  opacity: 0.4;
+}
+
+.mail-list-navbar
+  .mail-navbar__actions
+  :deep(.mail-navbar__select.sky-link) {
+  width: auto;
+  height: var(--sky-touch-target);
+  min-width: 0;
+  min-height: var(--sky-touch-target);
+  padding: 0 var(--sky-space-3);
+  color: #fff;
+  font-size: 15px;
+}
+
+.mail-list-navbar
+  .mail-navbar__actions
+  :deep(.mail-navbar__select.sky-link:focus-visible) {
+  outline: 0;
+  box-shadow: inset 0 0 0 1px #fff;
 }
 
 .mail-list {
-  height: calc(100% - 188px);
+  min-height: 0;
+  flex: 1;
   overflow-y: auto;
-  padding: 0 0 82px;
+  padding: 0 0 18px;
 }
 
 .mail-row-shell {
@@ -1663,13 +2512,12 @@ button {
   gap: 10px;
   border: 0;
   padding: 8px 13px 8px 19px;
-  background: #000;
+  background: var(--sky-bg);
+  color: var(--sky-text);
   text-align: left;
   cursor: pointer;
   transform: translate3d(var(--mail-row-offset), 0, 0);
-  transition:
-    transform 260ms cubic-bezier(0.22, 0.8, 0.3, 1),
-    background-color 160ms ease;
+  transition: transform 260ms cubic-bezier(0.22, 0.8, 0.3, 1);
   will-change: transform;
 }
 
@@ -1797,7 +2645,7 @@ button {
 }
 
 .mail-row__subject {
-  color: #f5f5f7;
+  color: var(--sky-text);
   font-size: 13px;
 }
 
@@ -1810,19 +2658,111 @@ button {
   color: #48484a;
 }
 
-.mail-compose-fab {
-  position: absolute;
-  z-index: 8;
-  right: 17px;
-  bottom: 32px;
+.mail-bottom-toolbar {
+  flex: none;
+  padding-bottom: calc(var(--sky-safe-area-bottom, 0px) + var(--sky-space-6));
 }
 
-.mail-selection-toolbar {
-  position: absolute;
-  z-index: 8;
-  right: 0;
-  bottom: 0;
-  left: 0;
+.mail-folders-toolbar :deep(.sky-toolbar__inner) {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.mail-folders-toolbar :deep(.sky-fab) {
+  flex: none;
+  border: 1px solid var(--sky-hairline);
+  color: #fff;
+}
+
+.mail-folders-toolbar :deep(.sky-fab--with-text) {
+  width: auto;
+  min-width: var(--sky-touch-target);
+  padding-inline: var(--sky-space-5);
+}
+
+.mail-mailbox-picker {
+  display: grid;
+  gap: var(--sky-space-2);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.mail-mailbox-picker :deep(.sky-button) {
+  min-height: var(--sky-touch-target);
+  justify-content: flex-start;
+  gap: var(--sky-space-3);
+  color: #fff;
+  text-align: left;
+}
+
+.mail-dialog :deep(.sky-dialog-button) {
+  color: #fff;
+}
+
+.mail-list-toolbar :deep(.sky-toolbar__inner) {
+  align-items: center;
+  gap: var(--sky-space-2);
+}
+
+.mail-list-toolbar :deep(.sky-searchbar) {
+  min-width: 0;
+  flex: 1;
+}
+
+.mail-list-toolbar :deep(.sky-fab) {
+  flex: none;
+  border: 1px solid var(--sky-hairline);
+}
+
+.mail-list-toolbar :deep(.mail-filter-fab--active) {
+  width: min(145px, 43%);
+  min-width: 112px;
+  flex: 0 1 145px;
+  padding: 0 var(--sky-space-3);
+  text-transform: none;
+}
+
+.mail-list-toolbar :deep(.mail-filter-fab--active .sky-fab__icon) {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--mail-blue);
+  color: #fff;
+}
+
+.mail-list-toolbar :deep(.mail-filter-fab--active .sky-fab__text) {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mail-list-toolbar :deep(.mail-filter-fab__copy) {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  line-height: 1.05;
+  text-align: left;
+}
+
+.mail-list-toolbar :deep(.mail-filter-fab__copy small) {
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mail-list-toolbar :deep(.mail-filter-fab__copy strong) {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mail-selection-toolbar :deep(.mail-selection-toolbar__inner) {
@@ -1838,21 +2778,21 @@ button {
 
 .mail-selection-toolbar :deep(.mail-selection-toolbar__pane > span) {
   overflow: hidden;
-  color: #f5f5f7;
+  color: var(--sky-text);
   font-size: 12px;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.mail-selection-toolbar :deep(.k-link) {
+.mail-selection-toolbar :deep(.sky-link) {
   gap: 6px;
   color: #ff453a;
   font-size: 12px;
   font-weight: 650;
 }
 
-.mail-selection-toolbar :deep(.k-link:disabled) {
+.mail-selection-toolbar :deep(.sky-link:disabled) {
   opacity: 0.4;
 }
 
@@ -1873,7 +2813,7 @@ button {
 
 .mail-empty h2 {
   margin: 13px 0 4px;
-  color: #f5f5f7;
+  color: var(--sky-text);
   font-size: 20px;
 }
 
@@ -1882,6 +2822,10 @@ button {
   margin: 0;
   font-size: 13px;
   line-height: 1.4;
+}
+
+.mail-empty--filtered h2 {
+  margin: 0;
 }
 
 .mail-load-more {
@@ -1893,43 +2837,31 @@ button {
 }
 
 .mail-navbar {
-  --k-safe-area-top: 46px;
-  color: #f5f5f7;
+  --sky-safe-area-top: calc(46px + var(--sky-space-2));
+  color: var(--sky-text);
 }
 
-.mail-navbar :deep(.k-link) {
-  color: var(--mail-blue);
+.mail-navbar :deep(.sky-link) {
+  color: #fff;
 }
 
-.mail-navbar :deep(.k-link:disabled) {
+.mail-navbar :deep(.sky-navbar-back-link) {
+  color: #fff;
+}
+
+.mail-navbar :deep(.sky-link:disabled) {
   opacity: 0.4;
 }
 
-.mail-compose__navbar :deep(.mail-compose__nav-side--left) {
-  margin-right: 12px;
-}
-
-.mail-compose__navbar :deep(.mail-compose__nav-side--right) {
-  margin-left: 12px;
-}
-
-.mail-compose__navbar :deep(.mail-compose__nav-title) {
-  max-width: 112px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mail-compose__navbar :deep(.mail-compose__nav-action) {
-  min-width: 54px;
-  justify-content: center;
-  padding-right: 10px;
-  padding-left: 10px;
+.mail-navbar :deep(.sky-navbar-back-link__icon) {
+  transform: translateX(2px);
 }
 
 .mail-message {
-  height: calc(100% - 90px);
+  min-height: 0;
+  flex: 1;
   overflow-y: auto;
-  padding: 18px 18px 104px;
+  padding: 18px;
   user-select: text;
 }
 
@@ -1978,11 +2910,6 @@ button {
 }
 
 .mail-action-bar {
-  position: absolute;
-  z-index: 7;
-  right: 0;
-  bottom: 0;
-  left: 0;
   animation: mail-action-bar-enter 320ms cubic-bezier(0.22, 0.8, 0.3, 1) both;
 }
 
@@ -1995,12 +2922,12 @@ button {
   width: 100%;
 }
 
-.mail-action-bar :deep(.k-link) {
+.mail-action-bar :deep(.sky-link) {
   position: relative;
-  color: #f5f5f7;
+  color: var(--sky-text);
 }
 
-.mail-action-bar :deep(.k-link::after) {
+.mail-action-bar :deep(.sky-link::after) {
   position: absolute;
   bottom: calc(100% + 9px);
   left: 50%;
@@ -2022,32 +2949,30 @@ button {
   white-space: nowrap;
 }
 
-.mail-action-bar :deep(.k-link:focus-visible),
-.mail-compose-fab:focus-visible {
+.mail-action-bar :deep(.sky-link:focus-visible) {
   outline: 2px solid var(--mail-blue);
   outline-offset: 2px;
 }
 
-.mail-action-bar :deep(.k-link:focus-visible::after) {
+.mail-action-bar :deep(.sky-link:focus-visible::after) {
   opacity: 1;
   transform: translate(-50%, 0) scale(1);
 }
 
 @media (hover: hover) {
-  .mail-folder-row:hover,
-  .mail-row-shell:not(.is-dragging) .mail-row:hover {
+  .mail-folder-row:not(:disabled):hover {
     background: #ffffff0b;
   }
 
-  .mail-action-bar :deep(.k-link:hover) {
-    color: #64b5ff;
+  .mail-action-bar :deep(.sky-link:hover) {
+    color: #fff;
   }
 
   .mail-action-bar :deep(.mail-action-bar__danger:hover) {
     color: #ff6961;
   }
 
-  .mail-action-bar :deep(.k-link:hover::after) {
+  .mail-action-bar :deep(.sky-link:hover::after) {
     opacity: 1;
     transform: translate(-50%, 0) scale(1);
   }
@@ -2079,7 +3004,7 @@ button {
   outline: 0;
   padding: 0 16px 0 0;
   background: transparent;
-  color: #f5f5f7;
+  color: var(--sky-text);
   font-size: 14px;
   font-weight: 400;
 }
@@ -2092,33 +3017,23 @@ button {
 }
 
 .mail-compose__editor {
-  height: calc(100% - 278px);
-  min-height: 250px;
-  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
 
 .mail-compose__meta {
   position: absolute;
   right: 17px;
-  bottom: 28px;
+  bottom: 92px;
   left: 17px;
   z-index: 4;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   color: var(--mail-muted);
   font-size: 10px;
   pointer-events: none;
-}
-
-.mail-compose__meta button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  padding: 0;
-  background: none;
-  color: #ff453a;
-  pointer-events: auto;
 }
 
 .mail-compose__meta .is-over-limit {
@@ -2131,7 +3046,8 @@ button {
   overflow-y: auto;
   padding: 70px 22px 40px;
   background:
-    radial-gradient(circle at 50% 11%, #0a84ff2e, transparent 31%), #000;
+    radial-gradient(circle at 50% 11%, #0a84ff2e, transparent 31%),
+    var(--sky-bg);
 }
 
 .mail-auth__hero {
@@ -2180,7 +3096,7 @@ button {
   margin: 24px 0 14px;
   padding: 3px;
   border-radius: 11px;
-  background: #1c1c1e;
+  background: var(--sky-surface-muted);
 }
 
 .mail-auth__segment button {
@@ -2194,9 +3110,9 @@ button {
 }
 
 .mail-auth__segment button.is-active {
-  background: #3a3a3c;
-  color: #fff;
-  box-shadow: 0 1px 4px #0008;
+  background: var(--sky-surface-tint);
+  color: var(--sky-text);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 18%);
 }
 
 .mail-auth__form {
@@ -2221,10 +3137,10 @@ button {
   align-items: center;
   gap: 10px;
   padding: 0 13px;
-  border: 1px solid #ffffff18;
+  border: 1px solid var(--sky-hairline);
   border-radius: 13px;
-  background: #1c1c1e;
-  color: #8e8e93;
+  background: var(--sky-surface);
+  color: var(--sky-muted);
 }
 
 .mail-auth__field:focus-within > div {
@@ -2238,8 +3154,13 @@ button {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #f5f5f7;
+  color: var(--sky-text);
   font-size: 14px;
+}
+
+.mail-auth__field input::placeholder {
+  color: var(--mail-muted);
+  opacity: 0.72;
 }
 
 .mail-auth__field small {
@@ -2268,15 +3189,17 @@ button {
 .mail-auth__warning {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin: 2px 3px 0;
-  color: var(--mail-muted);
-  font-size: 10px;
-  line-height: 1.35;
+  gap: 8px;
+  margin: 6px 3px 0;
+  color: var(--sky-text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
 }
 
 .mail-auth__warning svg {
   flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 @keyframes mail-screen-enter {
@@ -2324,12 +3247,11 @@ button {
 
   .mail-row,
   .mail-row-action,
-  .mail-compose-fab,
   .mail-folder-row {
     transition-duration: 0.01ms;
   }
 
-  .mail-action-bar :deep(.k-link) {
+  .mail-action-bar :deep(.sky-link) {
     transition-duration: 0.01ms;
   }
 }

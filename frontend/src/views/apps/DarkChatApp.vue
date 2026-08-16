@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   ShieldOff,
   Smile,
+  SquarePen,
   Trash2,
   UserRound,
   UserMinus,
@@ -28,7 +29,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import DarkChatVoiceMessage from '@/components/DarkChatVoiceMessage.vue'
 import FullEmojiPicker from '@/components/FullEmojiPicker.vue'
@@ -49,6 +50,7 @@ import type { EasySharePayload } from '@/types/easyshare'
 import type { MediaType, PhoneMedia } from '@/types/media'
 import { copyText } from '@/utils/clipboard'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
+import { easyShareDarkChatInviteCode } from '@/utils/easyshare'
 import { handleEnterAction } from '@/utils/keyboard'
 import {
   SkyAppPage,
@@ -64,7 +66,6 @@ import {
   SkyListItem,
   SkyMessagebar,
   SkyNavbar,
-  SkyPillNavigation,
   SkyScrollArea,
   SkySearchbar,
   SkySettingsGroup,
@@ -88,6 +89,7 @@ const easyShare = useEasyShareStore()
 const sms = useMessagesStore()
 const messageMedia = useMessageMediaStore()
 const phone = usePhoneStore()
+const route = useRoute()
 const router = useRouter()
 const screen = ref<'inbox' | 'new' | 'thread' | 'contact' | 'profile'>('inbox')
 const search = ref('')
@@ -147,6 +149,23 @@ const filteredConversations = computed(() => {
       .includes(needle),
   )
 })
+const contactSuggestions = computed(() => {
+  const needle = identifier.value.trim().toLocaleLowerCase(phone.lang)
+  if (!needle) return darkchat.contacts.slice(0, 8)
+  return darkchat.contacts
+    .filter((contact) =>
+      `${contact.alias} ${contact.darkId}`
+        .toLocaleLowerCase(phone.lang)
+        .includes(needle),
+    )
+    .slice(0, 8)
+})
+const sharedInviteCode = ref(
+  easyShareDarkChatInviteCode(
+    route.query.easyShareKind,
+    route.query.easyShareLink,
+  ),
+)
 const active = computed(() => darkchat.activeConversation)
 const attachmentPanelOpen = computed(() => emojiOpen.value || gifOpen.value)
 const timerOptions = [0, -1, 60, 300, 3600, 86400, 604800]
@@ -340,6 +359,25 @@ function back(): void {
   screen.value = 'inbox'
   shareDraft.value = null
   resetPanels()
+}
+
+function beginNewChat(): void {
+  identifier.value = ''
+  screen.value = 'new'
+  resetPanels()
+}
+
+function openSharedInvite(): void {
+  if (!sharedInviteCode.value || !darkchat.profile) return
+  identifier.value = sharedInviteCode.value
+  sharedInviteCode.value = null
+  screen.value = 'new'
+  resetPanels()
+  const query = { ...route.query }
+  delete query.easyShareId
+  delete query.easyShareKind
+  delete query.easyShareLink
+  void router.replace({ path: route.path, query })
 }
 
 function resetPanels(): void {
@@ -704,6 +742,7 @@ async function createProfile(): Promise<void> {
   const success = await darkchat.createProfile()
   profileActionPending.value = false
   if (!success) showToast(errorText(darkchat.lastError ?? undefined))
+  else openSharedInvite()
 }
 
 function selectDisappearing(value: number | string): void {
@@ -733,7 +772,7 @@ function chooseSelection(value: number | string): void {
   selectionSheet.value = null
 }
 
-function shareIdentity(): void {
+function sharePrivateInvite(): void {
   const profile = darkchat.profile
   if (!profile) return
   easyShare.open({
@@ -918,6 +957,7 @@ function recordingTime(): string {
 onMounted(async () => {
   if (signedIn.value) await darkchat.bootstrap()
   if (await openEasyShareDraft()) return
+  openSharedInvite()
   if (!active.value) return
   screen.value = 'thread'
   const media = messageMedia.consume(`darkchat:${active.value.id}`)
@@ -1072,6 +1112,27 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 
+.dc-search :deep(.sky-searchbar__control),
+.dc-search :deep(.sky-searchbar__input) {
+  height: 38px;
+  min-height: 38px;
+}
+
+.dc-search :deep(.sky-searchbar__input) {
+  font-size: 15px;
+}
+
+.dc-search :deep(.sky-searchbar__clear) {
+  width: 38px;
+  height: 38px;
+}
+
+.dc-search :deep(.sky-searchbar__clear::before) {
+  position: absolute;
+  inset: -3px;
+  content: '';
+}
+
 .dc-security {
   width: 100%;
   min-height: 58px;
@@ -1197,6 +1258,65 @@ onBeforeUnmount(() => {
   margin: 0 2px 22px;
 }
 
+.dc-new-chat-scroll {
+  padding-top: 2px;
+}
+
+.dc-recipient-field,
+.dc-new-chat-contacts {
+  margin: 0 calc(var(--sky-page-gutter) * -1) 12px;
+  border-top: 1px solid var(--dc-border);
+  border-bottom: 1px solid var(--dc-border);
+  background: transparent;
+}
+
+.dc-recipient-field :deep(.sky-field) {
+  min-height: 52px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  background: transparent;
+}
+
+.dc-recipient-field :deep(.sky-field__inner) {
+  min-width: 0;
+  padding: 0;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+}
+
+.dc-recipient-field :deep(.sky-field__label) {
+  margin: 0;
+  flex: none;
+  color: var(--dc-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.dc-recipient-field :deep(.sky-field__control),
+.dc-recipient-field :deep(.sky-field__input) {
+  min-height: 52px;
+}
+
+.dc-recipient-field :deep(.sky-field__control) {
+  flex: 1;
+  margin: 0;
+}
+
+.dc-recipient-field :deep(.sky-field__input) {
+  font-size: 15px;
+}
+
+.dc-new-chat-contacts :deep(.sky-list-item__row) {
+  background: transparent;
+}
+
+.dc-identifier-action {
+  margin: 0;
+}
+
 .dc-contacts-group {
   margin-bottom: 18px;
 }
@@ -1264,6 +1384,19 @@ onBeforeUnmount(() => {
 
 .dc-qr-card :deep(.sky-button) {
   grid-column: 1 / -1;
+}
+
+.dc-invite-actions {
+  min-width: 0;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dc-invite-actions :deep(.sky-button) {
+  min-width: 0;
+  grid-column: auto;
 }
 
 .dc-thread-meta {
@@ -1432,30 +1565,34 @@ onBeforeUnmount(() => {
 }
 
 .dc-attachments {
-  display: grid;
-  padding: 9px 10px 10px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 5px;
-  border-top: 1px solid var(--dc-border);
-  background: var(--dc-surface);
+  position: absolute;
+  z-index: 48;
+  bottom: calc(var(--sky-safe-area-bottom) + 78px);
+  left: calc(var(--sky-safe-area-left) + var(--sky-page-gutter));
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 7px;
 }
 
 .dc-attachment-action {
-  min-width: 0;
-  min-height: 72px;
+  width: auto;
+  min-height: 42px;
   display: flex;
-  padding: 7px 2px 6px;
+  padding: 4px 14px 4px 5px;
   align-items: center;
-  flex-direction: column;
-  gap: 5px;
-  border-radius: 18px;
+  gap: 9px;
+  border-radius: var(--sky-radius-pill);
   color: var(--dc-label);
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .dc-attachment-action > span {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   display: grid;
+  flex: 0 0 32px;
   border-radius: 50%;
   color: var(--dc-accent);
   background: var(--sky-app-accent-soft);
@@ -1463,13 +1600,11 @@ onBeforeUnmount(() => {
 }
 
 .dc-attachment-action > small {
-  width: 100%;
-  overflow: hidden;
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 12px;
-  text-align: center;
-  text-overflow: ellipsis;
+  width: auto;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -1569,30 +1704,43 @@ onBeforeUnmount(() => {
 }
 
 .dc-composer-row .dc-composer-pill {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
   margin: 0;
+  padding: 5px 7px;
+  align-items: center;
+  gap: 6px;
   flex: 1 1 auto;
 }
 
 .dc-composer-action {
-  width: var(--sky-touch-target);
-  height: var(--sky-touch-target);
+  box-sizing: border-box;
+  width: 46px;
+  height: 46px;
   display: grid;
   padding: 0;
   overflow: hidden;
-  flex: 0 0 var(--sky-touch-target);
+  flex: 0 0 46px;
   border-radius: 50%;
   color: var(--dc-accent);
   place-items: center;
+  transition:
+    color 180ms ease,
+    transform 180ms ease;
 }
 
 .dc-composer-action.active {
   color: #fff;
   background: var(--dc-accent);
+  transform: rotate(45deg);
 }
 
 .dc-composer {
   min-width: 0;
-  padding: 6px;
+  padding: 0;
+  flex: 1;
+  gap: 4px;
   background: transparent;
 }
 
@@ -1777,7 +1925,7 @@ onBeforeUnmount(() => {
   <SkyAppPage
     class="darkchat-page dc-ios"
     :label="t('name')"
-    :dark="true"
+    :dark="phone.isDarkMode"
     accent="#0a84ff"
     accent-soft="rgb(10 132 255 / 18%)"
   >
@@ -1826,15 +1974,19 @@ onBeforeUnmount(() => {
           :subtitle="t('privateNetwork')"
           variant="large"
         >
-          <template #right>
-            <SkyGlass
-              component="button"
-              class="dc-navbar-action"
+          <template #left>
+            <SkyLink
+              icon-only
               :aria-label="t('myIdentity')"
               @click="openProfile"
             >
               <UserRound :size="20" />
-            </SkyGlass>
+            </SkyLink>
+          </template>
+          <template #right>
+            <SkyLink icon-only :aria-label="t('newChat')" @click="beginNewChat">
+              <SquarePen :size="21" />
+            </SkyLink>
           </template>
           <template #subnavbar>
             <SkySearchbar
@@ -1847,7 +1999,7 @@ onBeforeUnmount(() => {
           </template>
         </SkyNavbar>
 
-        <SkyScrollArea padded with-tabbar class="dc-inbox-content">
+        <SkyScrollArea padded class="dc-inbox-content">
           <SkyGlass
             component="button"
             class="dc-security"
@@ -1910,68 +2062,36 @@ onBeforeUnmount(() => {
             <template #icon><ShieldCheck :size="27" /></template>
           </SkyEmptyState>
         </SkyScrollArea>
-
-        <SkyPillNavigation
-          layout="compact"
-          align="end"
-          :label="t('newChat')"
-          class="dc-inbox-navigation"
-        >
-          <SkyButton raised rounded @click="screen = 'new'">
-            <MessageCirclePlus :size="19" />{{ t('newChat') }}
-          </SkyButton>
-        </SkyPillNavigation>
       </section>
 
       <section v-else-if="screen === 'new'" class="dc-screen">
-        <SkyNavbar
-          :title="t('newChat')"
-          show-back
-          back-appearance="surface"
-          :back-label="phone.t('Common.back')"
-          @back="back"
-        />
-        <SkyScrollArea padded class="dc-scroll-content">
-          <SkyCard class="dc-hero" outline>
-            <span class="dc-icon-tile"><QrCode :size="27" /></span>
-            <h2>{{ t('connectPrivately') }}</h2>
-            <p>{{ t('newChatBody') }}</p>
-          </SkyCard>
-          <SkyList
-            inset
-            strong
-            class="dc-form-list"
-            @keydown.enter="handleEnterAction($event, requestStart)"
-          >
+        <SkyNavbar :title="t('newChat')">
+          <template #right>
+            <SkyLink @click="back">{{ phone.t('Common.cancel') }}</SkyLink>
+          </template>
+        </SkyNavbar>
+        <SkyScrollArea padded class="dc-new-chat-scroll">
+          <SkyList class="dc-recipient-field" density="compact" flush>
             <SkyField
-              :label="t('darkIdOrInvite')"
+              :label="t('to')"
+              layout="inline"
               :value="identifier"
               autocomplete="off"
-              placeholder="dark:7X4K-P92D"
+              :placeholder="t('darkIdOrInvite')"
               clear-button
               :clear-label="phone.t('Common.clear')"
               @input="setIdentifier"
               @clear="identifier = ''"
+              @keyup.enter="requestStart()"
             />
           </SkyList>
-          <SkyButton
-            large
-            rounded
-            block
-            class="dc-primary"
-            :disabled="!identifier.trim()"
-            @click="requestStart()"
-          >
-            {{ t('continue') }}
-          </SkyButton>
-
-          <SkySettingsGroup
-            :title="t('contacts')"
-            :footer="t('contactsHint')"
-            class="dc-contacts-group"
+          <SkyList
+            v-if="contactSuggestions.length"
+            class="dc-new-chat-contacts"
+            flush
           >
             <SkyListItem
-              v-for="contact in darkchat.contacts"
+              v-for="contact in contactSuggestions"
               :key="contact.id"
               link
               link-component="button"
@@ -1995,22 +2115,17 @@ onBeforeUnmount(() => {
                 </span>
               </template>
             </SkyListItem>
-            <li v-if="!darkchat.contacts.length" class="dc-contacts-empty">
-              <UserRound :size="22" />{{ t('noContacts') }}
-            </li>
-          </SkySettingsGroup>
-
-          <SkyCard class="dc-qr-card" outline :content-wrap="false">
-            <div class="dc-faux-qr"><QrCode :size="58" /></div>
-            <div>
-              <strong>{{ darkchat.profile.darkId }}</strong>
-              <small>{{ t('shareIdentity') }}</small>
-            </div>
-            <SkyButton tonal rounded @click="shareIdentity">
-              <Share2 :size="16" />
-              {{ phone.t('Apps.easyShare.shareProfile') }}
-            </SkyButton>
-          </SkyCard>
+          </SkyList>
+          <SkyButton
+            v-else-if="identifier.trim()"
+            rounded
+            tonal
+            class="dc-identifier-action"
+            @click="requestStart()"
+          >
+            <MessageCirclePlus :size="17" />
+            {{ identifier }}
+          </SkyButton>
         </SkyScrollArea>
       </section>
 
@@ -2234,16 +2349,16 @@ onBeforeUnmount(() => {
           </SkyLink>
         </SkyGlass>
         <div v-else class="dc-composer-row">
-          <SkyGlass
-            component="button"
-            class="dc-composer-action"
-            :class="{ active: attachmentOpen || attachmentPanelOpen }"
-            :aria-label="phone.t('Common.add')"
-            @click="toggleAttachmentPanel"
-          >
-            <Plus :size="23" />
-          </SkyGlass>
-          <SkyGlass class="dc-composer-pill">
+          <SkyGlass component="div" :highlight="false" class="dc-composer-pill">
+            <SkyGlass
+              component="button"
+              class="dc-composer-action"
+              :class="{ active: attachmentOpen || attachmentPanelOpen }"
+              :aria-label="phone.t('Common.add')"
+              @click="toggleAttachmentPanel"
+            >
+              <Plus :size="23" />
+            </SkyGlass>
             <SkyMessagebar
               class="dc-composer"
               embedded
@@ -2448,13 +2563,18 @@ onBeforeUnmount(() => {
               <strong>{{ darkchat.profile.inviteCode }}</strong>
               <small>{{ t('inviteCode') }}</small>
             </div>
-            <SkyButton
-              tonal
-              rounded
-              @click="copyIdentity(darkchat.profile.inviteCode)"
-            >
-              <Copy :size="16" />{{ t('copyInvite') }}
-            </SkyButton>
+            <div class="dc-invite-actions">
+              <SkyButton
+                clear
+                rounded
+                @click="copyIdentity(darkchat.profile.inviteCode)"
+              >
+                <Copy :size="16" />{{ t('copyInvite') }}
+              </SkyButton>
+              <SkyButton tonal rounded @click="sharePrivateInvite">
+                <Share2 :size="16" />{{ t('shareInvite') }}
+              </SkyButton>
+            </div>
           </SkyCard>
           <p class="dc-privacy-note">
             <LockKeyhole :size="17" />{{ t('privacyDisclaimer') }}

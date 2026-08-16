@@ -78,6 +78,106 @@ describe('RadioApp Sky UI contract', () => {
     expect(source).toContain('connectHistory(entry)')
   })
 
+  it('keeps the volume slider inside its Sky list row and exposes speaker progress', () => {
+    const volumeTitle = ':title="phone.t(\'Apps.radio.volume\')"'
+    const volumeRowStart = source.lastIndexOf(
+      '<SkyListItem',
+      source.indexOf(volumeTitle),
+    )
+    const volumeRow = source.slice(
+      volumeRowStart,
+      source.indexOf(
+        '</SkyListItem>',
+        volumeRowStart,
+      ) + '</SkyListItem>'.length,
+    )
+
+    expect(volumeRow).toContain('<template #after>')
+    expect(volumeRow).toContain('<template #inner>')
+    expect(volumeRow).toContain('<SkyRange')
+    expect(volumeRow).not.toContain(':caption=')
+    expect(source.match(/media-class="radio-audio-control-icon"/g)).toHaveLength(
+      2,
+    )
+    expect(source.match(/:strong-title="false"/g)).toHaveLength(2)
+    expect(
+      source.match(/title-font-size-ios="radio-audio-control-title"/g),
+    ).toHaveLength(2)
+    expect(source).toMatch(
+      /:deep\(\.radio-audio-control-icon\)\s*\{[^}]*color:\s*var\(--sky-text\)/s,
+    )
+    expect(source).toMatch(
+      /:deep\(\.radio-audio-control-title\)\s*\{[^}]*font-size:\s*12px[^}]*font-weight:\s*400[^}]*line-height:\s*16px/s,
+    )
+    expect(source).toContain('inner-class="radio-speaker-content"')
+    expect(source).toMatch(
+      /:deep\(\.radio-speaker-content \.sky-list-item__subtitle\)\s*\{[^}]*color:\s*var\(--sky-muted\)[^}]*font-size:\s*12px[^}]*line-height:\s*16px/s,
+    )
+    expect(source).toContain(':aria-busy="radio.speakerPending || undefined"')
+    expect(source).toContain('!radio.data.speakerSupported ||')
+    expect(source).toContain('!radio.data.connected ||')
+    expect(source).toContain('radio.speakerPending')
+  })
+
+  it('keeps provider capability rows stable when PMA lacks secondary and speaker support', () => {
+    const secondaryFieldStart = source.lastIndexOf(
+      '<SkyField',
+      source.indexOf("phone.t('Apps.radio.secondaryFrequency')"),
+    )
+    const secondaryField = source.slice(
+      secondaryFieldStart,
+      source.indexOf('</SkyField>', secondaryFieldStart),
+    )
+    const speakerRowStart = source.lastIndexOf(
+      '<SkyListItem',
+      source.indexOf("phone.t('Apps.radio.speaker')"),
+    )
+    const speakerRow = source.slice(
+      speakerRowStart,
+      source.indexOf('</SkyListItem>', speakerRowStart),
+    )
+
+    expect(secondaryField.slice(0, secondaryField.indexOf('>'))).not.toContain(
+      'v-if="radio.data.secondarySupported"',
+    )
+    expect(secondaryField).toContain(
+      ':disabled="!radio.data.secondarySupported"',
+    )
+    expect(secondaryField).toContain("'Apps.radio.notSupported'")
+    expect(speakerRow).not.toContain('v-if="radio.data.speakerSupported"')
+    expect(speakerRow).toContain(':disabled="!radio.data.speakerSupported"')
+    expect(source).toContain("'Apps.radio.providerFeatureUnavailable'")
+  })
+
+  it('uses compact profile placeholders without dropping the full guidance', () => {
+    expect(source.match(/class="radio-profile-field"/g)).toHaveLength(2)
+    expect(source).toMatch(
+      /:deep\(\.radio-profile-field \.sky-field__input\)\s*\{[^}]*min-width:\s*0[^}]*font-size:\s*15px/s,
+    )
+  })
+
+  it('uses the rounded Sky button treatment for both primary actions', () => {
+    const primaryActions = source.slice(
+      source.indexOf('<div class="radio-primary-action">'),
+      source.indexOf(
+        '</div>',
+        source.indexOf('<div class="radio-primary-action">'),
+      ) + '</div>'.length,
+    )
+
+    expect(primaryActions.match(/<SkyButton\b/g)).toHaveLength(2)
+    expect(primaryActions.match(/\r?\n\s+rounded\r?\n/g)).toHaveLength(2)
+  })
+
+  it('keeps the recently connected list close to its section title', () => {
+    expect(source).toContain(
+      '<SkyList v-else inset strong class="radio-history-list">',
+    )
+    expect(source).toMatch(
+      /\.radio-history-list\s*\{[^}]*margin-top:\s*var\(--sky-space-2\)/s,
+    )
+  })
+
   it('preserves theme, labels, loading, empty, error and feedback states', () => {
     expect(source).toContain(':dark="phone.isDarkMode"')
     expect(source).toContain(':label="phone.t(\'Apps.radio.name\')"')

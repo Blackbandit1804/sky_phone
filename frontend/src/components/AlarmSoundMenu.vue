@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { kList, kListItem, kNavbar, kNavbarBackLink } from 'konsta/vue'
+import {
+  SkyList as kList,
+  SkyListItem as kListItem,
+  SkyNavbar as kNavbar,
+  SkyNavbarBackLink as kNavbarBackLink,
+} from '@/ui'
 import { Check } from 'lucide-vue-next'
 import { onBeforeUnmount } from 'vue'
 

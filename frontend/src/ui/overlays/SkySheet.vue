@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, toRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useOverlayFocusTrap } from './useOverlayFocusTrap'
 
 defineOptions({ inheritAttrs: false })
@@ -12,25 +12,40 @@ const props = withDefaults(
     ariaModal?: boolean | 'false' | 'true'
     backdrop?: boolean
     component?: string
+    grabberClickable?: boolean
+    grabberLabel?: string
     opened: boolean
     role?: 'alertdialog' | 'dialog' | 'none' | 'presentation'
+    swipeToClose?: boolean
     tabindex?: number | string
   }>(),
   {
     ariaModal: true,
     backdrop: true,
     component: 'div',
+    grabberClickable: false,
+    grabberLabel: '',
     tabindex: -1,
   },
 )
 const emit = defineEmits<{
   backdropclick: [event: MouseEvent]
   escape: [event: KeyboardEvent]
+  grabberclick: [event: MouseEvent]
+  swipeclose: [event: PointerEvent]
 }>()
 
 const root = ref<HTMLElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
+const dragOffset = ref(0)
+const isDragging = ref(false)
+const isSettling = ref(false)
 const inferredRole = ref<'alertdialog' | 'dialog' | 'none' | 'presentation'>()
+let activePointerId: number | null = null
+let dragStartedAt = 0
+let dragStartY = 0
+let settleTimer: number | undefined
+
 const effectiveRole = computed(() => {
   const role = inferredRole.value
   const isDialog = role === 'dialog' || role === 'alertdialog'
@@ -38,6 +53,86 @@ const effectiveRole = computed(() => {
     ? 'presentation'
     : role
 })
+const panelStyle = computed(() =>
+  props.swipeToClose && dragOffset.value > 0
+    ? { '--sky-sheet-drag-offset': `${dragOffset.value}px` }
+    : undefined,
+)
+
+function clearSettleTimer(): void {
+  if (!settleTimer) return
+  window.clearTimeout(settleTimer)
+  settleTimer = undefined
+}
+
+function settleDrag(): void {
+  clearSettleTimer()
+  isSettling.value = true
+  dragOffset.value = 0
+  settleTimer = window.setTimeout(() => {
+    isSettling.value = false
+    settleTimer = undefined
+  }, 220)
+}
+
+function startDrag(event: PointerEvent): void {
+  if (
+    !props.swipeToClose ||
+    !event.isPrimary ||
+    (event.pointerType === 'mouse' && event.button !== 0)
+  ) {
+    return
+  }
+
+  clearSettleTimer()
+  activePointerId = event.pointerId
+  dragStartY = event.clientY
+  dragStartedAt = performance.now()
+  dragOffset.value = 0
+  isDragging.value = true
+  isSettling.value = false
+  const handle = event.currentTarget as HTMLElement
+  handle.setPointerCapture(event.pointerId)
+}
+
+function moveDrag(event: PointerEvent): void {
+  if (event.pointerId !== activePointerId) return
+  dragOffset.value = Math.max(0, event.clientY - dragStartY)
+  event.preventDefault()
+}
+
+function finishDrag(event: PointerEvent, cancelled = false): void {
+  if (event.pointerId !== activePointerId) return
+
+  const handle = event.currentTarget as HTMLElement
+  const pointerId = activePointerId
+  const elapsed = Math.max(performance.now() - dragStartedAt, 1)
+  const velocity = dragOffset.value / elapsed
+  const closeThreshold = Math.min(
+    Math.max((panel.value?.offsetHeight ?? 0) * 0.18, 72),
+    110,
+  )
+  const shouldClose =
+    !cancelled &&
+    (dragOffset.value >= closeThreshold ||
+      (dragOffset.value >= 28 && velocity >= 0.65))
+
+  activePointerId = null
+  isDragging.value = false
+  if (handle.hasPointerCapture(pointerId)) {
+    handle.releasePointerCapture(pointerId)
+  }
+
+  if (shouldClose) {
+    emit('swipeclose', event)
+    void nextTick(() => {
+      if (props.opened) settleDrag()
+    })
+    return
+  }
+
+  settleDrag()
+}
 
 watch(
   [toRef(props, 'opened'), toRef(props, 'role')],
@@ -55,6 +150,17 @@ watch(
   },
   { immediate: true, flush: 'post' },
 )
+
+watch(toRef(props, 'opened'), (opened) => {
+  if (opened) return
+  activePointerId = null
+  dragOffset.value = 0
+  isDragging.value = false
+  isSettling.value = false
+  clearSettleTimer()
+})
+
+onBeforeUnmount(clearSettleTimer)
 
 useOverlayFocusTrap({
   onEscape: (event) => emit('escape', event),
@@ -81,6 +187,11 @@ useOverlayFocusTrap({
         :is="component"
         ref="panel"
         class="sky-sheet__panel"
+        :class="{
+          'sky-sheet__panel--dragging': isDragging,
+          'sky-sheet__panel--settling': isSettling,
+        }"
+        :style="panelStyle"
         :role="effectiveRole"
         :aria-modal="
           effectiveRole === 'dialog' || effectiveRole === 'alertdialog'
@@ -94,6 +205,20 @@ useOverlayFocusTrap({
         :aria-describedby="effectiveRole ? ariaDescribedby : undefined"
         :tabindex="tabindex"
       >
+        <component
+          :is="grabberClickable ? 'button' : 'div'"
+          v-if="swipeToClose"
+          class="sky-sheet__grabber"
+          :type="grabberClickable ? 'button' : undefined"
+          :aria-hidden="grabberClickable ? undefined : true"
+          :aria-label="grabberClickable ? grabberLabel : undefined"
+          @click="grabberClickable && emit('grabberclick', $event)"
+          @lostpointercapture="finishDrag($event, true)"
+          @pointercancel="finishDrag($event, true)"
+          @pointerdown="startDrag"
+          @pointermove="moveDrag"
+          @pointerup="finishDrag($event)"
+        ></component>
         <slot />
       </component>
     </div>

@@ -19,7 +19,14 @@ describe('AppStoreDetail contract', () => {
     expect(source).toContain("emit('share')")
     expect(source).toContain('<AppStoreAction :action="action" />')
     expect(source).toContain(
-      ":class=\"{ 'store-detail__action--icon': action !== 'open' }\"",
+      "'store-detail__action--icon': action === 'installing'",
+    )
+    expect(source).toContain("'store-detail__action--get': action === 'get'")
+    expect(source).toMatch(
+      /\.store-detail__hero \.store-detail__action--get\s*\{[^}]*min-width:\s*54px;[^}]*min-height:\s*30px;[^}]*height:\s*30px;/s,
+    )
+    expect(source).toMatch(
+      /\.store-detail__hero \.store-detail__action--icon\s*\{[^}]*width:\s*54px;[^}]*min-width:\s*54px;[^}]*min-height:\s*30px;[^}]*height:\s*30px;/s,
     )
     expect(source).not.toContain(':has(')
     expect(source).toMatch(

@@ -61,4 +61,13 @@ describe('SkyRange', () => {
     )
     expect(tokens).toContain('--sky-shadow-glass-thumb-glow')
   })
+
+  it('keeps the native range above its enlarged pointer target', () => {
+    const uiDirectory = fileURLToPath(new URL('..', import.meta.url))
+    const controls = readFileSync(`${uiDirectory}/controls.css`, 'utf8')
+
+    expect(controls).toMatch(
+      /\.sky-range__input\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;/s,
+    )
+  })
 })

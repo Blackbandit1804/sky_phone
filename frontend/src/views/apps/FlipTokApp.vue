@@ -10,16 +10,14 @@ import {
   Home,
   ImagePlus,
   Link2,
-  MapPin,
   MessageCircle,
   MoreHorizontal,
   Music2,
+  Pencil,
   Play,
   Plus,
   Reply,
   Search,
-  ShieldAlert,
-  ShieldCheck,
   Send,
   Share2,
   TriangleAlert,
@@ -45,7 +43,6 @@ import { usePhoneStore } from '@/stores/phone'
 import type {
   FlipTokComment,
   FlipTokProfile,
-  FlipTokReport,
   FlipTokVideo,
 } from '@/types/fliptok'
 import type { PhoneMedia } from '@/types/media'
@@ -57,6 +54,7 @@ import {
   SkyChip,
   SkyDialog,
   SkyDialogButton,
+  SkyDropdown,
   SkyField,
   SkyGlass,
   SkyLink,
@@ -108,14 +106,15 @@ const logoutSubmitting = ref(false)
 const tab = ref<Tab>('feed')
 const selectedVideo = ref<FlipTokVideo | null>(null)
 const selectedMedia = ref<PhoneMedia | null>(null)
+const selectedMediaItems = ref<PhoneMedia[]>([])
 const commentsOpen = ref(false)
 const actionsOpen = ref(false)
-const visibilitySheetOpen = ref(false)
+const visibilityMenuOpen = ref(false)
+const visibilityMenuTarget = ref<HTMLElement | null>(null)
 const accountTypeSheetOpen = ref(false)
 const profilePhotoSheetOpen = ref(false)
 const composeOpen = ref(false)
 const profileEditOpen = ref(false)
-const moderationOpen = ref(false)
 const musicSheetOpen = ref(false)
 const reportSheetOpen = ref(false)
 const connectionsOpen = ref(false)
@@ -123,8 +122,8 @@ const connectionsMode = ref<ConnectionMode>('followers')
 const search = ref('')
 const commentBody = ref('')
 const replyingTo = ref<FlipTokComment | null>(null)
+const expandedCommentThreads = ref(new Set<string>())
 const caption = ref('')
-const location = ref('')
 const visibility = ref<'public' | 'followers' | 'private'>('public')
 const commentsEnabled = ref(true)
 const trimStartMs = ref(0)
@@ -163,6 +162,7 @@ const profileDraft = ref({
   handle: '',
 })
 const selectedProfilePhoto = ref<PhoneMedia | null>(null)
+const feedCards = new Map<string, HTMLElement>()
 const videoElements = new Map<string, HTMLVideoElement>()
 const musicElements = new Map<string, HTMLAudioElement>()
 let flipTokYoutubePlayer: YouTubePlayer | null = null
@@ -214,6 +214,19 @@ const canPublish = computed(
     caption.value.length <= 500 &&
     !customMusicLoadFailed.value,
 )
+const selectedMediaType = computed(() => selectedMedia.value?.mediaType ?? null)
+const visibilityMenuItems = computed(() =>
+  visibilityOptions.map((option) => ({
+    checked: visibility.value === option,
+    id: option,
+    label:
+      option === 'public'
+        ? t('public')
+        : option === 'followers'
+          ? t('followersOnly')
+          : t('private'),
+  })),
+)
 const tabIndex = computed(() =>
   ['feed', 'discover', 'create', 'activity', 'profile'].indexOf(tab.value),
 )
@@ -238,6 +251,12 @@ function compactCount(value: number): string {
     maximumFractionDigits: 1,
     notation: 'compact',
   }).format(value)
+}
+
+function videoMedia(video: FlipTokVideo) {
+  return video.media?.length
+    ? video.media
+    : [{ id: 0, mediaType: video.media_type ?? 'video', url: video.url }]
 }
 
 function parseYoutubeVideoId(value: string): string {
@@ -396,6 +415,15 @@ function setVideoElement(id: string, element: unknown): void {
   }
   videoElements.delete(id)
   setPlaybackFailed(id, false)
+}
+
+function setFeedCard(id: string, element: unknown): void {
+  if (element instanceof HTMLElement) {
+    element.dataset.id = id
+    feedCards.set(id, element)
+    return
+  }
+  feedCards.delete(id)
 }
 
 function setMusicElement(id: string, element: unknown): void {
@@ -657,7 +685,9 @@ function observeVideos(): void {
   observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
-        const video = entry.target as HTMLVideoElement
+        const card = entry.target as HTMLElement
+        const id = card.dataset.id ?? ''
+        const video = videoElements.get(id)
         if (entry.isIntersecting && entry.intersectionRatio > 0.72) {
           videoElements.forEach((item) => {
             if (item !== video) {
@@ -668,7 +698,9 @@ function observeVideos(): void {
               pauseFlipTokYoutube(otherId)
             }
           })
-          const id = video.dataset.id
+          musicElements.forEach((audio, audioId) => {
+            if (audioId !== id) audio.pause()
+          })
           const item = id
             ? [
                 ...store.feed,
@@ -676,11 +708,16 @@ function observeVideos(): void {
                 ...store.profileVideos,
               ].find((candidate) => candidate.id === id)
             : undefined
-          if (item) void playFeedVideo(item, video)
+          if (item && video) void playFeedVideo(item, video)
+          else if (item?.music_source === 'youtube' && item.music_video_id) {
+            void playFlipTokYoutube(id, item.music_video_id, item.music_volume, 0)
+          } else if (item) {
+            const music = musicElements.get(id)
+            if (music) void music.play().catch(() => undefined)
+          }
           if (id) void nuiCall('fliptok:view', { id })
         } else {
-          video.pause()
-          const id = video.dataset.id
+          video?.pause()
           if (id) {
             musicElements.get(id)?.pause()
             pauseFlipTokYoutube(id)
@@ -690,7 +727,7 @@ function observeVideos(): void {
     },
     { threshold: [0.72] },
   )
-  videoElements.forEach((video) => observer?.observe(video))
+  feedCards.forEach((card) => observer?.observe(card))
 }
 
 function togglePlayback(video: FlipTokVideo): void {
@@ -854,8 +891,16 @@ async function changeMode(mode: 'for-you' | 'following'): Promise<void> {
 async function openComments(video: FlipTokVideo): Promise<void> {
   selectedVideo.value = video
   replyingTo.value = null
+  expandedCommentThreads.value = new Set()
   await store.loadComments(video.id)
   commentsOpen.value = true
+}
+
+function toggleReplies(commentId: string): void {
+  const next = new Set(expandedCommentThreads.value)
+  if (next.has(commentId)) next.delete(commentId)
+  else next.add(commentId)
+  expandedCommentThreads.value = next
 }
 
 function startReply(comment: FlipTokComment): void {
@@ -881,11 +926,10 @@ async function submitComment(): Promise<void> {
   await store.loadComments(selectedVideo.value.id)
 }
 
-function chooseVideo(): void {
-  messageMedia.begin('fliptok:compose', 'video', '/apps/fliptok?compose=1', 1, {
+function chooseMedia(source: 'camera' | 'photos', mediaType: 'photo' | 'video'): void {
+  messageMedia.begin('fliptok:compose', mediaType, '/apps/fliptok?compose=1', mediaType === 'photo' ? 10 : 1, {
     caption: caption.value,
     commentsEnabled: commentsEnabled.value,
-    location: location.value,
     visibility: visibility.value,
     trimStartMs: trimStartMs.value,
     trimEndMs: trimEndMs.value,
@@ -897,11 +941,20 @@ function chooseVideo(): void {
     customMusicTitle: customMusicTitle.value,
     customMusicArtist: customMusicArtist.value,
     customMusicVideoId: customMusicVideoId.value,
+    selectedMediaItems: selectedMediaItems.value,
   })
   void router.push({
-    path: '/apps/photos',
-    query: { mediaAttachment: 'video' },
+    path: `/apps/${source}`,
+    query: { mediaAttachment: mediaType },
   })
+}
+
+function chooseVideo(source: 'camera' | 'photos' = 'photos'): void {
+  chooseMedia(source, 'video')
+}
+
+function choosePhotoSlideshow(source: 'camera' | 'photos' = 'photos'): void {
+  chooseMedia(source, 'photo')
 }
 
 async function publish(draft = false): Promise<void> {
@@ -911,8 +964,9 @@ async function publish(draft = false): Promise<void> {
     caption: caption.value,
     commentsEnabled: commentsEnabled.value,
     draft,
-    location: location.value,
     mediaId: selectedMedia.value.id,
+    mediaIds: selectedMediaItems.value.map((media) => media.id),
+    mediaType: selectedMediaType.value,
     trimStartMs: trimStartMs.value,
     trimEndMs: trimEndMs.value || null,
     coverTimeMs: coverTimeMs.value,
@@ -936,8 +990,8 @@ async function publish(draft = false): Promise<void> {
 
 function resetComposer(): void {
   selectedMedia.value = null
+  selectedMediaItems.value = []
   caption.value = ''
-  location.value = ''
   visibility.value = 'public'
   commentsEnabled.value = true
   trimStartMs.value = 0
@@ -1030,7 +1084,19 @@ function formatDuration(value: number): string {
 
 function chooseVisibility(value: (typeof visibilityOptions)[number]): void {
   visibility.value = value
-  visibilitySheetOpen.value = false
+  visibilityMenuOpen.value = false
+}
+
+function openVisibilityMenu(event: MouseEvent): void {
+  if (!(event.currentTarget instanceof HTMLElement)) return
+  visibilityMenuTarget.value = event.currentTarget
+  visibilityMenuOpen.value = true
+}
+
+function selectVisibility(id: string): void {
+  if (visibilityOptions.includes(id as (typeof visibilityOptions)[number])) {
+    chooseVisibility(id as (typeof visibilityOptions)[number])
+  }
 }
 
 function chooseAccountType(value: (typeof accountTypeOptions)[number]): void {
@@ -1148,19 +1214,6 @@ async function blockCurrentProfile(): Promise<void> {
     openOwnProfile()
     notify(t('blocked'))
   }
-}
-
-async function openModeration(): Promise<void> {
-  if (!(await store.loadReports())) return notify(t('errors.not_authorized'))
-  moderationOpen.value = true
-}
-
-async function resolveReport(
-  report: FlipTokReport,
-  action: 'dismiss' | 'remove',
-): Promise<void> {
-  if (!(await store.resolveReport(report.id, action)))
-    notify(t('errors.default'))
 }
 
 function editProfile(): void {
@@ -1296,7 +1349,6 @@ onMounted(async () => {
   const selection = messageMedia.consumeMany<{
     caption?: string
     commentsEnabled?: boolean
-    location?: string
     visibility?: 'public' | 'followers' | 'private'
     trimStartMs?: number
     trimEndMs?: number
@@ -1308,12 +1360,16 @@ onMounted(async () => {
     customMusicTitle?: string
     customMusicArtist?: string
     customMusicVideoId?: string
+    selectedMediaItems?: PhoneMedia[]
   }>('fliptok:compose')
-  if (selection?.media[0]) {
-    selectedMedia.value = selection.media[0]
+  if (selection) {
+    const restoredMedia = selection.media.length
+      ? selection.media
+      : (selection.context?.selectedMediaItems ?? [])
+    selectedMedia.value = restoredMedia[0] ?? null
+    selectedMediaItems.value = restoredMedia
     caption.value = selection.context?.caption ?? ''
     commentsEnabled.value = selection.context?.commentsEnabled ?? true
-    location.value = selection.context?.location ?? ''
     visibility.value = selection.context?.visibility ?? 'public'
     trimStartMs.value = selection.context?.trimStartMs ?? 0
     trimEndMs.value = selection.context?.trimEndMs ?? 0
@@ -1331,6 +1387,7 @@ onMounted(async () => {
     composeOpen.value = true
   }
   await store.bootstrap()
+  if (route.query.compose === '1' && store.authenticated) composeOpen.value = true
   const easyShareId = String(route.query.easyShareId ?? '')
   if (easyShareId && route.query.easyShareKind === 'profile') {
     const profileId = Number(easyShareId)
@@ -1355,6 +1412,7 @@ onBeforeUnmount(() => {
   if (reactionPulseTimer !== null) window.clearTimeout(reactionPulseTimer)
   followFeedbackTimers.forEach((timer) => window.clearTimeout(timer))
   followFeedbackTimers.clear()
+  feedCards.clear()
   videoElements.forEach((video) => video.pause())
   destroyFlipTokYoutube()
 })
@@ -1363,7 +1421,7 @@ onBeforeUnmount(() => {
 <template>
   <SkyAppPage
     class="fliptok-page"
-    :dark="true"
+    :dark="phone.isDarkMode"
     :label="t('name')"
     accent="#ff2d55"
     accent-soft="rgba(255, 45, 85, 0.18)"
@@ -1381,7 +1439,7 @@ onBeforeUnmount(() => {
         class="fliptok-auth__navbar"
         :title="t('name')"
         :scroll-el="null"
-        variant="large"
+        variant="medium"
       />
       <div class="fliptok-auth__body">
         <SkyGlass class="fliptok-auth__glass">
@@ -1504,8 +1562,22 @@ onBeforeUnmount(() => {
         <Search />
       </SkyLink>
       <main class="video-feed">
-        <article v-for="video in store.feed" :key="video.id" class="video-card">
+        <article
+          v-for="video in store.feed"
+          :key="video.id"
+          :ref="(el) => setFeedCard(video.id, el)"
+          class="video-card"
+        >
+          <div v-if="video.media_type === 'photo'" class="photo-slideshow">
+            <img
+              v-for="media in videoMedia(video)"
+              :key="media.id || media.url"
+              :src="media.url"
+              alt=""
+            />
+          </div>
           <video
+            v-else
             :ref="(el) => setVideoElement(video.id, el)"
             :data-id="video.id"
             :src="video.url"
@@ -1581,9 +1653,6 @@ onBeforeUnmount(() => {
                 <template v-else>{{ part.value }}</template>
               </template>
             </p>
-            <div v-if="video.location" class="location">
-              <MapPin />{{ video.location }}
-            </div>
             <div class="sound">
               <Music2 />{{
                 video.music_title ||
@@ -1601,25 +1670,27 @@ onBeforeUnmount(() => {
             </div>
           </section>
           <aside class="video-actions">
-            <button class="avatar" @click="openProfile(video.profile_id)">
-              <img v-if="video.avatar_url" :src="video.avatar_url" alt="" />
-              <template v-else>{{ initials(video.display_name) }}</template>
-            </button>
-            <button
-              v-if="
-                !video.is_owner &&
-                (!video.is_following || followFeedbackIds.has(video.id))
-              "
-              class="follow-dot"
-              :class="{
-                'follow-dot--confirmed': video.is_following,
-                'follow-dot--pending': followPendingIds.has(video.id),
-              }"
-              :disabled="followPendingIds.has(video.id)"
-              @click="followFromFeed(video)"
-            >
-              <Check v-if="video.is_following" /><Plus v-else />
-            </button>
+            <div class="video-profile-action">
+              <button class="avatar" @click="openProfile(video.profile_id)">
+                <img v-if="video.avatar_url" :src="video.avatar_url" alt="" />
+                <template v-else>{{ initials(video.display_name) }}</template>
+              </button>
+              <button
+                v-if="
+                  !video.is_owner &&
+                  (!video.is_following || followFeedbackIds.has(video.id))
+                "
+                class="follow-dot"
+                :class="{
+                  'follow-dot--confirmed': video.is_following,
+                  'follow-dot--pending': followPendingIds.has(video.id),
+                }"
+                :disabled="followPendingIds.has(video.id)"
+                @click="followFromFeed(video)"
+              >
+                <Check v-if="video.is_following" /><Plus v-else />
+              </button>
+            </div>
             <button
               :class="{
                 liked: video.is_liked,
@@ -1669,7 +1740,7 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else-if="tab === 'discover'">
-      <SkyNavbar class="fliptok-navbar" :title="t('discover')" variant="large">
+      <SkyNavbar class="fliptok-navbar" :title="t('discover')" variant="medium">
         <template #subnavbar>
           <SkySearchbar
             v-model="search"
@@ -1692,7 +1763,13 @@ onBeforeUnmount(() => {
             :key="video.id"
             @click="openDiscoveredVideo(video)"
           >
+            <img
+              v-if="video.media_type === 'photo'"
+              :src="video.url"
+              alt=""
+            />
             <video
+              v-else
               :src="video.url"
               preload="metadata"
               muted
@@ -1707,19 +1784,7 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else-if="tab === 'activity'">
-      <SkyNavbar class="fliptok-navbar" :title="t('activity')" variant="large">
-        <template v-if="store.isAdmin" #right>
-          <SkyLink
-            component="button"
-            icon-only
-            class="moderation-button"
-            :aria-label="t('moderation')"
-            @click="openModeration"
-          >
-            <span class="moderation-button__surface"><ShieldCheck /></span>
-          </SkyLink>
-        </template>
-      </SkyNavbar>
+      <SkyNavbar class="fliptok-navbar" :title="t('activity')" variant="large" />
       <SkyScrollArea padded with-tabbar class="light-screen activity-list">
         <article
           v-for="activity in store.activities"
@@ -1746,13 +1811,35 @@ onBeforeUnmount(() => {
     <template v-else-if="tab === 'profile'">
       <SkyNavbar
         class="fliptok-navbar"
-        :title="currentProfile ? `@${currentProfile.handle}` : t('profile')"
+        title=""
         :show-back="Boolean(store.viewedProfile)"
         :back-label="phone.t('Common.back')"
         back-appearance="surface"
         variant="medium"
         @back="openOwnProfile"
-      />
+      >
+        <template v-if="currentProfile" #right>
+          <div class="profile-navbar-actions">
+            <SkyLink
+              v-if="currentProfile.is_owner"
+              component="button"
+              icon-only
+              :aria-label="t('editProfile')"
+              @click="editProfile"
+            >
+              <Pencil />
+            </SkyLink>
+            <SkyLink
+              component="button"
+              icon-only
+              :aria-label="phone.t('Apps.easyShare.shareProfile')"
+              @click="shareCurrentProfile"
+            >
+              <Share2 />
+            </SkyLink>
+          </div>
+        </template>
+      </SkyNavbar>
       <SkyScrollArea
         v-if="currentProfile"
         padded
@@ -1789,14 +1876,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <p class="bio">{{ currentProfile.bio || t('emptyBio') }}</p>
-        <div class="profile-actions">
-          <SkyButton
-            v-if="currentProfile.is_owner"
-            rounded
-            @click="editProfile"
-            >{{ t('editProfile') }}</SkyButton
-          >
-          <template v-else>
+        <div v-if="!currentProfile.is_owner" class="profile-actions">
+          <template>
             <SkyButton rounded @click="store.followProfile(currentProfile)">
               {{ currentProfile.is_following ? t('unfollow') : t('follow') }}
             </SkyButton>
@@ -1808,10 +1889,6 @@ onBeforeUnmount(() => {
               >{{ t('block') }}</SkyButton
             >
           </template>
-          <SkyButton rounded tonal @click="shareCurrentProfile">
-            <Share2 :size="17" />
-            {{ phone.t('Apps.easyShare.shareProfile') }}
-          </SkyButton>
         </div>
         <div class="profile-video-grid">
           <button
@@ -1819,7 +1896,13 @@ onBeforeUnmount(() => {
             :key="video.id"
             @click="openDiscoveredVideo(video)"
           >
+            <img
+              v-if="video.media_type === 'photo'"
+              :src="video.url"
+              alt=""
+            />
             <video
+              v-else
               :src="video.url"
               muted
               playsinline
@@ -1840,7 +1923,7 @@ onBeforeUnmount(() => {
         store.authenticated &&
         !composeOpen &&
         !profileEditOpen &&
-        !moderationOpen
+        !connectionsOpen
       "
       class="main-tabs"
       :label="t('navigation')"
@@ -1907,17 +1990,26 @@ onBeforeUnmount(() => {
             <p>{{ t('createBody') }}</p>
           </div>
         </header>
-        <SkyGlass
-          v-if="!selectedMedia"
-          component="button"
-          class="media-picker"
-          @click="chooseVideo"
-        >
-          <Video /><strong>{{ t('chooseVideo') }}</strong
-          ><span>{{ t('chooseVideoHint') }}</span>
+        <SkyGlass v-if="!selectedMedia" class="media-picker">
+          <header>
+            <ImagePlus /><strong>{{ t('chooseMedia') }}</strong>
+            <span>{{ t('chooseMediaHint') }}</span>
+          </header>
+          <div class="media-source-grid">
+            <button type="button" @click="chooseVideo('camera')">
+              <Camera /><strong>{{ t('recordVideo') }}</strong>
+            </button>
+            <button type="button" @click="chooseVideo('photos')">
+              <Video /><strong>{{ t('chooseVideo') }}</strong>
+            </button>
+            <button type="button" @click="choosePhotoSlideshow('photos')">
+              <ImagePlus /><strong>{{ t('photoSlideshow') }}</strong>
+            </button>
+          </div>
         </SkyGlass>
         <SkyGlass v-else class="media-preview">
           <video
+            v-if="selectedMediaType === 'video'"
             ref="previewVideo"
             :src="selectedMedia.url"
             controls
@@ -1926,9 +2018,41 @@ onBeforeUnmount(() => {
             @play="handleComposerPlayback(true)"
             @pause="handleComposerPlayback(false)"
             @timeupdate="enforceComposerTrim"
-          /><SkyButton small rounded tonal @click="chooseVideo">
-            {{ t('changeVideo') }}
-          </SkyButton>
+          />
+          <div v-else class="compose-photo-preview">
+            <img
+              v-for="media in selectedMediaItems"
+              :key="media.id"
+              :src="media.url"
+              alt=""
+            />
+          </div>
+          <div class="media-preview__actions">
+            <SkyButton
+              small
+              rounded
+              tonal
+              @click="
+                selectedMediaType === 'photo'
+                  ? choosePhotoSlideshow('photos')
+                  : chooseVideo('photos')
+              "
+            >
+              {{ t('changeMedia') }}
+            </SkyButton>
+            <SkyButton
+              small
+              rounded
+              tonal
+              @click="
+                selectedMediaType === 'photo'
+                  ? choosePhotoSlideshow('camera')
+                  : chooseVideo('camera')
+              "
+            >
+              <Camera />{{ t('camera') }}
+            </SkyButton>
+          </div>
           <audio
             v-if="composerMusicUrl"
             ref="composerMusic"
@@ -1939,7 +2063,10 @@ onBeforeUnmount(() => {
             @error="markComposerMusicFailed"
           />
         </SkyGlass>
-        <SkyGlass v-if="selectedMedia && videoDurationMs" class="editor-card">
+        <SkyGlass
+          v-if="selectedMediaType === 'video' && videoDurationMs"
+          class="editor-card"
+        >
           <h3>{{ t('trimAndCover') }}</h3>
           <label>
             <span
@@ -2035,13 +2162,6 @@ onBeforeUnmount(() => {
             maxlength="500"
             @input="caption = inputValue($event)"
           />
-          <SkyField
-            :label="t('location')"
-            :placeholder="t('location')"
-            :value="location"
-            maxlength="80"
-            @input="location = inputValue($event)"
-          />
           <SkyListItem
             link
             link-component="button"
@@ -2054,7 +2174,7 @@ onBeforeUnmount(() => {
                   ? t('followersOnly')
                   : t('private')
             "
-            @click="visibilitySheetOpen = true"
+            @click="openVisibilityMenu"
           />
           <SkyListItem :title="t('allowComments')">
             <template #after>
@@ -2176,66 +2296,23 @@ onBeforeUnmount(() => {
       </SkyScrollArea>
     </section>
 
-    <div v-if="moderationOpen" class="overlay-screen moderation-screen">
-      <SkyNavbar
-        :title="t('moderation')"
-        :show-back="true"
-        :back-label="phone.t('Common.back')"
-        back-appearance="surface"
-        @back="moderationOpen = false"
-      />
-      <div class="moderation-body">
-        <h2>{{ t('reports') }}</h2>
-        <article
-          v-for="report in store.reports"
-          :key="report.id"
-          class="report-card"
-        >
-          <video :src="report.url" muted playsinline preload="metadata" />
-          <div>
-            <strong>@{{ report.creator_handle }}</strong>
-            <small
-              >{{ t(`reportReasons.${report.reason}`) }} · @{{
-                report.reporter_handle
-              }}</small
-            >
-            <p>{{ report.details || report.caption }}</p>
-            <div class="report-actions">
-              <SkyButton
-                small
-                rounded
-                tonal
-                @click="resolveReport(report, 'dismiss')"
-                >{{ t('dismissReport') }}</SkyButton
-              >
-              <SkyButton
-                small
-                rounded
-                variant="danger"
-                @click="resolveReport(report, 'remove')"
-                >{{ t('removeVideo') }}</SkyButton
-              >
-            </div>
-          </div>
-        </article>
-        <div v-if="!store.reports.length" class="light-empty">
-          <ShieldAlert /><strong>{{ t('noReports') }}</strong>
-        </div>
-      </div>
-    </div>
-
     <div v-if="commentsOpen" class="fliptok-sheet">
       <SkySheet
         :opened="commentsOpen"
         :aria-label="t('comments')"
+        grabber-clickable
+        swipe-to-close
         @backdropclick="commentsOpen = false"
         @escape="commentsOpen = false"
+        @grabberclick="commentsOpen = false"
+        @swipeclose="commentsOpen = false"
       >
-        <div class="sheet-handle" />
         <div class="comments-sheet">
           <header>
-            <strong>{{ t('comments') }}</strong
-            ><button @click="commentsOpen = false"><X /></button>
+            <strong>
+              {{ t('comments') }} ·
+              {{ compactCount(selectedVideo?.comment_count ?? 0) }}
+            </strong>
           </header>
           <div class="comments-list">
             <div
@@ -2314,8 +2391,24 @@ onBeforeUnmount(() => {
                   </footer>
                 </div>
               </article>
+              <button
+                v-if="thread.replies.length"
+                type="button"
+                class="replies-toggle"
+                @click="toggleReplies(thread.comment.id)"
+              >
+                <span></span>
+                {{
+                  expandedCommentThreads.has(thread.comment.id)
+                    ? t('hideReplies')
+                    : t('showReplies', {
+                        count: String(thread.replies.length),
+                      })
+                }}
+              </button>
               <article
                 v-for="reply in thread.replies"
+                v-show="expandedCommentThreads.has(thread.comment.id)"
                 :key="reply.id"
                 class="comment-row comment-row--reply"
               >
@@ -2435,11 +2528,15 @@ onBeforeUnmount(() => {
     <div v-if="reportSheetOpen" class="fliptok-sheet">
       <SkySheet
         :opened="reportSheetOpen"
+        grabber-clickable
+        swipe-to-close
         @backdropclick="reportSheetOpen = false"
+        @grabberclick="reportSheetOpen = false"
+        @swipeclose="reportSheetOpen = false"
       >
-        <div class="sheet-handle" />
         <div class="selection-sheet report-sheet">
           <h3>{{ t('report') }}</h3>
+          <p class="report-sheet__note">{{ t('reportDiscordNote') }}</p>
           <SkyList inset strong>
             <SkyListItem
               v-for="reason in reportReasonOptions"
@@ -2587,43 +2684,17 @@ onBeforeUnmount(() => {
         </div>
       </SkySheet>
     </div>
-    <div v-if="visibilitySheetOpen" class="fliptok-sheet">
-      <SkySheet
-        :opened="visibilitySheetOpen"
-        @backdropclick="visibilitySheetOpen = false"
-        ><div class="sheet-handle" />
-        <div class="selection-sheet">
-          <h3>{{ t('whoCanWatch') }}</h3>
-          <SkyList inset strong
-            ><SkyListItem
-              v-for="option in visibilityOptions"
-              :key="option"
-              link
-              link-component="button"
-              content-class="w-full"
-              :chevron="false"
-              :title="
-                option === 'public'
-                  ? t('public')
-                  : option === 'followers'
-                    ? t('followersOnly')
-                    : t('private')
-              "
-              @click="chooseVisibility(option)"
-              ><template #after
-                ><Check
-                  v-if="visibility === option"
-                  class="selection-check" /></template></SkyListItem></SkyList
-          ><SkyButton
-            large
-            rounded
-            tonal
-            @click="visibilitySheetOpen = false"
-            >{{ t('cancel') }}</SkyButton
-          >
-        </div></SkySheet
-      >
-    </div>
+    <SkyDropdown
+      :items="visibilityMenuItems"
+      :label="t('whoCanWatch')"
+      :opened="visibilityMenuOpen"
+      placement="auto"
+      :target="visibilityMenuTarget"
+      @backdropclick="visibilityMenuOpen = false"
+      @escape="visibilityMenuOpen = false"
+      @positionerror="visibilityMenuOpen = false"
+      @select="selectVisibility"
+    />
     <div v-if="profilePhotoSheetOpen" class="fliptok-sheet">
       <SkySheet
         :opened="profilePhotoSheetOpen"
@@ -2703,71 +2774,68 @@ onBeforeUnmount(() => {
         </div></SkySheet
       >
     </div>
-    <SkySheet
-      :opened="connectionsOpen"
-      class="fliptok-connections-sheet"
-      :aria-label="t(connectionsMode)"
-      @backdropclick="connectionsOpen = false"
-      @escape="connectionsOpen = false"
-    >
-      <div class="sheet-handle" />
-      <div class="connections-sheet">
-        <header>
-          <div>
-            <UsersRound />
-            <strong>{{ t(connectionsMode) }}</strong>
-          </div>
-          <button
-            type="button"
-            :aria-label="t('cancel')"
-            @click="connectionsOpen = false"
-          >
-            <X />
-          </button>
-        </header>
-        <div class="connections-list">
-          <article
+    <section v-if="connectionsOpen" class="overlay-screen connections-screen">
+      <SkyNavbar
+        :title="t(connectionsMode)"
+        :show-back="true"
+        :back-label="phone.t('Common.back')"
+        back-appearance="surface"
+        @back="connectionsOpen = false"
+      />
+      <SkyScrollArea padded class="connections-body">
+        <SkySegmented
+          class="connections-tabs"
+          :active-index="connectionsMode === 'followers' ? 0 : 1"
+          :item-count="2"
+          raised
+          strong
+          rounded
+        >
+          <SkySegmentedButton
+            :active="connectionsMode === 'followers'"
+            @click="openConnections('followers')"
+          >{{ t('followers') }}</SkySegmentedButton>
+          <SkySegmentedButton
+            :active="connectionsMode === 'following'"
+            @click="openConnections('following')"
+          >{{ t('following') }}</SkySegmentedButton>
+        </SkySegmented>
+        <SkyList v-if="store.connections.length" inset strong class="connections-list">
+          <SkyListItem
             v-for="profile in store.connections"
             :key="profile.id"
-            class="connection-row"
+            :title="profile.display_name"
+            :text="`@${profile.handle}`"
           >
-            <button
-              type="button"
-              class="connection-profile"
-              @click="openConnectionProfile(profile)"
-            >
-              <span class="connection-avatar">
-                <img
-                  v-if="profile.avatar_url"
-                  :src="profile.avatar_url"
-                  alt=""
-                />
-                <template v-else>{{ initials(profile.display_name) }}</template>
-              </span>
-              <span>
-                <strong
-                  >{{ profile.display_name }}
-                  <Check v-if="profile.verified" class="verified"
-                /></strong>
-                <small>@{{ profile.handle }}</small>
-              </span>
-            </button>
-            <SkyButton
-              v-if="!profile.is_owner"
-              small
-              rounded
-              :tonal="profile.is_following"
-              @click="store.followProfile(profile)"
-            >
-              {{ profile.is_following ? t('unfollow') : t('follow') }}
-            </SkyButton>
-          </article>
-          <div v-if="!store.connections.length" class="light-empty">
-            <UsersRound /><strong>{{ t('noConnections') }}</strong>
-          </div>
+            <template #media>
+              <button
+                type="button"
+                class="connection-profile"
+                :aria-label="profile.display_name"
+                @click="openConnectionProfile(profile)"
+              >
+                <span class="connection-avatar">
+                  <img v-if="profile.avatar_url" :src="profile.avatar_url" alt="" />
+                  <template v-else>{{ initials(profile.display_name) }}</template>
+                </span>
+              </button>
+            </template>
+            <template #after>
+              <SkyButton
+                v-if="!profile.is_owner"
+                small
+                rounded
+                :tonal="profile.is_following"
+                @click="store.followProfile(profile)"
+              >{{ profile.is_following ? t('unfollow') : t('follow') }}</SkyButton>
+            </template>
+          </SkyListItem>
+        </SkyList>
+        <div v-else class="light-empty connections-empty">
+          <UsersRound /><strong>{{ t('noConnections') }}</strong>
         </div>
-      </div>
-    </SkySheet>
+      </SkyScrollArea>
+    </section>
     <SkyDialog
       :opened="logoutDialogOpen"
       @backdropclick="!logoutSubmitting && (logoutDialogOpen = false)"
@@ -4797,6 +4865,312 @@ onBeforeUnmount(() => {
   }
 }
 
+/* FlipTok's media viewport is bound to the phone app, never the browser. */
+.fliptok-page {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.video-feed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.video-card {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.photo-slideshow,
+.compose-photo-preview {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.photo-slideshow::-webkit-scrollbar,
+.compose-photo-preview::-webkit-scrollbar {
+  display: none;
+}
+
+.photo-slideshow img,
+.compose-photo-preview img {
+  width: 100%;
+  height: 100%;
+  flex: 0 0 100%;
+  object-fit: cover;
+  scroll-snap-align: center;
+}
+
+.photo-slideshow__count {
+  position: absolute;
+  top: calc(var(--sky-safe-area-top) + 58px);
+  right: 12px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 9px;
+}
+
+.video-profile-action {
+  position: relative;
+  width: 40px;
+  min-height: 44px;
+  display: grid;
+  justify-items: center;
+}
+
+.video-actions .follow-dot {
+  position: absolute;
+  z-index: 2;
+  bottom: 0;
+  left: 50%;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  transform: translateX(-50%);
+}
+
+.video-actions .follow-dot--confirmed {
+  animation-name: follow-confirmed-fade-centered;
+}
+
+@keyframes follow-confirmed-fade-centered {
+  0%, 48% { opacity: 1; transform: translateX(-50%) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) scale(0.72); }
+}
+
+.video-actions button {
+  gap: 2px;
+}
+
+.video-actions button > span {
+  min-width: 26px;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.discover-screen {
+  padding-top: 0;
+}
+
+.video-grid span,
+.profile-video-grid span {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.video-grid img,
+.profile-video-grid img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.fliptok-auth__body {
+  min-height: calc(100% - 48px);
+  justify-content: center;
+  padding-top: 10px;
+  padding-bottom: calc(var(--sky-safe-area-bottom) + 18px);
+}
+
+.fliptok-auth__glass {
+  max-width: 350px;
+  margin: auto;
+}
+
+.profile-navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.profile-navbar-actions svg {
+  width: 18px;
+  height: 18px;
+}
+
+.profile-stats button,
+.profile-stats div,
+.profile-screen :deep(.profile-stats button) {
+  min-width: 70px;
+  min-height: 48px;
+  padding: 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.profile-stats button:active {
+  background: var(--sky-pressed);
+}
+
+.comment-content header button {
+  max-width: 150px;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replies-toggle {
+  min-height: 28px;
+  margin: 0 0 2px 42px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--sky-muted);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.replies-toggle span {
+  width: 24px;
+  height: 1px;
+  background: var(--sky-hairline);
+}
+
+.report-sheet {
+  box-sizing: border-box;
+  min-height: min(72vh, 560px);
+  max-height: min(82vh, 650px);
+  overflow-y: auto;
+}
+
+.report-sheet__note {
+  margin: -4px 4px 10px;
+  color: var(--sky-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.media-picker {
+  padding: var(--sky-space-4);
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--sky-space-3);
+}
+
+.media-picker > header {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.media-picker > header svg {
+  width: 28px;
+  height: 28px;
+  color: var(--sky-app-accent);
+}
+
+.media-source-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.media-source-grid button {
+  min-width: 0;
+  min-height: 78px;
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-control);
+  background: var(--sky-surface-variant);
+  color: var(--sky-text);
+  font: inherit;
+  font-size: 9px;
+  text-align: center;
+}
+
+.media-source-grid svg {
+  width: 20px;
+  height: 20px;
+  color: var(--sky-app-accent);
+}
+
+.media-preview__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.media-preview__actions :deep(.sky-button) {
+  flex: 1 1 0;
+}
+
+.compose-photo-preview {
+  height: 300px;
+  border-radius: var(--sky-radius-control);
+}
+
+.connections-screen {
+  z-index: 46;
+}
+
+.connections-body {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.connections-tabs {
+  width: 100%;
+  margin-bottom: 11px;
+}
+
+.connections-list {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-card);
+}
+
+.connections-list :deep(.sky-list-item__content) {
+  min-height: 62px;
+}
+
+.connections-list :deep(.sky-list-item__title) {
+  max-width: 112px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connections-list :deep(.sky-list-item__text) {
+  color: var(--sky-muted);
+  font-size: 9px;
+}
+
+.connections-empty {
+  min-height: 180px;
+}
+
 .connections-sheet {
   box-sizing: border-box;
   min-height: 300px;
@@ -4881,5 +5255,19 @@ onBeforeUnmount(() => {
   min-height: 0;
   flex: 1 1 auto;
   overflow-y: auto;
+}
+
+.creator-line .verified,
+.comment-content .verified,
+.profile-screen .verified {
+  flex: 0 0 auto;
+  align-self: center;
+  vertical-align: middle;
+}
+
+.connections-list .connection-profile {
+  width: var(--sky-touch-target);
+  min-width: var(--sky-touch-target);
+  flex: 0 0 var(--sky-touch-target);
 }
 </style>

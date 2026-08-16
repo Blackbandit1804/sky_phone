@@ -1,22 +1,19 @@
 <script setup lang="ts">
 import {
-  kBlock,
-  kButton,
-  kDialog,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kSegmented,
-  kSegmentedButton,
-  kToast,
-} from 'konsta/vue'
+  SkyBlock,
+  SkyDialog,
+  SkyLink,
+  SkyList,
+  SkyField,
+  SkyListItem,
+  SkyNavbarBackLink,
+  SkyAppPage,
+  SkySpinner,
+  SkySegmented,
+  SkySegmentedButton,
+  SkyToast,
+} from '@/ui'
 import {
-  Check,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -25,11 +22,8 @@ import {
   Link2,
   ListFilter,
   Play,
-  RotateCcw,
   Share2,
   Trash2,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -38,11 +32,8 @@ import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import { useEasyShareStore } from '@/stores/easyshare'
 import {
-  SkyActionButton,
-  SkyActionGroup,
-  SkyActionSheet,
-  SkyActionsLabel,
   SkyButton,
+  SkyDropdown,
   SkyNavbar,
   SkyToolbar,
   SkyToolbarPane,
@@ -74,7 +65,8 @@ const developmentParameters = isDevelopment
   ? new URLSearchParams(window.location.search)
   : null
 const developmentApiEnabled = Boolean(developmentParameters?.has('apiPort'))
-const developmentGalleryState = developmentParameters?.get('galleryMock') ?? null
+const developmentGalleryState =
+  developmentParameters?.get('galleryMock') ?? null
 const filterItems = [
   { id: 'all', label: 'all' },
   { id: 'photo', label: 'photos' },
@@ -107,8 +99,9 @@ const counts = ref<GalleryCounts>({
 })
 const filter = ref<GalleryFilter>(requestedMessageMedia.value ?? 'all')
 const favoritesOnly = ref(false)
-const sortOrder = ref<GallerySortOrder>('oldest')
+const sortOrder = ref<GallerySortOrder>('newest')
 const sortMenuOpened = ref(false)
+const sortMenuTarget = ref<HTMLElement | null>(null)
 const loading = ref(true)
 const fetching = ref(false)
 const hasMore = ref(true)
@@ -122,21 +115,6 @@ const importError = ref('')
 const importing = ref(false)
 const deleteDialogOpened = ref(false)
 const deleteManyDialogOpened = ref(false)
-const cancelButtonColors = {
-  fillBgIos: 'bg-[#8e8e93] active:bg-[#7a7a7f]',
-  fillBgMaterial: 'bg-[#8e8e93] active:bg-[#7a7a7f]',
-  fillTextIos: 'text-white',
-  fillTextMaterial: 'text-white',
-}
-const deleteButtonColors = {
-  fillBgIos: 'bg-[#ff3b30] active:bg-[#d9342b]',
-  fillBgMaterial: 'bg-[#ff3b30] active:bg-[#d9342b]',
-  fillTextIos: 'text-white',
-  fillTextMaterial: 'text-white',
-}
-const filterBarColors = {
-  strongHighlightBgIos: 'bg-[#63636680]',
-}
 const deleting = ref(false)
 const deletingMany = ref(false)
 const favoriting = ref(false)
@@ -150,6 +128,7 @@ const dragging = ref(false)
 const videoPlaybackError = ref(false)
 const dragStart = ref({ panX: 0, panY: 0, x: 0, y: 0 })
 let observer: IntersectionObserver | null = null
+let galleryReturnScrollTop = 0
 let toastTimer: number | undefined
 let pendingDeleteCorrelation = ''
 let pendingDeleteManyCorrelation = ''
@@ -162,6 +141,29 @@ const imageStyle = computed(() => ({
   transform: `translate3d(${imagePan.value.x}px, ${imagePan.value.y}px, 0) scale(${imageZoom.value})`,
 }))
 const orderedMedia = computed(() => orderMedia(media.value, sortOrder.value))
+const sortMenuItems = computed(() => [
+  {
+    checked: sortOrder.value === 'newest',
+    id: 'sort-newest',
+    label: phone.t('Apps.photos.sorting.newestFirst'),
+  },
+  {
+    checked: sortOrder.value === 'oldest',
+    id: 'sort-oldest',
+    label: phone.t('Apps.photos.sorting.oldestFirst'),
+  },
+  {
+    checked: !favoritesOnly.value,
+    id: 'show-all',
+    label: phone.t('Apps.photos.sorting.allItems'),
+    separatorBefore: true,
+  },
+  {
+    checked: favoritesOnly.value,
+    id: 'show-favorites',
+    label: phone.t('Apps.photos.sorting.favorites'),
+  },
+])
 const countText = computed(() => {
   if (favoritesOnly.value) {
     const favoriteCount =
@@ -178,11 +180,7 @@ const countText = computed(() => {
   const countKey = filter.value === 'all' ? 'all' : `${filter.value}s`
   const count = counts.value[countKey as keyof GalleryCounts]
   const translationKey =
-    count === 1
-      ? filter.value === 'all'
-        ? 'allOne'
-        : filter.value
-      : countKey
+    count === 1 ? (filter.value === 'all' ? 'allOne' : filter.value) : countKey
   return phone.t(`Apps.photos.counts.${translationKey}`, {
     count: new Intl.NumberFormat(phone.lang).format(count),
   })
@@ -195,7 +193,9 @@ const selectedMedia = computed(() =>
 )
 const selectedCountText = computed(() =>
   phone.t('Apps.photos.selection.selected', {
-    count: new Intl.NumberFormat(phone.lang).format(selectedMediaIds.value.length),
+    count: new Intl.NumberFormat(phone.lang).format(
+      selectedMediaIds.value.length,
+    ),
   }),
 )
 const selectedCaptureDay = computed(() => {
@@ -588,8 +588,7 @@ async function loadGallery(): Promise<void> {
   loading.value = false
   await nextTick()
   if (galleryContent.value) {
-    galleryContent.value.scrollTop =
-      sortOrder.value === 'oldest' ? galleryContent.value.scrollHeight : 0
+    galleryContent.value.scrollTop = galleryContent.value.scrollHeight
   }
   observeMore()
 }
@@ -599,10 +598,27 @@ async function selectSortOrder(value: GallerySortOrder): Promise<void> {
   sortMenuOpened.value = false
   await nextTick()
   if (galleryContent.value) {
-    galleryContent.value.scrollTop =
-      value === 'oldest' ? galleryContent.value.scrollHeight : 0
+    galleryContent.value.scrollTop = galleryContent.value.scrollHeight
   }
   observeMore()
+}
+
+function openSortMenu(event: MouseEvent): void {
+  if (!(event.currentTarget instanceof HTMLElement)) return
+  sortMenuTarget.value = event.currentTarget
+  sortMenuOpened.value = true
+}
+
+function selectSortMenuItem(id: string): void {
+  if (id === 'sort-newest') {
+    void selectSortOrder('newest')
+  } else if (id === 'sort-oldest') {
+    void selectSortOrder('oldest')
+  } else if (id === 'show-all') {
+    void selectFavoritesOnly(false)
+  } else if (id === 'show-favorites') {
+    void selectFavoritesOnly(true)
+  }
 }
 
 async function selectFavoritesOnly(value: boolean): Promise<void> {
@@ -659,6 +675,9 @@ function openMedia(entry: PhoneMedia): void {
       return
     }
   }
+  galleryReturnScrollTop = galleryContent.value?.scrollTop ?? 0
+  observer?.disconnect()
+  observer = null
   phone.setCameraLandscape(false)
   selected.value = entry
   videoPlaybackError.value = false
@@ -685,12 +704,17 @@ function cancelMessageSelection(): void {
   void router.replace(messageMedia.cancel())
 }
 
-function closeMedia(): void {
+async function closeMedia(): Promise<void> {
   phone.setCameraLandscape(false)
   selected.value = null
   videoPlaybackError.value = false
   deleteDialogOpened.value = false
   stopDragging()
+  await nextTick()
+  if (galleryContent.value) {
+    galleryContent.value.scrollTop = galleryReturnScrollTop
+  }
+  observeMore()
 }
 
 function shareSelected(): void {
@@ -704,7 +728,9 @@ function shareSelected(): void {
     kind: mediaKind,
     link: `skyphone://media/${selected.value.id}`,
     subtitle: formatDate(selected.value.createdAt),
-    title: phone.t(mediaKind === 'video' ? 'Apps.photos.video' : 'Apps.photos.photo'),
+    title: phone.t(
+      mediaKind === 'video' ? 'Apps.photos.video' : 'Apps.photos.photo',
+    ),
   })
 }
 
@@ -719,7 +745,9 @@ async function toggleFavorite(): Promise<void> {
     )
     if (developmentItem) developmentItem.favorite = nextFavorite
     if (favoritesOnly.value && !nextFavorite) {
-      media.value = media.value.filter((entry) => entry.id !== selected.value?.id)
+      media.value = media.value.filter(
+        (entry) => entry.id !== selected.value?.id,
+      )
     }
     favoriting.value = false
     await fetchCounts()
@@ -738,7 +766,9 @@ async function toggleFavorite(): Promise<void> {
       )
       if (developmentItem) developmentItem.favorite = nextFavorite
       if (favoritesOnly.value && !nextFavorite) {
-        media.value = media.value.filter((entry) => entry.id !== selected.value?.id)
+        media.value = media.value.filter(
+          (entry) => entry.id !== selected.value?.id,
+        )
       }
       await fetchCounts()
       return
@@ -831,6 +861,34 @@ async function deleteSelection(): Promise<void> {
 function setZoom(value: number): void {
   imageZoom.value = Math.min(4, Math.max(1, value))
   if (imageZoom.value === 1) imagePan.value = { x: 0, y: 0 }
+}
+
+function zoomImageWithWheel(event: WheelEvent): void {
+  if (event.deltaY === 0) return
+  const nextZoom = Math.min(
+    4,
+    Math.max(1, imageZoom.value + (event.deltaY < 0 ? 0.25 : -0.25)),
+  )
+  if (nextZoom === imageZoom.value) return
+
+  const media = (event.currentTarget as HTMLImageElement)
+    .parentElement as HTMLElement
+  const bounds = media.getBoundingClientRect()
+  const pointerX =
+    (event.clientX - bounds.left - bounds.width / 2) *
+    (media.clientWidth / bounds.width)
+  const pointerY =
+    (event.clientY - bounds.top - bounds.height / 2) *
+    (media.clientHeight / bounds.height)
+  const zoomRatio = nextZoom / imageZoom.value
+
+  if (nextZoom > 1) {
+    imagePan.value = {
+      x: pointerX - (pointerX - imagePan.value.x) * zoomRatio,
+      y: pointerY - (pointerY - imagePan.value.y) * zoomRatio,
+    }
+  }
+  setZoom(nextZoom)
 }
 
 function startDragging(event: PointerEvent): void {
@@ -980,9 +1038,7 @@ function onMessage(event: MessageEvent): void {
     closeMedia()
     showToast(phone.t('Apps.photos.deleted'))
   } else {
-    showToast(
-      phone.t(`Apps.photos.errors.${mediaErrorKey(result.error)}`),
-    )
+    showToast(phone.t(`Apps.photos.errors.${mediaErrorKey(result.error)}`))
   }
 }
 
@@ -997,6 +1053,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   phone.setCameraLandscape(false)
+  sortMenuTarget.value = null
   observer?.disconnect()
   stopDragging()
   if (toastTimer !== undefined) window.clearTimeout(toastTimer)
@@ -1005,25 +1062,25 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     v-if="importMode === 'sources'"
     class="gallery-import-page !pt-[44px]"
     :aria-label="phone.t('Apps.photos.import.chooseSource')"
   >
-    <k-navbar :title="phone.t('Apps.photos.import.title')">
+    <sky-navbar :title="phone.t('Apps.photos.import.title')">
       <template #left>
-        <k-navbar-back-link
+        <sky-navbar-back-link
           component="button"
           :text="phone.t('Common.back')"
           @click="closeImport"
         />
       </template>
-    </k-navbar>
-    <k-block class="gallery-import-intro">
+    </sky-navbar>
+    <sky-block class="gallery-import-intro">
       {{ phone.t('Apps.photos.import.chooseSource') }}
-    </k-block>
-    <k-list inset strong>
-      <k-list-item
+    </sky-block>
+    <sky-list inset strong>
+      <sky-list-item
         v-for="source in importSources"
         :key="source.id"
         link
@@ -1044,31 +1101,31 @@ onBeforeUnmount(() => {
       >
         <template #media><Globe2 :size="22" /></template>
         <template #after><ChevronRight :size="18" /></template>
-      </k-list-item>
-    </k-list>
-  </k-page>
+      </sky-list-item>
+    </sky-list>
+  </sky-app-page>
 
-  <k-page
+  <sky-app-page
     v-else-if="importMode === 'form' && importSource"
     class="gallery-import-page !pt-[44px]"
     :aria-label="phone.t('Apps.photos.import.title')"
   >
-    <k-navbar :title="importSource.label">
+    <sky-navbar :title="importSource.label">
       <template #left>
-        <k-navbar-back-link
+        <sky-navbar-back-link
           component="button"
           :text="phone.t('Common.back')"
           @click="backFromImportForm"
         />
       </template>
-    </k-navbar>
+    </sky-navbar>
 
     <div class="gallery-import-form">
       <div class="gallery-import-form-icon"><Link2 :size="34" /></div>
       <h2>{{ phone.t('Apps.photos.import.linkTitle') }}</h2>
       <p>{{ phone.t('Apps.photos.import.linkBody') }}</p>
-      <k-list inset strong class="gallery-import-url-list">
-        <k-list-input
+      <sky-list inset strong class="gallery-import-url-list">
+        <sky-field
           outline
           input-id="gallery-import-url"
           inputmode="url"
@@ -1081,47 +1138,47 @@ onBeforeUnmount(() => {
           @input="updateImportUrl"
           @keyup.enter="commitUrlImport"
         />
-      </k-list>
-      <k-button
+      </sky-list>
+      <sky-button
         class="gallery-import-submit"
         large
         rounded
         :disabled="!importUrl.trim() || importing"
         @click="commitUrlImport"
       >
-        <k-preloader v-if="importing" class="mr-2" />
+        <sky-spinner v-if="importing" class="mr-2" />
         {{ phone.t('Apps.photos.import.action') }}
-      </k-button>
+      </sky-button>
     </div>
-  </k-page>
+  </sky-app-page>
 
-  <k-page
+  <sky-app-page
     v-else-if="!selected"
     class="gallery-page"
     :class="{ '!pt-[44px]': requestedMessageMedia }"
     :aria-label="phone.t('Apps.photos.name')"
   >
-    <k-navbar
+    <sky-navbar
       v-if="requestedMessageMedia"
       :title="phone.t('Apps.photos.name')"
     >
       <template #left>
-        <k-navbar-back-link
+        <sky-navbar-back-link
           component="button"
           :text="phone.t('Common.back')"
           @click="cancelMessageSelection"
         />
       </template>
       <template v-if="multipleSelection" #right>
-        <k-link
+        <sky-link
           component="button"
           :disabled="!selectedMediaIds.length"
           @click="completeMultipleSelection"
         >
           {{ phone.t('Common.done') }}
-        </k-link>
+        </sky-link>
       </template>
-    </k-navbar>
+    </sky-navbar>
     <SkyNavbar
       v-else
       class="gallery-library-navbar"
@@ -1137,7 +1194,11 @@ onBeforeUnmount(() => {
           class="gallery-header-actions sky-ui-provider sky-ui-provider--dark"
         >
           <SkyToolbarPane class="gallery-header-tool gallery-header-tool--text">
-            <SkyButton clear class="gallery-header-action" @click="exitSelectionMode">
+            <SkyButton
+              clear
+              class="gallery-header-action"
+              @click="exitSelectionMode"
+            >
               {{ phone.t('Common.cancel') }}
             </SkyButton>
           </SkyToolbarPane>
@@ -1153,8 +1214,10 @@ onBeforeUnmount(() => {
               rounded
               class="gallery-header-action"
               :aria-label="phone.t('Apps.photos.sorting.action')"
+              :aria-expanded="sortMenuOpened"
+              aria-haspopup="menu"
               :title="phone.t('Apps.photos.sorting.action')"
-              @click="sortMenuOpened = true"
+              @click="openSortMenu"
             >
               <ListFilter :size="21" aria-hidden="true" />
             </SkyButton>
@@ -1176,7 +1239,11 @@ onBeforeUnmount(() => {
             </SkyButton>
           </SkyToolbarPane>
           <SkyToolbarPane class="gallery-header-tool gallery-header-tool--text">
-            <SkyButton clear class="gallery-header-action" @click="enterSelectionMode">
+            <SkyButton
+              clear
+              class="gallery-header-action"
+              @click="enterSelectionMode"
+            >
               {{ phone.t('Apps.photos.selection.action') }}
             </SkyButton>
           </SkyToolbarPane>
@@ -1186,12 +1253,12 @@ onBeforeUnmount(() => {
 
     <div ref="galleryContent" class="gallery-content">
       <div v-if="loading" class="gallery-state">
-        <k-preloader />
+        <sky-spinner />
         <span>{{ phone.t('Apps.photos.loading') }}</span>
       </div>
-      <k-block v-else-if="loadError" strong inset class="gallery-error">
+      <sky-block v-else-if="loadError" strong inset class="gallery-error">
         {{ loadError }}
-      </k-block>
+      </sky-block>
       <div v-else-if="!media.length" class="gallery-state gallery-empty">
         <strong>{{ phone.t('Apps.photos.emptyTitle') }}</strong>
         <span>{{ phone.t('Apps.photos.emptyBody') }}</span>
@@ -1202,7 +1269,7 @@ onBeforeUnmount(() => {
         :class="{ 'gallery-grid--fill': media.length >= 13 }"
       >
         <span
-          v-if="hasMore && sortOrder === 'oldest'"
+          v-if="hasMore"
           ref="loadTrigger"
           class="gallery-load-trigger"
         ></span>
@@ -1213,18 +1280,12 @@ onBeforeUnmount(() => {
           :class="{
             'gallery-tile--selected': selectedMediaIds.includes(entry.id),
           }"
-          :style="
-            {
-              gridColumnStart: bottomRightGridPosition(
-                index,
-                orderedMedia.length,
-              ).column,
-              gridRowStart: bottomRightGridPosition(
-                index,
-                orderedMedia.length,
-              ).row,
-            }
-          "
+          :style="{
+            gridColumnStart: bottomRightGridPosition(index, orderedMedia.length)
+              .column,
+            gridRowStart: bottomRightGridPosition(index, orderedMedia.length)
+              .row,
+          }"
           type="button"
           :aria-pressed="
             selectionMode || multipleSelection
@@ -1267,28 +1328,18 @@ onBeforeUnmount(() => {
             {{ selectedMediaIds.indexOf(entry.id) + 1 }}
           </span>
         </button>
-        <span
-          v-if="hasMore && sortOrder === 'newest'"
-          ref="loadTrigger"
-          class="gallery-load-trigger"
-        ></span>
       </div>
     </div>
 
-    <k-navbar
+    <sky-navbar
       v-if="!requestedMessageMedia && !selectionMode"
       component="nav"
       class="gallery-filter-navbar"
       :aria-label="phone.t('Apps.photos.name')"
     >
       <template #subnavbar>
-        <k-segmented
-          strong
-          rounded
-          :colors="filterBarColors"
-          :data-active-filter="filter"
-        >
-          <k-segmented-button
+        <sky-segmented strong rounded :data-active-filter="filter">
+          <sky-segmented-button
             v-for="item in filterItems"
             :key="item.id"
             large
@@ -1298,10 +1349,10 @@ onBeforeUnmount(() => {
             @click="filter = item.id"
           >
             {{ phone.t(`Apps.photos.filters.${item.label}`) }}
-          </k-segmented-button>
-        </k-segmented>
+          </sky-segmented-button>
+        </sky-segmented>
       </template>
-    </k-navbar>
+    </sky-navbar>
 
     <SkyToolbar
       v-if="selectionMode"
@@ -1313,33 +1364,37 @@ onBeforeUnmount(() => {
       <SkyToolbarPane class="gallery-selection-count">
         {{ selectedCountText }}
       </SkyToolbarPane>
-      <SkyToolbarPane class="gallery-selection-actions">
-        <SkyButton
-          icon-only
-          rounded
-          tonal
-          :aria-label="phone.t('Apps.photos.selection.share')"
-          :disabled="!selectedMediaIds.length"
-          @click="shareSelection"
-        >
-          <Share2 :size="20" aria-hidden="true" />
-        </SkyButton>
-        <SkyButton
-          icon-only
-          rounded
-          tonal
-          variant="danger"
-          :aria-label="phone.t('Apps.photos.selection.delete')"
-          :disabled="!selectedMediaIds.length || deletingMany"
-          @click="deleteManyDialogOpened = true"
-        >
-          <Trash2 :size="20" aria-hidden="true" />
-        </SkyButton>
-      </SkyToolbarPane>
+      <div class="gallery-selection-actions">
+        <SkyToolbarPane class="gallery-selection-action">
+          <SkyButton
+            icon-only
+            rounded
+            clear
+            :aria-label="phone.t('Apps.photos.selection.share')"
+            :disabled="!selectedMediaIds.length"
+            @click="shareSelection"
+          >
+            <Share2 :size="20" aria-hidden="true" />
+          </SkyButton>
+        </SkyToolbarPane>
+        <SkyToolbarPane class="gallery-selection-action">
+          <SkyButton
+            icon-only
+            rounded
+            clear
+            variant="danger"
+            :aria-label="phone.t('Apps.photos.selection.delete')"
+            :disabled="!selectedMediaIds.length || deletingMany"
+            @click="deleteManyDialogOpened = true"
+          >
+            <Trash2 :size="20" aria-hidden="true" />
+          </SkyButton>
+        </SkyToolbarPane>
+      </div>
     </SkyToolbar>
-  </k-page>
+  </sky-app-page>
 
-  <k-page
+  <sky-app-page
     v-else
     class="gallery-detail sky-ui-provider sky-ui-provider--dark"
   >
@@ -1353,7 +1408,8 @@ onBeforeUnmount(() => {
         <SkyButton
           icon-only
           rounded
-          tonal
+          clear
+          class="gallery-detail-back"
           :aria-label="phone.t('Common.back')"
           @click="closeMedia"
         >
@@ -1388,6 +1444,7 @@ onBeforeUnmount(() => {
           @lostpointercapture="stopDragging"
           @keydown="moveImageWithKeyboard"
           @dblclick="setZoom(imageZoom === 1 ? 2 : 1)"
+          @wheel.prevent="zoomImageWithWheel"
         />
         <video
           v-else
@@ -1398,7 +1455,7 @@ onBeforeUnmount(() => {
           @loadedmetadata="initializeVideo"
           @error="videoPlaybackError = true"
         ></video>
-        <k-block
+        <sky-block
           v-if="selected.mediaType === 'video' && videoPlaybackError"
           strong
           inset
@@ -1406,7 +1463,7 @@ onBeforeUnmount(() => {
           role="alert"
         >
           {{ phone.t('Apps.photos.errors.unsupported') }}
-        </k-block>
+        </sky-block>
       </div>
     </div>
 
@@ -1416,7 +1473,7 @@ onBeforeUnmount(() => {
       class="gallery-detail-toolbar"
       component="nav"
     >
-      <SkyToolbarPane>
+      <SkyToolbarPane class="gallery-detail-action">
         <SkyButton
           icon-only
           rounded
@@ -1448,40 +1505,8 @@ onBeforeUnmount(() => {
             aria-hidden="true"
           />
         </SkyButton>
-        <template v-if="selected.mediaType === 'photo'">
-          <SkyButton
-            icon-only
-            rounded
-            clear
-            :aria-label="phone.t('Apps.photos.zoomOut')"
-            :disabled="imageZoom === 1"
-            @click="setZoom(imageZoom - 0.5)"
-          >
-            <ZoomOut :size="19" aria-hidden="true" />
-          </SkyButton>
-          <SkyButton
-            icon-only
-            rounded
-            clear
-            :aria-label="phone.t('Apps.photos.resetZoom')"
-            :disabled="imageZoom === 1"
-            @click="setZoom(1)"
-          >
-            <RotateCcw :size="18" aria-hidden="true" />
-          </SkyButton>
-          <SkyButton
-            icon-only
-            rounded
-            clear
-            :aria-label="phone.t('Apps.photos.zoomIn')"
-            :disabled="imageZoom === 4"
-            @click="setZoom(imageZoom + 0.5)"
-          >
-            <ZoomIn :size="19" aria-hidden="true" />
-          </SkyButton>
-        </template>
       </SkyToolbarPane>
-      <SkyToolbarPane>
+      <SkyToolbarPane class="gallery-detail-action">
         <SkyButton
           icon-only
           rounded
@@ -1495,66 +1520,21 @@ onBeforeUnmount(() => {
         </SkyButton>
       </SkyToolbarPane>
     </SkyToolbar>
-  </k-page>
+  </sky-app-page>
 
-  <SkyActionSheet
-    class="gallery-sort-sheet sky-ui-provider"
+  <SkyDropdown
+    class="gallery-sort-dropdown sky-ui-provider"
     :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
-    :aria-label="phone.t('Apps.photos.sorting.title')"
+    :items="sortMenuItems"
+    :label="phone.t('Apps.photos.sorting.title')"
     :opened="sortMenuOpened"
+    :target="sortMenuTarget"
     @backdropclick="sortMenuOpened = false"
     @escape="sortMenuOpened = false"
-  >
-    <SkyActionGroup>
-      <SkyActionsLabel>
-        {{ phone.t('Apps.photos.sorting.title') }}
-      </SkyActionsLabel>
-      <SkyActionButton
-        class="gallery-sort-option"
-        :bold="sortOrder === 'newest'"
-        @click="selectSortOrder('newest')"
-      >
-        <span>{{ phone.t('Apps.photos.sorting.newestFirst') }}</span>
-        <Check v-if="sortOrder === 'newest'" :size="20" aria-hidden="true" />
-      </SkyActionButton>
-      <SkyActionButton
-        class="gallery-sort-option"
-        :bold="sortOrder === 'oldest'"
-        @click="selectSortOrder('oldest')"
-      >
-        <span>{{ phone.t('Apps.photos.sorting.oldestFirst') }}</span>
-        <Check v-if="sortOrder === 'oldest'" :size="20" aria-hidden="true" />
-      </SkyActionButton>
-    </SkyActionGroup>
-    <SkyActionGroup>
-      <SkyActionsLabel>
-        {{ phone.t('Apps.photos.sorting.show') }}
-      </SkyActionsLabel>
-      <SkyActionButton
-        class="gallery-sort-option"
-        :bold="!favoritesOnly"
-        @click="selectFavoritesOnly(false)"
-      >
-        <span>{{ phone.t('Apps.photos.sorting.allItems') }}</span>
-        <Check v-if="!favoritesOnly" :size="20" aria-hidden="true" />
-      </SkyActionButton>
-      <SkyActionButton
-        class="gallery-sort-option"
-        :bold="favoritesOnly"
-        @click="selectFavoritesOnly(true)"
-      >
-        <span>{{ phone.t('Apps.photos.sorting.favorites') }}</span>
-        <Check v-if="favoritesOnly" :size="20" aria-hidden="true" />
-      </SkyActionButton>
-    </SkyActionGroup>
-    <SkyActionGroup>
-      <SkyActionButton bold @click="sortMenuOpened = false">
-        {{ phone.t('Common.cancel') }}
-      </SkyActionButton>
-    </SkyActionGroup>
-  </SkyActionSheet>
+    @select="selectSortMenuItem"
+  />
 
-  <k-dialog
+  <sky-dialog
     :opened="deleteManyDialogOpened"
     @backdropclick="deleteManyDialogOpened = false"
   >
@@ -1563,54 +1543,48 @@ onBeforeUnmount(() => {
     </template>
     <p>{{ phone.t('Apps.photos.selection.deleteBody') }}</p>
     <template #buttons>
-      <k-button
+      <sky-button
         large
         rounded
-        :colors="cancelButtonColors"
+        variant="secondary"
         @click="deleteManyDialogOpened = false"
       >
         {{ phone.t('Common.cancel') }}
-      </k-button>
-      <k-button
-        large
-        rounded
-        :colors="deleteButtonColors"
-        @click="deleteSelection"
-      >
+      </sky-button>
+      <sky-button large rounded variant="danger" @click="deleteSelection">
         {{ phone.t('Common.delete') }}
-      </k-button>
+      </sky-button>
     </template>
-  </k-dialog>
+  </sky-dialog>
 
-  <k-dialog
+  <sky-dialog
     :opened="deleteDialogOpened"
     @backdropclick="deleteDialogOpened = false"
   >
     <template #title>{{ phone.t('Apps.photos.deleteTitle') }}</template>
     <p>{{ phone.t('Apps.photos.deleteBody') }}</p>
     <template #buttons>
-      <k-button
+      <sky-button
         large
         rounded
-        :colors="cancelButtonColors"
+        variant="secondary"
         @click="deleteDialogOpened = false"
       >
         {{ phone.t('Common.cancel') }}
-      </k-button>
-      <k-button
-        large
-        rounded
-        :colors="deleteButtonColors"
-        @click="deleteSelected"
-      >
+      </sky-button>
+      <sky-button large rounded variant="danger" @click="deleteSelected">
         {{ phone.t('Common.delete') }}
-      </k-button>
+      </sky-button>
     </template>
-  </k-dialog>
+  </sky-dialog>
 
-  <k-toast :opened="toastOpened" position="center" @click="toastOpened = false">
+  <sky-toast
+    :opened="toastOpened"
+    position="center"
+    @click="toastOpened = false"
+  >
     {{ toastText }}
-  </k-toast>
+  </sky-toast>
 </template>
 
 <style scoped>
@@ -1684,6 +1658,7 @@ onBeforeUnmount(() => {
   display: none;
 }
 .gallery-grid {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 2px;
@@ -1698,26 +1673,31 @@ onBeforeUnmount(() => {
 }
 .gallery-library-navbar :deep(.sky-navbar__right) {
   z-index: 2;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   transform: translateY(calc(var(--sky-navbar-height) - 30px));
 }
 .gallery-library-navbar :deep(.sky-navbar__inner) {
+  grid-template-columns: minmax(0, 1fr) 0 max-content;
   margin-bottom: 0;
 }
 .gallery-library-navbar :deep(.sky-navbar__title-container) {
   padding-right: calc(200px + var(--sky-safe-area-right));
-  transform: translateY(
-    calc(0px - var(--sky-navbar-collapse-offset) - 30px)
-  );
+  transform: translateY(calc(0px - var(--sky-navbar-collapse-offset) - 30px));
 }
 .gallery-header-actions {
   width: max-content;
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sky-space-2);
 }
 .gallery-header-tool {
   flex: none;
+  height: var(--sky-touch-target);
 }
 .gallery-header-tool--icon {
   width: var(--sky-touch-target);
@@ -1728,10 +1708,6 @@ onBeforeUnmount(() => {
   font-size: 14px;
   font-weight: 600;
 }
-.gallery-sort-option {
-  justify-content: space-between;
-  text-align: left;
-}
 .gallery-selection-toolbar {
   position: absolute;
   right: 0;
@@ -1740,6 +1716,7 @@ onBeforeUnmount(() => {
 }
 .gallery-selection-toolbar :deep(.sky-toolbar__inner) {
   width: 100%;
+  gap: var(--sky-space-2);
 }
 .gallery-selection-count {
   padding: 0 14px;
@@ -1748,7 +1725,17 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 .gallery-selection-actions {
+  display: flex;
+  align-items: center;
   gap: var(--sky-space-2);
+}
+.gallery-selection-action {
+  width: 48px;
+  flex: 0 0 48px;
+  justify-content: center;
+}
+.gallery-selection-action :deep(.sky-button) {
+  color: #fff;
 }
 .gallery-grid--fill {
   flex: 1;
@@ -1808,8 +1795,12 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 .gallery-load-trigger {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
   height: 1px;
-  grid-column: 1 / -1;
+  pointer-events: none;
 }
 .gallery-state {
   min-height: 430px;
@@ -1847,6 +1838,26 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: 13px;
   font-weight: 600;
+}
+.gallery-detail-navbar :deep(.gallery-detail-back) {
+  color: #fff;
+}
+.gallery-detail-navbar :deep(.gallery-detail-back svg) {
+  transition: transform var(--sky-transition-fast, 100ms) ease;
+}
+@media (hover: hover) {
+  .gallery-detail-navbar
+    :deep(.gallery-detail-back:hover:not(:disabled)) {
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+  .gallery-detail-navbar
+    :deep(.gallery-detail-back:hover:not(:disabled) svg) {
+    transform: translateX(-2px);
+  }
+}
+.gallery-detail-navbar :deep(.gallery-detail-back:active:not(:disabled)) {
+  background: rgba(255, 255, 255, 0.22);
 }
 .gallery-detail-stage {
   position: relative;
@@ -1887,10 +1898,21 @@ onBeforeUnmount(() => {
 .gallery-detail-toolbar :deep(.sky-toolbar__background) {
   background: linear-gradient(to top, #000 72%, transparent);
 }
+.gallery-detail-toolbar :deep(.sky-button) {
+  color: #fff;
+}
+.gallery-detail-toolbar :deep(.sky-button:active:not(:disabled)) {
+  background: rgba(255, 255, 255, 0.14);
+}
 .gallery-detail-tools {
   flex: 1;
   justify-content: center;
   gap: 0;
   padding: 0 2px;
+}
+.gallery-detail-action {
+  width: 48px;
+  flex: 0 0 48px;
+  justify-content: center;
 }
 </style>

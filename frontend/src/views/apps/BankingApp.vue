@@ -1,22 +1,5 @@
 <script setup lang="ts">
 import {
-  kButton,
-  kCard,
-  kGlass,
-  kIcon,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kPage,
-  kPreloader,
-  kSheet,
-  kTabbar,
-  kTabbarLink,
-  kToolbarPane,
-} from 'konsta/vue'
-import {
   ArrowDownLeft,
   ArrowRight,
   ArrowUpRight,
@@ -42,7 +25,23 @@ import type {
 import type { PhoneContact } from '@/types/phone'
 import { handleEnterAction } from '@/utils/keyboard'
 import { formatPhoneNumber, normalizePhoneNumber } from '@/utils/phone'
-import { SkyToast } from '@/ui'
+import {
+  SkyAppPage,
+  SkyButton,
+  SkyCard,
+  SkyEmptyState,
+  SkyField,
+  SkyGlass,
+  SkyLink,
+  SkyList,
+  SkyListItem,
+  SkyNavbar,
+  SkySheet,
+  SkySpinner,
+  SkyTabBar,
+  SkyTabButton,
+  SkyToast,
+} from '@/ui'
 
 type BankingTab = 'home' | 'activity'
 
@@ -64,7 +63,6 @@ let pullStartY = 0
 let isPulling = false
 let wheelRefreshTimeout: ReturnType<typeof setTimeout> | undefined
 let cooldownToastTimer: ReturnType<typeof setTimeout> | undefined
-let previousFocus: HTMLElement | null = null
 
 function closeCooldownToast(): void {
   cooldownToastOpened.value = false
@@ -241,50 +239,6 @@ function pullWithWheel(event: WheelEvent): void {
   wheelRefreshTimeout = setTimeout(finishPull, 130)
 }
 
-function focusableSheetElements(): HTMLElement[] {
-  const sheet = document.querySelector<HTMLElement>('.banking-sheet__content')
-  if (!sheet) return []
-  return Array.from(
-    sheet.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-    ),
-  )
-}
-
-function handleSheetKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    event.stopPropagation()
-    closeAction()
-    return
-  }
-  if (event.key !== 'Tab') return
-
-  const focusable = focusableSheetElements()
-  if (!focusable.length) {
-    event.preventDefault()
-    return
-  }
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
-
-function handleWindowKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !action.value || event.defaultPrevented) {
-    return
-  }
-  event.preventDefault()
-  event.stopImmediatePropagation()
-  closeAction()
-}
-
 function errorMessage(code: string): string {
   return phone.t(`Apps.banking.errors.${code}`) ===
     `Apps.banking.errors.${code}`
@@ -318,7 +272,6 @@ async function submitAction(): Promise<void> {
 }
 
 onMounted(() => {
-  window.addEventListener('keydown', handleWindowKeydown)
   void banking.load()
 })
 
@@ -334,35 +287,28 @@ watch(
 
 watch(action, async (currentAction) => {
   if (currentAction) {
-    previousFocus =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null
     await nextTick()
     document.getElementById('banking-transfer-target')?.focus()
-    return
   }
-  previousFocus?.focus()
-  previousFocus = null
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleWindowKeydown)
   if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
   if (cooldownToastTimer) clearTimeout(cooldownToastTimer)
-  previousFocus?.focus()
 })
 </script>
 
 <template>
-  <k-page
-    component="main"
+  <SkyAppPage
     class="banking-app pb-safe-24"
-    :colors="{ bgIos: 'bg-transparent' }"
+    :label="phone.t('Apps.banking.name')"
+    :dark="phone.isDarkMode"
+    accent="#2d76ff"
+    accent-soft="rgba(45, 118, 255, 0.18)"
   >
     <div class="banking-app__aurora" aria-hidden="true"></div>
 
-    <k-navbar
+    <SkyNavbar
       class="banking-navbar"
       :aria-hidden="Boolean(action)"
       :inert="Boolean(action)"
@@ -376,23 +322,25 @@ onBeforeUnmount(() => {
       :aria-hidden="Boolean(action)"
       :inert="Boolean(action)"
     >
-      <k-preloader />
+      <SkySpinner :label="phone.t('Common.loading')" />
       <span>{{ phone.t('Common.loading') }}</span>
     </div>
 
-    <div
+    <SkyEmptyState
       v-else-if="!banking.overview"
       class="banking-empty"
       :aria-hidden="Boolean(action)"
+      :body="errorMessage(banking.error)"
       :inert="Boolean(action)"
+      :title="phone.t('Apps.banking.unavailable')"
     >
-      <Landmark :size="34" />
-      <strong>{{ phone.t('Apps.banking.unavailable') }}</strong>
-      <p>{{ errorMessage(banking.error) }}</p>
-      <k-button rounded @click="banking.load(true)">
-        {{ phone.t('Apps.banking.tryAgain') }}
-      </k-button>
-    </div>
+      <template #icon><Landmark :size="34" /></template>
+      <template #actions>
+        <SkyButton rounded @click="banking.load(true)">
+          {{ phone.t('Apps.banking.tryAgain') }}
+        </SkyButton>
+      </template>
+    </SkyEmptyState>
 
     <div
       v-else
@@ -411,10 +359,10 @@ onBeforeUnmount(() => {
         :style="{ transform: `translateY(${pullDistance - pullThreshold}px)` }"
         aria-live="polite"
       >
-        <k-preloader />
+        <SkySpinner :label="phone.t('Common.loading')" />
       </div>
       <template v-if="activeTab === 'home'">
-        <k-glass class="banking-balance">
+        <SkyGlass class="banking-balance">
           <div class="banking-balance__label">
             <span>{{ phone.t('Apps.banking.totalBalance') }}</span>
             <small>#{{ banking.overview.playerId }}</small>
@@ -426,13 +374,13 @@ onBeforeUnmount(() => {
             }}</span>
             {{ phone.t('Apps.banking.recentPeriod') }}
           </div>
-        </k-glass>
+        </SkyGlass>
 
         <section
           class="banking-actions"
           :aria-label="phone.t('Apps.banking.actions')"
         >
-          <k-glass
+          <SkyGlass
             component="button"
             type="button"
             class="banking-action banking-action--primary"
@@ -441,47 +389,47 @@ onBeforeUnmount(() => {
             <span class="banking-action__icon"><Send :size="20" /></span>
             <b>{{ phone.t('Apps.banking.send') }}</b>
             <ChevronRight :size="16" aria-hidden="true" />
-          </k-glass>
+          </SkyGlass>
         </section>
 
-        <k-card class="banking-card banking-accounts">
+        <SkyCard class="banking-card banking-accounts">
           <div class="banking-section-title">
             <h2>{{ phone.t('Apps.banking.accounts') }}</h2>
           </div>
-          <k-list inset strong class="banking-account-list">
-            <k-list-item
+          <SkyList inset strong class="banking-account-list">
+            <SkyListItem
               :title="phone.t('Apps.banking.bankAccount')"
               :after="formatMoney(banking.overview.bank)"
             >
               <template #media><WalletCards :size="18" /></template>
-            </k-list-item>
-            <k-list-item
+            </SkyListItem>
+            <SkyListItem
               :title="phone.t('Apps.banking.cash')"
               :after="formatMoney(banking.overview.cash)"
             >
               <template #media><CircleDollarSign :size="18" /></template>
-            </k-list-item>
-          </k-list>
-        </k-card>
+            </SkyListItem>
+          </SkyList>
+        </SkyCard>
 
         <section class="banking-transactions">
           <div class="banking-section-title">
             <h2>{{ phone.t('Apps.banking.latestTransactions') }}</h2>
-            <k-link
+            <SkyLink
               component="button"
-              :link-props="{ type: 'button' }"
+              type="button"
               @click="activeTab = 'activity'"
             >
               {{ phone.t('Apps.banking.viewAll') }}
-            </k-link>
+            </SkyLink>
           </div>
-          <k-card
+          <SkyCard
             v-if="banking.overview.transactions.length"
             :content-wrap="false"
             class="banking-card banking-transaction-card"
           >
-            <k-list inset strong class="banking-transaction-list">
-              <k-list-item
+            <SkyList inset strong class="banking-transaction-list">
+              <SkyListItem
                 v-for="transaction in banking.overview.transactions.slice(0, 5)"
                 :key="transaction.id"
                 :subtitle="formatDate(transaction.createdAt)"
@@ -505,9 +453,9 @@ onBeforeUnmount(() => {
                     }}
                   </b>
                 </template>
-              </k-list-item>
-            </k-list>
-          </k-card>
+              </SkyListItem>
+            </SkyList>
+          </SkyCard>
           <p v-else class="banking-no-transactions">
             {{ phone.t('Apps.banking.noTransactions') }}
           </p>
@@ -523,7 +471,7 @@ onBeforeUnmount(() => {
           <small>{{ phone.t('Apps.banking.recentPeriod') }}</small>
         </section>
 
-        <k-card :content-wrap="false" class="banking-card banking-chart-card">
+        <SkyCard :content-wrap="false" class="banking-card banking-chart-card">
           <div class="banking-chart-legend">
             <span
               ><i class="is-incoming"></i
@@ -555,18 +503,18 @@ onBeforeUnmount(() => {
               <span>{{ day.label }}</span>
             </div>
           </div>
-        </k-card>
+        </SkyCard>
 
         <section class="banking-transactions banking-transactions--all">
           <div class="banking-section-title">
             <h2>{{ phone.t('Apps.banking.allTransactions') }}</h2>
           </div>
-          <k-card
+          <SkyCard
             :content-wrap="false"
             class="banking-card banking-transaction-card"
           >
-            <k-list inset strong class="banking-transaction-list">
-              <k-list-item
+            <SkyList inset strong class="banking-transaction-list">
+              <SkyListItem
                 v-for="transaction in banking.overview.transactions"
                 :key="transaction.id"
                 :subtitle="formatDate(transaction.createdAt)"
@@ -590,67 +538,55 @@ onBeforeUnmount(() => {
                     }}
                   </b>
                 </template>
-              </k-list-item>
-            </k-list>
-          </k-card>
+              </SkyListItem>
+            </SkyList>
+          </SkyCard>
         </section>
       </template>
     </div>
 
-    <k-tabbar
+    <SkyTabBar
       v-if="banking.overview"
-      component="nav"
       icons
       labels
-      class="bottom-0 left-0 fixed"
+      class="banking-tabbar"
       :aria-hidden="Boolean(action)"
-      :aria-label="phone.t('Apps.banking.navigation')"
       :inert="Boolean(action)"
+      :label="phone.t('Apps.banking.navigation')"
     >
-      <k-toolbar-pane>
-        <k-tabbar-link
-          component="button"
-          :active="activeTab === 'home'"
-          :link-props="{ type: 'button' }"
-          @click="activeTab = 'home'"
-        >
-          <template #label>{{ phone.t('Apps.banking.home') }}</template>
-          <template #icon>
-            <k-icon><House class="w-7 h-7" /></k-icon>
-          </template>
-        </k-tabbar-link>
-        <k-tabbar-link
-          component="button"
-          :active="activeTab === 'activity'"
-          :link-props="{ type: 'button' }"
-          @click="activeTab = 'activity'"
-        >
-          <template #label>{{ phone.t('Apps.banking.activity') }}</template>
-          <template #icon>
-            <k-icon><BarChart3 class="w-7 h-7" /></k-icon>
-          </template>
-        </k-tabbar-link>
-      </k-toolbar-pane>
-    </k-tabbar>
-
-    <k-sheet :opened="Boolean(action)" @backdropclick="closeAction">
-      <section
-        v-if="action"
-        class="banking-sheet__content"
-        role="dialog"
-        aria-modal="true"
-        :aria-labelledby="`banking-${action}-title`"
-        @keydown="handleSheetKeydown"
+      <SkyTabButton
+        :active="activeTab === 'home'"
+        :label="phone.t('Apps.banking.home')"
+        @click="activeTab = 'home'"
       >
-        <k-link
+        <template #icon><House :size="25" /></template>
+      </SkyTabButton>
+      <SkyTabButton
+        :active="activeTab === 'activity'"
+        :label="phone.t('Apps.banking.activity')"
+        @click="activeTab = 'activity'"
+      >
+        <template #icon><BarChart3 :size="25" /></template>
+      </SkyTabButton>
+    </SkyTabBar>
+
+    <SkySheet
+      :opened="Boolean(action)"
+      :ariaLabelledby="action ? `banking-${action}-title` : undefined"
+      @backdropclick="closeAction"
+      @escape="closeAction"
+    >
+      <section v-if="action" class="banking-sheet__content">
+        <SkyLink
           component="button"
           class="banking-modal__close"
           :aria-label="phone.t('Common.close')"
-          :link-props="{ type: 'button' }"
+          icon-only
+          type="button"
           @click="closeAction"
         >
           <X :size="17" />
-        </k-link>
+        </SkyLink>
         <span class="banking-modal__icon">
           <Send :size="23" />
         </span>
@@ -658,8 +594,8 @@ onBeforeUnmount(() => {
           {{ phone.t(`Apps.banking.forms.${action}.title`) }}
         </h2>
         <p>{{ phone.t(`Apps.banking.forms.${action}.body`) }}</p>
-        <k-list aria-live="polite" inset strong class="banking-form-list">
-          <k-list-input
+        <SkyList aria-live="polite" inset strong class="banking-form-list">
+          <SkyField
             :label="phone.t('Apps.banking.recipientPhone')"
             input-id="banking-transfer-target"
             inputmode="tel"
@@ -669,9 +605,9 @@ onBeforeUnmount(() => {
             :value="target"
             @input="updateTarget"
           />
-          <k-list-input
+          <SkyField
             :label="phone.t('Apps.banking.amount')"
-            :error="formError || undefined"
+            :error="formError || false"
             input-id="banking-transfer-amount"
             inputmode="numeric"
             min="1"
@@ -682,35 +618,41 @@ onBeforeUnmount(() => {
             @input="updateAmount"
             @keydown.enter="handleEnterAction($event, submitAction)"
           />
-        </k-list>
+        </SkyList>
         <div class="banking-contact-picker">
           <span>{{ phone.t('Apps.banking.chooseContact') }}</span>
-          <k-list v-if="calls.contacts.length" inset strong>
-            <k-list-item
+          <SkyList v-if="calls.contacts.length" inset strong>
+            <SkyListItem
               v-for="contact in calls.contacts"
               :key="contact.id"
               :title="contact.name"
               :subtitle="formatPhoneNumber(contact.phone_number)"
               link
+              link-component="button"
               @click="selectContact(contact)"
             />
-          </k-list>
+          </SkyList>
           <p v-else>{{ phone.t('Apps.banking.noContacts') }}</p>
         </div>
-        <k-button
+        <SkyButton
+          block
           large
           rounded
           :disabled="banking.isLoading"
           @click="submitAction"
         >
-          <k-preloader v-if="banking.isLoading" />
+          <SkySpinner
+            v-if="banking.isLoading"
+            :label="phone.t('Common.loading')"
+            :size="20"
+          />
           <template v-else>
             {{ phone.t(`Apps.banking.forms.${action}.submit`) }}
             <ArrowRight :size="17" />
           </template>
-        </k-button>
+        </SkyButton>
       </section>
-    </k-sheet>
+    </SkySheet>
 
     <SkyToast
       :opened="cooldownToastOpened"
@@ -720,5 +662,5 @@ onBeforeUnmount(() => {
     >
       {{ errorMessage('reload_cooldown') }}
     </SkyToast>
-  </k-page>
+  </SkyAppPage>
 </template>

@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { kBlock, kButton, kPage, kPreloader } from 'konsta/vue'
+import {
+  SkyAppPage as kPage,
+  SkyBlock as kBlock,
+  SkyButton as kButton,
+  SkySpinner as kPreloader,
+} from '@/ui'
 import { computed, onBeforeMount, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -478,7 +483,7 @@ watch(() => catalog.openRequests[props.app.id], flushOpenRequest, {
   text-align: center;
 }
 
-.custom-app-state :deep(.k-block) {
+.custom-app-state :deep(.sky-block) {
   margin: 0;
 }
 

@@ -65,7 +65,6 @@ Bridge.Callbacks.Register("sky_phone:notes:list", function(source)
     end
     return { success = true, data = SkyPhoneNotes.List(account_id, imei) }
 end)
-end)
 
 Bridge.Callbacks.Register("sky_phone:notes:create", function(source, data)
     if not SkyPhone.AllowOperation(source, "notes_write", 120, 60) then
@@ -174,4 +173,5 @@ Bridge.Callbacks.Register("sky_phone:notes:delete", function(source, data)
     Bridge.Database.Query(("DELETE FROM `sky_phone_notes` WHERE `id` = ? AND %s"):format(condition), params)
     notify_owner(account_id, imei)
     return { success = true, data = SkyPhoneNotes.List(account_id, imei) }
+end)
 end)

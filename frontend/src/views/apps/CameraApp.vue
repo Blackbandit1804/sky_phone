@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { kFab, kPage } from 'konsta/vue'
+import { SkyFab, SkyAppPage } from '@/ui'
 import {
   ArrowLeft,
   Images,
@@ -50,8 +50,8 @@ const flashEnabled = ref(false)
 const microphoneEnabled = ref(true)
 const frontCamera = ref(false)
 const shutterActive = ref(false)
-const focused = ref(true)
 const cameraLocked = ref(false)
+const movementEnabled = ref(false)
 const recording = ref(false)
 const savingVideo = ref(false)
 const recordingStartedAt = ref(0)
@@ -73,24 +73,6 @@ const pendingCount = computed(
   () =>
     captures.value.filter((capture) => capture.status === 'uploading').length,
 )
-const controlColors = {
-  bgIos: 'bg-ios-light-glass/75 dark:bg-ios-dark-glass/75',
-  activeBgIos: 'active:bg-white/90 dark:active:bg-white/20',
-  textIos: 'text-black/80 dark:text-white/80',
-}
-const flashColors = computed(() => ({
-  ...controlColors,
-  textIos: flashEnabled.value
-    ? 'text-yellow-500 dark:text-yellow-300'
-    : controlColors.textIos,
-}))
-const microphoneColors = computed(() => ({
-  ...controlColors,
-  textIos: microphoneEnabled.value
-    ? 'text-white'
-    : 'text-red-400',
-}))
-
 function correlationId(): string {
   return `${Date.now()}-${crypto.randomUUID()}`
 }
@@ -231,6 +213,10 @@ async function toggleFacing(): Promise<void> {
 
 async function toggleCameraLock(): Promise<void> {
   cameraLocked.value = !cameraLocked.value
+  if (cameraLocked.value && movementEnabled.value) {
+    movementEnabled.value = false
+    await nuiCall('camera:setFocus', { focused: true })
+  }
   await nuiCall('camera:setLocked', { locked: cameraLocked.value })
 }
 
@@ -265,7 +251,17 @@ function setZoom(zoom: number): void {
 }
 
 function zoomWithWheel(event: WheelEvent): void {
-  setZoom(selectedZoom.value - event.deltaY * 0.0025)
+  const deltaMultiplier =
+    event.deltaMode === WheelEvent.DOM_DELTA_LINE
+      ? 16
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+        ? window.innerHeight
+        : 1
+  const wheelDelta = Math.max(
+    -120,
+    Math.min(120, event.deltaY * deltaMultiplier),
+  )
+  setZoom(selectedZoom.value - wheelDelta * 0.00075)
 }
 
 function resizeGameView(entry?: ResizeObserverEntry): void {
@@ -323,13 +319,20 @@ function onKeydown(event: KeyboardEvent): void {
   if (
     event.code !== 'Space' ||
     event.repeat ||
-    !focused.value ||
-    cameraLocked.value
+    cameraLocked.value ||
+    movementEnabled.value
   )
     return
   event.preventDefault()
-  focused.value = false
+  movementEnabled.value = true
   void nuiCall('camera:setFocus', { focused: false })
+}
+
+function onKeyup(event: KeyboardEvent): void {
+  if (event.code !== 'Space' || !movementEnabled.value) return
+  event.preventDefault()
+  movementEnabled.value = false
+  void nuiCall('camera:setFocus', { focused: true })
 }
 
 function onMessage(event: MessageEvent): void {
@@ -338,8 +341,12 @@ function onMessage(event: MessageEvent): void {
     data?: Record<string, unknown>
     type?: string
   }
-  if (message.type === 'camera:focus') {
-    focused.value = message.data?.focused === true
+  if (message.type === 'camera:zoom') {
+    const zoom = Number(message.data?.zoom)
+    if (Number.isFinite(zoom) && zoom >= minimumZoom && zoom <= maximumZoom) {
+      selectedZoom.value = zoom
+      resizeGameView()
+    }
   } else if (message.type === 'camera:recordState') {
     const active = message.data?.active === true
     savingVideo.value = message.data?.saving === true
@@ -406,6 +413,7 @@ onMounted(() => {
     '*',
   )
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('keyup', onKeyup)
   window.addEventListener('message', onMessage)
   void nuiCall('camera:setActive', { active: true })
   void nuiCall<{ videoBitrateKbps?: number }>('media:config').then(
@@ -424,7 +432,12 @@ onBeforeUnmount(() => {
   if (noticeTimer !== undefined) window.clearTimeout(noticeTimer)
   if (recordingTimer !== undefined) window.clearInterval(recordingTimer)
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('keyup', onKeyup)
   window.removeEventListener('message', onMessage)
+  if (movementEnabled.value) {
+    movementEnabled.value = false
+    void nuiCall('camera:setFocus', { focused: true })
+  }
   if (renderFrameId !== undefined) window.cancelAnimationFrame(renderFrameId)
   resizeObserver?.disconnect()
   gameView?.dispose()
@@ -441,12 +454,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     class="camera-page"
     :class="{ 'camera-page--landscape': phone.cameraLandscape }"
     :aria-label="phone.t('Apps.camera.name')"
   >
-    <div class="camera-viewport" @wheel.prevent="zoomWithWheel">
+    <div class="camera-viewport" @wheel.prevent.stop="zoomWithWheel">
       <canvas
         v-if="!isDevelopment && !gameViewUnavailable"
         ref="gameCanvas"
@@ -477,12 +490,13 @@ onBeforeUnmount(() => {
         >
           <ArrowLeft :size="20" />
         </button>
-        <k-fab
+        <sky-fab
           v-else
           component="button"
           type="button"
           class="camera-control"
-          :colors="flashColors"
+          :class="{ 'camera-control--flash-active': flashEnabled }"
+          variant="neutral"
           :aria-label="phone.t('Apps.camera.flash')"
           @click="toggleFlash"
         >
@@ -490,13 +504,14 @@ onBeforeUnmount(() => {
             <Zap v-if="flashEnabled" :size="19" />
             <ZapOff v-else :size="19" />
           </template>
-        </k-fab>
-        <k-fab
+        </sky-fab>
+        <sky-fab
           v-if="mode === 'video'"
           component="button"
           type="button"
           class="camera-control"
-          :colors="microphoneColors"
+          :class="{ 'camera-control--danger': !microphoneEnabled }"
+          variant="neutral"
           :disabled="recording || savingVideo"
           :aria-label="
             phone.t(
@@ -512,7 +527,7 @@ onBeforeUnmount(() => {
             <Mic v-if="microphoneEnabled" :size="19" />
             <MicOff v-else :size="19" />
           </template>
-        </k-fab>
+        </sky-fab>
       </div>
       <span
         v-if="noticeText"
@@ -542,11 +557,11 @@ onBeforeUnmount(() => {
         <LockOpen v-else :size="12" />
         <kbd>{{ phone.t('Apps.camera.spaceKey') }}</kbd>
       </button>
-      <k-fab
+      <sky-fab
         component="button"
         type="button"
         class="camera-control"
-        :colors="controlColors"
+        variant="neutral"
         :disabled="recording || savingVideo"
         :aria-label="
           phone.t(
@@ -558,7 +573,7 @@ onBeforeUnmount(() => {
         @click="toggleOrientation"
       >
         <template #icon><RotateCcwSquare :size="19" /></template>
-      </k-fab>
+      </sky-fab>
     </header>
 
     <div v-if="recording || savingVideo" class="camera-record-status">
@@ -626,16 +641,16 @@ onBeforeUnmount(() => {
           <span></span>
         </button>
 
-        <k-fab
+        <sky-fab
           component="button"
           type="button"
           class="camera-control camera-selfie"
-          :colors="controlColors"
+          variant="neutral"
           :aria-label="phone.t('Apps.camera.flip')"
           @click="toggleFacing"
         >
           <template #icon><RefreshCw :size="20" /></template>
-        </k-fab>
+        </sky-fab>
       </div>
 
       <SkySegmented
@@ -663,7 +678,7 @@ onBeforeUnmount(() => {
         </SkySegmentedButton>
       </SkySegmented>
     </footer>
-  </k-page>
+  </sky-app-page>
 </template>
 
 <style scoped>
@@ -779,7 +794,14 @@ onBeforeUnmount(() => {
   height: 44px;
 }
 .camera-control {
-  --color-primary: transparent;
+  --sky-glass-solid: rgb(28 28 30 / 80%);
+  color: rgb(255 255 255 / 86%);
+}
+.camera-control--flash-active {
+  color: #ffd60a !important;
+}
+.camera-control--danger {
+  color: #ff6961 !important;
 }
 .camera-picker-back {
   width: 44px;

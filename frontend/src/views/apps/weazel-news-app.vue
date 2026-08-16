@@ -1,37 +1,38 @@
 <script setup lang="ts">
 import {
-  kButton,
-  kCard,
-  kDialog,
-  kDialogButton,
-  kIcon,
-  kLink,
-  kList,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kSearchbar,
-  kSegmented,
-  kSegmentedButton,
-  kSheet,
-  kTabbar,
-  kTabbarLink,
-  kToast,
-  kToolbarPane,
-} from 'konsta/vue'
+  SkyAppPage,
+  SkyButton,
+  SkyCard,
+  SkyDialog,
+  SkyDialogButton,
+  SkyDropdown,
+  SkyEmptyState,
+  SkyField,
+  SkyIcon,
+  SkyLink,
+  SkyList,
+  SkyListItem,
+  SkyNavbar,
+  SkyPillNavigation,
+  SkyScrollArea,
+  SkySpinner,
+  SkySearchbar,
+  SkySegmented,
+  SkySegmentedButton,
+  SkyToast,
+} from '@/ui'
 import {
   BriefcaseBusiness,
   Building2,
+  Camera,
   CalendarDays,
-  Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   FileText,
   House,
   ImagePlus,
+  Images,
   LayoutGrid,
   Megaphone,
   Newspaper,
@@ -59,13 +60,11 @@ import { WEAZEL_NEWS_CATEGORY_IDS } from '@/types/weazel-news'
 
 type MainTab = 'home' | 'categories' | 'search' | 'editorial'
 type Screen = 'main' | 'detail' | 'composer'
-type ComposerChoice = 'category' | 'status'
-type ComposerChoiceOption = { label: string; value: string }
-type SelectedCover = { id: number; url: string }
+type SelectedImage = { id: number; url: string }
 type ComposerContext = {
   article: WeazelNewsArticle | null
-  cover: SelectedCover | null
   draft: WeazelNewsArticleDraft
+  images: SelectedImage[]
   originTab: MainTab
 }
 
@@ -82,21 +81,27 @@ const selectedCategory = ref<WeazelNewsCategoryId | null>(null)
 const searchQuery = ref('')
 const submittedSearchQuery = ref('')
 const searchSubmitted = ref(false)
+const searchPending = ref(false)
 const editorialStatus = ref<WeazelNewsManageStatus>('all')
 const editingArticle = ref<WeazelNewsArticle | null>(null)
-const selectedCover = ref<SelectedCover | null>(null)
+const selectedImages = ref<SelectedImage[]>([])
+const detailImageIndex = ref(0)
+const categoryDropdownOpened = ref(false)
+const categoryDropdownTarget = ref<HTMLElement | null>(null)
+const statusDropdownOpened = ref(false)
+const statusDropdownTarget = ref<HTMLElement | null>(null)
 const deleteTarget = ref<WeazelNewsArticle | null>(null)
 const deleteDialogOpened = ref(false)
-const composerChoice = ref<ComposerChoice | null>(null)
 const toastOpened = ref(false)
 const toastText = ref('')
 let toastTimer: number | undefined
+let searchTimer: number | undefined
 
 function emptyDraft(): WeazelNewsArticleDraft {
   return {
     body: '',
     category: 'news',
-    imageMediaId: null,
+    imageMediaIds: [],
     status: 'draft',
     title: '',
   }
@@ -115,21 +120,47 @@ const categoryIcons = {
 const featuredArticle = computed(() => news.publicItems[0] ?? null)
 const secondaryArticles = computed(() => news.publicItems.slice(1))
 const selectedArticle = computed(() => news.selected)
-const composerChoiceOptions = computed<ComposerChoiceOption[]>(() =>
-  composerChoice.value === 'status'
-    ? [
-        { label: t('composer.statusDraft'), value: 'draft' },
-        { label: t('composer.statusPublished'), value: 'published' },
-      ]
-    : WEAZEL_NEWS_CATEGORY_IDS.map((category) => ({
-        label: categoryLabel(category),
-        value: category,
-      })),
+const maximumImages = computed(() => news.context?.maximumImages ?? 6)
+const activeTabIndex = computed(() =>
+  (['home', 'categories', 'search', 'editorial'] as MainTab[]).indexOf(
+    activeTab.value,
+  ),
 )
-const composerChoiceLabel = computed(() =>
-  composerChoice.value === 'status'
-    ? t('composer.status')
-    : t('composer.category'),
+const categoryDropdownItems = computed(() =>
+  WEAZEL_NEWS_CATEGORY_IDS.map((category) => ({
+    checked: draft.value.category === category,
+    id: category,
+    label: categoryLabel(category),
+  })),
+)
+const statusDropdownItems = computed(() => [
+  {
+    checked: draft.value.status === 'draft',
+    id: 'draft',
+    label: t('composer.statusDraft'),
+  },
+  {
+    checked: draft.value.status === 'published',
+    id: 'published',
+    label: t('composer.statusPublished'),
+  },
+])
+const detailImages = computed<SelectedImage[]>(() => {
+  const article = selectedArticle.value
+  if (!article) return []
+  if (article.images?.length) {
+    return article.images.map((image) => ({
+      id: image.mediaId,
+      url: image.url,
+    }))
+  }
+  return article.imageMediaId && article.imageUrl
+    ? [{ id: article.imageMediaId, url: article.imageUrl }]
+    : []
+})
+const activeDetailImage = computed(
+  () =>
+    detailImages.value[detailImageIndex.value] ?? detailImages.value[0] ?? null,
 )
 const knownErrors = new Set([
   'feature_disabled',
@@ -166,7 +197,7 @@ const currentSurfaceLoading = computed(() => {
   }
   if (activeTab.value === 'categories') return news.contextLoading
   if (activeTab.value === 'search') {
-    return searchSubmitted.value && news.publicLoading
+    return searchPending.value || news.publicLoading
   }
   return news.publicLoading
 })
@@ -176,7 +207,9 @@ function t(path: string, replacements: Record<string, string> = {}): string {
 }
 
 function eventValue(event: Event): string {
-  return (event.target as HTMLInputElement | HTMLTextAreaElement).value
+  return (
+    event.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+  ).value
 }
 
 function categoryLabel(category: WeazelNewsCategoryId | null): string {
@@ -223,14 +256,26 @@ async function loadHome(): Promise<void> {
   await news.loadPublic({ category: selectedCategory.value })
 }
 
+function cancelQueuedSearch(): void {
+  if (searchTimer !== undefined) {
+    window.clearTimeout(searchTimer)
+    searchTimer = undefined
+  }
+  searchPending.value = false
+}
+
 async function selectTab(tab: MainTab): Promise<void> {
+  if (tab !== 'search') cancelQueuedSearch()
   activeTab.value = tab
   screen.value = 'main'
   news.error = ''
 
   if (tab === 'home') await loadHome()
   if (tab === 'categories') await news.loadContext()
-  if (tab === 'search' && searchSubmitted.value) await submitSearch()
+  if (tab === 'search') {
+    if (searchSubmitted.value) await submitSearch()
+    else await loadLatestSearch()
+  }
   if (tab === 'editorial') await loadEditorial()
 }
 
@@ -249,9 +294,35 @@ async function selectCategory(
 }
 
 async function submitSearch(): Promise<void> {
+  if (searchTimer !== undefined) {
+    window.clearTimeout(searchTimer)
+    searchTimer = undefined
+  }
+  submittedSearchQuery.value = searchQuery.value.trim()
+  if (!submittedSearchQuery.value) {
+    await clearSearch()
+    return
+  }
+  searchSubmitted.value = true
+  searchPending.value = false
+  await news.loadPublic({ search: submittedSearchQuery.value })
+}
+
+function queueSearch(event: Event): void {
+  searchQuery.value = eventValue(event)
+  if (searchTimer !== undefined) window.clearTimeout(searchTimer)
+  if (!searchQuery.value.trim()) {
+    void clearSearch()
+    return
+  }
   submittedSearchQuery.value = searchQuery.value.trim()
   searchSubmitted.value = true
-  await news.loadPublic({ search: submittedSearchQuery.value })
+  searchPending.value = true
+  searchTimer = window.setTimeout(() => {
+    searchTimer = undefined
+    if (activeTab.value !== 'search') return
+    void submitSearch()
+  }, 250)
 }
 
 async function loadMoreSearch(): Promise<void> {
@@ -262,12 +333,27 @@ async function loadMoreSearch(): Promise<void> {
   })
 }
 
-function clearSearch(): void {
+async function loadLatestSearch(): Promise<void> {
+  await news.loadPublic({ search: '' })
+}
+
+async function retrySearch(): Promise<void> {
+  if (searchSubmitted.value) await submitSearch()
+  else await loadLatestSearch()
+}
+
+async function clearSearch(): Promise<void> {
+  if (searchTimer !== undefined) {
+    window.clearTimeout(searchTimer)
+    searchTimer = undefined
+  }
   searchQuery.value = ''
   submittedSearchQuery.value = ''
   searchSubmitted.value = false
+  searchPending.value = false
   news.publicError = ''
   news.error = ''
+  await loadLatestSearch()
 }
 
 async function openArticle(
@@ -278,12 +364,14 @@ async function openArticle(
     showToast(errorKey(news.detailError))
     return
   }
+  detailImageIndex.value = 0
   detailManaged.value = managed
   screen.value = 'detail'
 }
 
 function closeDetail(): void {
   screen.value = 'main'
+  detailImageIndex.value = 0
   news.selected = null
   if (activeTab.value === 'editorial' && news.context?.canManage) {
     void news.loadManaged(editorialStatus.value)
@@ -293,7 +381,8 @@ function closeDetail(): void {
 function createArticle(): void {
   if (!news.context?.canManage) return
   editingArticle.value = null
-  selectedCover.value = null
+  selectedImages.value = []
+  closeComposerDropdowns()
   draft.value = emptyDraft()
   screen.value = 'composer'
 }
@@ -301,14 +390,19 @@ function createArticle(): void {
 function editArticle(article: WeazelNewsArticle): void {
   if (!news.context?.canManage) return
   editingArticle.value = article
-  selectedCover.value =
-    article.imageMediaId && article.imageUrl
-      ? { id: article.imageMediaId, url: article.imageUrl }
-      : null
+  closeComposerDropdowns()
+  selectedImages.value = article.images?.length
+    ? article.images.map((image) => ({
+        id: image.mediaId,
+        url: image.url,
+      }))
+    : article.imageMediaId && article.imageUrl
+      ? [{ id: article.imageMediaId, url: article.imageUrl }]
+      : []
   draft.value = {
     body: article.body,
     category: article.category,
-    imageMediaId: article.imageMediaId ?? null,
+    imageMediaIds: selectedImages.value.map((image) => image.id),
     status: article.status,
     title: article.title,
   }
@@ -316,41 +410,131 @@ function editArticle(article: WeazelNewsArticle): void {
 }
 
 function closeComposer(): void {
-  composerChoice.value = null
+  closeComposerDropdowns()
   screen.value = editingArticle.value ? 'detail' : 'main'
 }
 
-function selectComposerChoice(option: ComposerChoiceOption): void {
-  if (composerChoice.value === 'category') {
-    draft.value.category = option.value as WeazelNewsCategoryId
-  } else if (composerChoice.value === 'status') {
-    draft.value.status = option.value as WeazelNewsArticleDraft['status']
-  }
-  composerChoice.value = null
+function closeComposerDropdowns(): void {
+  categoryDropdownOpened.value = false
+  statusDropdownOpened.value = false
 }
 
-function chooseCover(): void {
+function toggleCategoryDropdown(event: MouseEvent): void {
+  if (!(event.currentTarget instanceof HTMLElement)) return
+  categoryDropdownTarget.value = event.currentTarget
+  statusDropdownOpened.value = false
+  categoryDropdownOpened.value = !categoryDropdownOpened.value
+}
+
+function toggleStatusDropdown(event: MouseEvent): void {
+  if (!(event.currentTarget instanceof HTMLElement)) return
+  statusDropdownTarget.value = event.currentTarget
+  categoryDropdownOpened.value = false
+  statusDropdownOpened.value = !statusDropdownOpened.value
+}
+
+function updateCategory(value: string): void {
+  if (WEAZEL_NEWS_CATEGORY_IDS.includes(value as WeazelNewsCategoryId)) {
+    draft.value.category = value as WeazelNewsCategoryId
+  }
+}
+
+function updateStatus(value: string): void {
+  if (value === 'draft' || value === 'published') {
+    draft.value.status = value
+  }
+}
+
+function selectCategoryDropdownItem(id: string): void {
+  updateCategory(id)
+  closeComposerDropdowns()
+}
+
+function selectStatusDropdownItem(id: string): void {
+  updateStatus(id)
+  closeComposerDropdowns()
+}
+
+function selectDetailImage(index: number): void {
+  if (index < 0 || index >= detailImages.value.length) return
+  detailImageIndex.value = index
+}
+
+function showPreviousDetailImage(): void {
+  const count = detailImages.value.length
+  if (count < 2) return
+  detailImageIndex.value = (detailImageIndex.value - 1 + count) % count
+}
+
+function showNextDetailImage(): void {
+  const count = detailImages.value.length
+  if (count < 2) return
+  detailImageIndex.value = (detailImageIndex.value + 1) % count
+}
+
+let detailSwipeStartX: number | null = null
+
+function beginDetailImageSwipe(event: TouchEvent): void {
+  detailSwipeStartX = event.changedTouches.item(0)?.clientX ?? null
+}
+
+function finishDetailImageSwipe(event: TouchEvent): void {
+  const endX = event.changedTouches.item(0)?.clientX
+  if (detailSwipeStartX === null || endX === undefined) return
+  const distance = endX - detailSwipeStartX
+  detailSwipeStartX = null
+  if (Math.abs(distance) < 44) return
+  if (distance < 0) showNextDetailImage()
+  else showPreviousDetailImage()
+}
+
+function cancelDetailImageSwipe(): void {
+  detailSwipeStartX = null
+}
+
+function syncImageMediaIds(): void {
+  draft.value.imageMediaIds = selectedImages.value.map((image) => image.id)
+}
+
+function openArticleMediaApp(app: 'camera' | 'photos'): void {
+  const remaining = maximumImages.value - selectedImages.value.length
+  if (remaining < 1) return
   messageMedia.begin(
-    'weazel-news:cover',
+    'weazel-news:article-images',
     'photo',
     '/apps/weazel-news?compose=1',
-    1,
+    app === 'photos' ? remaining : 1,
     {
       article: editingArticle.value,
-      cover: selectedCover.value,
-      draft: { ...draft.value },
+      draft: {
+        ...draft.value,
+        imageMediaIds: [...draft.value.imageMediaIds],
+      },
+      images: selectedImages.value.map((image) => ({ ...image })),
       originTab: activeTab.value,
     } satisfies ComposerContext,
   )
   void router.push({
-    path: '/apps/photos',
+    path: `/apps/${app}`,
     query: { mediaAttachment: 'photo' },
   })
 }
 
-function removeCover(): void {
-  selectedCover.value = null
-  draft.value.imageMediaId = null
+function makePrimaryImage(index: number): void {
+  if (index < 1 || index >= selectedImages.value.length) return
+  const next = [...selectedImages.value]
+  const [image] = next.splice(index, 1)
+  if (!image) return
+  next.unshift(image)
+  selectedImages.value = next
+  syncImageMediaIds()
+}
+
+function removeImage(index: number): void {
+  selectedImages.value = selectedImages.value.filter(
+    (_, imageIndex) => imageIndex !== index,
+  )
+  syncImageMediaIds()
 }
 
 async function saveArticle(
@@ -376,6 +560,7 @@ async function saveArticle(
   const payload: WeazelNewsArticleDraft = {
     ...draft.value,
     body,
+    imageMediaIds: selectedImages.value.map((image) => image.id),
     status: nextStatus,
     title,
   }
@@ -391,6 +576,7 @@ async function saveArticle(
 
   editingArticle.value = article
   news.selected = article
+  detailImageIndex.value = 0
   detailManaged.value = true
   screen.value = 'detail'
   showToast(wasEditing ? 'feedback.updated' : 'feedback.created')
@@ -432,19 +618,32 @@ async function loadMoreManaged(): Promise<void> {
 }
 
 async function initialize(): Promise<void> {
-  const selection =
-    messageMedia.consumeMany<ComposerContext>('weazel-news:cover')
+  const selection = messageMedia.consumeMany<ComposerContext>(
+    'weazel-news:article-images',
+  )
   if (selection?.context) {
     editingArticle.value = selection.context.article
-    selectedCover.value = selection.context.cover
-    draft.value = selection.context.draft
+    selectedImages.value = [...selection.context.images]
+    draft.value = {
+      ...selection.context.draft,
+      imageMediaIds: [...selection.context.draft.imageMediaIds],
+    }
     activeTab.value = selection.context.originTab
     screen.value = 'composer'
   }
-  const media = selection?.media[0]
-  if (media) {
-    selectedCover.value = { id: media.id, url: media.url }
-    draft.value.imageMediaId = media.id
+  if (selection?.media.length) {
+    const knownIds = new Set(selectedImages.value.map((image) => image.id))
+    for (const media of selection.media) {
+      if (
+        knownIds.has(media.id) ||
+        selectedImages.value.length >= maximumImages.value
+      ) {
+        continue
+      }
+      knownIds.add(media.id)
+      selectedImages.value.push({ id: media.id, url: media.url })
+    }
+    syncImageMediaIds()
   }
 
   await news.loadContext()
@@ -457,29 +656,31 @@ async function initialize(): Promise<void> {
 onMounted(() => void initialize())
 
 onBeforeUnmount(() => {
+  categoryDropdownTarget.value = null
+  statusDropdownTarget.value = null
   if (toastTimer !== undefined) window.clearTimeout(toastTimer)
+  if (searchTimer !== undefined) window.clearTimeout(searchTimer)
 })
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     component="main"
     class="weazel-app"
     :class="{ 'weazel-app--light': !phone.isDarkMode }"
-    :colors="{ bgIos: 'bg-transparent' }"
     :aria-label="t('name')"
   >
     <template v-if="screen === 'main'">
-      <k-navbar class="weazel-navbar" :center-title="true">
+      <sky-navbar class="weazel-navbar" :center-title="true">
         <template #title>
           <span class="weazel-brand" :aria-label="t('brand')">
             <span><Newspaper :size="16" :stroke-width="2.4" /></span>
             <b>{{ t('brand') }}</b>
           </span>
         </template>
-      </k-navbar>
+      </sky-navbar>
 
-      <div class="weazel-scroll">
+      <sky-scroll-area padded with-tabbar class="weazel-scroll">
         <template v-if="activeTab === 'home'">
           <header class="weazel-section-heading">
             <div>
@@ -498,16 +699,16 @@ onBeforeUnmount(() => {
           </header>
 
           <div v-if="currentSurfaceLoading" class="weazel-state">
-            <k-preloader class="text-[#d71920]" />
+            <sky-spinner class="text-[#d71920]" />
             <span>{{ t('states.loading') }}</span>
           </div>
           <div v-else-if="activeError" class="weazel-state">
             <Newspaper :size="34" />
             <strong>{{ t('states.errorTitle') }}</strong>
             <span>{{ contextualError }}</span>
-            <k-button rounded small @click="loadHome">{{
+            <sky-button rounded small @click="loadHome">{{
               t('retry')
-            }}</k-button>
+            }}</sky-button>
           </div>
           <div v-else-if="!featuredArticle" class="weazel-state">
             <FileText :size="34" />
@@ -515,7 +716,7 @@ onBeforeUnmount(() => {
             <span>{{ t('states.emptyBody') }}</span>
           </div>
           <section v-else :aria-label="t('accessibility.articleList')">
-            <k-card :content-wrap="false" class="weazel-feature-card">
+            <sky-card :content-wrap="false" class="weazel-feature-card">
               <button
                 type="button"
                 :aria-label="
@@ -548,14 +749,14 @@ onBeforeUnmount(() => {
                   </small>
                 </div>
               </button>
-            </k-card>
+            </sky-card>
 
             <div class="weazel-latest-title">
               <span>{{ t('home.latest') }}</span>
               <i></i>
             </div>
             <div class="weazel-card-list">
-              <k-card
+              <sky-card
                 v-for="article in secondaryArticles"
                 :key="article.id"
                 :content-wrap="false"
@@ -581,9 +782,9 @@ onBeforeUnmount(() => {
                   />
                   <span v-else class="weazel-card-mark">W</span>
                 </button>
-              </k-card>
+              </sky-card>
             </div>
-            <k-button
+            <sky-button
               v-if="news.publicHasMore"
               class="weazel-load-more"
               tonal
@@ -597,7 +798,7 @@ onBeforeUnmount(() => {
               "
             >
               {{ t('loadMore') }}
-            </k-button>
+            </sky-button>
           </section>
         </template>
 
@@ -609,13 +810,13 @@ onBeforeUnmount(() => {
               <p>{{ t('categories.subtitle') }}</p>
             </div>
           </header>
-          <k-list
+          <sky-list
             inset
             strong
             class="weazel-category-list"
             :aria-label="t('accessibility.categoryList')"
           >
-            <k-list-item
+            <sky-list-item
               v-for="category in WEAZEL_NEWS_CATEGORY_IDS"
               :key="category"
               link
@@ -635,8 +836,8 @@ onBeforeUnmount(() => {
                   <component :is="categoryIcons[category]" :size="19" />
                 </span>
               </template>
-            </k-list-item>
-          </k-list>
+            </sky-list-item>
+          </sky-list>
         </template>
 
         <template v-else-if="activeTab === 'search'">
@@ -647,7 +848,7 @@ onBeforeUnmount(() => {
             </div>
           </header>
           <div class="weazel-search-shell">
-            <k-searchbar
+            <sky-searchbar
               component="form"
               class="weazel-searchbar"
               input-id="weazel-news-search"
@@ -655,7 +856,7 @@ onBeforeUnmount(() => {
               :value="searchQuery"
               :placeholder="t('search.placeholder')"
               :aria-label="t('accessibility.search')"
-              @input="searchQuery = eventValue($event)"
+              @input="queueSearch"
               @submit.prevent="submitSearch"
             />
             <button
@@ -675,7 +876,7 @@ onBeforeUnmount(() => {
             v-if="currentSurfaceLoading"
             class="weazel-state weazel-state--compact"
           >
-            <k-preloader class="text-[#d71920]" />
+            <sky-spinner class="text-[#d71920]" />
             <span>{{ t('states.loading') }}</span>
           </div>
           <div
@@ -685,20 +886,28 @@ onBeforeUnmount(() => {
             <Newspaper :size="34" />
             <strong>{{ t('states.errorTitle') }}</strong>
             <span>{{ contextualError }}</span>
-            <k-button rounded small @click="submitSearch">{{
+            <sky-button rounded small @click="retrySearch">{{
               t('retry')
-            }}</k-button>
+            }}</sky-button>
           </div>
-          <div
+          <sky-empty-state
             v-else-if="searchSubmitted && !news.publicItems.length"
+            compact
+            :title="t('search.emptyTitle')"
+            :body="t('search.emptyBody')"
+          >
+            <template #icon><Search :size="34" /></template>
+          </sky-empty-state>
+          <div
+            v-else-if="!news.publicItems.length"
             class="weazel-state weazel-state--compact"
           >
-            <Search :size="34" />
-            <strong>{{ t('search.emptyTitle') }}</strong>
-            <span>{{ t('search.emptyBody') }}</span>
+            <FileText :size="34" />
+            <strong>{{ t('states.emptyTitle') }}</strong>
+            <span>{{ t('states.emptyBody') }}</span>
           </div>
-          <div v-else-if="searchSubmitted" class="weazel-card-list">
-            <k-card
+          <div v-else class="weazel-card-list">
+            <sky-card
               v-for="article in news.publicItems"
               :key="article.id"
               :content-wrap="false"
@@ -714,19 +923,17 @@ onBeforeUnmount(() => {
                 <img v-if="article.imageUrl" :src="article.imageUrl" alt="" />
                 <ChevronRight v-else :size="20" />
               </button>
-            </k-card>
+            </sky-card>
           </div>
-          <k-button
-            v-if="
-              searchSubmitted && news.publicHasMore && !currentSurfaceLoading
-            "
+          <sky-button
+            v-if="news.publicHasMore && !currentSurfaceLoading"
             class="weazel-load-more"
             tonal
             rounded
             @click="loadMoreSearch"
           >
             {{ t('loadMore') }}
-          </k-button>
+          </sky-button>
         </template>
 
         <template v-else>
@@ -742,16 +949,16 @@ onBeforeUnmount(() => {
             v-if="currentSurfaceLoading && !news.context"
             class="weazel-state"
           >
-            <k-preloader class="text-[#d71920]" />
+            <sky-spinner class="text-[#d71920]" />
             <span>{{ t('states.loading') }}</span>
           </div>
           <div v-else-if="activeError && !news.context" class="weazel-state">
             <Newspaper :size="34" />
             <strong>{{ t('states.errorTitle') }}</strong>
             <span>{{ contextualError }}</span>
-            <k-button rounded small @click="loadEditorial">{{
+            <sky-button rounded small @click="loadEditorial">{{
               t('retry')
-            }}</k-button>
+            }}</sky-button>
           </div>
           <div v-else-if="!news.context?.canManage" class="weazel-state">
             <UserRound :size="36" />
@@ -759,7 +966,7 @@ onBeforeUnmount(() => {
             <span>{{ t('states.readOnlyBody') }}</span>
           </div>
           <template v-else>
-            <k-card :content-wrap="false" class="weazel-access-card">
+            <sky-card :content-wrap="false" class="weazel-access-card">
               <div class="weazel-access-content">
                 <span class="weazel-access-avatar">W</span>
                 <div class="weazel-access-identity">
@@ -773,7 +980,7 @@ onBeforeUnmount(() => {
                     })
                   }}</small>
                 </div>
-                <k-button
+                <sky-button
                   rounded
                   small
                   class="weazel-new-article"
@@ -781,12 +988,12 @@ onBeforeUnmount(() => {
                   @click="createArticle"
                 >
                   <Plus :size="17" /> {{ t('editorial.newArticle') }}
-                </k-button>
+                </sky-button>
               </div>
-            </k-card>
+            </sky-card>
 
-            <k-segmented strong rounded class="weazel-editorial-filter">
-              <k-segmented-button
+            <sky-segmented strong rounded class="weazel-editorial-filter">
+              <sky-segmented-button
                 v-for="status in [
                   'all',
                   'published',
@@ -797,14 +1004,14 @@ onBeforeUnmount(() => {
                 @click="changeEditorialStatus(status)"
               >
                 {{ t(`editorial.${status === 'draft' ? 'drafts' : status}`) }}
-              </k-segmented-button>
-            </k-segmented>
+              </sky-segmented-button>
+            </sky-segmented>
 
             <div
               v-if="currentSurfaceLoading"
               class="weazel-state weazel-state--compact"
             >
-              <k-preloader class="text-[#d71920]" />
+              <sky-spinner class="text-[#d71920]" />
             </div>
             <div
               v-else-if="activeError"
@@ -813,9 +1020,9 @@ onBeforeUnmount(() => {
               <Newspaper :size="34" />
               <strong>{{ t('states.errorTitle') }}</strong>
               <span>{{ contextualError }}</span>
-              <k-button rounded small @click="loadEditorial">{{
+              <sky-button rounded small @click="loadEditorial">{{
                 t('retry')
-              }}</k-button>
+              }}</sky-button>
             </div>
             <div
               v-else-if="!news.managedItems.length"
@@ -825,14 +1032,14 @@ onBeforeUnmount(() => {
               <strong>{{ t('states.noManagedTitle') }}</strong>
               <span>{{ t('states.noManagedBody') }}</span>
             </div>
-            <k-list
+            <sky-list
               v-else
               inset
               strong
               class="weazel-editorial-list"
               :aria-label="t('accessibility.editorialList')"
             >
-              <k-list-item
+              <sky-list-item
                 v-for="article in news.managedItems"
                 :key="article.id"
                 link
@@ -860,9 +1067,9 @@ onBeforeUnmount(() => {
                     {{ statusLabel(article.status) }}
                   </span>
                 </template>
-              </k-list-item>
-            </k-list>
-            <k-button
+              </sky-list-item>
+            </sky-list>
+            <sky-button
               v-if="
                 news.managedItems.length &&
                 news.managedHasMore &&
@@ -874,83 +1081,79 @@ onBeforeUnmount(() => {
               @click="loadMoreManaged"
             >
               {{ t('loadMore') }}
-            </k-button>
+            </sky-button>
           </template>
         </template>
-      </div>
+      </sky-scroll-area>
 
-      <k-tabbar
-        component="nav"
-        icons
-        labels
-        class="weazel-tabbar"
-        inner-class="weazel-tabbar__inner"
-        :aria-label="t('navigation')"
+      <sky-pill-navigation
+        layout="full"
+        class="weazel-navigation"
+        :label="t('navigation')"
       >
-        <k-toolbar-pane class="weazel-tabbar__pane">
-          <k-tabbar-link
-            component="button"
-            class="weazel-tabbar__link"
+        <sky-segmented
+          strong
+          rounded
+          navigation
+          :active-index="activeTabIndex"
+          :aria-label="t('navigation')"
+          :item-count="4"
+        >
+          <sky-segmented-button
+            type="button"
             :active="activeTab === 'home'"
-            :link-props="{ type: 'button' }"
             @click="selectTab('home')"
           >
-            <template #icon
-              ><k-icon><House :size="22" /></k-icon
-            ></template>
-            <template #label>{{ t('tabs.home') }}</template>
-          </k-tabbar-link>
-          <k-tabbar-link
-            component="button"
-            class="weazel-tabbar__link"
+            <span class="weazel-navigation__item">
+              <sky-icon :size="20"><House :size="20" /></sky-icon>
+              <span>{{ t('tabs.home') }}</span>
+            </span>
+          </sky-segmented-button>
+          <sky-segmented-button
+            type="button"
             :active="activeTab === 'categories'"
-            :link-props="{ type: 'button' }"
             @click="selectTab('categories')"
           >
-            <template #icon
-              ><k-icon><LayoutGrid :size="22" /></k-icon
-            ></template>
-            <template #label>{{ t('tabs.categories') }}</template>
-          </k-tabbar-link>
-          <k-tabbar-link
-            component="button"
-            class="weazel-tabbar__link"
+            <span class="weazel-navigation__item">
+              <sky-icon :size="20"><LayoutGrid :size="20" /></sky-icon>
+              <span>{{ t('tabs.categories') }}</span>
+            </span>
+          </sky-segmented-button>
+          <sky-segmented-button
+            type="button"
             :active="activeTab === 'search'"
-            :link-props="{ type: 'button' }"
             @click="selectTab('search')"
           >
-            <template #icon
-              ><k-icon><Search :size="22" /></k-icon
-            ></template>
-            <template #label>{{ t('tabs.search') }}</template>
-          </k-tabbar-link>
-          <k-tabbar-link
-            component="button"
-            class="weazel-tabbar__link"
+            <span class="weazel-navigation__item">
+              <sky-icon :size="20"><Search :size="20" /></sky-icon>
+              <span>{{ t('tabs.search') }}</span>
+            </span>
+          </sky-segmented-button>
+          <sky-segmented-button
+            type="button"
             :active="activeTab === 'editorial'"
-            :link-props="{ type: 'button' }"
             @click="selectTab('editorial')"
           >
-            <template #icon
-              ><k-icon><UserRound :size="22" /></k-icon
-            ></template>
-            <template #label>{{ t('tabs.editorial') }}</template>
-          </k-tabbar-link>
-        </k-toolbar-pane>
-      </k-tabbar>
+            <span class="weazel-navigation__item">
+              <sky-icon :size="20"><UserRound :size="20" /></sky-icon>
+              <span>{{ t('tabs.editorial') }}</span>
+            </span>
+          </sky-segmented-button>
+        </sky-segmented>
+      </sky-pill-navigation>
     </template>
 
     <template v-else-if="screen === 'detail' && selectedArticle">
-      <k-navbar class="weazel-navbar" :title="t('article.readMore')">
-        <template #left>
-          <k-navbar-back-link
-            component="button"
-            :text="t('back')"
-            @click="closeDetail"
-          />
-        </template>
+      <sky-navbar
+        class="weazel-navbar"
+        :title="t('article.readMore')"
+        show-back
+        back-appearance="surface"
+        :back-label="t('back')"
+        @back="closeDetail"
+      >
         <template v-if="news.context?.canManage && detailManaged" #right>
-          <k-link
+          <sky-link
             component="button"
             icon-only
             :aria-label="
@@ -959,16 +1162,86 @@ onBeforeUnmount(() => {
             @click="editArticle(selectedArticle)"
           >
             <Pencil :size="19" />
-          </k-link>
+          </sky-link>
         </template>
-      </k-navbar>
-      <article class="weazel-detail-scroll">
-        <img
-          v-if="selectedArticle.imageUrl"
-          class="weazel-detail-cover"
-          :src="selectedArticle.imageUrl"
-          :alt="t('article.coverAlt', { title: selectedArticle.title })"
-        />
+      </sky-navbar>
+      <sky-scroll-area as="article" class="weazel-detail-scroll">
+        <div
+          v-if="detailImages.length"
+          class="weazel-detail-gallery"
+          role="group"
+          :aria-label="t('accessibility.articleImages')"
+          :tabindex="detailImages.length > 1 ? 0 : undefined"
+          @keydown.left.prevent="showPreviousDetailImage"
+          @keydown.right.prevent="showNextDetailImage"
+          @touchstart.passive="beginDetailImageSwipe"
+          @touchend.passive="finishDetailImageSwipe"
+          @touchcancel="cancelDetailImageSwipe"
+        >
+          <img
+            v-if="activeDetailImage"
+            :key="activeDetailImage.id"
+            class="weazel-detail-cover"
+            :src="activeDetailImage.url"
+            :alt="
+              t('article.coverAlt', {
+                title: selectedArticle.title,
+              })
+            "
+          />
+          <template v-if="detailImages.length > 1">
+            <sky-button
+              icon-only
+              rounded
+              tonal
+              class="weazel-detail-gallery-control is-previous"
+              :aria-label="t('accessibility.previousPhoto')"
+              @click="showPreviousDetailImage"
+            >
+              <ChevronLeft :size="22" />
+            </sky-button>
+            <sky-button
+              icon-only
+              rounded
+              tonal
+              class="weazel-detail-gallery-control is-next"
+              :aria-label="t('accessibility.nextPhoto')"
+              @click="showNextDetailImage"
+            >
+              <ChevronRight :size="22" />
+            </sky-button>
+            <div
+              class="weazel-detail-pagination"
+              role="group"
+              :aria-label="t('accessibility.articleImages')"
+            >
+              <button
+                v-for="(image, index) in detailImages"
+                :key="image.id"
+                type="button"
+                :class="{ 'is-active': detailImageIndex === index }"
+                :aria-current="detailImageIndex === index ? 'true' : undefined"
+                :aria-label="
+                  t('accessibility.showPhoto', {
+                    current: String(index + 1),
+                    total: String(detailImages.length),
+                  })
+                "
+                @click="selectDetailImage(index)"
+              >
+                <span></span>
+              </button>
+            </div>
+          </template>
+          <span
+            v-if="detailImages.length > 1"
+            class="weazel-detail-count"
+            aria-hidden="true"
+          >
+            <Images :size="13" /> {{ detailImageIndex + 1 }} /
+            {{ detailImages.length }}
+          </span>
+        </div>
         <div v-else class="weazel-detail-masthead">
           <span>W</span><Newspaper :size="38" />
         </div>
@@ -1000,152 +1273,180 @@ onBeforeUnmount(() => {
           v-if="news.context?.canManage && detailManaged"
           class="weazel-detail-actions"
         >
-          <k-button rounded tonal @click="editArticle(selectedArticle)">
-            <Pencil :size="18" /> {{ t('editorial.edit') }}
-          </k-button>
-          <k-button
+          <sky-button
             rounded
             tonal
             class="weazel-danger"
             @click="requestDelete(selectedArticle)"
           >
             <Trash2 :size="18" /> {{ t('editorial.delete') }}
-          </k-button>
+          </sky-button>
         </div>
-      </article>
+      </sky-scroll-area>
     </template>
 
     <template v-else-if="screen === 'composer'">
-      <k-navbar
+      <sky-navbar
         class="weazel-navbar"
         :title="t(editingArticle ? 'composer.editTitle' : 'composer.newTitle')"
-      >
-        <template #left>
-          <k-navbar-back-link
-            component="button"
-            :text="t('back')"
-            @click="closeComposer"
-          />
-        </template>
-      </k-navbar>
-      <div class="weazel-composer-scroll">
-        <section class="weazel-composer-cover">
-          <img
-            v-if="selectedCover"
-            :src="selectedCover.url"
-            :alt="t('composer.coverAlt')"
-          />
-          <div v-else>
-            <ImagePlus :size="34" /><span>{{ t('composer.cover') }}</span>
-          </div>
-          <div class="weazel-cover-actions">
-            <k-button
-              rounded
-              tonal
-              class="weazel-cover-picker"
-              @click="chooseCover"
-            >
-              <ImagePlus aria-hidden="true" />
-              <span class="weazel-cover-picker__label">
+        show-back
+        back-appearance="surface"
+        :back-label="t('back')"
+        @back="closeComposer"
+      />
+      <sky-scroll-area padded class="weazel-composer-scroll">
+        <section class="weazel-composer-media">
+          <header class="weazel-composer-media__header">
+            <div>
+              <strong>{{ t('composer.photos') }}</strong>
+              <span>
                 {{
-                  t(
-                    selectedCover
-                      ? 'composer.changeCover'
-                      : 'composer.chooseCover',
-                  )
+                  t('composer.photoCount', {
+                    count: String(selectedImages.length),
+                    maximum: String(maximumImages),
+                  })
                 }}
               </span>
-            </k-button>
-            <k-button
-              v-if="selectedCover"
-              rounded
-              clear
-              class="weazel-danger weazel-cover-remove"
-              @click="removeCover"
+            </div>
+          </header>
+
+          <div v-if="selectedImages.length" class="weazel-image-grid">
+            <article
+              v-for="(image, index) in selectedImages"
+              :key="image.id"
+              class="weazel-image-preview"
+              :class="{ 'is-primary': index === 0 }"
             >
-              {{ t('composer.removeCover') }}
-            </k-button>
+              <img :src="image.url" :alt="t('composer.coverAlt')" />
+              <span v-if="index === 0" class="weazel-image-primary">
+                {{ t('composer.primaryPhoto') }}
+              </span>
+              <div class="weazel-image-actions">
+                <sky-button
+                  v-if="index > 0"
+                  rounded
+                  small
+                  tonal
+                  @click="makePrimaryImage(index)"
+                >
+                  {{ t('composer.makePrimary') }}
+                </sky-button>
+                <sky-button
+                  rounded
+                  small
+                  clear
+                  class="weazel-danger"
+                  :aria-label="t('accessibility.removePhoto')"
+                  @click="removeImage(index)"
+                >
+                  <X :size="16" />
+                </sky-button>
+              </div>
+            </article>
+          </div>
+          <div v-else class="weazel-image-empty">
+            <ImagePlus :size="34" />
+            <strong>{{ t('composer.addPhotos') }}</strong>
+            <span>{{ t('composer.photoSourceHint') }}</span>
+          </div>
+          <div
+            v-if="selectedImages.length < maximumImages"
+            class="weazel-photo-source-actions"
+            role="group"
+            :aria-label="t('composer.addPhotos')"
+          >
+            <sky-button rounded tonal @click="openArticleMediaApp('photos')">
+              <Images :size="19" />
+              <span>{{ t('composer.choosePhotos') }}</span>
+            </sky-button>
+            <sky-button rounded tonal @click="openArticleMediaApp('camera')">
+              <Camera :size="19" />
+              <span>{{ t('composer.takePhoto') }}</span>
+            </sky-button>
           </div>
         </section>
 
-        <k-list nested :dividers="false" class="weazel-composer-list">
-          <k-list-input
-            outline
+        <sky-list inset strong :dividers="false" class="weazel-composer-list">
+          <sky-field
             class="weazel-composer-field"
-            input-class="weazel-composer-input"
             maxlength="160"
             :label="t('composer.title')"
             :placeholder="t('composer.titlePlaceholder')"
             :value="draft.title"
             @input="draft.title = eventValue($event)"
           />
-          <k-list-input
-            outline
+          <sky-field
             class="weazel-composer-field"
             type="textarea"
+            :rows="8"
             maxlength="12000"
             :label="t('composer.body')"
             :placeholder="t('composer.bodyPlaceholder')"
             :value="draft.body"
-            input-class="weazel-composer-input weazel-body-input"
             @input="draft.body = eventValue($event)"
           />
-          <k-list-item
+          <sky-list-item
             link
             link-component="button"
             :chevron="false"
-            class="weazel-choice-trigger"
-            content-class="weazel-choice-trigger__content"
-            inner-class="weazel-choice-trigger__inner"
+            :title="t('composer.category')"
+            :aria-label="`${t('composer.category')}: ${categoryLabel(draft.category)}`"
             :link-props="{
+              id: 'weazel-news-category-trigger',
+              'aria-controls': 'weazel-news-category-dropdown',
+              'aria-expanded': categoryDropdownOpened,
+              'aria-haspopup': 'menu',
               type: 'button',
-              'aria-haspopup': 'dialog',
-              'aria-expanded': composerChoice === 'category',
             }"
-            @click="composerChoice = 'category'"
+            @click="toggleCategoryDropdown"
           >
-            <template #inner>
-              <span class="weazel-choice-trigger__copy">
-                <small>{{ t('composer.category') }}</small>
-                <strong>{{ categoryLabel(draft.category) }}</strong>
+            <template #after>
+              <span class="weazel-composer-select-value">
+                {{ categoryLabel(draft.category) }}
+                <ChevronDown :size="17" aria-hidden="true" />
               </span>
-              <ChevronDown
-                class="weazel-choice-trigger__icon"
-                :class="{ 'is-open': composerChoice === 'category' }"
-              />
             </template>
-          </k-list-item>
-          <k-list-item
+          </sky-list-item>
+          <sky-list-item
             v-if="editingArticle"
             link
             link-component="button"
             :chevron="false"
-            class="weazel-choice-trigger"
-            content-class="weazel-choice-trigger__content"
-            inner-class="weazel-choice-trigger__inner"
+            :title="t('composer.status')"
+            :aria-label="
+              t('accessibility.status', {
+                status: statusLabel(draft.status),
+              })
+            "
             :link-props="{
+              id: 'weazel-news-status-trigger',
+              'aria-controls': 'weazel-news-status-dropdown',
+              'aria-expanded': statusDropdownOpened,
+              'aria-haspopup': 'menu',
               type: 'button',
-              'aria-haspopup': 'dialog',
-              'aria-expanded': composerChoice === 'status',
             }"
-            @click="composerChoice = 'status'"
+            @click="toggleStatusDropdown"
           >
-            <template #inner>
-              <span class="weazel-choice-trigger__copy">
-                <small>{{ t('composer.status') }}</small>
-                <strong>{{ statusLabel(draft.status) }}</strong>
+            <template #after>
+              <span class="weazel-composer-select-value">
+                {{ statusLabel(draft.status) }}
+                <ChevronDown :size="17" aria-hidden="true" />
               </span>
-              <ChevronDown
-                class="weazel-choice-trigger__icon"
-                :class="{ 'is-open': composerChoice === 'status' }"
-              />
             </template>
-          </k-list-item>
-        </k-list>
+          </sky-list-item>
+        </sky-list>
 
         <div class="weazel-composer-actions">
           <template v-if="!editingArticle">
-            <k-button
+            <sky-button
+              large
+              rounded
+              :disabled="news.mutating"
+              @click="saveArticle('published')"
+            >
+              {{ t('composer.publish') }}
+            </sky-button>
+            <sky-button
               large
               rounded
               tonal
@@ -1153,17 +1454,9 @@ onBeforeUnmount(() => {
               @click="saveArticle('draft')"
             >
               {{ t('composer.saveDraft') }}
-            </k-button>
-            <k-button
-              large
-              rounded
-              :disabled="news.mutating"
-              @click="saveArticle('published')"
-            >
-              {{ t('composer.publish') }}
-            </k-button>
+            </sky-button>
           </template>
-          <k-button
+          <sky-button
             v-else
             large
             rounded
@@ -1171,102 +1464,64 @@ onBeforeUnmount(() => {
             @click="saveArticle()"
           >
             {{ t('composer.saveChanges') }}
-          </k-button>
+          </sky-button>
         </div>
-      </div>
+      </sky-scroll-area>
     </template>
 
-    <k-sheet
-      :opened="composerChoice !== null"
-      class="weazel-choice-sheet"
-      @backdropclick="composerChoice = null"
-    >
-      <section
-        v-if="composerChoice"
-        class="weazel-choice-sheet__content"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="composerChoiceLabel"
-      >
-        <div class="weazel-choice-sheet__handle" aria-hidden="true" />
-        <header class="weazel-choice-sheet__header">
-          <h2>{{ composerChoiceLabel }}</h2>
-          <k-link
-            component="button"
-            icon-only
-            class="weazel-choice-sheet__close"
-            :aria-label="phone.t('Common.close')"
-            :link-props="{ type: 'button' }"
-            @click="composerChoice = null"
-          >
-            <X />
-          </k-link>
-        </header>
-        <k-list
-          nested
-          :dividers="false"
-          class="weazel-choice-options"
-          role="listbox"
-        >
-          <k-list-item
-            v-for="option in composerChoiceOptions"
-            :key="option.value"
-            link
-            link-component="button"
-            :chevron="false"
-            :title="option.label"
-            :link-props="{
-              type: 'button',
-              role: 'option',
-              'aria-selected':
-                composerChoice === 'category'
-                  ? option.value === draft.category
-                  : option.value === draft.status,
-            }"
-            class="weazel-choice-option"
-            content-class="weazel-choice-option__content"
-            inner-class="weazel-choice-option__inner"
-            title-wrap-class="weazel-choice-option__title"
-            @click="selectComposerChoice(option)"
-          >
-            <template #after>
-              <Check
-                v-if="
-                  composerChoice === 'category'
-                    ? option.value === draft.category
-                    : option.value === draft.status
-                "
-              />
-            </template>
-          </k-list-item>
-        </k-list>
-      </section>
-    </k-sheet>
+    <sky-dropdown
+      id="weazel-news-category-dropdown"
+      class="weazel-composer-dropdown sky-ui-provider"
+      :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+      :items="categoryDropdownItems"
+      :label="t('composer.category')"
+      :opened="categoryDropdownOpened"
+      placement="auto"
+      :target="categoryDropdownTarget"
+      @backdropclick="closeComposerDropdowns"
+      @escape="closeComposerDropdowns"
+      @positionerror="closeComposerDropdowns"
+      @select="selectCategoryDropdownItem"
+    />
+    <sky-dropdown
+      id="weazel-news-status-dropdown"
+      class="weazel-composer-dropdown sky-ui-provider"
+      :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+      :items="statusDropdownItems"
+      :label="t('composer.status')"
+      :opened="statusDropdownOpened"
+      placement="auto"
+      :target="statusDropdownTarget"
+      @backdropclick="closeComposerDropdowns"
+      @escape="closeComposerDropdowns"
+      @positionerror="closeComposerDropdowns"
+      @select="selectStatusDropdownItem"
+    />
 
-    <k-dialog
+    <sky-dialog
       :opened="deleteDialogOpened"
       @backdropclick="deleteDialogOpened = false"
     >
       <template #title>{{ t('delete.title') }}</template>
       <p>{{ t('delete.body') }}</p>
       <template #buttons>
-        <k-dialog-button @click="deleteDialogOpened = false">
+        <sky-dialog-button @click="deleteDialogOpened = false">
           {{ t('delete.cancel') }}
-        </k-dialog-button>
-        <k-dialog-button strong class="text-red-500" @click="confirmDelete">
+        </sky-dialog-button>
+        <sky-dialog-button strong class="text-red-500" @click="confirmDelete">
           {{ t('delete.confirm') }}
-        </k-dialog-button>
+        </sky-dialog-button>
       </template>
-    </k-dialog>
+    </sky-dialog>
 
-    <k-toast
+    <sky-toast
       :opened="toastOpened"
       position="center"
       @click="toastOpened = false"
     >
       {{ toastText }}
-    </k-toast>
-  </k-page>
+    </sky-toast>
+  </sky-app-page>
 </template>
 
 <style scoped>
@@ -1294,12 +1549,6 @@ onBeforeUnmount(() => {
 }
 
 .weazel-navbar {
-  --k-safe-area-top: 46px;
-  position: absolute;
-  z-index: 10;
-  top: 0;
-  right: 0;
-  left: 0;
   color: var(--weazel-text);
 }
 
@@ -1340,19 +1589,11 @@ onBeforeUnmount(() => {
 .weazel-scroll,
 .weazel-detail-scroll,
 .weazel-composer-scroll {
-  position: absolute;
-  inset: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 100px 14px 86px;
-  padding: 12.4cqh 1.7cqh 10.6cqh;
   scrollbar-width: none;
 }
 
-.weazel-detail-scroll,
-.weazel-composer-scroll {
-  padding-bottom: 32px;
-  padding-bottom: 4cqh;
+.weazel-detail-scroll {
+  padding-bottom: calc(var(--sky-safe-area-bottom) + var(--sky-space-6));
 }
 
 .weazel-scroll::-webkit-scrollbar,
@@ -1617,16 +1858,36 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 2;
   top: 50%;
-  right: 14px;
-  width: 30px;
-  height: 30px;
+  right: 7px;
+  width: var(--sky-touch-target);
+  min-width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
+  min-height: var(--sky-touch-target);
   display: grid;
   place-items: center;
   transform: translateY(-50%);
   border: 0;
-  border-radius: 999px;
-  background: var(--weazel-line);
+  padding: 0;
+  background: transparent;
   color: var(--weazel-muted);
+}
+
+.weazel-search-clear::before {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--sky-radius-pill);
+  background: var(--weazel-line);
+  content: '';
+}
+
+.weazel-search-clear:focus-visible {
+  outline: 2px solid var(--sky-app-accent, #007aff);
+  outline-offset: -2px;
+}
+
+.weazel-search-clear > svg {
+  position: relative;
 }
 
 .weazel-access-content {
@@ -1639,7 +1900,7 @@ onBeforeUnmount(() => {
   padding: 1.1cqh;
 }
 
-.weazel-access-card :deep(.k-card-content) {
+.weazel-access-card :deep(.sky-card__content) {
   padding: 0 !important;
 }
 
@@ -1804,99 +2065,126 @@ onBeforeUnmount(() => {
   color: #34c759;
 }
 
-.weazel-tabbar {
-  position: absolute !important;
-  z-index: 20;
-  right: 9px;
-  right: 1.1cqh;
-  bottom: 25px;
-  bottom: 3.1cqh;
-  left: 9px;
-  left: 1.1cqh;
-  width: auto !important;
-  padding: 0 !important;
-  color: var(--weazel-text);
-  overflow: hidden;
-}
-
-.weazel-tabbar :deep(> div:first-child) {
-  height: 100% !important;
-}
-
-.weazel-tabbar :deep(.weazel-tabbar__inner) {
-  width: 100% !important;
-  height: 50px !important;
-  height: 6.2cqh !important;
-  max-width: none !important;
-  gap: 0 !important;
-  padding: 0 3px !important;
-  padding: 0 0.37cqh !important;
-}
-
-.weazel-tabbar :deep(.weazel-tabbar__pane) {
-  width: 100% !important;
-  max-width: none !important;
-  display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 0;
-}
-
-.weazel-tabbar :deep(.weazel-tabbar__link) {
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: none !important;
-  justify-content: center;
-  overflow: hidden;
-  padding: 0 !important;
-}
-
-.weazel-tabbar :deep(.weazel-tabbar__link > span) {
+.weazel-navigation__item {
   min-width: 0;
-  gap: 1px;
-  gap: 0.12cqh;
-  padding: 3px 0 !important;
-  padding: 0.37cqh 0 !important;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  font-size: 10px;
+  line-height: 1.1;
 }
 
-.weazel-tabbar :deep(.weazel-tabbar__link.k-link) {
-  padding-right: 0 !important;
-  padding-left: 0 !important;
-}
-
-.weazel-tabbar :deep(.k-tabbar-link-icon),
-.weazel-tabbar :deep(.k-icon) {
-  width: 22px !important;
-  width: 2.72cqh !important;
-  height: 22px !important;
-  height: 2.72cqh !important;
-}
-
-.weazel-tabbar :deep(.k-tabbar-link-label) {
-  width: 100%;
+.weazel-navigation__item > span:last-child {
+  max-width: 100%;
   overflow: hidden;
-  font-size: 9.5px;
-  font-size: 1.18cqh;
-  line-height: 1.15;
-  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.weazel-tabbar :deep(.text-primary) {
-  color: #d71920 !important;
+.weazel-detail-gallery {
+  position: relative;
+  width: 100%;
+  height: 240px;
+  overflow: hidden;
+  touch-action: pan-y;
 }
 
-.weazel-detail-cover,
-.weazel-detail-masthead {
-  width: calc(100% + 30px);
+.weazel-detail-gallery:focus-visible,
+.weazel-detail-pagination button:focus-visible {
+  outline: 2px solid var(--sky-app-accent, #007aff);
+  outline-offset: -2px;
+}
+
+.weazel-detail-cover {
+  width: 100%;
+  max-width: none;
   height: 240px;
-  margin: 0 -15px;
+  display: block;
   object-fit: cover;
 }
 
+.weazel-detail-gallery-control {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  width: var(--sky-touch-target) !important;
+  height: var(--sky-touch-target) !important;
+  min-width: var(--sky-touch-target) !important;
+  min-height: var(--sky-touch-target) !important;
+  transform: translateY(-50%);
+  background: rgb(0 0 0 / 58%) !important;
+  color: #fff !important;
+}
+
+.weazel-detail-gallery-control.is-previous {
+  left: var(--sky-space-2);
+}
+
+.weazel-detail-gallery-control.is-next {
+  right: var(--sky-space-2);
+}
+
+.weazel-detail-pagination {
+  position: absolute;
+  z-index: 2;
+  right: 50%;
+  bottom: 0;
+  display: flex;
+  transform: translateX(50%);
+}
+
+.weazel-detail-pagination button {
+  width: var(--sky-touch-target);
+  min-width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
+  min-height: var(--sky-touch-target);
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.weazel-detail-pagination span {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--sky-radius-pill);
+  background: rgb(255 255 255 / 55%);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+}
+
+.weazel-detail-pagination button.is-active span {
+  width: 16px;
+  background: #fff;
+}
+
+.weazel-detail-masthead {
+  width: 100%;
+  height: 240px;
+}
+
+.weazel-detail-count {
+  position: absolute;
+  z-index: 2;
+  right: var(--sky-page-gutter);
+  top: var(--sky-space-3);
+  padding: 4px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--sky-radius-pill);
+  background: rgb(0 0 0 / 58%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
 .weazel-detail-copy {
-  padding: 22px 4px 10px;
+  padding: 22px calc(var(--sky-page-gutter) + var(--sky-safe-area-right)) 10px;
+  padding-left: calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
 }
 
 .weazel-detail-copy h1 {
@@ -1946,15 +2234,18 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
 }
 
-.weazel-detail-actions,
-.weazel-composer-actions,
-.weazel-cover-actions {
+.weazel-detail-actions {
   display: flex;
   gap: 10px;
 }
 
-.weazel-detail-actions > *,
-.weazel-composer-actions > * {
+.weazel-detail-actions {
+  padding-right: calc(var(--sky-page-gutter) + var(--sky-safe-area-right));
+  padding-left: calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
+}
+
+.weazel-detail-actions > * {
+  width: 100%;
   flex: 1;
 }
 
@@ -1962,347 +2253,181 @@ onBeforeUnmount(() => {
   color: #ff453a !important;
 }
 
-.weazel-composer-cover {
+.weazel-composer-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sky-space-2);
+  margin: var(--sky-space-4) 0 0;
+}
+
+.weazel-composer-actions > * {
+  width: 100%;
+}
+
+.weazel-composer-media {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: var(--sky-space-4);
   overflow: hidden;
-  margin-bottom: 14px;
   border: 1px solid var(--weazel-line);
-  border-radius: 20px;
+  border-radius: var(--sky-radius-card);
   background: var(--weazel-surface);
 }
 
-.weazel-composer-cover > img,
-.weazel-composer-cover > div:first-child {
+.weazel-composer-media__header {
+  min-height: var(--sky-touch-target);
+  padding: var(--sky-space-2) var(--sky-space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sky-space-2);
+  border-bottom: 1px solid var(--weazel-line);
+}
+
+.weazel-composer-media__header > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.weazel-composer-media__header strong {
+  color: var(--weazel-text);
+  font-size: 14px;
+}
+
+.weazel-composer-media__header span {
+  color: var(--weazel-muted);
+  font-size: 11px;
+}
+
+.weazel-image-grid {
+  padding: var(--sky-space-2);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sky-space-2);
+}
+
+.weazel-image-preview {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--sky-radius-control);
+  background: var(--weazel-surface-strong);
+}
+
+.weazel-image-preview.is-primary {
+  aspect-ratio: 16 / 9;
+  grid-column: 1 / -1;
+}
+
+.weazel-image-preview img {
   width: 100%;
-  height: 190px;
+  height: 100%;
+  display: block;
   object-fit: cover;
 }
 
-.weazel-composer-cover > div:first-child {
+.weazel-image-primary {
+  position: absolute;
+  top: var(--sky-space-2);
+  left: var(--sky-space-2);
+  padding: 4px 8px;
+  border-radius: var(--sky-radius-pill);
+  background: rgb(0 0 0 / 64%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.weazel-image-actions {
+  position: absolute;
+  right: var(--sky-space-1);
+  bottom: var(--sky-space-1);
+  left: var(--sky-space-1);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sky-space-1);
+}
+
+.weazel-image-actions > :first-child:not(:last-child) {
+  min-width: 0;
+  flex: 1;
+}
+
+.weazel-image-actions :deep(.sky-button) {
+  min-height: 34px;
+  border-color: rgb(255 255 255 / 14%);
+  background: rgb(17 17 17 / 78%);
+  color: #fff;
+  backdrop-filter: blur(12px);
+}
+
+.weazel-image-empty {
+  width: 100%;
+  min-height: 148px;
+  padding: var(--sky-space-5);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sky-space-2);
+  border: 0;
+  background: transparent;
   color: var(--weazel-muted);
+  font: inherit;
 }
 
-.weazel-cover-actions {
-  padding: 10px;
+.weazel-image-empty strong {
+  color: var(--weazel-text);
+  font-size: 15px;
 }
 
-.weazel-cover-actions > * {
-  height: 36px !important;
-  height: 4.45cqh !important;
-  min-width: 0;
-  flex: 1 1 0;
-  padding-block: 0 !important;
-}
-
-.weazel-cover-picker {
-  gap: 6px;
-  gap: 0.74cqh;
-  padding-inline: 10px !important;
-  padding-inline: 1.24cqh !important;
-  font-size: 12px !important;
-  font-size: 1.48cqh !important;
-  line-height: 1.15;
-}
-
-.weazel-cover-picker :deep(svg) {
-  width: 16px;
-  width: 1.98cqh;
-  height: 16px;
-  height: 1.98cqh;
-  flex: none;
-}
-
-.weazel-cover-picker__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.weazel-cover-remove {
-  padding-inline: 8px !important;
-  padding-inline: 1cqh !important;
-  font-size: 12px !important;
-  font-size: 1.48cqh !important;
+.weazel-image-empty span {
+  max-width: 250px;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .weazel-composer-list {
-  margin: 0 !important;
-  overflow: visible;
-  background: transparent !important;
+  margin: 0 0 var(--sky-space-4) !important;
+  overflow: hidden;
+  background: var(--weazel-surface) !important;
 }
 
 .weazel-composer-list :deep(.weazel-composer-field) {
-  margin-block: 13px !important;
-  margin-block: 1.61cqh !important;
+  margin-block: 0 !important;
 }
 
-.weazel-composer-list :deep(.weazel-composer-field > .relative) {
-  margin-inline: 0 !important;
-  padding-inline-start: 0 !important;
-  border-radius: 9px !important;
-  border-radius: 1.11cqh !important;
+.weazel-composer-list :deep(.sky-field__textarea) {
+  min-height: 180px;
+  resize: vertical;
 }
 
-.weazel-composer-list :deep(.weazel-composer-field > .relative > .w-full) {
-  padding-block: 0 !important;
-  padding-inline-end: 0 !important;
-}
-
-.weazel-composer-list
-  :deep(.weazel-composer-field > .relative > .w-full > .relative) {
-  margin-top: -7px !important;
-  margin-top: -0.87cqh !important;
-  margin-bottom: -7px !important;
-  margin-bottom: -0.87cqh !important;
-}
-
-.weazel-composer-list :deep(.weazel-composer-field .text-xs) {
-  margin-top: -11px !important;
-  margin-top: -1.36cqh !important;
-  font-size: 10px !important;
-  font-size: 1.24cqh !important;
-  line-height: 1.25;
-}
-
-.weazel-composer-list :deep(.weazel-composer-field .text-xs > div) {
-  top: -1px !important;
-  top: -0.12cqh !important;
-  margin: -1px !important;
-  margin: -0.12cqh !important;
-  padding: 2px 4px !important;
-  padding: 0.25cqh 0.5cqh !important;
-}
-
-.weazel-composer-list :deep(.weazel-composer-input) {
-  height: 44px !important;
-  height: 5.45cqh !important;
-  padding-inline: 2px !important;
-  padding-inline: 0.25cqh !important;
-  color: var(--weazel-text);
-  font-size: 13px !important;
-  font-size: 1.61cqh !important;
-  line-height: 1.35;
-}
-
-.weazel-composer-list :deep(.weazel-body-input) {
-  height: 210px !important;
-  height: 26cqh !important;
-  min-height: 210px !important;
-  min-height: 26cqh !important;
-  padding-block: 8px !important;
-  padding-block: 1cqh !important;
-  resize: none;
-}
-
-.weazel-choice-trigger {
-  margin-block: 13px;
-  margin-block: 1.61cqh;
-}
-
-.weazel-composer-list :deep(.weazel-choice-trigger__content) {
-  min-height: 44px;
-  min-height: 5.45cqh;
-  padding-inline: 10px !important;
-  padding-inline: 1.24cqh !important;
-  border: 1px solid var(--weazel-line);
-  border-radius: 9px;
-  border-radius: 1.11cqh;
-  background: var(--weazel-surface);
-}
-
-.weazel-composer-list :deep(.weazel-choice-trigger__inner) {
-  min-width: 0;
-  display: flex;
+.weazel-composer-select-value {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  gap: 1cqh;
-  padding: 0 !important;
-}
-
-.weazel-choice-trigger__copy {
-  min-width: 0;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  gap: 0.25cqh;
-  text-align: left;
-}
-
-.weazel-choice-trigger__copy small {
+  gap: var(--sky-space-1);
   color: var(--weazel-muted);
-  font-size: 10px;
-  font-size: 1.24cqh;
-  line-height: 1.15;
 }
 
-.weazel-choice-trigger__copy strong {
-  overflow: hidden;
-  color: var(--weazel-text);
-  font-size: 13px;
-  font-size: 1.61cqh;
+.weazel-photo-source-actions {
+  padding: 0 var(--sky-space-3) var(--sky-space-3);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sky-space-2);
+}
+
+.weazel-photo-source-actions :deep(.sky-button) {
+  width: 100%;
+  min-height: var(--sky-touch-target);
+  height: auto;
+  padding: var(--sky-space-2) var(--sky-space-3);
   line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.weazel-choice-trigger__icon {
-  width: 16px;
-  width: 1.98cqh;
-  height: 16px;
-  height: 1.98cqh;
-  flex: none;
-  color: var(--weazel-muted);
-  transition: transform 0.18s ease;
-}
-
-.weazel-choice-trigger__icon.is-open {
-  transform: rotate(180deg);
-}
-
-.weazel-choice-sheet {
-  right: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  border-radius: 18px 18px 0 0 !important;
-  border-radius: 2.23cqh 2.23cqh 0 0 !important;
-  background: var(--weazel-surface) !important;
-  color: var(--weazel-text);
-}
-
-.weazel-choice-sheet__content {
-  max-height: 436px;
-  max-height: 54cqh;
-  overflow-y: auto;
-  padding: 6px 10px 20px;
-  padding: 0.74cqh 1.24cqh 2.48cqh;
-  border-radius: 18px 18px 0 0;
-  border-radius: 2.23cqh 2.23cqh 0 0;
-  background: var(--weazel-surface);
-  color: var(--weazel-text);
-  scrollbar-width: none;
-}
-
-.weazel-choice-sheet__content::-webkit-scrollbar {
-  display: none;
-}
-
-.weazel-choice-sheet__handle {
-  width: 34px;
-  width: 4.2cqh;
-  height: 4px;
-  height: 0.5cqh;
-  margin: 0 auto 6px;
-  margin: 0 auto 0.74cqh;
-  border-radius: 999px;
-  background: var(--weazel-line);
-}
-
-.weazel-choice-sheet__header {
-  min-height: 36px;
-  min-height: 4.45cqh;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  gap: 1cqh;
-  padding-inline: 4px;
-  padding-inline: 0.5cqh;
-}
-
-.weazel-choice-sheet__header h2 {
-  margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 16px;
-  font-size: 1.98cqh;
-  line-height: 1.15;
-}
-
-.weazel-choice-sheet__close {
-  width: 30px !important;
-  width: 3.71cqh !important;
-  height: 30px !important;
-  height: 3.71cqh !important;
-  min-width: 30px !important;
-  min-width: 3.71cqh !important;
-  padding: 0 !important;
-  border-radius: 999px;
-  background: var(--weazel-surface-strong);
-  color: var(--weazel-muted);
-}
-
-.weazel-choice-sheet__close :deep(svg) {
-  width: 15px;
-  width: 1.86cqh;
-  height: 15px;
-  height: 1.86cqh;
-}
-
-.weazel-choice-options {
-  margin: 5px 0 0 !important;
-  margin: 0.62cqh 0 0 !important;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__content) {
-  min-height: 40px;
-  min-height: 4.95cqh;
-  padding-inline: 8px !important;
-  padding-inline: 1cqh !important;
-  border-radius: 8px;
-  border-radius: 1cqh;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__inner) {
-  min-width: 0;
-  padding: 0 !important;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__title) {
-  min-height: 40px !important;
-  min-height: 4.95cqh !important;
-  font-size: 13px !important;
-  font-size: 1.61cqh !important;
-  line-height: 1.2;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__title > div:first-child) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__title > div:nth-child(2)) {
-  gap: 2px;
-  gap: 0.25cqh;
-  padding-inline-start: 3px;
-  padding-inline-start: 0.37cqh;
-}
-
-.weazel-choice-options :deep(.weazel-choice-option__title svg) {
-  width: 16px;
-  width: 1.98cqh;
-  height: 16px;
-  height: 1.98cqh;
-  color: #d71920;
-}
-
-.weazel-composer-actions {
-  margin: 16px 0 5px;
-}
-
-.weazel-composer-actions > * {
-  height: 44px !important;
-  height: 5.45cqh !important;
-  padding: 0 8px !important;
-  padding: 0 1cqh !important;
-  font-size: 14px !important;
-  font-size: 1.73cqh !important;
-  line-height: 1.15;
+  white-space: normal;
 }
 </style>

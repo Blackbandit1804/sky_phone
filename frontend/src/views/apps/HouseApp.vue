@@ -1,18 +1,17 @@
 <script setup lang="ts">
 import {
-  kBlockTitle,
-  kButton,
-  kCard,
-  kDialog,
-  kDialogButton,
-  kLink,
-  kList,
-  kListItem,
-  kNavbar,
-  kPage,
-  kPreloader,
-  kSheet,
-} from 'konsta/vue'
+  SkyBlockTitle,
+  SkyButton,
+  SkyCard,
+  SkyDialog,
+  SkyDialogButton,
+  SkyList,
+  SkyListItem,
+  SkyNavbar,
+  SkyAppPage,
+  SkySpinner,
+  SkySheet,
+} from '@/ui'
 import {
   Camera,
   CarFront,
@@ -28,7 +27,6 @@ import {
   UserRound,
   UsersRound,
   WifiOff,
-  X,
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
@@ -55,12 +53,6 @@ const isRefreshing = ref(false)
 const pullDistance = ref(0)
 
 const pullThreshold = 56
-const housePrimaryButtonColors = {
-  fillBgIos: 'bg-[#f47a38] active:bg-[#d86129]',
-  fillBgMaterial: 'bg-[#f47a38] active:bg-[#d86129]',
-  fillTextIos: 'text-white',
-  fillTextMaterial: 'text-white',
-}
 let pullStartY = 0
 let isPulling = false
 let wheelRefreshTimeout: ReturnType<typeof setTimeout> | undefined
@@ -246,15 +238,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page component="main" class="house-page">
-    <k-navbar
+  <sky-app-page component="main" class="house-page">
+    <sky-navbar
       class="house-navbar"
       :subtitle="phone.t('Apps.house.subtitle')"
       :title="phone.t('Apps.house.name')"
     />
 
     <div v-if="housing.isLoading && !housing.overview" class="house-state">
-      <k-preloader />
+      <sky-spinner />
       <span>{{ phone.t('Common.loading') }}</span>
     </div>
 
@@ -262,26 +254,26 @@ onBeforeUnmount(() => {
       <span class="house-state__icon"><WifiOff :size="30" /></span>
       <strong>{{ phone.t('Apps.house.unavailable') }}</strong>
       <p>{{ translatedError(housing.error) }}</p>
-      <k-button
+      <sky-button
         rounded
-        :colors="housePrimaryButtonColors"
+        style="--sky-app-accent: var(--house-accent)"
         @click="refresh"
       >
         {{ phone.t('Apps.house.tryAgain') }}
-      </k-button>
+      </sky-button>
     </div>
 
     <div v-else-if="!housing.overview.available" class="house-state">
       <span class="house-state__icon"><Router :size="31" /></span>
       <strong>{{ phone.t('Apps.house.offline') }}</strong>
       <p>{{ phone.t('Apps.house.offlineBody') }}</p>
-      <k-button
+      <sky-button
         rounded
-        :colors="housePrimaryButtonColors"
+        style="--sky-app-accent: var(--house-accent)"
         @click="refresh"
       >
         {{ phone.t('Apps.house.tryAgain') }}
-      </k-button>
+      </sky-button>
     </div>
 
     <div
@@ -299,21 +291,10 @@ onBeforeUnmount(() => {
         :style="{ transform: `translateY(${pullDistance - pullThreshold}px)` }"
         aria-live="polite"
       >
-        <k-preloader />
+        <sky-spinner />
       </div>
       <section v-if="properties.length" class="house-properties">
-        <header class="house-properties__heading">
-          <div>
-            <small>{{ phone.t('Apps.house.properties') }}</small>
-            <h1>{{ phone.t('Apps.house.myHomes') }}</h1>
-          </div>
-          <span class="house-properties__count">{{ properties.length }}</span>
-        </header>
-
-        <div
-          class="house-overview"
-          :aria-label="phone.t('Apps.house.myHomes')"
-        >
+        <div class="house-overview" :aria-label="phone.t('Apps.house.myHomes')">
           <span
             ><b>{{ ownedCount }}</b
             >{{ phone.t('Apps.house.owned') }}</span
@@ -328,16 +309,16 @@ onBeforeUnmount(() => {
           >
         </div>
 
-        <k-list inset strong class="house-property-list">
-          <k-list-item
-          v-for="property in properties"
-          :key="property.id"
-          link
-          chevron
-          :title="property.name"
-          :subtitle="propertySubtitle(property)"
-          :aria-label="`${phone.t('Apps.house.openDetails')}: ${property.name}`"
-          @click="selectedPropertyId = property.id"
+        <sky-list inset strong class="house-property-list">
+          <sky-list-item
+            v-for="property in properties"
+            :key="property.id"
+            link
+            chevron
+            :title="property.name"
+            :subtitle="propertySubtitle(property)"
+            :aria-label="`${phone.t('Apps.house.openDetails')}: ${property.name}`"
+            @click="selectedPropertyId = property.id"
           >
             <template #media>
               <span class="house-property__icon"><House :size="21" /></span>
@@ -359,8 +340,8 @@ onBeforeUnmount(() => {
                 }}
               </span>
             </template>
-          </k-list-item>
-        </k-list>
+          </sky-list-item>
+        </sky-list>
       </section>
 
       <section v-else class="house-empty">
@@ -368,33 +349,29 @@ onBeforeUnmount(() => {
         <small>{{ phone.t('Apps.house.myHomes') }}</small>
         <h1>{{ phone.t('Apps.house.empty') }}</h1>
         <p>{{ phone.t('Apps.house.emptyBody') }}</p>
-        <k-button
+        <sky-button
           inline
           rounded
-          :colors="housePrimaryButtonColors"
+          style="--sky-app-accent: var(--house-accent)"
           @click="refresh"
         >
           {{ phone.t('Apps.house.refresh') }}
-        </k-button>
+        </sky-button>
       </section>
     </div>
 
-    <k-sheet
+    <sky-sheet
       :opened="Boolean(selectedProperty)"
       class="house-detail-sheet"
+      grabber-clickable
+      :grabber-label="phone.t('Common.close')"
+      swipe-to-close
       @backdropclick="selectedPropertyId = null"
+      @escape="selectedPropertyId = null"
+      @grabberclick="selectedPropertyId = null"
+      @swipeclose="selectedPropertyId = null"
     >
       <section v-if="selectedProperty" class="house-detail">
-        <k-glass
-          component="button"
-          class="house-detail__close"
-          type="button"
-          :aria-label="phone.t('Common.close')"
-          @click="selectedPropertyId = null"
-        >
-          <X :size="18" />
-        </k-glass>
-
         <span class="house-detail__mark"><House :size="29" /></span>
         <small>{{ accessLabel(selectedProperty) }}</small>
         <h2>{{ selectedProperty.name }}</h2>
@@ -414,12 +391,11 @@ onBeforeUnmount(() => {
           }}
         </span>
 
-        <k-button
+        <sky-button
           v-if="selectedProperty.capabilities.lock"
           large
           rounded
           class="house-lock-button"
-          :colors="housePrimaryButtonColors"
           :disabled="isPending('toggle_lock', selectedProperty)"
           @click="runCommand('toggle_lock', selectedProperty)"
         >
@@ -432,11 +408,11 @@ onBeforeUnmount(() => {
                 : 'Apps.house.lockDoor',
             )
           }}
-        </k-button>
+        </sky-button>
 
-        <k-block-title>{{ phone.t('Apps.house.actions') }}</k-block-title>
-        <k-list inset strong class="house-action-list">
-          <k-list-item
+        <sky-block-title>{{ phone.t('Apps.house.actions') }}</sky-block-title>
+        <sky-list inset strong class="house-action-list">
+          <sky-list-item
             link
             chevron
             :title="phone.t('Apps.house.setWaypoint')"
@@ -444,8 +420,8 @@ onBeforeUnmount(() => {
             @click="runCommand('set_waypoint', selectedProperty)"
           >
             <template #media><LocateFixed :size="19" /></template>
-          </k-list-item>
-          <k-list-item
+          </sky-list-item>
+          <sky-list-item
             :link="selectedProperty.capabilities.cctv"
             :chevron="selectedProperty.capabilities.cctv"
             :title="phone.t('Apps.house.viewCamera')"
@@ -466,26 +442,26 @@ onBeforeUnmount(() => {
             "
           >
             <template #media><Camera :size="19" /></template>
-          </k-list-item>
-          <k-list-item
+          </sky-list-item>
+          <sky-list-item
             link
             chevron
             :title="phone.t('Apps.easyShare.share')"
             @click="shareProperty(selectedProperty)"
           >
             <template #media><Share2 :size="19" /></template>
-          </k-list-item>
-        </k-list>
+          </sky-list-item>
+        </sky-list>
 
-        <k-block-title>{{ phone.t('Apps.house.status') }}</k-block-title>
-        <k-list inset strong class="house-facts">
-          <k-list-item
+        <sky-block-title>{{ phone.t('Apps.house.status') }}</sky-block-title>
+        <sky-list inset strong class="house-facts">
+          <sky-list-item
             :title="phone.t('Apps.house.access')"
             :after="accessLabel(selectedProperty)"
           >
             <template #media><UserRound :size="17" /></template>
-          </k-list-item>
-          <k-list-item
+          </sky-list-item>
+          <sky-list-item
             :title="phone.t('Apps.house.camera')"
             :after="
               phone.t(
@@ -496,8 +472,8 @@ onBeforeUnmount(() => {
             "
           >
             <template #media><Camera :size="17" /></template>
-          </k-list-item>
-          <k-list-item
+          </sky-list-item>
+          <sky-list-item
             v-if="selectedProperty.garage"
             :title="phone.t('Apps.house.garage')"
             :subtitle="
@@ -514,8 +490,8 @@ onBeforeUnmount(() => {
             "
           >
             <template #media><CarFront :size="17" /></template>
-          </k-list-item>
-        </k-list>
+          </sky-list-item>
+        </sky-list>
 
         <section v-if="selectedProperty.capabilities.keys" class="house-keys">
           <header>
@@ -523,17 +499,22 @@ onBeforeUnmount(() => {
               ><small>{{ phone.t('Apps.house.access') }}</small
               ><strong>{{ phone.t('Apps.house.keys') }}</strong></span
             >
-            <k-button
+            <sky-button
               rounded
               small
               inline
               @click="openKeyCandidates(selectedProperty)"
             >
               <Plus :size="15" />{{ phone.t('Apps.house.addKey') }}
-            </k-button>
+            </sky-button>
           </header>
-          <k-list v-if="selectedProperty.keys?.length" inset strong>
-            <k-list-item
+          <sky-list
+            v-if="selectedProperty.keys?.length"
+            inset
+            strong
+            class="house-key-list"
+          >
+            <sky-list-item
               v-for="key in selectedProperty.keys"
               :key="key.identifier"
               :title="key.name"
@@ -545,7 +526,7 @@ onBeforeUnmount(() => {
             >
               <template #media><KeyRound :size="17" /></template>
               <template #after>
-                <k-button
+                <sky-button
                   clear
                   rounded
                   small
@@ -553,33 +534,31 @@ onBeforeUnmount(() => {
                   @click.stop="revokeCandidate = key"
                 >
                   {{ phone.t('Apps.house.revokeKey') }}
-                </k-button>
+                </sky-button>
               </template>
-            </k-list-item>
-          </k-list>
-          <k-card v-else class="house-keys__empty">
+            </sky-list-item>
+          </sky-list>
+          <sky-card v-else class="house-keys__empty">
             <KeyRound :size="25" />
             <strong>{{ phone.t('Apps.house.noKeys') }}</strong>
             <p>{{ phone.t('Apps.house.noKeysBody') }}</p>
-          </k-card>
+          </sky-card>
         </section>
       </section>
-    </k-sheet>
+    </sky-sheet>
 
-    <k-sheet
+    <sky-sheet
       :opened="candidatesOpened"
       class="house-candidates-sheet"
+      grabber-clickable
+      :grabber-label="phone.t('Common.close')"
+      swipe-to-close
       @backdropclick="candidatesOpened = false"
+      @escape="candidatesOpened = false"
+      @grabberclick="candidatesOpened = false"
+      @swipeclose="candidatesOpened = false"
     >
       <section class="house-candidates">
-        <k-link
-          component="button"
-          icon-only
-          :aria-label="phone.t('Common.close')"
-          :link-props="{ type: 'button' }"
-          @click="candidatesOpened = false"
-          ><X :size="18"
-        /></k-link>
         <UsersRound :size="34" />
         <h2>{{ phone.t('Apps.house.chooseResident') }}</h2>
         <p>{{ phone.t('Apps.house.chooseResidentBody') }}</p>
@@ -587,10 +566,10 @@ onBeforeUnmount(() => {
           v-if="housing.isLoadingCandidates"
           class="house-candidates__loading"
         >
-          <k-preloader />
+          <sky-spinner />
         </div>
-        <k-list v-else-if="housing.candidates.length" inset strong>
-          <k-list-item
+        <sky-list v-else-if="housing.candidates.length" inset strong>
+          <sky-list-item
             v-for="candidate in housing.candidates"
             :key="candidate.id"
             link
@@ -599,17 +578,17 @@ onBeforeUnmount(() => {
             @click="grantKey(candidate)"
           >
             <template #media><UserRound :size="17" /></template>
-          </k-list-item>
-        </k-list>
-        <k-card v-else class="house-keys__empty">
+          </sky-list-item>
+        </sky-list>
+        <sky-card v-else class="house-keys__empty">
           <UsersRound :size="25" />
           <strong>{{ phone.t('Apps.house.noCandidates') }}</strong>
           <p>{{ phone.t('Apps.house.noCandidatesBody') }}</p>
-        </k-card>
+        </sky-card>
       </section>
-    </k-sheet>
+    </sky-sheet>
 
-    <k-dialog
+    <sky-dialog
       :opened="Boolean(revokeCandidate)"
       @backdropclick="revokeCandidate = null"
     >
@@ -618,16 +597,16 @@ onBeforeUnmount(() => {
         {{ phone.t('Apps.house.revokeBody', { name: revokeCandidate.name }) }}
       </p>
       <template #buttons>
-        <k-dialog-button @click="revokeCandidate = null">{{
+        <sky-dialog-button @click="revokeCandidate = null">{{
           phone.t('Apps.house.cancel')
-        }}</k-dialog-button>
-        <k-dialog-button strong @click="revokeKey"
+        }}</sky-dialog-button>
+        <sky-dialog-button strong @click="revokeKey"
           ><Check :size="15" />{{
             phone.t('Apps.house.confirm')
-          }}</k-dialog-button
+          }}</sky-dialog-button
         >
       </template>
-    </k-dialog>
+    </sky-dialog>
 
     <SkyToast
       :opened="toastOpened"
@@ -637,7 +616,7 @@ onBeforeUnmount(() => {
     >
       {{ toastText }}
     </SkyToast>
-  </k-page>
+  </sky-app-page>
 </template>
 
 <style scoped>
@@ -667,8 +646,7 @@ onBeforeUnmount(() => {
     linear-gradient(165deg, #26201d 0, #111216 48%, #171d25 100%);
 }
 .house-navbar {
-  --k-safe-area-top: 46px;
-  --k-navbar-bg-color: transparent;
+  --sky-navbar-glass: transparent;
   position: absolute;
   z-index: 5;
   top: 0;
@@ -679,9 +657,30 @@ onBeforeUnmount(() => {
 .house-navbar::after {
   opacity: 0;
 }
+.house-navbar :deep(.sky-navbar__heading) {
+  width: 100%;
+  justify-content: center;
+  grid-column: 1 / -1;
+  gap: 1px;
+  padding: 0 var(--sky-page-gutter);
+}
+.house-navbar :deep(.sky-navbar__title) {
+  line-height: 24px;
+}
+.house-navbar :deep(.sky-navbar__subtitle) {
+  max-width: 100%;
+  margin-top: 0;
+  overflow: visible;
+  line-height: 15px;
+  text-overflow: clip;
+  white-space: normal;
+}
 .house-scroll {
   position: absolute;
-  inset: 104px 0 25px;
+  inset: calc(
+      var(--sky-safe-area-top) + var(--sky-navbar-height) + var(--sky-space-3)
+    )
+    0 25px;
   padding: 9px 13px 34px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -706,7 +705,10 @@ onBeforeUnmount(() => {
 }
 .house-state {
   position: absolute;
-  inset: 104px 0 25px;
+  inset: calc(
+      var(--sky-safe-area-top) + var(--sky-navbar-height) + var(--sky-space-3)
+    )
+    0 25px;
   padding: 30px;
   display: flex;
   flex-direction: column;
@@ -913,28 +915,20 @@ onBeforeUnmount(() => {
 }
 :global(.house-detail-sheet),
 :global(.house-candidates-sheet) {
-  --k-sheet-bg-color: var(--house-bg);
+  --sky-sheet-background: var(--house-bg);
+}
+:global(.house-detail-sheet .sky-sheet__panel),
+:global(.house-candidates-sheet .sky-sheet__panel) {
   height: 88%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border-radius: 28px 28px 0 0;
 }
 .house-detail {
   position: relative;
-  height: 100%;
-  padding: 18px 14px 40px;
-  overflow-y: auto;
+  min-height: calc(100% - 32px);
+  padding: 12px 14px 40px;
   text-align: center;
-}
-.house-detail__close {
-  position: sticky;
-  z-index: 2;
-  top: 0;
-  width: 32px;
-  height: 32px;
-  margin: 0 0 -32px auto;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
 }
 .house-detail__mark {
   width: 83px;
@@ -975,7 +969,7 @@ onBeforeUnmount(() => {
   color: #c8522b;
 }
 .house-lock-button {
-  --k-button-bg-color: var(--house-accent);
+  --sky-app-accent: var(--house-accent);
   width: 100%;
   margin-bottom: 18px;
   gap: 6px;
@@ -1047,18 +1041,13 @@ onBeforeUnmount(() => {
   padding: 18px;
 }
 .house-candidates {
-  height: 100%;
-  padding: 19px 14px 35px;
-  overflow-y: auto;
+  min-height: calc(100% - 32px);
+  padding: 12px 14px 35px;
   text-align: center;
 }
-.house-candidates > button {
-  position: absolute;
-  right: 14px;
-  top: 13px;
-}
 .house-candidates > svg {
-  margin-top: 7px;
+  display: block;
+  margin: 0 auto;
   color: var(--house-accent);
 }
 .house-candidates h2 {
@@ -1096,7 +1085,7 @@ onBeforeUnmount(() => {
   background: var(--house-bg);
 }
 .house-navbar {
-  --k-navbar-bg-color: var(--house-bg);
+  --sky-navbar-glass: var(--house-bg);
 }
 .house-scroll {
   padding: 0 0 46px;
@@ -1122,42 +1111,10 @@ onBeforeUnmount(() => {
   line-height: 1.4;
 }
 .house-properties {
-  padding-top: 14px;
-}
-.house-properties__heading {
-  margin: 0 21px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.house-properties__heading small,
-.house-properties__heading h1 {
-  display: block;
-}
-.house-properties__heading small {
-  color: var(--house-muted);
-  font-size: 12px;
-  line-height: 1.2;
-}
-.house-properties__heading h1 {
-  margin: 2px 0 0;
-  font-size: 25px;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-}
-.house-properties__count {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--house-accent);
-  color: #fff;
-  font-size: 18px;
-  font-weight: 750;
+  padding-top: 4px;
 }
 .house-overview {
-  margin: 0 16px 20px;
+  margin: 0 16px 16px;
   padding: 12px 6px;
   border-radius: 18px;
   display: flex;
@@ -1251,13 +1208,13 @@ onBeforeUnmount(() => {
   line-height: 1.42;
 }
 .house-detail {
-  height: 620px;
-  padding: 18px 0 42px;
+  min-height: calc(100% - 32px);
+  padding: 12px 0 42px;
 }
 .house-detail__mark {
   width: 58px;
   height: 58px;
-  margin: 8px auto 10px;
+  margin: 0 auto 10px;
   border-radius: 18px;
   background: var(--house-accent);
 }
@@ -1277,7 +1234,7 @@ onBeforeUnmount(() => {
   width: calc(100% - 32px);
   margin: 0 16px 20px;
 }
-.house-detail :deep(.k-block-title) {
+.house-detail :deep(.sky-block-title) {
   margin-top: 18px;
   margin-bottom: 7px;
   padding: 0 20px;
@@ -1295,6 +1252,13 @@ onBeforeUnmount(() => {
 .house-keys {
   padding: 0 16px;
 }
+.house-key-list {
+  --sky-list-outer-left: 0px;
+  --sky-list-outer-right: 0px;
+  width: 100%;
+  margin-top: 0;
+  margin-bottom: 0;
+}
 .house-keys header {
   margin: 20px 4px 8px;
 }
@@ -1305,8 +1269,8 @@ onBeforeUnmount(() => {
   font-size: 16px;
 }
 .house-candidates {
-  height: 620px;
-  padding: 21px 14px 35px;
+  min-height: calc(100% - 32px);
+  padding: 12px 14px 35px;
 }
 .house-candidates h2 {
   margin: 8px 0 5px;

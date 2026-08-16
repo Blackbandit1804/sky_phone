@@ -236,6 +236,20 @@ label.sky-settings-row__title {
   padding: 0;
 }
 
+.sky-settings-group__list
+  > .sky-field:not(.sky-field--has-label)
+  .sky-field__inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.sky-settings-group__list
+  > .sky-field:not(.sky-field--has-label)
+  .sky-field__control {
+  margin: 0;
+}
+
 .sky-settings-group__list > .sky-field .sky-field__label {
   font-size: 13px;
   line-height: 18px;

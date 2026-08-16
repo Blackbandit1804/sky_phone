@@ -12,4 +12,10 @@ describe('PhoneApp EasyShare contract', () => {
     expect(source).toContain('easyShare.open(response.data)')
     expect(source).not.toContain("kind: 'profile'")
   })
+
+  it('uses the shared full-width Sky tab bar for phone sections', () => {
+    expect(source).toContain('<sky-tab-bar')
+    expect(source).toContain('<sky-tab-button')
+    expect(source).not.toContain('<sky-segmented')
+  })
 })

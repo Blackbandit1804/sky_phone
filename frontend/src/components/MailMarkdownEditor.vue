@@ -15,6 +15,8 @@ import {
 } from 'lucide-vue-next'
 import { onBeforeUnmount, watch } from 'vue'
 
+import { SkyButton, SkyIcon, SkyToolbar, SkyToolbarPane } from '@/ui'
+
 export type MailEditorLabels = {
   bold: string
   bulletList: string
@@ -22,6 +24,7 @@ export type MailEditorLabels = {
   numberedList: string
   quote: string
   redo: string
+  toolbar: string
   undo: string
 }
 
@@ -41,6 +44,7 @@ const props = withDefaults(
       numberedList: 'Numbered list',
       quote: 'Quote',
       redo: 'Redo',
+      toolbar: 'Formatting tools',
       undo: 'Undo',
     }),
     placeholder: '',
@@ -111,126 +115,159 @@ onBeforeUnmount(() => editor.value?.destroy())
 
 <template>
   <div class="mail-editor" :class="{ 'mail-editor--readonly': !editable }">
-    <div v-if="editable && editor" class="mail-editor__toolbar">
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('bold') }"
-        :aria-label="labels.bold"
-        :title="labels.bold"
-        @click="editor.chain().focus().toggleBold().run()"
-      >
-        <Bold :size="17" />
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('italic') }"
-        :aria-label="labels.italic"
-        :title="labels.italic"
-        @click="editor.chain().focus().toggleItalic().run()"
-      >
-        <Italic :size="17" />
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('bulletList') }"
-        :aria-label="labels.bulletList"
-        :title="labels.bulletList"
-        @click="editor.chain().focus().toggleBulletList().run()"
-      >
-        <List :size="17" />
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('orderedList') }"
-        :aria-label="labels.numberedList"
-        :title="labels.numberedList"
-        @click="editor.chain().focus().toggleOrderedList().run()"
-      >
-        <ListOrdered :size="17" />
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': editor.isActive('blockquote') }"
-        :aria-label="labels.quote"
-        :title="labels.quote"
-        @click="editor.chain().focus().toggleBlockquote().run()"
-      >
-        <Quote :size="17" />
-      </button>
-      <span class="mail-editor__toolbar-spacer" />
-      <button
-        type="button"
-        :disabled="!editor.can().chain().focus().undo().run()"
-        :aria-label="labels.undo"
-        :title="labels.undo"
-        @click="editor.chain().focus().undo().run()"
-      >
-        <Undo2 :size="17" />
-      </button>
-      <button
-        type="button"
-        :disabled="!editor.can().chain().focus().redo().run()"
-        :aria-label="labels.redo"
-        :title="labels.redo"
-        @click="editor.chain().focus().redo().run()"
-      >
-        <Redo2 :size="17" />
-      </button>
-    </div>
-    <EditorContent v-if="editor" :editor="editor" />
+    <EditorContent
+      v-if="editor"
+      class="mail-editor__content"
+      :editor="editor"
+    />
+    <SkyToolbar
+      v-if="editable && editor"
+      class="mail-editor__tools"
+      component="footer"
+      :aria-label="labels.toolbar"
+    >
+      <SkyToolbarPane class="mail-editor__tool-pane">
+        <SkyButton
+          class="mail-editor__tool"
+          :class="{
+            'mail-editor__tool--active': editor.isActive('bold'),
+          }"
+          variant="plain"
+          icon-only
+          :aria-label="labels.bold"
+          :aria-pressed="editor.isActive('bold')"
+          @click="editor.chain().focus().toggleBold().run()"
+        >
+          <SkyIcon :size="20"><Bold /></SkyIcon>
+        </SkyButton>
+        <SkyButton
+          class="mail-editor__tool"
+          :class="{
+            'mail-editor__tool--active': editor.isActive('italic'),
+          }"
+          variant="plain"
+          icon-only
+          :aria-label="labels.italic"
+          :aria-pressed="editor.isActive('italic')"
+          @click="editor.chain().focus().toggleItalic().run()"
+        >
+          <SkyIcon :size="20"><Italic /></SkyIcon>
+        </SkyButton>
+        <SkyButton
+          class="mail-editor__tool"
+          :class="{
+            'mail-editor__tool--active': editor.isActive('bulletList'),
+          }"
+          variant="plain"
+          icon-only
+          :aria-label="labels.bulletList"
+          :aria-pressed="editor.isActive('bulletList')"
+          @click="editor.chain().focus().toggleBulletList().run()"
+        >
+          <SkyIcon :size="20"><List /></SkyIcon>
+        </SkyButton>
+        <SkyButton
+          class="mail-editor__tool"
+          :class="{
+            'mail-editor__tool--active': editor.isActive('orderedList'),
+          }"
+          variant="plain"
+          icon-only
+          :aria-label="labels.numberedList"
+          :aria-pressed="editor.isActive('orderedList')"
+          @click="editor.chain().focus().toggleOrderedList().run()"
+        >
+          <SkyIcon :size="20"><ListOrdered /></SkyIcon>
+        </SkyButton>
+        <SkyButton
+          class="mail-editor__tool"
+          :class="{
+            'mail-editor__tool--active': editor.isActive('blockquote'),
+          }"
+          variant="plain"
+          icon-only
+          :aria-label="labels.quote"
+          :aria-pressed="editor.isActive('blockquote')"
+          @click="editor.chain().focus().toggleBlockquote().run()"
+        >
+          <SkyIcon :size="20"><Quote /></SkyIcon>
+        </SkyButton>
+        <SkyButton
+          class="mail-editor__tool"
+          variant="plain"
+          icon-only
+          :disabled="!editor.can().chain().focus().undo().run()"
+          :aria-label="labels.undo"
+          @click="editor.chain().focus().undo().run()"
+        >
+          <SkyIcon :size="20"><Undo2 /></SkyIcon>
+        </SkyButton>
+        <SkyButton
+          class="mail-editor__tool"
+          variant="plain"
+          icon-only
+          :disabled="!editor.can().chain().focus().redo().run()"
+          :aria-label="labels.redo"
+          @click="editor.chain().focus().redo().run()"
+        >
+          <SkyIcon :size="20"><Redo2 /></SkyIcon>
+        </SkyButton>
+      </SkyToolbarPane>
+    </SkyToolbar>
   </div>
 </template>
 
 <style scoped>
 .mail-editor {
-  min-height: 210px;
-  color: #f5f5f7;
-}
-
-.mail-editor__toolbar {
-  position: sticky;
-  z-index: 2;
-  top: 0;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
   display: flex;
-  align-items: center;
-  gap: 3px;
-  min-height: 43px;
-  padding: 5px 7px;
-  border-bottom: 1px solid #ffffff14;
-  background: #1c1c1ee8;
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--sky-bg);
+  color: var(--sky-text);
 }
 
-.mail-editor__toolbar button {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: #f5f5f7;
-  cursor: pointer;
-}
-
-.mail-editor__toolbar button.is-active {
-  background: #0a84ff;
-  color: #fff;
-}
-
-.mail-editor__toolbar button:disabled {
-  opacity: 0.28;
-  cursor: default;
-}
-
-.mail-editor__toolbar-spacer {
+.mail-editor__content {
+  min-height: 0;
   flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.mail-editor__content::-webkit-scrollbar {
+  display: none;
+}
+
+.mail-editor__tools {
+  padding-right: var(--sky-space-3);
+  padding-left: var(--sky-space-3);
+}
+
+.mail-editor__tools :deep(.sky-toolbar__inner),
+.mail-editor__tool-pane {
+  width: 100%;
+}
+
+.mail-editor__tool {
+  min-width: var(--sky-touch-target);
+  min-height: var(--sky-touch-target);
+  flex: 1 1 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--sky-text);
+}
+
+.mail-editor__tool--active {
+  background: transparent;
+  color: var(--sky-app-accent);
 }
 
 :deep(.tiptap) {
-  min-height: 210px;
-  padding: 15px 16px 92px;
+  min-height: 100%;
+  padding: 15px 16px 124px;
   outline: none;
   font-size: 15px;
   line-height: 1.5;
@@ -238,7 +275,14 @@ onBeforeUnmount(() => editor.value?.destroy())
 }
 
 .mail-editor--readonly {
+  height: auto;
+  display: block;
   min-height: 0;
+  overflow: visible;
+}
+
+.mail-editor--readonly .mail-editor__content {
+  overflow: visible;
 }
 
 .mail-editor--readonly :deep(.tiptap) {
@@ -248,11 +292,7 @@ onBeforeUnmount(() => editor.value?.destroy())
 }
 
 :deep(.tiptap p) {
-  margin: 0 0 0.8em;
-}
-
-:deep(.tiptap p:last-child) {
-  margin-bottom: 0;
+  margin: 0;
 }
 
 :deep(.tiptap h2),

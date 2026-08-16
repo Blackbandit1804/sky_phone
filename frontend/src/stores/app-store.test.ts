@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   DEFAULT_INSTALLED_PHONE_APP_IDS,
-  NON_REMOVABLE_PHONE_APP_IDS,
 } from '@/config/apps'
 import { useAppStoreStore } from '@/stores/app-store'
 import {
@@ -184,26 +183,26 @@ describe('app store', () => {
   it('fully uninstalls removable apps and allows downloading them again', () => {
     vi.useFakeTimers()
     const apps = useAppStoreStore()
-    apps.hydrate(null)
+    apps.hydrate({ claimedApps: ['snake'] })
     mocks.phone.saveDeviceNamespace.mockClear()
 
-    expect(apps.uninstallApp('calculator')).toBe(true)
-    expect(apps.isInstalled('calculator')).toBe(false)
-    expect(apps.uninstalledApps).toEqual(['calculator'])
-    expect(apps.homeLayout.hidden).toContain('calculator')
+    expect(apps.uninstallApp('snake')).toBe(true)
+    expect(apps.isInstalled('snake')).toBe(false)
+    expect(apps.uninstalledApps).toEqual(['snake'])
+    expect(apps.homeLayout.hidden).toContain('snake')
     expect(mocks.phone.saveDeviceNamespace).toHaveBeenLastCalledWith('apps', {
       claimedApps: [],
       homeLayout: apps.homeLayout,
       launchCounts: {},
-      uninstalledApps: ['calculator'],
+      uninstalledApps: ['snake'],
     })
 
-    apps.installApp('calculator')
+    apps.installApp('snake')
     vi.advanceTimersByTime(3000)
 
-    expect(apps.isInstalled('calculator')).toBe(true)
+    expect(apps.isInstalled('snake')).toBe(true)
     expect(apps.uninstalledApps).toEqual([])
-    expect(apps.homeLayout.hidden).not.toContain('calculator')
+    expect(apps.homeLayout.hidden).not.toContain('snake')
   })
 
   it('hydrates persisted removals while rejecting protected and invalid ids', () => {
@@ -211,47 +210,23 @@ describe('app store', () => {
 
     apps.hydrate({
       uninstalledApps: ['calculator', 'phone', 'not-an-app'],
-      updatedAppReleases: {
-        calculator: '2026-08-14',
-        phone: '2026-08-14',
-        snake: 'x'.repeat(64),
-      },
     })
 
-    expect(apps.uninstalledApps).toEqual(['calculator'])
-    expect(apps.isInstalled('calculator')).toBe(false)
+    expect(apps.uninstalledApps).toEqual([])
+    expect(apps.isInstalled('calculator')).toBe(true)
     expect(apps.isInstalled('phone')).toBe(true)
-    expect(apps.updatedAppReleases).toEqual({ phone: '2026-08-14' })
   })
 
-  it('protects system apps from full uninstallation', () => {
+  it('protects every default app from full uninstallation', () => {
     const apps = useAppStoreStore()
     apps.hydrate(null)
     mocks.phone.saveDeviceNamespace.mockClear()
 
-    expect(apps.uninstallApp('phone')).toBe(false)
-    expect(apps.isInstalled('phone')).toBe(true)
+    for (const appId of DEFAULT_INSTALLED_PHONE_APP_IDS) {
+      expect(apps.uninstallApp(appId)).toBe(false)
+      expect(apps.isInstalled(appId)).toBe(true)
+    }
     expect(mocks.phone.saveDeviceNamespace).not.toHaveBeenCalled()
-  })
-
-  it('updates installed apps and persists the current release', () => {
-    vi.useFakeTimers()
-    const apps = useAppStoreStore()
-    apps.hydrate(null)
-
-    apps.updateApp('phone', '2026-08-14')
-    expect(apps.updatingApps.phone).toBe(true)
-
-    vi.advanceTimersByTime(1800)
-
-    expect(apps.updatingApps.phone).toBeUndefined()
-    expect(apps.updatedAppReleases.phone).toBe('2026-08-14')
-    expect(mocks.phone.saveDeviceNamespace).toHaveBeenLastCalledWith('apps', {
-      claimedApps: [],
-      homeLayout: apps.homeLayout,
-      launchCounts: {},
-      updatedAppReleases: { phone: '2026-08-14' },
-    })
   })
 
   it('ignores duplicate installation requests and invalid persisted ids', () => {
@@ -267,7 +242,7 @@ describe('app store', () => {
     expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
   })
 
-  it('reinstalls core and claimed apps removed from the Home Screen', () => {
+  it('reinstalls claimed apps removed from the Home Screen', () => {
     vi.useFakeTimers()
     const apps = useAppStoreStore()
 
@@ -279,8 +254,8 @@ describe('app store', () => {
     apps.installApp('notes')
     apps.installApp('memory')
 
-    expect(apps.installingApps).toEqual({ notes: true, memory: true })
-    expect(apps.homeLayout.hidden).toEqual(['notes', 'memory'])
+    expect(apps.installingApps).toEqual({ memory: true })
+    expect(apps.homeLayout.hidden).toEqual(['memory'])
 
     vi.advanceTimersByTime(3000)
 
@@ -289,25 +264,15 @@ describe('app store', () => {
     expect(apps.homeLayout.grid).toContain('notes')
     expect(apps.homeLayout.grid).toContain('memory')
     expect(apps.claimedApps).toEqual(['memory'])
-    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(2)
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
   })
 
-  it('prevents protected apps from being removed from the Home Screen', () => {
+  it('prevents every default app from being removed from the Home Screen', () => {
     const apps = useAppStoreStore()
     apps.hydrate(null)
     mocks.phone.saveDeviceNamespace.mockClear()
 
-    expect([...NON_REMOVABLE_PHONE_APP_IDS]).toEqual([
-      'app-store',
-      'settings',
-      'camera',
-      'photos',
-      'phone',
-      'messages',
-      'mail',
-      'health',
-    ])
-    for (const appId of NON_REMOVABLE_PHONE_APP_IDS) {
+    for (const appId of DEFAULT_INSTALLED_PHONE_APP_IDS) {
       apps.removeHomeApp(appId)
       expect(apps.homeLayout.hidden).not.toContain(appId)
     }
@@ -332,17 +297,18 @@ describe('app store', () => {
 
   it('persists home reordering and removal independently from installation', () => {
     const apps = useAppStoreStore()
-    apps.hydrate(null)
+    apps.hydrate({ claimedApps: ['memory'] })
+    mocks.phone.saveDeviceNamespace.mockClear()
 
-    const notesIndex = apps.homeLayout.grid.indexOf('notes')
-    apps.moveHomeApp('grid', notesIndex, 'grid', 0)
-    expect(apps.homeLayout.grid[0]).toBe('notes')
+    const memoryIndex = apps.homeLayout.grid.indexOf('memory')
+    apps.moveHomeApp('grid', memoryIndex, 'grid', 0)
+    expect(apps.homeLayout.grid[0]).toBe('memory')
 
-    apps.removeHomeApp('notes')
-    expect(apps.homeLayout.grid).not.toContain('notes')
-    expect(apps.homeLayout.hidden).toContain('notes')
+    apps.removeHomeApp('memory')
+    expect(apps.homeLayout.grid).not.toContain('memory')
+    expect(apps.homeLayout.hidden).toContain('memory')
     expect(mocks.phone.saveDeviceNamespace).toHaveBeenLastCalledWith('apps', {
-      claimedApps: [],
+      claimedApps: ['memory'],
       homeLayout: apps.homeLayout,
       launchCounts: {},
     })

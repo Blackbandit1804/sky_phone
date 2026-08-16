@@ -39,6 +39,7 @@ const browserDataRequests = [
   ['housing:key-candidates', { action: 'give' }],
   ['mail:counts', {}],
   ['mail:list', { folder: 'inbox' }],
+  ['mail:mailboxes', {}],
   ['map:getPlayerCoords', {}],
   ['map:markers', {}],
   ['marketplace:counts', {}],
@@ -65,6 +66,9 @@ const browserDataRequests = [
   ['skyride:history', {}],
   ['skyride:get-player-coords', {}],
   ['weather:get', {}],
+  ['weazel-news:context', {}],
+  ['weazel-news:list', { category: null, offset: 0, search: '' }],
+  ['weazel-news:manage-list', { offset: 0, search: '', status: 'all' }],
 ]
 
 async function post(baseUrl, endpoint, body = {}) {
@@ -82,6 +86,106 @@ async function expectSuccess(baseUrl, endpoint, body = {}, data = false) {
   assert.equal(result.success, true, `${endpoint}: ${result.error ?? 'failed'}`)
   if (data) assert.notEqual(result.data, undefined, `${endpoint}: missing data`)
   return result.data
+}
+
+function expectItems(value, label, minimum = 1) {
+  assert(
+    Array.isArray(value) && value.length >= minimum,
+    `${label} did not include enough browser test data`,
+  )
+}
+
+function verifyBrowserTestData(dataByEndpoint) {
+  const development = dataByEndpoint.get('development:bootstrap')
+  expectItems(development.device.data.alarms.payload, 'clock alarms', 3)
+  expectItems(
+    development.device.data.media.payload.captures,
+    'camera captures',
+    2,
+  )
+  expectItems(development.memos, 'memos', 3)
+  expectItems(development.notes, 'notes', 4)
+  assert(
+    Object.keys(development.device.data.games.payload).length >= 7,
+    'games did not include saved browser test progress',
+  )
+
+  expectItems(dataByEndpoint.get('health:overview').days, 'health history', 7)
+  expectItems(
+    dataByEndpoint.get('billing:list').invoices,
+    'billing invoices',
+    3,
+  )
+  expectItems(dataByEndpoint.get('calendar:list'), 'calendar events', 5)
+  expectItems(dataByEndpoint.get('calls:recents'), 'recent calls', 5)
+  expectItems(dataByEndpoint.get('companies:list').companies, 'companies', 3)
+  expectItems(dataByEndpoint.get('contacts:list'), 'contacts', 10)
+  expectItems(
+    dataByEndpoint.get('crewlink:bootstrap').groups,
+    'CrewLink groups',
+    2,
+  )
+  expectItems(
+    dataByEndpoint.get('darkchat:bootstrap').conversations,
+    'DarkChat conversations',
+  )
+  expectItems(dataByEndpoint.get('feather:feed').items, 'Feather posts', 5)
+  expectItems(
+    dataByEndpoint.get('flare:bootstrap').suggestions,
+    'Flare suggestions',
+    5,
+  )
+  expectItems(dataByEndpoint.get('fliptok:feed').items, 'FlipTok videos', 2)
+  expectItems(dataByEndpoint.get('gallery:list'), 'gallery media', 30)
+  expectItems(
+    dataByEndpoint.get('garage:vehicles').vehicles,
+    'garage vehicles',
+    4,
+  )
+  expectItems(
+    dataByEndpoint.get('housing:overview').properties,
+    'housing properties',
+    5,
+  )
+  expectItems(dataByEndpoint.get('mail:list').items, 'inbox mail', 2)
+  expectItems(
+    dataByEndpoint.get('mail:mailboxes').mailboxes,
+    'custom mailboxes',
+  )
+  expectItems(dataByEndpoint.get('map:markers'), 'map markers')
+  expectItems(
+    dataByEndpoint.get('marketplace:list').items,
+    'CityMarkt listings',
+    4,
+  )
+  expectItems(
+    dataByEndpoint.get('messages:conversations'),
+    'message conversations',
+    5,
+  )
+  expectItems(
+    dataByEndpoint.get('music:bootstrap').serverTracks,
+    'music tracks',
+    3,
+  )
+  expectItems(dataByEndpoint.get('pages:list').items, 'Local Pages posts', 4)
+  expectItems(
+    dataByEndpoint.get('picstagram:feed').items,
+    'Picstagram posts',
+    2,
+  )
+  expectItems(dataByEndpoint.get('radio:get').history, 'radio history', 2)
+  expectItems(dataByEndpoint.get('skyride:history').items, 'SkyRide history', 2)
+  expectItems(
+    dataByEndpoint.get('weazel-news:list').items,
+    'Weazel News articles',
+    5,
+  )
+  expectItems(
+    dataByEndpoint.get('weazel-news:manage-list').items,
+    'Weazel News editorial articles',
+    7,
+  )
 }
 
 async function verifyStatefulActions(baseUrl) {
@@ -104,7 +208,88 @@ async function verifyStatefulActions(baseUrl) {
     true,
   )
   gallery = await expectSuccess(baseUrl, 'gallery:list', {}, true)
-  assert.equal(gallery.find((item) => item.id === gallery[0].id)?.favorite, true)
+  assert.equal(
+    gallery.find((item) => item.id === gallery[0].id)?.favorite,
+    true,
+  )
+  const articlePhotos = gallery
+    .filter((item) => item.mediaType === 'photo')
+    .slice(0, 7)
+  assert.equal(
+    articlePhotos.length,
+    7,
+    'gallery:list did not include enough photos for Weazel News',
+  )
+  const weazelContext = await expectSuccess(
+    baseUrl,
+    'weazel-news:context',
+    {},
+    true,
+  )
+  assert.equal(weazelContext.maximumImages, 6)
+  const createdArticleResponse = await expectSuccess(
+    baseUrl,
+    'weazel-news:create',
+    {
+      body: 'Created by the browser mock smoke test with several photos.',
+      category: 'news',
+      imageMediaIds: articlePhotos.slice(0, 3).map((item) => item.id),
+      status: 'published',
+      title: 'Browser test Weazel article',
+    },
+    true,
+  )
+  const createdArticle = createdArticleResponse.article
+  assert.deepEqual(
+    createdArticle.images.map((image) => image.mediaId),
+    articlePhotos.slice(0, 3).map((item) => item.id),
+    'weazel-news:create did not preserve image order',
+  )
+  assert.equal(createdArticle.imageMediaId, articlePhotos[0].id)
+
+  const updatedArticleResponse = await expectSuccess(
+    baseUrl,
+    'weazel-news:update',
+    {
+      body: createdArticle.body,
+      category: 'business',
+      id: createdArticle.id,
+      imageMediaIds: [articlePhotos[2].id, articlePhotos[0].id],
+      revision: createdArticle.revision,
+      status: 'draft',
+      title: 'Updated browser test Weazel article',
+    },
+    true,
+  )
+  const updatedArticle = updatedArticleResponse.article
+  assert.deepEqual(
+    updatedArticle.images.map((image) => image.mediaId),
+    [articlePhotos[2].id, articlePhotos[0].id],
+    'weazel-news:update did not preserve the reordered images',
+  )
+  assert.equal(updatedArticle.imageMediaId, articlePhotos[2].id)
+
+  const loadedArticleResponse = await expectSuccess(
+    baseUrl,
+    'weazel-news:get',
+    { id: updatedArticle.id, manage: true },
+    true,
+  )
+  assert.deepEqual(loadedArticleResponse.article.images, updatedArticle.images)
+
+  const tooManyImages = await post(baseUrl, 'weazel-news:create', {
+    body: 'This article must be rejected because it has too many photos.',
+    category: 'news',
+    imageMediaIds: articlePhotos.map((item) => item.id),
+    status: 'draft',
+    title: 'Invalid Weazel article',
+  })
+  assert.equal(tooManyImages.success, false)
+  assert.equal(tooManyImages.error, 'invalid_attachment')
+  await expectSuccess(baseUrl, 'weazel-news:delete', {
+    id: updatedArticle.id,
+    revision: updatedArticle.revision,
+  })
 
   const memoBootstrap = await expectSuccess(
     baseUrl,
@@ -417,6 +602,39 @@ async function verifyStatefulActions(baseUrl) {
   assert.equal(payphoneCall.state, 'connected')
   await expectSuccess(baseUrl, 'payphone:hangup')
 
+  const mailbox = await expectSuccess(
+    baseUrl,
+    'mail:create-mailbox',
+    { name: 'Browser Test' },
+    true,
+  )
+  const mailboxes = await expectSuccess(
+    baseUrl,
+    'mail:mailboxes',
+    {},
+    true,
+  )
+  assert(
+    mailboxes.mailboxes.some((item) => item.id === mailbox.id),
+    'mail:create-mailbox did not update the mock mailbox list',
+  )
+  await expectSuccess(baseUrl, 'mail:move', {
+    id: 2,
+    mailboxId: mailbox.id,
+  })
+  const mailboxItems = await expectSuccess(
+    baseUrl,
+    'mail:list',
+    { folder: `mailbox:${mailbox.id}` },
+    true,
+  )
+  assert(
+    mailboxItems.items.some((message) => message.id === 2),
+    'mail:move did not add the message to the custom mailbox',
+  )
+  await expectSuccess(baseUrl, 'mail:move', { id: 2, mailboxId: 0 })
+  await expectSuccess(baseUrl, 'mail:delete-mailbox', { id: mailbox.id })
+
   const draft = await expectSuccess(
     baseUrl,
     'mail:save-draft',
@@ -501,6 +719,79 @@ async function verifyStatefulActions(baseUrl) {
     remainingTrash.items.some((message) => message.id === 4),
     'mail:delete-many removed non-selected trash mail',
   )
+
+  const flareBeforeDelete = await expectSuccess(
+    baseUrl,
+    'flare:bootstrap',
+    {},
+    true,
+  )
+  assert(flareBeforeDelete.profile, 'flare:bootstrap did not include a profile')
+  assert(
+    flareBeforeDelete.matches.length > 0,
+    'flare:bootstrap did not include a deletable match',
+  )
+  const swipedProfile = flareBeforeDelete.suggestions[0]
+  await expectSuccess(baseUrl, 'flare:swipe', {
+    choice: 'pass',
+    targetId: swipedProfile.id,
+  })
+  const flareAfterSwipe = await expectSuccess(
+    baseUrl,
+    'flare:bootstrap',
+    {},
+    true,
+  )
+  assert(
+    !flareAfterSwipe.suggestions.some(
+      (profile) => profile.id === swipedProfile.id,
+    ),
+    'flare:swipe did not filter the swiped profile',
+  )
+  await expectSuccess(baseUrl, 'flare:delete-profile')
+  const flareAfterDelete = await expectSuccess(
+    baseUrl,
+    'flare:bootstrap',
+    {},
+    true,
+  )
+  assert.equal(flareAfterDelete.profile, null)
+  assert.deepEqual(flareAfterDelete.suggestions, [])
+  assert.deepEqual(flareAfterDelete.likes, [])
+  assert.deepEqual(flareAfterDelete.matches, [])
+  const repeatedFlareDelete = await post(baseUrl, 'flare:delete-profile')
+  assert.deepEqual(repeatedFlareDelete, {
+    error: 'profile_not_found',
+    success: false,
+  })
+  const recreatedFlare = await expectSuccess(
+    baseUrl,
+    'flare:save-profile',
+    {
+      ...flareBeforeDelete.profile,
+      photoMediaIds: [],
+      photoUrls: undefined,
+    },
+    true,
+  )
+  assert(
+    recreatedFlare.suggestions.some(
+      (profile) => profile.id === swipedProfile.id,
+    ),
+    'recreated Flare profile retained a deleted swipe filter',
+  )
+
+  await expectSuccess(baseUrl, 'account:logout')
+  const signedOutFlareBootstrap = await post(baseUrl, 'flare:bootstrap')
+  assert.deepEqual(signedOutFlareBootstrap, {
+    error: 'not_authenticated',
+    success: false,
+  })
+  const signedOutFlareDelete = await post(baseUrl, 'flare:delete-profile')
+  assert.deepEqual(signedOutFlareDelete, {
+    error: 'not_authenticated',
+    success: false,
+  })
 }
 
 async function main() {
@@ -510,9 +801,14 @@ async function main() {
   const baseUrl = `http://127.0.0.1:${address.port}`
 
   try {
+    const dataByEndpoint = new Map()
     for (const [endpoint, body] of browserDataRequests) {
-      await expectSuccess(baseUrl, endpoint, body, true)
+      dataByEndpoint.set(
+        endpoint,
+        await expectSuccess(baseUrl, endpoint, body, true),
+      )
     }
+    verifyBrowserTestData(dataByEndpoint)
 
     await verifyStatefulActions(baseUrl)
 

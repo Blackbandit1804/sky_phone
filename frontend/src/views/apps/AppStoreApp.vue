@@ -7,7 +7,6 @@ import {
   Grid2X2,
   Newspaper,
   Plane,
-  RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
@@ -17,8 +16,6 @@ import {
 import {
   computed,
   nextTick,
-  onMounted,
-  onUnmounted,
   ref,
   watch,
   type ComponentPublicInstance,
@@ -41,13 +38,13 @@ import {
   SkyAppPage,
   SkyDialog,
   SkyDialogButton,
+  SkyEmptyState,
   SkyNavbar,
   SkyPillNavigation,
   SkyScrollArea,
   SkySearchbar,
   SkySegmented,
   SkySegmentedButton,
-  SkySpinner,
   SkySheet,
 } from '@/ui'
 import { getDailyHighlights } from '@/utils/appStoreHighlights'
@@ -68,12 +65,12 @@ const profileOpened = ref(false)
 const uninstallCandidate = ref<LaunchablePhoneAppDefinition | null>(null)
 const selectedApp = ref<LaunchablePhoneAppDefinition | null>(null)
 const storeScroll = ref<ComponentPublicInstance | null>(null)
+const featuredScroller = ref<HTMLElement | null>(null)
 const profileDragOffset = ref(0)
 const profileDragging = ref(false)
 let profileDragPointerId: number | null = null
 let profileDragStartTime = 0
 let profileDragStartY = 0
-let featuredTimer: ReturnType<typeof globalThis.setInterval> | null = null
 const tabs = [
   { id: 'today', icon: Newspaper },
   { id: 'apps', icon: Grid2X2 },
@@ -111,14 +108,15 @@ const profileInitials = computed(() => {
     .charAt(0)}`
   return initials.toLocaleUpperCase(phone.lang) || 'P'
 })
-const todayDate = computed(() =>
-  new Intl.DateTimeFormat(phone.lang, {
-    day: 'numeric',
-    month: 'long',
-    weekday: 'long',
-  }).format(openedAt),
+const downloadDateDescription = computed(() =>
+  phone.t('Apps.appStore.account.downloadedOn', {
+    date: new Intl.DateTimeFormat(phone.lang, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(openedAt),
+  }),
 )
-const currentRelease = `${openedAt.getFullYear()}-${String(openedAt.getMonth() + 1).padStart(2, '0')}-${String(openedAt.getDate()).padStart(2, '0')}`
 const catalog = computed(() =>
   PHONE_APPS.filter((app): app is LaunchablePhoneAppDefinition => {
     if (!isLaunchablePhoneApp(app) || app.id === 'app-store') {
@@ -162,12 +160,6 @@ const featuredCandidates = computed(() => {
     )
     .slice(0, 6)
 })
-const featuredApp = computed(() => {
-  if (!featuredCandidates.value.length) return null
-  return featuredCandidates.value[
-    featuredSlide.value % featuredCandidates.value.length
-  ]
-})
 const hasSearchQuery = computed(() => Boolean(query.value.trim()))
 const searchRecommendations = computed(() => dailyCandidates.value.slice(0, 3))
 const searchDiscoverCards = computed(() => {
@@ -192,6 +184,7 @@ const shownApps = computed(() => {
     const searchable = [
       getPhoneAppLabel(app, phone.t),
       phone.t(`Home.groups.${app.category}`),
+      appStoreTagline(app),
     ]
       .join(' ')
       .toLocaleLowerCase(phone.lang)
@@ -199,24 +192,62 @@ const shownApps = computed(() => {
   })
 })
 
-watch(tab, () => {
+watch(tab, async () => {
   featuredSlide.value = 0
+  await nextTick()
+  featuredScroller.value?.scrollTo({ left: 0 })
 })
 
-onMounted(() => {
-  featuredTimer = globalThis.setInterval(() => {
-    if (
-      (tab.value === 'apps' || tab.value === 'games') &&
-      featuredCandidates.value.length > 1
-    ) {
-      featuredSlide.value += 1
+function updateFeaturedSlide(): void {
+  const scroller = featuredScroller.value
+  if (!scroller) return
+
+  const cards = Array.from(
+    scroller.querySelectorAll<HTMLElement>('.store-browse-feature'),
+  )
+  let closestIndex = 0
+  let closestDistance = Number.POSITIVE_INFINITY
+
+  cards.forEach((card, index) => {
+    const distance = Math.abs(card.offsetLeft - scroller.scrollLeft)
+    if (distance < closestDistance) {
+      closestIndex = index
+      closestDistance = distance
     }
-  }, 6500)
-})
+  })
 
-onUnmounted(() => {
-  if (featuredTimer) globalThis.clearInterval(featuredTimer)
-})
+  featuredSlide.value = closestIndex
+}
+
+function scrollToFeatured(index: number): void {
+  const scroller = featuredScroller.value
+  const card = scroller?.querySelectorAll<HTMLElement>(
+    '.store-browse-feature',
+  )[index]
+  if (!scroller || !card) return
+
+  scroller.scrollTo({ left: card.offsetLeft, behavior: 'smooth' })
+}
+
+function handleFeaturedWheel(event: WheelEvent): void {
+  const scroller = event.currentTarget as HTMLElement
+  const delta =
+    Math.abs(event.deltaX) > Math.abs(event.deltaY)
+      ? event.deltaX
+      : event.deltaY
+  const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth
+
+  if (
+    !delta ||
+    (delta < 0 && scroller.scrollLeft <= 0) ||
+    (delta > 0 && scroller.scrollLeft >= maxScrollLeft - 1)
+  ) {
+    return
+  }
+
+  event.preventDefault()
+  scroller.scrollBy({ left: delta })
+}
 
 function appAction(
   app: LaunchablePhoneAppDefinition,
@@ -241,11 +272,6 @@ function handleApp(app: LaunchablePhoneAppDefinition): void {
 }
 
 function handleManagedApp(app: LaunchablePhoneAppDefinition): void {
-  if (appStore.updatedAppReleases[app.id] !== currentRelease) {
-    appStore.updateApp(app.id, currentRelease)
-    return
-  }
-
   closeProfile()
   void router.push(app.route)
 }
@@ -315,6 +341,14 @@ function categoryDescription(app: LaunchablePhoneAppDefinition): string {
   })
 }
 
+function appStoreTagline(app: LaunchablePhoneAppDefinition): string {
+  if (isExternalPhoneApp(app)) {
+    return app.description.trim() || app.developer
+  }
+
+  return phone.t(`Apps.appStore.taglines.${app.id}`)
+}
+
 function selectSearchDiscovery(app: LaunchablePhoneAppDefinition): void {
   query.value = getPhoneAppLabel(app, phone.t)
 }
@@ -379,6 +413,7 @@ watch(
     <SkyNavbar
       v-if="!selectedApp"
       class="app-store-navbar"
+      :class="{ 'app-store-navbar--search': tab === 'search' }"
       :scroll-el="null"
       transparent
       :title="phone.t(`Apps.appStore.tabs.${tab}`)"
@@ -422,17 +457,6 @@ watch(
         @share="shareSelectedApp"
       />
       <section v-else-if="tab === 'today'" class="store-today">
-        <header class="store-today__edition">
-          <div>
-            <strong>{{ todayDate }}</strong>
-            <span>{{ phone.t('Apps.appStore.today.freshDaily') }}</span>
-          </div>
-          <span class="store-today__edition-badge">
-            <Sparkles :size="13" :stroke-width="2.4" aria-hidden="true" />
-            {{ phone.t('Apps.appStore.today.dailyEdition') }}
-          </span>
-        </header>
-
         <article
           v-if="dailyHighlights[0]"
           class="store-highlight store-highlight--hero phone-effect--expensive-shadow"
@@ -496,7 +520,9 @@ watch(
               class="store-action-button"
               :class="{
                 'store-action-button--icon':
-                  appAction(dailyHighlights[0]) !== 'open',
+                  appAction(dailyHighlights[0]) === 'installing',
+                'store-action-button--get':
+                  appAction(dailyHighlights[0]) === 'get',
               }"
               :disabled="appStore.installingApps[dailyHighlights[0].id]"
               :aria-label="`${getPhoneAppLabel(dailyHighlights[0], phone.t)} ${phone.t(
@@ -539,9 +565,6 @@ watch(
           ></div>
           <div class="store-highlight__copy">
             <p>
-              <span class="store-highlight__story-number"
-                >0{{ index + 1 }}</span
-              >
               {{
                 phone.t(
                   app.category === 'games'
@@ -572,7 +595,8 @@ watch(
               type="button"
               class="store-action-button"
               :class="{
-                'store-action-button--icon': appAction(app) !== 'open',
+                'store-action-button--icon': appAction(app) === 'installing',
+                'store-action-button--get': appAction(app) === 'get',
               }"
               :disabled="appStore.installingApps[app.id]"
               :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
@@ -596,8 +620,7 @@ watch(
             </div>
           </header>
           <ol>
-            <li v-for="(app, index) in topToday" :key="app.id">
-              <span class="store-ranking__position">{{ index + 1 }}</span>
+            <li v-for="app in topToday" :key="app.id">
               <button
                 type="button"
                 class="store-ranking__detail-link"
@@ -618,7 +641,8 @@ watch(
                 type="button"
                 class="store-action-button"
                 :class="{
-                  'store-action-button--icon': appAction(app) !== 'open',
+                  'store-action-button--icon': appAction(app) === 'installing',
+                  'store-action-button--get': appAction(app) === 'get',
                 }"
                 :disabled="appStore.installingApps[app.id]"
                 :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
@@ -666,7 +690,9 @@ watch(
             type="button"
             class="store-action-button"
             :class="{
-              'store-action-button--icon': appAction(finalHighlight) !== 'open',
+              'store-action-button--icon':
+                appAction(finalHighlight) === 'installing',
+              'store-action-button--get': appAction(finalHighlight) === 'get',
             }"
             :disabled="appStore.installingApps[finalHighlight.id]"
             :aria-label="`${getPhoneAppLabel(finalHighlight, phone.t)} ${phone.t(
@@ -683,12 +709,18 @@ watch(
         v-else-if="tab === 'apps' || tab === 'games'"
         class="store-browse"
       >
-        <Transition name="store-featured" mode="out-in">
+        <div
+          ref="featuredScroller"
+          class="store-browse__featured-scroll"
+          @scroll.passive="updateFeaturedSlide"
+          @wheel="handleFeaturedWheel"
+        >
           <article
-            v-if="featuredApp"
-            :key="featuredApp.id"
+            v-for="(app, index) in featuredCandidates"
+            :key="app.id"
             class="store-browse-feature phone-effect--expensive-shadow"
-            :style="highlightStyle(featuredSlide + 1)"
+            :class="{ 'is-active': featuredSlide === index }"
+            :style="highlightStyle(index + 1)"
           >
             <div
               class="store-browse-feature__texture phone-effect--decorative"
@@ -699,54 +731,55 @@ watch(
               <h2>
                 {{
                   phone.t('Apps.appStore.browse.featureTitle', {
-                    app: getPhoneAppLabel(featuredApp, phone.t),
+                    app: getPhoneAppLabel(app, phone.t),
                   })
                 }}
               </h2>
-              <p>{{ categoryDescription(featuredApp) }}</p>
+              <p>{{ categoryDescription(app) }}</p>
             </div>
             <div class="store-browse-feature__art" aria-hidden="true">
               <span></span>
               <component
-                :is="featuredApp.icon"
-                :size="104"
+                :is="app.icon"
+                :size="84"
                 :stroke-width="1.1"
               />
               <img
                 class="phone-effect--filtered-media"
-                :src="featuredApp.iconImage"
+                :src="app.iconImage"
                 alt=""
                 draggable="false"
               />
             </div>
             <footer>
-              <img :src="featuredApp.iconImage" alt="" draggable="false" />
+              <img :src="app.iconImage" alt="" draggable="false" />
               <button
                 type="button"
                 class="store-browse-feature__details"
-                @click="openAppDetail(featuredApp)"
+                @click="openAppDetail(app)"
               >
-                <strong>{{ getPhoneAppLabel(featuredApp, phone.t) }}</strong>
-                <small>{{ categoryDescription(featuredApp) }}</small>
+                <strong>{{ getPhoneAppLabel(app, phone.t) }}</strong>
+                <small>{{ appStoreTagline(app) }}</small>
               </button>
               <button
                 type="button"
                 class="store-action-button"
                 :class="{
                   'store-action-button--icon':
-                    appAction(featuredApp) !== 'open',
+                    appAction(app) === 'installing',
+                  'store-action-button--get': appAction(app) === 'get',
                 }"
-                :disabled="appStore.installingApps[featuredApp.id]"
-                :aria-label="`${getPhoneAppLabel(featuredApp, phone.t)} ${phone.t(
-                  `Apps.appStore.${appAction(featuredApp)}`,
+                :disabled="appStore.installingApps[app.id]"
+                :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
+                  `Apps.appStore.${appAction(app)}`,
                 )}`"
-                @click="handleApp(featuredApp)"
+                @click="handleApp(app)"
               >
-                <AppStoreAction :action="appAction(featuredApp)" />
+                <AppStoreAction :action="appAction(app)" />
               </button>
             </footer>
           </article>
-        </Transition>
+        </div>
 
         <div
           v-if="featuredCandidates.length > 1"
@@ -758,10 +791,10 @@ watch(
             :key="app.id"
             type="button"
             :class="{
-              'is-active': featuredSlide % featuredCandidates.length === index,
+              'is-active': featuredSlide === index,
             }"
             :aria-label="getPhoneAppLabel(app, phone.t)"
-            @click="featuredSlide = index"
+            @click="scrollToFeatured(index)"
           ></button>
         </div>
 
@@ -796,14 +829,15 @@ watch(
               />
               <span>
                 <strong>{{ getPhoneAppLabel(app, phone.t) }}</strong>
-                <small>{{ categoryDescription(app) }}</small>
+                <small class="store-list__tagline">{{ appStoreTagline(app) }}</small>
               </span>
             </button>
             <button
               type="button"
               class="store-action-button"
               :class="{
-                'store-action-button--icon': appAction(app) !== 'open',
+                'store-action-button--icon': appAction(app) === 'installing',
+                'store-action-button--get': appAction(app) === 'get',
               }"
               :disabled="appStore.installingApps[app.id]"
               :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
@@ -853,7 +887,8 @@ watch(
                   type="button"
                   class="store-action-button"
                   :class="{
-                    'store-action-button--icon': appAction(app) !== 'open',
+                    'store-action-button--icon': appAction(app) === 'installing',
+                    'store-action-button--get': appAction(app) === 'get',
                   }"
                   :disabled="appStore.installingApps[app.id]"
                   :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
@@ -916,14 +951,15 @@ watch(
                 />
                 <span>
                   <strong>{{ getPhoneAppLabel(app, phone.t) }}</strong>
-                  <small>{{ categoryDescription(app) }}</small>
+                  <small class="store-list__tagline">{{ appStoreTagline(app) }}</small>
                 </span>
               </button>
               <button
                 type="button"
                 class="store-action-button"
                 :class="{
-                  'store-action-button--icon': appAction(app) !== 'open',
+                  'store-action-button--icon': appAction(app) === 'installing',
+                  'store-action-button--get': appAction(app) === 'get',
                 }"
                 :disabled="appStore.installingApps[app.id]"
                 :aria-label="`${getPhoneAppLabel(app, phone.t)} ${phone.t(
@@ -935,9 +971,17 @@ watch(
               </button>
             </article>
           </div>
-          <p v-if="shownApps.length === 0" class="store-empty">
-            {{ phone.t('Apps.appStore.search.noResults') }}
-          </p>
+          <SkyEmptyState
+            v-if="shownApps.length === 0"
+            compact
+            class="store-search__empty"
+            :title="phone.t('Apps.appStore.search.noResults')"
+            :body="phone.t('Apps.appStore.search.noResultsBody')"
+          >
+            <template #icon>
+              <Search :size="38" :stroke-width="1.8" aria-hidden="true" />
+            </template>
+          </SkyEmptyState>
         </section>
       </section>
     </SkyScrollArea>
@@ -1040,29 +1084,14 @@ watch(
             <img :src="app.iconImage" alt="" draggable="false" />
             <div>
               <strong>{{ getPhoneAppLabel(app, phone.t) }}</strong>
-              <small>{{ categoryDescription(app) }}</small>
+              <small>{{ downloadDateDescription }}</small>
             </div>
             <button
               type="button"
               class="store-account__primary-action"
-              :disabled="appStore.updatingApps[app.id]"
               @click="handleManagedApp(app)"
             >
-              <SkySpinner
-                v-if="appStore.updatingApps[app.id]"
-                class="store-installing"
-              />
-              <template
-                v-else-if="
-                  appStore.updatedAppReleases[app.id] !== currentRelease
-                "
-              >
-                <RefreshCw :size="13" :stroke-width="2.5" aria-hidden="true" />
-                {{ phone.t('Apps.appStore.account.update') }}
-              </template>
-              <template v-else>
-                {{ phone.t('Apps.appStore.open') }}
-              </template>
+              {{ phone.t('Apps.appStore.open') }}
             </button>
             <button
               v-if="isPhoneAppRemovable(app)"
@@ -1147,6 +1176,16 @@ watch(
       var(--sky-safe-area-right)
   );
   transform: translateY(calc(0px - var(--sky-navbar-collapse-offset) - 30px));
+}
+
+.app-store-navbar--search {
+  margin-bottom: -24px;
+}
+
+.app-store-navbar--search :deep(.sky-navbar__subnavbar) {
+  transform: translateY(
+    calc(0px - var(--sky-navbar-collapse-offset) - 24px)
+  );
 }
 
 .app-store-profile {
@@ -1310,9 +1349,10 @@ watch(
   min-height: 70px;
   display: grid;
   place-items: center;
+  border: 1px solid var(--sky-hairline);
   border-radius: var(--sky-radius-card);
   padding: var(--sky-space-3);
-  background: var(--sky-surface-variant);
+  background: var(--sky-surface-muted);
   text-align: center;
 }
 
@@ -1403,8 +1443,8 @@ watch(
 }
 
 .store-account__primary-action {
-  min-width: 66px;
-  min-height: var(--sky-touch-target);
+  min-width: 60px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1412,7 +1452,7 @@ watch(
   flex: 0 0 auto;
   border: 0;
   border-radius: var(--sky-radius-pill);
-  padding: 0 var(--sky-space-3);
+  padding: 0 10px;
   color: var(--sky-app-accent);
   background: var(--sky-surface-muted);
   font-size: 11px;
@@ -1553,11 +1593,42 @@ watch(
   position: absolute;
   width: 180px;
   height: 180px;
+  border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow:
-    0 0 0 28px rgba(255, 255, 255, 0.06),
-    0 0 0 58px rgba(255, 255, 255, 0.035);
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.24), transparent 38%),
+    radial-gradient(circle at 66% 68%, var(--store-highlight-glow), transparent 70%);
+  box-shadow: none;
+  opacity: 0.68;
+  filter: blur(14px) saturate(125%);
+}
+
+.store-highlight__orbit::before,
+.store-highlight__orbit::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.store-highlight__orbit::before {
+  inset: -30px;
+  background: radial-gradient(
+    circle,
+    transparent 20%,
+    rgba(255, 255, 255, 0.12) 45%,
+    transparent 74%
+  );
+  filter: blur(12px);
+}
+
+.store-highlight__orbit::after {
+  inset: -58px;
+  background:
+    radial-gradient(circle at 68% 36%, rgba(255, 255, 255, 0.12), transparent 42%),
+    radial-gradient(circle at 38% 64%, var(--store-highlight-glow), transparent 72%);
+  opacity: 0.56;
+  filter: blur(20px) saturate(130%);
 }
 
 .store-highlight__art img {
@@ -1577,11 +1648,30 @@ watch(
   display: flex;
   align-items: center;
   gap: var(--sky-space-3);
+  border-radius: 0 0 var(--sky-radius-card) var(--sky-radius-card);
   padding: var(--sky-space-3) var(--sky-space-4);
-  background: rgba(0, 0, 0, 0.2);
+  background: linear-gradient(
+    180deg,
+    rgba(5, 8, 16, 0.2),
+    rgba(5, 8, 16, 0.42)
+  );
+}
+
+.store-highlight__footer::before {
+  content: '';
+  height: 28px;
+  position: absolute;
+  z-index: 0;
+  top: -28px;
+  right: 0;
+  left: 0;
+  background: linear-gradient(180deg, transparent, rgba(5, 8, 16, 0.2));
+  pointer-events: none;
 }
 
 .store-highlight__footer > img {
+  position: relative;
+  z-index: 1;
   width: 46px;
   height: 46px;
   flex: 0 0 46px;
@@ -1591,6 +1681,8 @@ watch(
 
 .store-highlight__footer > div {
   min-width: 0;
+  position: relative;
+  z-index: 1;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -1642,60 +1734,23 @@ watch(
 .store-highlight--compact .store-highlight__orbit {
   width: 96px;
   height: 96px;
-  box-shadow: 0 0 0 18px rgba(255, 255, 255, 0.05);
+  filter: blur(10px) saturate(125%);
+}
+
+.store-highlight--compact .store-highlight__orbit::before {
+  inset: -18px;
+  filter: blur(9px);
+}
+
+.store-highlight--compact .store-highlight__orbit::after {
+  inset: -32px;
+  filter: blur(14px) saturate(130%);
 }
 
 .store-highlight--compact .store-highlight__art img {
   width: 72px;
   height: 72px;
   border-radius: calc(var(--sky-radius-control) + var(--sky-space-2));
-}
-
-.store-today__edition {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--sky-space-3);
-  border-bottom: 1px solid var(--sky-hairline);
-  padding-bottom: var(--sky-space-3);
-}
-
-.store-today__edition > div {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.store-today__edition strong {
-  overflow: hidden;
-  color: var(--sky-text);
-  text-overflow: ellipsis;
-  text-transform: capitalize;
-  white-space: nowrap;
-  font-size: 14px;
-}
-
-.store-today__edition > div span {
-  color: var(--sky-muted);
-  font-size: var(--sky-font-caption);
-}
-
-.store-today__edition-badge {
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 5px;
-  border: 1px solid var(--sky-hairline);
-  border-radius: var(--sky-radius-pill);
-  padding: 0 var(--sky-space-2);
-  color: var(--sky-app-accent);
-  background: var(--sky-surface);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .store-today__section-heading {
@@ -1773,19 +1828,6 @@ watch(
 .store-highlight--compact .store-highlight__copy > span {
   max-width: 62%;
   font-size: 12px;
-}
-
-.store-highlight__story-number {
-  min-width: 24px;
-  height: 20px;
-  display: inline-grid;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--sky-radius-pill);
-  color: #fff;
-  background: rgba(0, 0, 0, 0.14);
-  font-size: 9px;
-  letter-spacing: 0;
 }
 
 .store-highlight--reverse {
@@ -1879,15 +1921,6 @@ watch(
   border-bottom: 0;
 }
 
-.store-ranking__position {
-  width: 16px;
-  flex: 0 0 16px;
-  color: var(--sky-muted);
-  text-align: center;
-  font-size: 15px;
-  font-weight: 800;
-}
-
 .store-ranking__detail-link {
   min-width: 0;
   min-height: 72px;
@@ -1938,7 +1971,7 @@ watch(
 
 .store-ranking li > button:not(.store-ranking__detail-link),
 .store-final-pick > button:not(.store-highlight__detail-link) {
-  min-width: 62px;
+  min-width: 68px;
   min-height: var(--sky-touch-target);
   display: grid;
   place-items: center;
@@ -2044,9 +2077,32 @@ watch(
   padding-bottom: var(--sky-space-5);
 }
 
+.store-browse__featured-scroll {
+  min-width: 0;
+  display: grid;
+  grid-auto-columns: calc(100% - var(--sky-space-4));
+  grid-auto-flow: column;
+  gap: var(--sky-space-3);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.store-browse__featured-scroll:active {
+  cursor: grabbing;
+}
+
+.store-browse__featured-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .store-browse-feature {
   position: relative;
-  min-height: 354px;
+  min-height: 246px;
   overflow: hidden;
   border-radius: var(--sky-radius-card);
   color: #fff;
@@ -2058,6 +2114,19 @@ watch(
     ),
     linear-gradient(150deg, var(--store-highlight-background), #0e1421 125%);
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18);
+  opacity: 0.72;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  transform: scale(0.97);
+  transform-origin: center;
+  transition:
+    opacity 260ms ease,
+    transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.store-browse-feature.is-active {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .store-browse-feature__texture {
@@ -2079,8 +2148,8 @@ watch(
 .store-browse-feature__copy {
   position: relative;
   z-index: 2;
-  min-height: 112px;
-  padding: var(--sky-space-5) var(--sky-space-5) 0;
+  min-height: 80px;
+  padding: var(--sky-space-3) var(--sky-space-4) 0;
 }
 
 .store-browse-feature__copy span {
@@ -2098,34 +2167,52 @@ watch(
 
 .store-browse-feature__copy h2 {
   max-width: 94%;
-  margin-top: 6px;
-  font-size: 27px;
+  margin-top: 4px;
+  font-size: 21px;
   line-height: 1.04;
 }
 
 .store-browse-feature__copy p {
-  margin-top: 6px;
+  margin-top: 4px;
   color: rgba(255, 255, 255, 0.68);
   font-size: 12px;
 }
 
 .store-browse-feature__art {
   position: relative;
-  height: 166px;
+  height: 106px;
   display: grid;
   place-items: center;
 }
 
 .store-browse-feature__art > span {
   position: absolute;
-  width: 210px;
-  height: 125px;
+  width: 150px;
+  height: 80px;
+  border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow:
-    0 0 0 22px rgba(255, 255, 255, 0.04),
-    0 18px 40px rgba(0, 0, 0, 0.22);
+  background:
+    radial-gradient(ellipse at 30% 36%, rgba(255, 255, 255, 0.24), transparent 38%),
+    radial-gradient(ellipse at 70% 64%, var(--store-highlight-glow), transparent 74%);
+  box-shadow: none;
+  opacity: 0.72;
+  filter: blur(11px) saturate(125%);
   transform: rotate(-8deg);
+}
+
+.store-browse-feature__art > span::before {
+  content: '';
+  position: absolute;
+  inset: -22px -34px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    transparent 18%,
+    rgba(255, 255, 255, 0.12) 46%,
+    transparent 76%
+  );
+  filter: blur(14px);
+  pointer-events: none;
 }
 
 .store-browse-feature__art > svg {
@@ -2137,37 +2224,64 @@ watch(
 .store-browse-feature__art > img {
   position: relative;
   z-index: 1;
-  width: 118px;
-  height: 118px;
+  width: 76px;
+  height: 76px;
   border-radius: calc(var(--sky-radius-card) - var(--sky-space-1));
   object-fit: cover;
-  filter: drop-shadow(0 16px 18px rgba(0, 0, 0, 0.36));
-  transform: translateX(-28px) rotate(-5deg);
+  filter: drop-shadow(0 12px 15px rgba(0, 0, 0, 0.34));
+  transform: translateX(-24px) rotate(-4deg);
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.store-browse-feature.is-active .store-browse-feature__art > img {
+  transform: translateX(-24px) rotate(-4deg) scale(1.04);
 }
 
 .store-browse-feature footer {
   position: relative;
   z-index: 2;
-  min-height: 76px;
+  min-height: 60px;
   display: flex;
   align-items: center;
   gap: var(--sky-space-3);
-  padding: var(--sky-space-3) var(--sky-space-4);
-  background: rgba(0, 0, 0, 0.25);
+  padding: var(--sky-space-2) var(--sky-space-3);
+  background:
+    linear-gradient(180deg, rgba(5, 8, 16, 0.22), rgba(5, 8, 16, 0.52)),
+    linear-gradient(90deg, rgba(5, 8, 16, 0.42), rgba(5, 8, 16, 0.26));
+  backdrop-filter: blur(10px) saturate(115%);
+}
+
+.store-browse-feature footer::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: -28px;
+  right: 0;
+  left: 0;
+  height: 28px;
+  background: linear-gradient(180deg, transparent, rgba(5, 8, 16, 0.3));
+  backdrop-filter: blur(7px) saturate(110%);
+  pointer-events: none;
+}
+
+.store-browse-feature footer > * {
+  position: relative;
+  z-index: 1;
 }
 
 .store-browse-feature footer > img {
-  width: 46px;
-  height: 46px;
-  flex: 0 0 46px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   border-radius: calc(var(--sky-radius-control) + var(--sky-space-1));
   object-fit: cover;
 }
 
 .store-browse-feature__details {
   min-width: 0;
+  overflow: hidden;
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   flex-direction: column;
   align-items: flex-start;
   border: 0;
@@ -2179,6 +2293,8 @@ watch(
 
 .store-browse-feature footer strong,
 .store-browse-feature footer small {
+  width: 100%;
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2210,29 +2326,12 @@ watch(
   font-weight: 850;
 }
 
-.store-featured-enter-active,
-.store-featured-leave-active {
-  transition:
-    opacity var(--sky-transition-normal) var(--sky-ease-out),
-    transform var(--sky-transition-normal) var(--sky-ease-out);
-}
-
-.store-featured-enter-from {
-  opacity: 0;
-  transform: translateX(16px);
-}
-
-.store-featured-leave-to {
-  opacity: 0;
-  transform: translateX(-16px);
-}
-
 .store-browse__pages {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0;
-  margin: calc(0px - var(--sky-space-4)) 0 calc(0px - var(--sky-space-3));
+  margin: calc(0px - var(--sky-space-3)) 0 calc(0px - var(--sky-space-3));
 }
 
 .store-browse__pages button {
@@ -2311,6 +2410,7 @@ watch(
 .store-list--browse article {
   min-height: 76px;
   padding: var(--sky-space-3) var(--sky-space-4);
+  transition: background-color var(--sky-transition-fast) var(--sky-ease-out);
 }
 
 .store-list--browse article:last-of-type {
@@ -2356,6 +2456,13 @@ watch(
   min-width: 0;
 }
 
+.store-search__empty {
+  min-height: 220px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
 .store-search__heading {
   min-height: var(--sky-touch-target);
   display: flex;
@@ -2391,7 +2498,7 @@ watch(
 }
 
 .store-search__recommendations {
-  overflow: hidden;
+  overflow: visible;
   border-bottom: 1px solid var(--sky-hairline);
 }
 
@@ -2409,15 +2516,16 @@ watch(
 }
 
 .store-search__recommendations article.store-search__recommendation--promoted {
-  margin-bottom: var(--sky-space-2);
-  border: 1px solid rgba(117, 151, 218, 0.22);
-  border-radius: var(--sky-radius-card);
-  padding: var(--sky-space-3);
+  margin: 0 calc(0px - var(--sky-space-2));
+  border: 0;
+  border-radius: var(--sky-radius-control);
+  padding: var(--sky-space-3) var(--sky-space-2);
   background: linear-gradient(
-    115deg,
-    rgba(90, 121, 181, 0.22),
-    var(--sky-surface)
+    90deg,
+    rgba(10, 132, 255, 0.18),
+    rgba(10, 132, 255, 0.04)
   );
+  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.12);
 }
 
 .store-search__recommendations img {
@@ -2570,8 +2678,12 @@ watch(
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .store-featured-enter-active,
-  .store-featured-leave-active,
+  .store-browse__featured-scroll {
+    scroll-behavior: auto;
+  }
+
+  .store-browse-feature,
+  .store-browse-feature__art > img,
   .store-browse__pages button {
     transition: none;
   }
@@ -2621,6 +2733,18 @@ watch(
   color: var(--sky-muted);
 }
 
+.store-list__tagline {
+  max-width: 100%;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--sky-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .store-list article > button:not(.store-list__detail-link) {
   min-width: 68px;
   min-height: var(--sky-touch-target);
@@ -2635,13 +2759,60 @@ watch(
 .store-browse-feature footer > .store-action-button--icon,
 .store-search__recommendations article > .store-action-button--icon,
 .store-list article > .store-action-button--icon {
-  width: var(--sky-touch-target);
-  min-width: var(--sky-touch-target);
+  width: 54px;
+  min-width: 54px;
+  min-height: 30px;
+  height: 30px;
   padding: 0;
   border-color: transparent;
   color: var(--sky-app-accent);
   background: transparent;
   box-shadow: none;
+}
+
+.store-highlight__footer .store-action-button--get,
+.store-ranking li > .store-action-button--get,
+.store-final-pick > .store-action-button--get,
+.store-browse-feature footer > .store-action-button--get,
+.store-search__recommendations article > .store-action-button--get,
+.store-list article > .store-action-button--get {
+  min-width: 54px;
+  min-height: 30px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+
+.store-ranking li > button.store-action-button--get:not(.store-ranking__detail-link),
+.store-browse-feature
+  footer
+  > button.store-action-button--get:not(.store-browse-feature__details),
+.store-search__recommendations
+  article
+  > button.store-action-button--get:not(.store-search__detail-link),
+.store-list article > button.store-action-button--get:not(.store-list__detail-link) {
+  width: 56px;
+  min-width: 56px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+.store-ranking li > button.store-action-button--icon:not(.store-ranking__detail-link),
+.store-browse-feature
+  footer
+  > button.store-action-button--icon:not(.store-browse-feature__details),
+.store-search__recommendations
+  article
+  > button.store-action-button--icon:not(.store-search__detail-link),
+.store-list article > button.store-action-button--icon:not(.store-list__detail-link) {
+  width: 56px;
+  min-width: 56px;
+  min-height: 32px;
+  height: 32px;
 }
 
 .store-installing {
@@ -2659,9 +2830,36 @@ watch(
 
 @media (hover: hover) and (pointer: fine) {
   .app-store-page
-    :deep(button:not(.store-ranking__detail-link):not(:disabled):hover) {
+    :deep(
+      button:not(.store-ranking__detail-link):not(
+          .store-browse-feature__details
+        ):not(.store-list__detail-link):not(.store-search__detail-link):not(
+          :disabled
+        ):hover
+    ) {
     filter: brightness(1.08);
     transform: translateY(-1px);
+  }
+
+  .store-list--browse article:hover {
+    background-color: var(--sky-surface-muted);
+  }
+
+  .store-ranking
+    li
+    > button.store-action-button--get:not(.store-ranking__detail-link):hover,
+  .store-browse-feature
+    footer
+    > button.store-action-button--get:not(.store-browse-feature__details):hover,
+  .store-search__recommendations
+    article
+    > button.store-action-button--get:not(.store-search__detail-link):hover,
+  .store-list
+    article
+    > button.store-action-button--get:not(.store-list__detail-link):hover {
+    background: var(--sky-app-accent-soft);
+    filter: none;
+    transform: none;
   }
 
   .app-store-page :deep(button:not(:disabled):active) {

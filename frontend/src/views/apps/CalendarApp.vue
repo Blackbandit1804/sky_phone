@@ -18,7 +18,7 @@ import {
   UserRound,
   X,
 } from 'lucide-vue-next'
-import { kGlass, kSearchbar, kToggle } from 'konsta/vue'
+import { SkyGlass, SkySearchbar, SkyToggle } from '@/ui'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 
 import { useAccountStore } from '@/stores/account'
@@ -61,9 +61,7 @@ const saving = ref(false)
 const formError = ref('')
 const datePickerOpen = ref(false)
 const pickerDate = ref(selectedDate.value)
-const pickerMonth = ref(
-  new Date(today.getFullYear(), today.getMonth(), 1),
-)
+const pickerMonth = ref(new Date(today.getFullYear(), today.getMonth(), 1))
 const timePickerField = ref<TimeField | null>(null)
 const pickerHour = ref('09')
 const pickerMinute = ref('00')
@@ -88,9 +86,6 @@ const hourOptions = Array.from({ length: 24 }, (_, index) =>
 const minuteOptions = Array.from({ length: 12 }, (_, index) =>
   String(index * 5).padStart(2, '0'),
 )
-const calendarToggleColors = {
-  checkedBgIos: 'bg-[#ff3b30]',
-}
 const viewModes: Array<{
   icon: typeof LayoutGrid
   id: CalendarViewMode
@@ -359,7 +354,9 @@ async function toggleSearch(): Promise<void> {
 }
 
 function isAllDayEvent(event: CalendarEvent): boolean {
-  return timeValue(event.startsAt) === '00:00' && timeValue(event.endsAt) === '23:59'
+  return (
+    timeValue(event.startsAt) === '00:00' && timeValue(event.endsAt) === '23:59'
+  )
 }
 
 function eventTimeLabel(event: CalendarEvent): string {
@@ -550,15 +547,19 @@ onMounted(async () => {
         :class="{ 'calendar__toolbar--year': yearOverviewOpen }"
       >
         <Transition name="calendar-search" mode="out-in">
-          <div v-if="searchOpen" ref="searchToolbar" class="calendar__search-toolbar">
-            <k-searchbar
+          <div
+            v-if="searchOpen"
+            ref="searchToolbar"
+            class="calendar__search-toolbar"
+          >
+            <sky-searchbar
               class="calendar__searchbar"
               :placeholder="phone.t('Apps.calendar.searchPlaceholder')"
               :value="searchQuery"
               @clear="searchQuery = ''"
               @input="updateSearch"
             />
-            <k-glass
+            <sky-glass
               component="button"
               type="button"
               class="calendar__control calendar__control--close"
@@ -566,22 +567,22 @@ onMounted(async () => {
               @click="toggleSearch"
             >
               <X :size="20" />
-            </k-glass>
+            </sky-glass>
           </div>
           <div v-else class="calendar__toolbar-default">
-          <k-glass
-            v-if="!yearOverviewOpen"
-            component="button"
-            type="button"
-            class="calendar__control calendar__control--year"
-            :aria-label="String(visibleYear)"
-            @click="openYearOverview"
-          >
-            <ChevronLeft :size="20" />
-            <span>{{ visibleYear }}</span>
-          </k-glass>
+            <sky-glass
+              v-if="!yearOverviewOpen"
+              component="button"
+              type="button"
+              class="calendar__control calendar__control--year"
+              :aria-label="String(visibleYear)"
+              @click="openYearOverview"
+            >
+              <ChevronLeft :size="20" />
+              <span>{{ visibleYear }}</span>
+            </sky-glass>
             <div class="calendar__toolbar-actions">
-              <k-glass
+              <sky-glass
                 v-if="!yearOverviewOpen"
                 component="button"
                 class="calendar__control"
@@ -593,8 +594,8 @@ onMounted(async () => {
                   :is="viewModes.find((mode) => mode.id === viewMode)?.icon"
                   :size="19"
                 />
-              </k-glass>
-              <k-glass
+              </sky-glass>
+              <sky-glass
                 component="button"
                 class="calendar__control"
                 :aria-label="phone.t('Common.search')"
@@ -602,8 +603,8 @@ onMounted(async () => {
                 @click="toggleSearch"
               >
                 <Search :size="19" />
-              </k-glass>
-              <k-glass
+              </sky-glass>
+              <sky-glass
                 v-if="isAuthenticated"
                 component="button"
                 class="calendar__control"
@@ -612,7 +613,7 @@ onMounted(async () => {
                 @click="openCreate"
               >
                 <Plus :size="21" />
-              </k-glass>
+              </sky-glass>
             </div>
 
             <Transition name="calendar-popover">
@@ -734,9 +735,7 @@ onMounted(async () => {
                 >
                   <span class="calendar__day-number">{{ day.getDate() }}</span>
                   <span
-                    v-if="
-                      viewMode === 'compact' && eventsForDay(day).length
-                    "
+                    v-if="viewMode === 'compact' && eventsForDay(day).length"
                     class="calendar__compact-indicator"
                   />
                   <span
@@ -746,7 +745,10 @@ onMounted(async () => {
                     class="calendar__event-bars"
                   >
                     <i
-                      v-for="(event, eventIndex) in eventsForDay(day).slice(0, 3)"
+                      v-for="(event, eventIndex) in eventsForDay(day).slice(
+                        0,
+                        3,
+                      )"
                       :key="event.id"
                       :class="`calendar__event-dot--${eventIndex % 3}`"
                     />
@@ -820,14 +822,14 @@ onMounted(async () => {
       </div>
 
       <footer v-if="isAuthenticated" class="calendar__footer">
-        <k-glass
+        <sky-glass
           component="button"
           type="button"
           class="calendar__control calendar__control--today"
           @click="goToday"
         >
           {{ phone.t('Apps.calendar.today') }}
-        </k-glass>
+        </sky-glass>
       </footer>
     </template>
 
@@ -874,7 +876,11 @@ onMounted(async () => {
             <p>{{ selectedEvent.note }}</p>
           </div>
         </section>
-        <button class="calendar__delete calendar__share" type="button" @click="shareEvent">
+        <button
+          class="calendar__delete calendar__share"
+          type="button"
+          @click="shareEvent"
+        >
           <Share2 :size="18" />
           {{ phone.t('Apps.easyShare.share') }}
         </button>
@@ -887,14 +893,14 @@ onMounted(async () => {
 
     <section v-else class="calendar__form">
       <header class="calendar__sheet-header">
-        <k-glass
+        <sky-glass
           component="button"
           type="button"
           class="calendar__control calendar__sheet-action"
           @click="closeForm"
         >
           {{ phone.t('Common.cancel') }}
-        </k-glass>
+        </sky-glass>
         <strong>
           {{
             editingEvent
@@ -902,7 +908,7 @@ onMounted(async () => {
               : phone.t('Apps.calendar.newEvent')
           }}
         </strong>
-        <k-glass
+        <sky-glass
           component="button"
           type="button"
           class="calendar__control calendar__sheet-action"
@@ -910,7 +916,7 @@ onMounted(async () => {
           @click="saveEvent"
         >
           {{ editingEvent ? phone.t('Common.save') : phone.t('Common.add') }}
-        </k-glass>
+        </sky-glass>
       </header>
       <form class="calendar__sheet-scroll" @submit.prevent="saveEvent">
         <section class="calendar__group calendar__group--fields">
@@ -938,9 +944,9 @@ onMounted(async () => {
           </button>
           <div class="calendar__all-day-row">
             <span>{{ phone.t('Apps.calendar.allDay') }}</span>
-            <k-toggle
+            <sky-toggle
               :checked="draft.allDay"
-              :colors="calendarToggleColors"
+              style="--sky-app-accent: #ff3b30"
               :aria-label="phone.t('Apps.calendar.allDay')"
               @change="toggleAllDay"
             />
@@ -1025,23 +1031,23 @@ onMounted(async () => {
           </header>
 
           <div class="calendar__date-picker-month">
-            <k-glass
+            <sky-glass
               component="button"
               type="button"
               :aria-label="phone.t('Apps.calendar.previousMonth')"
               @click="movePickerMonth(-1)"
             >
               <ChevronLeft :size="20" />
-            </k-glass>
+            </sky-glass>
             <strong>{{ pickerMonthLabel }}</strong>
-            <k-glass
+            <sky-glass
               component="button"
               type="button"
               :aria-label="phone.t('Apps.calendar.nextMonth')"
               @click="movePickerMonth(1)"
             >
               <ChevronRight :size="20" />
-            </k-glass>
+            </sky-glass>
           </div>
 
           <div class="calendar__date-picker-weekdays" aria-hidden="true">

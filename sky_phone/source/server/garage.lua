@@ -119,6 +119,30 @@ local function vehicle_properties(row)
     return properties
 end
 
+local function vehicle_image_url(model)
+    local image_config = Config.Garage.VehicleImages or {}
+    if image_config.Enabled ~= true then
+        return nil
+    end
+
+    local configured_names = image_config.ModelNames or {}
+    local model_name = configured_names[model] or configured_names[tostring(model or "")]
+    if not model_name and type(model) == "string" and not tonumber(model) then
+        model_name = model
+    end
+
+    model_name = string.lower(tostring(model_name or ""))
+    if model_name == "" or not model_name:match("^[%w_-]+$") then
+        return nil
+    end
+
+    local template = tostring(image_config.UrlTemplate or "")
+    if template == "" or not template:find("{model}", 1, true) then
+        return nil
+    end
+    return (template:gsub("{model}", model_name))
+end
+
 local function vehicle_dto(row, garage_system)
     local mods = vehicle_properties(row)
     local vehicle_value = row.vehicle
@@ -142,6 +166,7 @@ local function vehicle_dto(row, garage_system)
         vin = tostring(row.vin or ""),
         nickname = tostring(row.nickname or ""),
         model = model,
+        imageUrl = vehicle_image_url(model),
         kind = vehicle_kind(first_value(row.garage_type, row.type, mods.type)),
         status = vehicle_status(row, location, garage_system),
         location = tostring(location or ""),

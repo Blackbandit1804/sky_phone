@@ -47,6 +47,12 @@ export const useFlareStore = defineStore('flare', {
       }
       return response.success
     },
+    async deleteProfile(): Promise<boolean> {
+      const response = await nuiCall('flare:delete-profile')
+      this.error = response.success ? '' : (response.error ?? 'default')
+      if (response.success) this.reset()
+      return response.success
+    },
     async saveProfile(draft: FlareProfileDraft): Promise<boolean> {
       const response = await nuiCall<FlareBootstrap>(
         'flare:save-profile',
@@ -131,6 +137,17 @@ export const useFlareStore = defineStore('flare', {
         if (this.activeMatchId === matchId) this.activeMatchId = ''
       }
       return response.success
+    },
+    reset(error = ''): void {
+      this.activeMatchId = ''
+      this.error = error
+      this.loading = false
+      this.likes = []
+      this.matches = []
+      this.messages = []
+      this.profile = null
+      this.sending = false
+      this.suggestions = []
     },
     applyBootstrap(data: FlareBootstrap): void {
       this.profile = data.profile

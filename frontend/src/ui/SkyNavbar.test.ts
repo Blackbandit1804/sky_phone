@@ -60,6 +60,28 @@ describe('SkyNavbar', () => {
     expect(html).toContain('Settings')
   })
 
+  it('keeps migrated boolean sizing and inner hooks compatible', async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(
+            SkyNavbar,
+            {
+              component: 'nav',
+              innerClass: 'custom-inner',
+              large: true,
+              title: 'Clock',
+            },
+            { right: () => h('button', 'Edit') },
+          ),
+      }),
+    )
+
+    expect(html).toMatch(/^<nav/)
+    expect(html).toContain('sky-navbar--large')
+    expect(html).toContain('sky-navbar__inner custom-inner')
+  })
+
   it('renders the extended navigation row only when it has controls', async () => {
     const html = await renderToString(
       createSSRApp({
@@ -245,6 +267,9 @@ describe('SkyNavbar', () => {
     )
     expect(controlsStyles).toMatch(
       /\.sky-navbar-back-link:active:not\(:disabled\)\s*\{[^}]*opacity:\s*0\.5;[^}]*transition-duration:\s*0ms;/s,
+    )
+    expect(controlsStyles).toMatch(
+      /\.sky-navbar-back-link__chevron\s*\{[^}]*width:\s*12px;[^}]*height:\s*12px;[^}]*display:\s*block;/s,
     )
     expect(controlsStyles).not.toMatch(
       /\.sky-navbar-back-link:active:not\(:disabled\)\s*\{[^}]*--sky-app-accent-soft/s,

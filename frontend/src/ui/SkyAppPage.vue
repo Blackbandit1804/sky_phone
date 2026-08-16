@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, type CSSProperties } from 'vue'
+import { computed, useAttrs, type CSSProperties } from 'vue'
 
 import { provideSkyPageScroll } from './page-scroll-context'
 import { useSkyTheme } from './theme'
@@ -12,16 +12,18 @@ const props = withDefaults(
     accentSoft?: string
     component?: string
     dark?: boolean
-    label: string
+    label?: string
   }>(),
   {
     accent: '',
     accentSoft: '',
     component: 'main',
     dark: undefined,
+    label: '',
   },
 )
 
+const attrs = useAttrs()
 const theme = useSkyTheme()
 const pageScroll = provideSkyPageScroll()
 const isDark = computed(() => props.dark ?? theme?.dark.value ?? false)
@@ -31,6 +33,11 @@ const effectiveAccent = computed(
 const effectiveAccentSoft = computed(
   () => props.accentSoft || theme?.accentSoft.value || '',
 )
+const accessibleLabel = computed(() => {
+  if (props.label) return props.label
+  const attribute = attrs['aria-label']
+  return typeof attribute === 'string' && attribute ? attribute : undefined
+})
 
 const accentStyle = computed(() =>
   effectiveAccent.value || effectiveAccentSoft.value
@@ -60,7 +67,7 @@ const pageStyle = computed<CSSProperties>(
     class="sky-app-page"
     :class="{ 'sky-app-page--dark': isDark }"
     :style="pageStyle"
-    :aria-label="label"
+    :aria-label="accessibleLabel"
   >
     <div class="sky-app-page__backdrop" aria-hidden="true"></div>
     <slot />

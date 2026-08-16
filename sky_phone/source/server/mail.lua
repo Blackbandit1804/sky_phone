@@ -67,6 +67,60 @@ local function validate_text(value, maximum)
     return length and length <= maximum
 end
 
+local function normalize_mailbox_name(value)
+    local name = trim(value)
+    local length = text_length(name)
+    if not length or length < 1 or length > Config.Mail.MailboxNameMaxLength or name:find("%c") then
+        return nil
+    end
+
+    return name
+end
+
+local function normalize_numeric_id(value)
+    local id = tonumber(value)
+    if not id or id ~= id or id < 1 or id > MAX_SAFE_INTEGER or id ~= math.floor(id) then
+        return nil
+    end
+
+    return id
+end
+
+local function mailbox_id_from_folder(folder)
+    if type(folder) ~= "string" then
+        return nil
+    end
+
+    local value = folder:match("^mailbox:(%d+)$")
+    return value and normalize_numeric_id(value) or nil
+end
+
+local function normalize_list_filters(value)
+    if value == nil then
+        return {
+            address = "all",
+            direction = "all",
+            read = "all",
+            today = false,
+        }
+    end
+    if type(value) ~= "table"
+        or (value.address ~= "all" and value.address ~= "from-me" and value.address ~= "to-me")
+        or (value.direction ~= "all" and value.direction ~= "inbox" and value.direction ~= "sent")
+        or (value.read ~= "all" and value.read ~= "read" and value.read ~= "unread")
+        or type(value.today) ~= "boolean"
+    then
+        return nil
+    end
+
+    return {
+        address = value.address,
+        direction = value.direction,
+        read = value.read,
+        today = value.today,
+    }
+end
+
 local function normalize_recipients(values, strict)
     if type(values) ~= "table" or #values > Config.Mail.MaxRecipients then
         return nil
@@ -192,9 +246,9 @@ end
 local function get_counts(account_id)
     local rows = Bridge.Database.Query([[
         SELECT
-            SUM(CASE WHEN `folder` = 'inbox' AND `trashed_at` IS NULL AND `read_at` IS NULL THEN 1 ELSE 0 END) AS unread,
-            SUM(CASE WHEN `folder` = 'inbox' AND `trashed_at` IS NULL THEN 1 ELSE 0 END) AS inbox,
-            SUM(CASE WHEN `folder` = 'sent' AND `trashed_at` IS NULL THEN 1 ELSE 0 END) AS sent,
+            SUM(CASE WHEN `folder` = 'inbox' AND `mailbox_id` IS NULL AND `trashed_at` IS NULL AND `read_at` IS NULL THEN 1 ELSE 0 END) AS unread,
+            SUM(CASE WHEN `folder` = 'inbox' AND `mailbox_id` IS NULL AND `trashed_at` IS NULL THEN 1 ELSE 0 END) AS inbox,
+            SUM(CASE WHEN `folder` = 'sent' AND `mailbox_id` IS NULL AND `trashed_at` IS NULL THEN 1 ELSE 0 END) AS sent,
             SUM(CASE WHEN `trashed_at` IS NOT NULL THEN 1 ELSE 0 END) AS trash
         FROM `sky_phone_mail_entries`
         WHERE `account_id` = ?
@@ -214,6 +268,38 @@ local function get_counts(account_id)
     }
 end
 
+local function get_mailboxes(account_id)
+    local rows = Bridge.Database.Query([[
+        SELECT mailbox.`id`, mailbox.`name`, mailbox.`sort_order`, COUNT(entry.`id`) AS `count`
+        FROM `sky_phone_mailboxes` mailbox
+        LEFT JOIN `sky_phone_mail_entries` entry
+            ON entry.`mailbox_id` = mailbox.`id`
+            AND entry.`account_id` = mailbox.`account_id`
+            AND entry.`trashed_at` IS NULL
+        WHERE mailbox.`account_id` = ?
+        GROUP BY mailbox.`id`, mailbox.`name`, mailbox.`sort_order`
+        ORDER BY mailbox.`sort_order` ASC, mailbox.`id` ASC
+    ]], { account_id })
+
+    for index = 1, #rows do
+        rows[index].id = tonumber(rows[index].id)
+        rows[index].sort_order = tonumber(rows[index].sort_order) or 0
+        rows[index].count = tonumber(rows[index].count) or 0
+    end
+
+    return rows
+end
+
+local function find_owned_mailbox(account_id, mailbox_id)
+    local rows = Bridge.Database.Query([[
+        SELECT `id`, `name`, `sort_order`
+        FROM `sky_phone_mailboxes`
+        WHERE `id` = ? AND `account_id` = ?
+        LIMIT 1
+    ]], { mailbox_id, account_id })
+    return rows[1]
+end
+
 local function broadcast_mailbox_changed(account_id, counts)
     notify_account(account_id, "sky_phone:mail:changed", {
         counts = counts or get_counts(account_id),
@@ -229,6 +315,111 @@ Bridge.Callbacks.Register("sky_phone:mail:counts", function(source)
     return { success = true, data = get_counts(session.id) }
 end)
 
+Bridge.Callbacks.Register("sky_phone:mail:mailboxes", function(source)
+    local session, error_response = require_session(source)
+    if not session then
+        return error_response
+    end
+
+    return { success = true, data = { mailboxes = get_mailboxes(session.id) } }
+end)
+
+Bridge.Callbacks.Register("sky_phone:mail:create-mailbox", function(source, data)
+    local session, error_response = require_session(source)
+    if not session then
+        return error_response
+    end
+    if not SkyPhone.AllowOperation(source, "mail_manage_mailboxes", Config.Mail.MailboxRequestsPerMinute, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+
+    data = validate_payload(source, "create-mailbox", data)
+    if not data then
+        return { success = false, error = "invalid_request" }
+    end
+
+    local name = normalize_mailbox_name(data.name)
+    if not name then
+        return { success = false, error = "invalid_mailbox" }
+    end
+
+    local rows = Bridge.Database.Query([[
+        SELECT COUNT(*) AS `count`,
+            SUM(CASE WHEN LOWER(`name`) = LOWER(?) THEN 1 ELSE 0 END) AS `duplicate_count`,
+            COALESCE(MAX(`sort_order`), -1) AS `maximum_sort_order`
+        FROM `sky_phone_mailboxes`
+        WHERE `account_id` = ?
+    ]], { name, session.id })
+    local summary = rows[1] or {}
+    if (tonumber(summary.duplicate_count) or 0) > 0 then
+        return { success = false, error = "mailbox_exists" }
+    end
+    if (tonumber(summary.count) or 0) >= Config.Mail.MaxMailboxes then
+        return { success = false, error = "mailbox_limit" }
+    end
+
+    local sort_order = math.min(65535, (tonumber(summary.maximum_sort_order) or -1) + 1)
+    Bridge.Database.Query([[
+        INSERT INTO `sky_phone_mailboxes` (`account_id`, `name`, `sort_order`)
+        VALUES (?, ?, ?)
+    ]], { session.id, name, sort_order })
+
+    local created = Bridge.Database.Query([[
+        SELECT `id`, `name`, `sort_order`, 0 AS `count`
+        FROM `sky_phone_mailboxes`
+        WHERE `account_id` = ? AND LOWER(`name`) = LOWER(?)
+        LIMIT 1
+    ]], { session.id, name })
+    if not created[1] then
+        error("[sky_phone] Created mail mailbox could not be loaded.")
+    end
+
+    created[1].id = tonumber(created[1].id)
+    created[1].sort_order = tonumber(created[1].sort_order) or 0
+    created[1].count = 0
+    broadcast_mailbox_changed(session.id)
+    return { success = true, data = created[1] }
+end)
+
+Bridge.Callbacks.Register("sky_phone:mail:delete-mailbox", function(source, data)
+    local session, error_response = require_session(source)
+    if not session then
+        return error_response
+    end
+    if not SkyPhone.AllowOperation(source, "mail_manage_mailboxes", Config.Mail.MailboxRequestsPerMinute, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+
+    data = validate_payload(source, "delete-mailbox", data)
+    if not data then
+        return { success = false, error = "invalid_request" }
+    end
+
+    local mailbox_id = normalize_numeric_id(data.id)
+    if not mailbox_id or not find_owned_mailbox(session.id, mailbox_id) then
+        return { success = false, error = "mailbox_not_found" }
+    end
+
+    if not Bridge.Database.Transaction({
+        {
+            query = [[
+                UPDATE `sky_phone_mail_entries` SET `mailbox_id` = NULL
+                WHERE `account_id` = ? AND `mailbox_id` = ?
+            ]],
+            params = { session.id, mailbox_id },
+        },
+        {
+            query = "DELETE FROM `sky_phone_mailboxes` WHERE `id` = ? AND `account_id` = ?",
+            params = { mailbox_id, session.id },
+        },
+    }) then
+        return { success = false, error = "request_failed" }
+    end
+
+    broadcast_mailbox_changed(session.id)
+    return { success = true }
+end)
+
 Bridge.Callbacks.Register("sky_phone:mail:list", function(source, data)
     local session, error_response = require_session(source)
     if not session then
@@ -241,8 +432,14 @@ Bridge.Callbacks.Register("sky_phone:mail:list", function(source, data)
     end
 
     local folder = data.folder
-    if folder ~= "inbox" and folder ~= "sent" and folder ~= "drafts" and folder ~= "trash" then
+    local custom_mailbox_id = mailbox_id_from_folder(folder)
+    if folder ~= "inbox" and folder ~= "sent" and folder ~= "drafts" and folder ~= "trash"
+        and not custom_mailbox_id
+    then
         return { success = false, error = "invalid_folder" }
+    end
+    if custom_mailbox_id and not find_owned_mailbox(session.id, custom_mailbox_id) then
+        return { success = false, error = "mailbox_not_found" }
     end
 
     local search = trim(data.search) or ""
@@ -251,9 +448,16 @@ Bridge.Callbacks.Register("sky_phone:mail:list", function(source, data)
     end
     local offset = math.max(0, math.min(100000, math.floor(tonumber(data.offset) or 0)))
     local limit = Config.Mail.PageSize + 1
+    local filters = normalize_list_filters(data.filters)
+    if not filters then
+        return { success = false, error = "invalid_filter" }
+    end
     local rows
 
     if folder == "drafts" then
+        if filters.address ~= "all" or filters.direction ~= "all" or filters.read ~= "all" or filters.today then
+            return { success = false, error = "invalid_filter" }
+        end
         local pattern = "%" .. search .. "%"
         rows = Bridge.Database.Query([[
             SELECT `id`, `recipients`, `subject`, LEFT(`body`, 180) AS `preview`, `updated_at` AS `created_at`
@@ -265,11 +469,33 @@ Bridge.Callbacks.Register("sky_phone:mail:list", function(source, data)
     else
         local conditions
         local values = { session.id }
-        if folder == "trash" then
+        if custom_mailbox_id then
+            conditions = "e.`mailbox_id` = ? AND e.`trashed_at` IS NULL"
+            values[#values + 1] = custom_mailbox_id
+        elseif folder == "trash" then
             conditions = "e.`trashed_at` IS NOT NULL"
         else
-            conditions = "e.`folder` = ? AND e.`trashed_at` IS NULL"
+            conditions = "e.`folder` = ? AND e.`mailbox_id` IS NULL AND e.`trashed_at` IS NULL"
             values[#values + 1] = folder
+        end
+
+        if filters.read == "unread" then
+            conditions = conditions .. " AND e.`folder` = 'inbox' AND e.`read_at` IS NULL"
+        elseif filters.read == "read" then
+            conditions = conditions .. " AND (e.`folder` = 'sent' OR e.`read_at` IS NOT NULL)"
+        end
+        if filters.direction ~= "all" then
+            conditions = conditions .. " AND e.`folder` = ?"
+            values[#values + 1] = filters.direction
+        end
+        if filters.address == "to-me" then
+            conditions = conditions .. " AND m.`recipients` LIKE ?"
+            values[#values + 1] = "%\"" .. session.email .. "\"%"
+        elseif filters.address == "from-me" then
+            conditions = conditions .. " AND m.`sender_account_id` = e.`account_id`"
+        end
+        if filters.today then
+            conditions = conditions .. " AND m.`created_at` >= CURRENT_DATE() AND m.`created_at` < CURRENT_DATE() + INTERVAL 1 DAY"
         end
 
         local pattern = "%" .. search .. "%"
@@ -566,6 +792,57 @@ Bridge.Callbacks.Register("sky_phone:mail:set-read", function(source, data)
     return { success = true }
 end)
 
+Bridge.Callbacks.Register("sky_phone:mail:move", function(source, data)
+    local session, error_response = require_session(source)
+    if not session then
+        return error_response
+    end
+    if not SkyPhone.AllowOperation(source, "mail_move", Config.Mail.MailboxRequestsPerMinute * 3, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+
+    data = validate_payload(source, "move", data)
+    if not data then
+        return { success = false, error = "invalid_request" }
+    end
+
+    local entry_id = normalize_numeric_id(data.id)
+    local mailbox_id
+    if data.mailboxId ~= 0 then
+        mailbox_id = normalize_numeric_id(data.mailboxId)
+    end
+    if not entry_id then
+        return { success = false, error = "message_not_found" }
+    end
+    if data.mailboxId ~= 0 and (not mailbox_id or not find_owned_mailbox(session.id, mailbox_id)) then
+        return { success = false, error = "mailbox_not_found" }
+    end
+
+    local entries = Bridge.Database.Query([[
+        SELECT `id`
+        FROM `sky_phone_mail_entries`
+        WHERE `id` = ? AND `account_id` = ? AND `trashed_at` IS NULL
+        LIMIT 1
+    ]], { entry_id, session.id })
+    if not entries[1] then
+        return { success = false, error = "message_not_found" }
+    end
+
+    if mailbox_id then
+        Bridge.Database.Query([[
+            UPDATE `sky_phone_mail_entries` SET `mailbox_id` = ?
+            WHERE `id` = ? AND `account_id` = ? AND `trashed_at` IS NULL
+        ]], { mailbox_id, entry_id, session.id })
+    else
+        Bridge.Database.Query([[
+            UPDATE `sky_phone_mail_entries` SET `mailbox_id` = NULL
+            WHERE `id` = ? AND `account_id` = ? AND `trashed_at` IS NULL
+        ]], { entry_id, session.id })
+    end
+    broadcast_mailbox_changed(session.id)
+    return { success = true }
+end)
+
 Bridge.Callbacks.Register("sky_phone:mail:trash", function(source, data)
     local session, error_response = require_session(source)
     if not session then
@@ -658,8 +935,12 @@ Bridge.Callbacks.Register("sky_phone:mail:delete-many", function(source, data)
     end
 
     local folder = data.folder
-    if type(folder) ~= "string" or not DELETE_FOLDERS[folder] then
+    local custom_mailbox_id = mailbox_id_from_folder(folder)
+    if type(folder) ~= "string" or (not DELETE_FOLDERS[folder] and not custom_mailbox_id) then
         return { success = false, error = "invalid_folder" }
+    end
+    if custom_mailbox_id and not find_owned_mailbox(session.id, custom_mailbox_id) then
+        return { success = false, error = "mailbox_not_found" }
     end
 
     local ids = normalize_delete_ids(folder, data.ids)
@@ -680,7 +961,16 @@ Bridge.Callbacks.Register("sky_phone:mail:delete-many", function(source, data)
         append_values(parameters, ids)
         Bridge.Database.Query(([[
             UPDATE `sky_phone_mail_entries` SET `trashed_at` = CURRENT_TIMESTAMP
-            WHERE `account_id` = ? AND `folder` = ? AND `trashed_at` IS NULL
+            WHERE `account_id` = ? AND `folder` = ? AND `mailbox_id` IS NULL
+                AND `trashed_at` IS NULL
+                AND `id` IN (%s)
+        ]]):format(placeholders), parameters)
+    elseif custom_mailbox_id then
+        local parameters = { session.id, custom_mailbox_id }
+        append_values(parameters, ids)
+        Bridge.Database.Query(([[
+            UPDATE `sky_phone_mail_entries` SET `trashed_at` = CURRENT_TIMESTAMP
+            WHERE `account_id` = ? AND `mailbox_id` = ? AND `trashed_at` IS NULL
                 AND `id` IN (%s)
         ]]):format(placeholders), parameters)
     else

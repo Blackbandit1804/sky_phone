@@ -38,7 +38,16 @@ describe('Camera app controls', () => {
   it('keeps continuous wheel zoom without an extra slider bar', () => {
     expect(cameraView).not.toContain('camera-zoom-slider')
     expect(cameraView).not.toContain('type="range"')
-    expect(cameraView).toContain('event.deltaY * 0.0025')
+    expect(cameraView).toContain('@wheel.prevent.stop="zoomWithWheel"')
+    expect(cameraView).toContain('Math.min(120, event.deltaY * deltaMultiplier)')
+    expect(cameraView).toContain('wheelDelta * 0.00075')
+    expect(cameraView).toContain("message.type === 'camera:zoom'")
+    expect(cameraClient).toContain('mouse_wheel_zoom_step = 0.08')
+    expect(cameraClient).toContain('INPUT_CURSOR_SCROLL_UP')
+    expect(cameraClient).toContain('INPUT_CURSOR_SCROLL_DOWN')
+    expect(cameraClient).toContain('IsDisabledControlJustPressed(0, 241)')
+    expect(cameraClient).toContain('IsDisabledControlJustPressed(0, 242)')
+    expect(cameraClient).toContain('type = "camera:zoom"')
     expect(mediaCapture).toContain('nextZoom < 0.5 || nextZoom > 3')
     expect(mediaCapture).not.toContain('[0.5, 1, 2, 3].includes(nextZoom)')
   })
@@ -62,11 +71,42 @@ describe('Camera app controls', () => {
     expect(cameraClient).toContain(
       'SetFollowPedCamViewMode(first_person_view_mode)',
     )
-    expect(cameraClient).toContain(
-      'SetFollowVehicleCamViewMode(first_person_view_mode)',
-    )
+    expect(cameraClient).toContain('SetFollowVehicleCamViewMode(view_mode)')
+    expect(cameraClient).toContain('SetFollowPedCamViewMode(view_mode)')
+    expect(cameraClient).toMatch(/while camera_state\.active do[\s\S]*apply_camera_view\(\)/)
+    expect(cameraClient).not.toContain('next_view_apply')
     expect(cameraClient).not.toContain('ultrawide_camera_handle')
     expect(cameraClient).not.toContain('ensure_ultrawide_camera')
+  })
+
+  it('keeps the selfie camera stable while Space still allows movement', () => {
+    expect(cameraView).toMatch(
+      /event\.code !== 'Space'[\s\S]*cameraLocked\.value/,
+    )
+    expect(cameraClient).toContain(
+      'if camera_state.locked or camera_state.front_camera then',
+    )
+    expect(cameraClient).toContain('get_front_camera_transform')
+    expect(cameraClient).toContain('local front_camera_view_mode = 0')
+    expect(cameraClient).toContain('local front_camera_fov = 32.0')
+    expect(cameraClient).toContain('local front_camera_distance = 1.05')
+    expect(cameraClient).toContain('local head_position = GetPedBoneCoords')
+    expect(cameraClient).toContain('local dot = (to_camera.x * forward_vector.x)')
+    expect(cameraClient).toContain('front_camera_target_height')
+    expect(cameraClient).toContain(
+      'return { block_game = false, block_look = false, cursor = false, focused = true, game_input = true, keep_input = true }',
+    )
+    expect(cameraClient).toContain('SetCamCoord(')
+    expect(cameraClient).toContain('PointCamAtCoord(')
+    expect(cameraClient).not.toContain('SetCamRot(')
+    expect(cameraClient).not.toContain('SetEntityHeading(')
+    expect(cameraClient).not.toContain('front_camera_position')
+    expect(cameraClient).not.toContain('AttachCamToEntity(')
+    expect(cameraClient).not.toContain('PointCamAtEntity(')
+    expect(cameraView).toContain("window.addEventListener('keyup', onKeyup)")
+    expect(cameraView).toContain(
+      "nuiCall('camera:setFocus', { focused: true })",
+    )
   })
 
   it('uses a looping camera-hold pose instead of the old selfie dance', () => {

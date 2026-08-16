@@ -20,6 +20,11 @@ export type WeazelNewsCategorySummary = {
   id: WeazelNewsCategoryId
 }
 
+export type WeazelNewsArticleImage = {
+  mediaId: number
+  url: string
+}
+
 export type WeazelNewsArticle = {
   authorName: string
   body: string
@@ -29,6 +34,7 @@ export type WeazelNewsArticle = {
   id: string
   imageMediaId?: number | null
   imageUrl?: string | null
+  images: WeazelNewsArticleImage[]
   publishedAt?: number | null
   revision: number
   status: WeazelNewsArticleStatus
@@ -41,7 +47,7 @@ export type WeazelNewsArticleSummary = Omit<WeazelNewsArticle, 'body'>
 export type WeazelNewsArticleDraft = {
   body: string
   category: WeazelNewsCategoryId
-  imageMediaId: number | null
+  imageMediaIds: number[]
   status: WeazelNewsArticleStatus
   title: string
 }
@@ -51,6 +57,7 @@ export type WeazelNewsContext = {
   categories: WeazelNewsCategorySummary[]
   jobGradeLabel?: string
   jobLabel?: string
+  maximumImages: number
 }
 
 export type WeazelNewsListResponse = {

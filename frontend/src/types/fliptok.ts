@@ -29,6 +29,12 @@ export type FlipTokVideo = {
   is_saved: boolean
   like_count: number
   location: string
+  media?: Array<{
+    id: number
+    mediaType: 'photo' | 'video'
+    url: string
+  }>
+  media_type?: 'photo' | 'video'
   cover_time_ms: number
   music_artist: string
   music_source: '' | 'audio' | 'youtube'
@@ -52,20 +58,6 @@ export type FlipTokMusicTrack = {
   id: string
   title: string
   url: string
-}
-
-export type FlipTokReport = {
-  caption: string
-  created_at: number
-  creator_display_name: string
-  creator_handle: string
-  details: string
-  id: string
-  reason: 'spam' | 'harassment' | 'dangerous' | 'illegal' | 'other'
-  reporter_display_name: string
-  reporter_handle: string
-  url: string
-  video_id: string
 }
 
 export type FlipTokProfilePage = {

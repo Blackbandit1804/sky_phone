@@ -81,13 +81,17 @@ describe('flare store', () => {
     })
   })
 
-  it('sends only Gallery media ids when profile photos are saved', async () => {
+  it('creates a profile with ordered media selected during onboarding', async () => {
     const updated = {
       ...bootstrap,
       profile: {
         ...bootstrap.profile!,
-        photoMediaIds: [42],
-        photoUrls: ['https://cdn.example.test/profile.jpg'],
+        photoMediaIds: [42, 17, 91],
+        photoUrls: [
+          'https://cdn.example.test/profile-primary.jpg',
+          'https://cdn.example.test/profile-secondary.jpg',
+          'https://cdn.example.test/profile-tertiary.jpg',
+        ],
       },
     }
     const draft: FlareProfileDraft = {
@@ -101,15 +105,19 @@ describe('flare store', () => {
       maxAge: bootstrap.profile!.maxAge,
       minAge: bootstrap.profile!.minAge,
       name: bootstrap.profile!.name,
-      photoMediaIds: [42],
+      photoMediaIds: [42, 17, 91],
     }
     mockNuiCall.mockResolvedValueOnce({ data: updated, success: true })
     const flare = useFlareStore()
 
+    expect(flare.profile).toBeNull()
     expect(await flare.saveProfile(draft)).toBe(true)
     expect(mockNuiCall).toHaveBeenCalledWith('flare:save-profile', draft)
+    expect(flare.profile?.photoMediaIds).toEqual([42, 17, 91])
     expect(flare.profile?.photoUrls).toEqual([
-      'https://cdn.example.test/profile.jpg',
+      'https://cdn.example.test/profile-primary.jpg',
+      'https://cdn.example.test/profile-secondary.jpg',
+      'https://cdn.example.test/profile-tertiary.jpg',
     ])
   })
 
@@ -148,6 +156,35 @@ describe('flare store', () => {
     expect(await flare.setDiscovery(false)).toBe(false)
     expect(flare.profile?.discoverable).toBe(true)
     expect(flare.error).toBe('invalid_discovery')
+  })
+
+  it('clears Flare state after the server deletes the owned profile', async () => {
+    mockNuiCall.mockResolvedValueOnce({ success: true })
+    const flare = useFlareStore()
+    flare.applyBootstrap(bootstrap)
+    flare.activeMatchId = 'match-to-delete'
+
+    expect(await flare.deleteProfile()).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledWith('flare:delete-profile')
+    expect(flare.profile).toBeNull()
+    expect(flare.activeMatchId).toBe('')
+    expect(flare.likes).toEqual([])
+    expect(flare.matches).toEqual([])
+    expect(flare.suggestions).toEqual([])
+    expect(flare.error).toBe('')
+  })
+
+  it('keeps the Flare profile when account deletion is rejected', async () => {
+    mockNuiCall.mockResolvedValueOnce({
+      error: 'request_failed',
+      success: false,
+    })
+    const flare = useFlareStore()
+    flare.applyBootstrap(bootstrap)
+
+    expect(await flare.deleteProfile()).toBe(false)
+    expect(flare.profile).toEqual(bootstrap.profile)
+    expect(flare.error).toBe('request_failed')
   })
 
   it('sends media messages and keeps numeric database timestamps intact', async () => {

@@ -59,6 +59,54 @@ describe('media utilities', () => {
     expect(bottomRightGridPosition(10, 11)).toEqual({ column: 2, row: 1 })
   })
 
+  it('places newest-first media from the bottom-right toward older rows', () => {
+    const newestFirst = orderMedia(
+      [
+        {
+          createdAt: 10,
+          favorite: false,
+          id: 1,
+          mediaType: 'photo',
+          url: 'oldest',
+        },
+        {
+          createdAt: 20,
+          favorite: false,
+          id: 2,
+          mediaType: 'photo',
+          url: 'middle',
+        },
+        {
+          createdAt: 30,
+          favorite: false,
+          id: 3,
+          mediaType: 'photo',
+          url: 'newest',
+        },
+        {
+          createdAt: 5,
+          favorite: false,
+          id: 4,
+          mediaType: 'photo',
+          url: 'older-row',
+        },
+      ],
+      'newest',
+    )
+
+    expect(
+      newestFirst.map((entry, index) => ({
+        id: entry.id,
+        ...bottomRightGridPosition(index, newestFirst.length),
+      })),
+    ).toEqual([
+      { column: 3, id: 3, row: 2 },
+      { column: 2, id: 2, row: 2 },
+      { column: 1, id: 1, row: 2 },
+      { column: 3, id: 4, row: 1 },
+    ])
+  })
+
   it('loads another gallery page only after a full 30-item batch', () => {
     expect(hasNextMediaPage(30)).toBe(true)
     expect(hasNextMediaPage(29)).toBe(false)

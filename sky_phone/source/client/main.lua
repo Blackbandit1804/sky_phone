@@ -12,6 +12,10 @@ local active_call_payload = nil
 local call_channel = 0
 local nui_generation = 0
 local activity_suspended = false
+local phone_block_game = false
+local phone_block_look = false
+local phone_game_input = false
+local phone_cursor_disabled = false
 
 Bridge.Debug("debug", "[sky_phone] Client script initialized.", { always = true })
 
@@ -39,6 +43,9 @@ local server_callbacks = {
     "mail:login",
     "mail:logout",
     "mail:counts",
+    "mail:mailboxes",
+    "mail:create-mailbox",
+    "mail:delete-mailbox",
     "mail:list",
     "mail:get",
     "mail:get-draft",
@@ -47,6 +54,7 @@ local server_callbacks = {
     "mail:delete-many",
     "mail:send",
     "mail:set-read",
+    "mail:move",
     "mail:trash",
     "mail:restore",
     "mail:delete-forever",
@@ -268,6 +276,7 @@ local server_callbacks = {
     "darkchat:report",
     "darkchat:clear",
     "flare:bootstrap",
+    "flare:delete-profile",
     "flare:save-profile",
     "flare:set-discovery",
     "flare:swipe",
@@ -296,19 +305,46 @@ local function update_nui_focus()
         call_focus = call_focus,
         camera_active = camera_active,
         camera_nui_focused = camera_nui_focused,
+        cursor_disabled = phone_cursor_disabled,
         is_open = is_open,
         notification_focus = notification_focus,
         payphone_focus = payphone_focus,
         sim_picker_open = sim_picker_open,
     })
-    SetNuiFocus(focus.focused, focus.focused)
+    SetNuiFocus(focus.focused, focus.cursor)
     SetNuiFocusKeepInput(focus.keep_input)
+    phone_block_game = focus.block_game == true
+    phone_block_look = focus.block_look == true
+    phone_game_input = focus.game_input
+    if not phone_game_input and not phone_block_game then
+        phone_cursor_disabled = false
+    end
     TriggerEvent("sky_phone:client:cameraFocusApplied", {
         active = camera_active,
+        cursor = focus.cursor,
         focused = focus.focused,
         gameInput = focus.keep_input,
     })
 end
+
+CreateThread(function()
+    while true do
+        if phone_game_input or phone_block_game then
+            if phone_block_game then
+                SkyPhoneFocus.ApplyFocusedControls()
+            else
+                SkyPhoneFocus.ApplyGameInputControls(phone_block_look)
+            end
+            if IsDisabledControlJustPressed(0, 19) then
+                phone_cursor_disabled = not phone_cursor_disabled
+                update_nui_focus()
+            end
+            Wait(0)
+        else
+            Wait(250)
+        end
+    end
+end)
 
 AddEventHandler("sky_phone:client:setSuspended", function(suspended)
     activity_suspended = suspended == true
@@ -987,6 +1023,8 @@ AddEventHandler("onResourceStop", function(resource_name)
     sim_picker_payload = nil
     active_call_payload = nil
     activity_suspended = false
+    phone_game_input = false
+    phone_cursor_disabled = false
     SetNuiFocusKeepInput(false)
     SetNuiFocus(false, false)
 

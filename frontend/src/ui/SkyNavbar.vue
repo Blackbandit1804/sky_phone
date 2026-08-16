@@ -18,25 +18,38 @@ const props = withDefaults(
   defineProps<{
     backAppearance?: 'plain' | 'surface'
     backLabel?: string
+    centerTitle?: boolean
+    colors?: Record<string, string>
+    component?: string
+    innerClass?: string
+    large?: boolean
+    medium?: boolean
     outline?: boolean
     showBack?: boolean
     showBackText?: boolean
     scrollEl?: HTMLElement | null
     subnavbarClass?: string
     subtitle?: string
-    title: string
+    title?: string
     transparent?: boolean
     variant?: 'compact' | 'large' | 'medium'
   }>(),
   {
     backAppearance: 'plain',
     backLabel: '',
+    centerTitle: true,
+    colors: undefined,
+    component: 'header',
+    innerClass: '',
+    large: false,
+    medium: false,
     outline: false,
     showBack: false,
     showBackText: false,
     subnavbarClass: '',
     subtitle: '',
     transparent: false,
+    title: '',
     variant: 'compact',
   },
 )
@@ -49,12 +62,19 @@ provideSkyNavbar()
 
 const slots = useSlots()
 const pageScroll = useSkyPageScroll()
+const resolvedVariant = computed(() => {
+  if (props.large) return 'large'
+  if (props.medium) return 'medium'
+  return props.variant
+})
 const accessibleBackLabel = computed(() => props.backLabel || props.title)
-const hasExtendedTitle = computed(() => props.variant !== 'compact')
+const hasExtendedTitle = computed(() => resolvedVariant.value !== 'compact')
 const isCollapsible = computed(
   () => hasExtendedTitle.value || props.transparent,
 )
-const titleHeight = computed(() => (props.variant === 'large' ? 52 : 44))
+const titleHeight = computed(() =>
+  resolvedVariant.value === 'large' ? 52 : 44,
+)
 const effectiveScrollElement = computed(() =>
   props.scrollEl === undefined
     ? (pageScroll?.element.value ?? null)
@@ -133,11 +153,12 @@ function hasNavigationRow(): boolean {
 </script>
 
 <template>
-  <header
+  <component
+    :is="component"
     v-bind="$attrs"
     class="sky-navbar"
     :class="[
-      `sky-navbar--${variant}`,
+      `sky-navbar--${resolvedVariant}`,
       {
         'sky-navbar--outline': outline,
         'sky-navbar--transparent': transparent,
@@ -150,7 +171,11 @@ function hasNavigationRow(): boolean {
     <div class="sky-navbar__blur" aria-hidden="true" />
     <div class="sky-navbar__background" aria-hidden="true" />
 
-    <div v-if="hasNavigationRow()" class="sky-navbar__inner">
+    <div
+      v-if="hasNavigationRow()"
+      class="sky-navbar__inner"
+      :class="innerClass"
+    >
       <div v-if="hasLeftContent()" class="sky-navbar__left sky-glass-surface">
         <slot name="left">
           <button
@@ -219,5 +244,5 @@ function hasNavigationRow(): boolean {
     >
       <slot name="subnavbar" />
     </div>
-  </header>
+  </component>
 </template>

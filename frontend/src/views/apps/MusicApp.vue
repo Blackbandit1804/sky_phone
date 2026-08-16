@@ -1,25 +1,27 @@
 <script setup lang="ts">
 import {
-  kBlock,
-  kBlockTitle,
-  kButton,
-  kDialog,
-  kDialogButton,
-  kGlass,
-  kLink,
-  kList,
-  kListButton,
-  kListInput,
-  kListItem,
-  kNavbar,
-  kNavbarBackLink,
-  kPage,
-  kPreloader,
-  kRange,
-  kSearchbar,
-  kSheet,
-  kToast,
-} from 'konsta/vue'
+  SkyBlock,
+  SkyBlockTitle,
+  SkyButton,
+  SkyDialog,
+  SkyDialogButton,
+  SkyDropdown,
+  SkyGlass,
+  SkyLink,
+  SkyList,
+  SkyField,
+  SkyListItem,
+  SkyNavbar,
+  SkyAppPage,
+  SkyPillNavigation,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySpinner,
+  SkyRange,
+  SkySearchbar,
+  SkySheet,
+  SkyToast,
+} from '@/ui'
 import {
   Check,
   CirclePlus,
@@ -35,15 +37,14 @@ import {
   Share2,
   SkipBack,
   SkipForward,
-  Trash2,
   Volume1,
   Volume2,
   X,
 } from 'lucide-vue-next'
-import type { CSSProperties } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import playlistPlaceholder from '@/assets/img/music/playlist-placeholder.jpg'
 import { useMusicStore } from '@/stores/music'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
@@ -51,7 +52,6 @@ import type { MusicPlaylist, MusicTrack } from '@/types/music'
 import { easyShareMusicTarget } from '@/utils/easyshare'
 import { consumeEscape, handleEnterAction } from '@/utils/keyboard'
 import { musicEscapeLayer } from '@/utils/musicEscape'
-import { SkyPillNavigation, SkySegmented, SkySegmentedButton } from '@/ui'
 
 type MusicTab = 'library' | 'playlists' | 'search'
 type MusicSheet =
@@ -60,11 +60,25 @@ type MusicSheet =
   | 'rename'
   | 'track-picker'
   | 'youtube'
+type MusicMenuAction =
+  | 'add-songs'
+  | 'add-to-playlist'
+  | 'add-youtube'
+  | 'delete-playlist'
+  | 'new-playlist'
+  | 'remove-from-library'
+  | 'remove-from-playlist'
+  | 'rename-playlist'
+  | 'share-playlist'
+  | 'share-track'
+type MusicMenuItem = {
+  destructive?: boolean
+  id: MusicMenuAction
+  label: string
+  separatorBefore?: boolean
+}
+type PlaylistArtworkTrack = MusicTrack & { artwork: string }
 
-const MUSIC_POPOVER_WIDTH = 240
-const MUSIC_POPOVER_ITEM_HEIGHT = 52
-const MUSIC_POPOVER_INSET = 8
-const MUSIC_POPOVER_GAP = 7
 const MUSIC_SHEET_TRANSITION_MS = 420
 
 const music = useMusicStore()
@@ -84,10 +98,7 @@ const activePlaylist = ref<MusicPlaylist | null>(null)
 const addMenuOpened = ref(false)
 const actionMenuOpened = ref(false)
 const actionTrack = ref<MusicTrack | null>(null)
-const popoverStyle = ref<CSSProperties>({
-  top: `${MUSIC_POPOVER_INSET}px`,
-  left: `${MUSIC_POPOVER_INSET}px`,
-})
+const menuTarget = ref<HTMLElement | null>(null)
 const activeSheet = ref<MusicSheet | null>(null)
 const playerOpened = ref(false)
 const youtubeUrl = ref('')
@@ -136,6 +147,69 @@ const pageTitle = computed(() => {
   if (activePlaylist.value) return activePlaylist.value.name
   return phone.t(`Apps.music.tabs.${activeTab.value}`)
 })
+const menuLabel = computed(() => {
+  if (addMenuOpened.value && activePlaylist.value) {
+    return phone.t('Apps.music.playlistActions')
+  }
+  return phone.t(
+    addMenuOpened.value ? 'Apps.music.addMusic' : 'Apps.music.songActions',
+  )
+})
+const menuItems = computed<MusicMenuItem[]>(() => {
+  if (addMenuOpened.value) {
+    if (activePlaylist.value) {
+      return [
+        {
+          id: 'share-playlist',
+          label: phone.t('Apps.easyShare.name'),
+        },
+        { id: 'add-songs', label: phone.t('Apps.music.addSongs') },
+        {
+          id: 'rename-playlist',
+          label: phone.t('Apps.music.renamePlaylist'),
+        },
+        {
+          destructive: true,
+          id: 'delete-playlist',
+          label: phone.t('Apps.music.deletePlaylist'),
+          separatorBefore: true,
+        },
+      ]
+    }
+
+    return [
+      { id: 'add-youtube', label: phone.t('Apps.music.addYouTube') },
+      { id: 'new-playlist', label: phone.t('Apps.music.newPlaylist') },
+    ]
+  }
+
+  if (!actionMenuOpened.value) return []
+
+  const items: MusicMenuItem[] = [
+    { id: 'share-track', label: phone.t('Apps.easyShare.name') },
+    {
+      id: 'add-to-playlist',
+      label: phone.t('Apps.music.addToPlaylist'),
+    },
+  ]
+  if (activePlaylist.value) {
+    items.push({
+      destructive: true,
+      id: 'remove-from-playlist',
+      label: phone.t('Apps.music.removeFromPlaylist'),
+      separatorBefore: true,
+    })
+  }
+  if (actionTrack.value?.source === 'youtube') {
+    items.push({
+      destructive: true,
+      id: 'remove-from-library',
+      label: phone.t('Apps.music.removeFromLibrary'),
+      separatorBefore: !activePlaylist.value,
+    })
+  }
+  return items
+})
 
 function eventValue(event: Event): string {
   return (event.target as HTMLInputElement | null)?.value ?? ''
@@ -162,47 +236,8 @@ function dismissMenus(): void {
   actionTrack.value = null
 }
 
-function positionPopover(target: HTMLElement, itemCount: number): boolean {
-  const app = target.closest<HTMLElement>('.music-app')
-  if (!app) return false
-
-  const appRect = app.getBoundingClientRect()
-  const targetRect = target.getBoundingClientRect()
-  const scale = app.offsetWidth ? appRect.width / app.offsetWidth : 1
-  const targetLeft = (targetRect.left - appRect.left) / scale
-  const targetTop = (targetRect.top - appRect.top) / scale
-  const targetWidth = targetRect.width / scale
-  const targetHeight = targetRect.height / scale
-  const popoverHeight = itemCount * MUSIC_POPOVER_ITEM_HEIGHT + 2
-  const desiredLeft = targetLeft + targetWidth - MUSIC_POPOVER_WIDTH
-  const belowTop = targetTop + targetHeight + MUSIC_POPOVER_GAP
-  const desiredTop =
-    belowTop + popoverHeight <= app.offsetHeight - MUSIC_POPOVER_INSET
-      ? belowTop
-      : targetTop - popoverHeight - MUSIC_POPOVER_GAP
-
-  popoverStyle.value = {
-    left: `${Math.max(
-      MUSIC_POPOVER_INSET,
-      Math.min(
-        desiredLeft,
-        app.offsetWidth - MUSIC_POPOVER_WIDTH - MUSIC_POPOVER_INSET,
-      ),
-    )}px`,
-    top: `${Math.max(
-      MUSIC_POPOVER_INSET,
-      Math.min(
-        desiredTop,
-        app.offsetHeight - popoverHeight - MUSIC_POPOVER_INSET,
-      ),
-    )}px`,
-  }
-  return true
-}
-
 function openAddMenu(event: MouseEvent): void {
-  const target = event.currentTarget as HTMLElement
-  if (!positionPopover(target, activePlaylist.value ? 4 : 2)) return
+  menuTarget.value = event.currentTarget as HTMLElement
   actionTrack.value = null
   actionMenuOpened.value = false
   addMenuOpened.value = true
@@ -275,15 +310,50 @@ function cancelRemoveTrack(): void {
 
 function openTrackMenu(event: MouseEvent, track: MusicTrack): void {
   event.stopPropagation()
+  menuTarget.value = event.currentTarget as HTMLElement
   actionTrack.value = track
-  const itemCount =
-    2 + (activePlaylist.value ? 1 : 0) + (track.source === 'youtube' ? 1 : 0)
-  if (!positionPopover(event.currentTarget as HTMLElement, itemCount)) return
   addMenuOpened.value = false
   actionMenuOpened.value = true
 }
 
-function shareTrack(selectedTrack: MusicTrack | null = actionTrack.value): void {
+function selectMenuItem(id: string): void {
+  switch (id as MusicMenuAction) {
+    case 'share-playlist':
+      shareActivePlaylist()
+      break
+    case 'add-songs':
+      openActivePlaylistTrackPicker()
+      break
+    case 'rename-playlist':
+      openSheet('rename')
+      break
+    case 'delete-playlist':
+      requestDeletePlaylist()
+      break
+    case 'add-youtube':
+      openSheet('youtube')
+      break
+    case 'new-playlist':
+      openNewPlaylist()
+      break
+    case 'share-track':
+      shareTrack()
+      break
+    case 'add-to-playlist':
+      openPlaylistPicker(actionTrack.value)
+      break
+    case 'remove-from-playlist':
+      void removeFromActivePlaylist()
+      break
+    case 'remove-from-library':
+      requestRemoveTrack()
+      break
+  }
+}
+
+function shareTrack(
+  selectedTrack: MusicTrack | null = actionTrack.value,
+): void {
   const track = selectedTrack
   if (!track) return
   closeMenus()
@@ -309,9 +379,12 @@ function shareActivePlaylist(): void {
     appId: 'music',
     copyText: `${playlist.name} · ${playlist.entries.length}`,
     id: playlist.id,
+    imageUrl: playlistArtwork(playlist)[0]?.artwork || playlistPlaceholder,
     kind: 'playlist',
     link: `skyphone://music/playlist/${playlist.id}`,
-    subtitle: phone.t('Apps.music.songCount', { count: String(playlist.entries.length) }),
+    subtitle: phone.t('Apps.music.songCount', {
+      count: String(playlist.entries.length),
+    }),
     title: playlist.name,
   })
 }
@@ -458,8 +531,15 @@ async function deleteActivePlaylist(): Promise<void> {
   }
 }
 
-function playlistArtwork(playlist: MusicPlaylist): MusicTrack[] {
-  return music.tracksForPlaylist(playlist).slice(0, 4)
+function hasPlaylistArtwork(track: MusicTrack): track is PlaylistArtworkTrack {
+  return typeof track.artwork === 'string' && track.artwork.trim().length > 0
+}
+
+function playlistArtwork(playlist: MusicPlaylist): PlaylistArtworkTrack[] {
+  return music
+    .tracksForPlaylist(playlist)
+    .filter(hasPlaylistArtwork)
+    .slice(0, 4)
 }
 
 function playlistHasTrack(playlist: MusicPlaylist, track: MusicTrack): boolean {
@@ -489,6 +569,16 @@ function fallbackArtwork(
 function hideBrokenArtwork(event: Event): void {
   const image = event.currentTarget as HTMLImageElement
   image.style.display = 'none'
+}
+
+function usePlaylistPlaceholder(event: Event): void {
+  const image = event.currentTarget as HTMLImageElement
+  if (image.dataset.playlistFallback === 'true') {
+    image.style.display = 'none'
+    return
+  }
+  image.dataset.playlistFallback = 'true'
+  image.src = playlistPlaceholder
 }
 
 function formatTime(seconds: number): string {
@@ -569,7 +659,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <k-page
+  <sky-app-page
     component="main"
     class="music-app sky-ui-provider"
     :class="{
@@ -578,46 +668,48 @@ onBeforeUnmount(() => {
       'sky-ui-provider--dark': phone.isDarkMode,
     }"
   >
-    <k-navbar
+    <sky-navbar
       component="nav"
       class="music-navbar"
       title-class="music-navbar-title"
       :title="activePlaylist ? activePlaylist.name : phone.t('Apps.music.name')"
+      :show-back="Boolean(activePlaylist)"
+      back-appearance="surface"
+      :back-label="phone.t('Apps.music.tabs.playlists')"
+      @back="closePlaylist"
     >
-      <template v-if="activePlaylist" #left>
-        <k-navbar-back-link
-          :text="phone.t('Apps.music.tabs.playlists')"
-          @click="closePlaylist"
-        />
-      </template>
       <template #right>
-        <k-link
+        <sky-link
           v-if="activePlaylist"
           component="button"
           icon-only
           :aria-label="phone.t('Apps.music.playlistActions')"
+          aria-haspopup="menu"
+          :aria-expanded="addMenuOpened"
           @click="openAddMenu"
         >
           <Ellipsis :size="22" />
-        </k-link>
-        <k-link
+        </sky-link>
+        <sky-link
           v-else
           component="button"
           icon-only
           :aria-label="phone.t('Apps.music.addMusic')"
+          aria-haspopup="menu"
+          :aria-expanded="addMenuOpened"
           @click="openAddMenu"
         >
           <Plus :size="24" />
-        </k-link>
+        </sky-link>
       </template>
-    </k-navbar>
+    </sky-navbar>
 
     <div ref="scrollEl" class="music-scroll">
       <div
         v-if="music.isLoading && !allTracks.length && !music.playlists.length"
         class="music-loading"
       >
-        <k-preloader />
+        <sky-spinner />
         <span>{{ phone.t('Apps.music.loading') }}</span>
       </div>
 
@@ -631,14 +723,15 @@ onBeforeUnmount(() => {
                 :style="fallbackArtwork(track)"
               >
                 <img
-                  v-if="track.artwork"
                   :src="track.artwork"
                   alt=""
-                  @error="hideBrokenArtwork"
+                  @error="usePlaylistPlaceholder"
                 />
               </div>
             </template>
-            <Music2 v-else :size="68" />
+            <span v-else class="music-playlist-placeholder">
+              <img :src="playlistPlaceholder" alt="" />
+            </span>
           </div>
           <h1>{{ activePlaylist.name }}</h1>
           <p>
@@ -649,7 +742,7 @@ onBeforeUnmount(() => {
             }}
           </p>
           <div class="music-playlist-actions">
-            <k-button
+            <sky-button
               large
               rounded
               :disabled="!playlistTracks.length"
@@ -660,8 +753,8 @@ onBeforeUnmount(() => {
             >
               <Play :size="18" fill="currentColor" />
               {{ phone.t('Apps.music.play') }}
-            </k-button>
-            <k-button
+            </sky-button>
+            <sky-button
               large
               rounded
               tonal
@@ -669,12 +762,12 @@ onBeforeUnmount(() => {
             >
               <CirclePlus :size="18" />
               {{ phone.t('Apps.music.addSongs') }}
-            </k-button>
+            </sky-button>
           </div>
         </section>
 
-        <k-list v-if="playlistTracks.length" nested class="music-track-list">
-          <k-list-item
+        <sky-list v-if="playlistTracks.length" nested class="music-track-list">
+          <sky-list-item
             v-for="track in playlistTracks"
             :key="`${track.source}:${track.id}`"
             link
@@ -695,22 +788,28 @@ onBeforeUnmount(() => {
               </span>
             </template>
             <template #after>
-              <k-link
+              <sky-link
                 component="button"
                 icon-only
                 :aria-label="phone.t('Apps.music.songActions')"
+                aria-haspopup="menu"
+                :aria-expanded="
+                  actionMenuOpened &&
+                  actionTrack?.id === track.id &&
+                  actionTrack?.source === track.source
+                "
                 @click="openTrackMenu($event, track)"
               >
                 <Ellipsis :size="20" />
-              </k-link>
+              </sky-link>
             </template>
-          </k-list-item>
-        </k-list>
-        <k-block v-else class="music-empty" inset>
+          </sky-list-item>
+        </sky-list>
+        <sky-block v-else class="music-empty" inset>
           <ListMusic :size="43" />
           <strong>{{ phone.t('Apps.music.emptyPlaylist') }}</strong>
           <span>{{ phone.t('Apps.music.emptyPlaylistBody') }}</span>
-        </k-block>
+        </sky-block>
       </template>
 
       <template v-else-if="activeTab === 'library'">
@@ -719,7 +818,11 @@ onBeforeUnmount(() => {
           <p>{{ phone.t('Apps.music.librarySubtitle') }}</p>
         </header>
 
-        <k-glass v-if="featuredTrack" class="music-featured" :highlight="false">
+        <sky-glass
+          v-if="featuredTrack"
+          class="music-featured"
+          :highlight="false"
+        >
           <button type="button" @click="playFeatured">
             <div class="music-featured-copy">
               <small>{{ phone.t('Apps.music.featured') }}</small>
@@ -743,12 +846,12 @@ onBeforeUnmount(() => {
               <Music2 v-else :size="52" />
             </div>
           </button>
-        </k-glass>
+        </sky-glass>
 
         <template v-if="recentTracks.length">
-          <k-block-title class="music-section-title">{{
+          <sky-block-title class="music-section-title">{{
             phone.t('Apps.music.recentlyAdded')
-          }}</k-block-title>
+          }}</sky-block-title>
           <section class="music-album-grid">
             <button
               v-for="track in recentTracks"
@@ -770,11 +873,11 @@ onBeforeUnmount(() => {
             </button>
           </section>
 
-          <k-block-title class="music-section-title">{{
+          <sky-block-title class="music-section-title">{{
             phone.t('Apps.music.songs')
-          }}</k-block-title>
-          <k-list nested class="music-track-list">
-            <k-list-item
+          }}</sky-block-title>
+          <sky-list nested class="music-track-list">
+            <sky-list-item
               v-for="track in allTracks"
               :key="`${track.source}:${track.id}`"
               link
@@ -795,27 +898,33 @@ onBeforeUnmount(() => {
                 </span>
               </template>
               <template #after>
-                <k-link
+                <sky-link
                   component="button"
                   icon-only
                   :aria-label="phone.t('Apps.music.songActions')"
+                  aria-haspopup="menu"
+                  :aria-expanded="
+                    actionMenuOpened &&
+                    actionTrack?.id === track.id &&
+                    actionTrack?.source === track.source
+                  "
                   @click="openTrackMenu($event, track)"
                 >
                   <Ellipsis :size="20" />
-                </k-link>
+                </sky-link>
               </template>
-            </k-list-item>
-          </k-list>
+            </sky-list-item>
+          </sky-list>
         </template>
-        <k-block v-else class="music-empty music-empty--library" inset>
+        <sky-block v-else class="music-empty music-empty--library" inset>
           <Music2 :size="48" />
           <strong>{{ phone.t('Apps.music.emptyLibrary') }}</strong>
           <span>{{ phone.t('Apps.music.emptyLibraryBody') }}</span>
-          <k-button rounded @click="openSheet('youtube')">
+          <sky-button rounded @click="openSheet('youtube')">
             <ExternalLink :size="17" />
             {{ phone.t('Apps.music.addYouTube') }}
-          </k-button>
-        </k-block>
+          </sky-button>
+        </sky-block>
       </template>
 
       <template v-else-if="activeTab === 'playlists'">
@@ -838,14 +947,15 @@ onBeforeUnmount(() => {
                   :style="fallbackArtwork(track)"
                 >
                   <img
-                    v-if="track.artwork"
                     :src="track.artwork"
                     alt=""
-                    @error="hideBrokenArtwork"
+                    @error="usePlaylistPlaceholder"
                   />
                 </i>
               </template>
-              <ListMusic v-else :size="44" />
+              <span v-else class="music-playlist-placeholder">
+                <img :src="playlistPlaceholder" alt="" />
+              </span>
             </span>
             <strong>{{ playlist.name }}</strong>
             <small>
@@ -857,30 +967,30 @@ onBeforeUnmount(() => {
             </small>
           </button>
         </section>
-        <k-block v-else class="music-empty music-empty--library" inset>
+        <sky-block v-else class="music-empty music-empty--library" inset>
           <ListMusic :size="48" />
           <strong>{{ phone.t('Apps.music.noPlaylists') }}</strong>
           <span>{{ phone.t('Apps.music.noPlaylistsBody') }}</span>
-          <k-button rounded @click="openNewPlaylist()">
+          <sky-button rounded @click="openNewPlaylist()">
             <Plus :size="17" />
             {{ phone.t('Apps.music.newPlaylist') }}
-          </k-button>
-        </k-block>
+          </sky-button>
+        </sky-block>
       </template>
 
       <template v-else>
         <header class="music-large-title music-large-title--search">
           <h1>{{ pageTitle }}</h1>
         </header>
-        <k-searchbar
+        <sky-searchbar
           class="music-searchbar"
           :value="searchQuery"
           :placeholder="phone.t('Apps.music.searchPlaceholder')"
           @input="searchQuery = eventValue($event)"
           @clear="searchQuery = ''"
         />
-        <k-list v-if="searchResults.length" nested class="music-track-list">
-          <k-list-item
+        <sky-list v-if="searchResults.length" nested class="music-track-list">
+          <sky-list-item
             v-for="track in searchResults"
             :key="`${track.source}:${track.id}`"
             link
@@ -901,26 +1011,32 @@ onBeforeUnmount(() => {
               </span>
             </template>
             <template #after>
-              <k-link
+              <sky-link
                 component="button"
                 icon-only
                 :aria-label="phone.t('Apps.music.songActions')"
+                aria-haspopup="menu"
+                :aria-expanded="
+                  actionMenuOpened &&
+                  actionTrack?.id === track.id &&
+                  actionTrack?.source === track.source
+                "
                 @click="openTrackMenu($event, track)"
               >
                 <Ellipsis :size="20" />
-              </k-link>
+              </sky-link>
             </template>
-          </k-list-item>
-        </k-list>
-        <k-block v-else class="music-empty" inset>
+          </sky-list-item>
+        </sky-list>
+        <sky-block v-else class="music-empty" inset>
           <Search :size="42" />
           <strong>{{ phone.t('Apps.music.noResults') }}</strong>
           <span>{{ phone.t('Apps.music.noResultsBody') }}</span>
-        </k-block>
+        </sky-block>
       </template>
     </div>
 
-    <k-glass
+    <sky-glass
       v-if="music.currentTrack"
       class="music-mini-player"
       :highlight="false"
@@ -956,7 +1072,7 @@ onBeforeUnmount(() => {
       >
         <SkipForward :size="23" fill="currentColor" />
       </button>
-    </k-glass>
+    </sky-glass>
 
     <SkyPillNavigation
       v-if="!activePlaylist"
@@ -994,460 +1110,379 @@ onBeforeUnmount(() => {
       </SkySegmented>
     </SkyPillNavigation>
 
-    <button
-      v-if="addMenuOpened || actionMenuOpened"
-      type="button"
-      class="music-popover-dismiss"
-      aria-hidden="true"
-      tabindex="-1"
-      @click="dismissMenus"
+    <SkyDropdown
+      :items="menuItems"
+      :label="menuLabel"
+      :opened="addMenuOpened || actionMenuOpened"
+      :target="menuTarget"
+      @backdropclick="dismissMenus"
+      @escape="dismissMenus"
+      @positionerror="dismissMenus"
+      @select="selectMenuItem"
     />
-    <section
-      v-if="addMenuOpened"
-      class="music-popover"
-      :style="popoverStyle"
-      :class="{
-        'phone-app--light': !phone.isDarkMode,
-      }"
-      role="group"
-      :aria-label="phone.t('Apps.music.addMusic')"
-    >
-      <k-list nested>
-        <template v-if="activePlaylist">
-          <k-list-button link-component="button" @click="shareActivePlaylist">
-            <Share2 :size="18" /> {{ phone.t('Apps.easyShare.name') }}
-          </k-list-button>
-          <k-list-button
-            link-component="button"
-            @click="openActivePlaylistTrackPicker"
-          >
-            <CirclePlus :size="18" /> {{ phone.t('Apps.music.addSongs') }}
-          </k-list-button>
-          <k-list-button link-component="button" @click="openSheet('rename')">
-            <ListMusic :size="18" />
-            {{ phone.t('Apps.music.renamePlaylist') }}
-          </k-list-button>
-          <k-list-button
-            link-component="button"
-            class="music-destructive"
-            @click="requestDeletePlaylist"
-          >
-            <Trash2 :size="18" /> {{ phone.t('Apps.music.deletePlaylist') }}
-          </k-list-button>
-        </template>
-        <template v-else>
-          <k-list-button link-component="button" @click="openSheet('youtube')">
-            <ExternalLink :size="18" /> {{ phone.t('Apps.music.addYouTube') }}
-          </k-list-button>
-          <k-list-button link-component="button" @click="openNewPlaylist()">
-            <ListMusic :size="18" /> {{ phone.t('Apps.music.newPlaylist') }}
-          </k-list-button>
-        </template>
-      </k-list>
-    </section>
-
-    <section
-      v-if="actionMenuOpened"
-      class="music-popover"
-      :style="popoverStyle"
-      :class="{
-        'phone-app--light': !phone.isDarkMode,
-      }"
-      role="group"
-      :aria-label="phone.t('Apps.music.songActions')"
-    >
-      <k-list nested>
-        <k-list-button link-component="button" @click="shareTrack">
-          <Share2 :size="18" /> {{ phone.t('Apps.easyShare.name') }}
-        </k-list-button>
-        <k-list-button
-          link-component="button"
-          @click="openPlaylistPicker(actionTrack)"
-        >
-          <CirclePlus :size="18" /> {{ phone.t('Apps.music.addToPlaylist') }}
-        </k-list-button>
-        <k-list-button
-          v-if="activePlaylist"
-          link-component="button"
-          class="music-destructive"
-          @click="removeFromActivePlaylist"
-        >
-          <X :size="18" /> {{ phone.t('Apps.music.removeFromPlaylist') }}
-        </k-list-button>
-        <k-list-button
-          v-if="actionTrack?.source === 'youtube'"
-          link-component="button"
-          class="music-destructive"
-          @click="requestRemoveTrack"
-        >
-          <Trash2 :size="18" /> {{ phone.t('Apps.music.removeFromLibrary') }}
-        </k-list-button>
-      </k-list>
-    </section>
 
     <div class="music-form-sheet">
-      <k-sheet
-        :opened="Boolean(activeSheet)"
-        @backdropclick="closeSheet"
-      >
+      <sky-sheet :opened="Boolean(activeSheet)" @backdropclick="closeSheet">
         <section class="music-sheet-content">
-        <header>
-          <k-link component="button" @click="closeSheet">{{
-            phone.t(
-              activeSheet === 'track-picker' ? 'Common.done' : 'Common.cancel',
-            )
-          }}</k-link>
-          <strong>{{ sheetTitle }}</strong>
-          <span />
-        </header>
+          <header>
+            <sky-link component="button" @click="closeSheet">{{
+              phone.t(
+                activeSheet === 'track-picker'
+                  ? 'Common.done'
+                  : 'Common.cancel',
+              )
+            }}</sky-link>
+            <strong>{{ sheetTitle }}</strong>
+            <span />
+          </header>
 
-        <template v-if="activeSheet === 'youtube'">
-          <div class="music-sheet-icon"><ExternalLink :size="28" /></div>
-          <p>{{ phone.t('Apps.music.youtubeBody') }}</p>
-          <k-list inset strong>
-            <k-list-input
-              :label="phone.t('Apps.music.youtubeUrl')"
-              input-id="music-youtube-url"
-              inputmode="url"
-              :placeholder="phone.t('Apps.music.youtubePlaceholder')"
-              type="url"
-              :value="youtubeUrl"
-              @input="youtubeUrl = eventValue($event)"
-              @keydown.enter="handleEnterAction($event, submitYouTube)"
-            />
-            <k-list-input
-              :label="phone.t('Apps.music.youtubeTitle')"
-              input-id="music-youtube-title"
-              maxlength="160"
-              :placeholder="phone.t('Apps.music.youtubeTitlePlaceholder')"
-              :value="youtubeTitle"
-              @input="youtubeTitle = eventValue($event)"
-              @keydown.enter="handleEnterAction($event, submitYouTube)"
-            />
-            <k-list-input
-              :label="phone.t('Apps.music.youtubeArtist')"
-              input-id="music-youtube-artist"
-              maxlength="120"
-              :placeholder="phone.t('Apps.music.youtubeArtistPlaceholder')"
-              :value="youtubeArtist"
-              @input="youtubeArtist = eventValue($event)"
-              @keydown.enter="handleEnterAction($event, submitYouTube)"
-            />
-          </k-list>
-          <p v-if="music.error" class="music-form-error" role="alert">
-            {{ errorText() }}
-          </p>
-          <k-button
-            large
-            rounded
-            :disabled="music.isLoading || !youtubeUrl.trim()"
-            @click="submitYouTube"
-          >
-            <k-preloader v-if="music.isLoading" />
-            <template v-else>{{ phone.t('Apps.music.addToLibrary') }}</template>
-          </k-button>
-        </template>
-
-        <template v-else-if="activeSheet === 'playlist-picker'">
-          <k-list
-            v-if="music.playlists.length"
-            inset
-            strong
-            class="music-picker-list"
-          >
-            <k-list-item
-              v-for="playlist in music.playlists"
-              :key="playlist.id"
-              :link="!actionTrackIsInPlaylist(playlist)"
-              link-component="button"
-              :chevron="false"
-              :link-props="{
-                type: 'button',
-                disabled: music.isLoading || actionTrackIsInPlaylist(playlist),
-              }"
-              :title="playlist.name"
-              :subtitle="
-                phone.t('Apps.music.songCount', {
-                  count: String(playlist.entries.length),
-                })
-              "
-              @click="addTrackToPlaylist(playlist)"
-            >
-              <template #media><ListMusic :size="22" /></template>
-              <template #after>
-                <span
-                  v-if="actionTrackIsInPlaylist(playlist)"
-                  class="music-picker-added"
-                >
-                  <Check :size="16" />
-                  {{ phone.t('Apps.music.alreadyAdded') }}
-                </span>
-                <CirclePlus v-else :size="19" />
-              </template>
-            </k-list-item>
-          </k-list>
-          <k-button
-            v-if="music.playlists.length"
-            rounded
-            tonal
-            class="music-picker-create"
-            :disabled="music.isLoading"
-            @click="openNewPlaylist(actionTrack)"
-          >
-            <Plus :size="17" /> {{ phone.t('Apps.music.newPlaylist') }}
-          </k-button>
-          <k-block v-else class="music-empty" inset>
-            <ListMusic :size="42" />
-            <strong>{{ phone.t('Apps.music.noPlaylists') }}</strong>
-            <span>{{ phone.t('Apps.music.createPlaylistFirst') }}</span>
-            <k-button
+          <template v-if="activeSheet === 'youtube'">
+            <div class="music-sheet-icon"><ExternalLink :size="28" /></div>
+            <p>{{ phone.t('Apps.music.youtubeBody') }}</p>
+            <sky-list inset strong>
+              <sky-field
+                :label="phone.t('Apps.music.youtubeUrl')"
+                input-id="music-youtube-url"
+                inputmode="url"
+                :placeholder="phone.t('Apps.music.youtubePlaceholder')"
+                type="url"
+                :value="youtubeUrl"
+                @input="youtubeUrl = eventValue($event)"
+                @keydown.enter="handleEnterAction($event, submitYouTube)"
+              />
+              <sky-field
+                :label="phone.t('Apps.music.youtubeTitle')"
+                input-id="music-youtube-title"
+                maxlength="160"
+                :placeholder="phone.t('Apps.music.youtubeTitlePlaceholder')"
+                :value="youtubeTitle"
+                @input="youtubeTitle = eventValue($event)"
+                @keydown.enter="handleEnterAction($event, submitYouTube)"
+              />
+              <sky-field
+                :label="phone.t('Apps.music.youtubeArtist')"
+                input-id="music-youtube-artist"
+                maxlength="120"
+                :placeholder="phone.t('Apps.music.youtubeArtistPlaceholder')"
+                :value="youtubeArtist"
+                @input="youtubeArtist = eventValue($event)"
+                @keydown.enter="handleEnterAction($event, submitYouTube)"
+              />
+            </sky-list>
+            <p v-if="music.error" class="music-form-error" role="alert">
+              {{ errorText() }}
+            </p>
+            <sky-button
+              large
               rounded
+              :disabled="music.isLoading || !youtubeUrl.trim()"
+              @click="submitYouTube"
+            >
+              <sky-spinner v-if="music.isLoading" />
+              <template v-else>{{
+                phone.t('Apps.music.addToLibrary')
+              }}</template>
+            </sky-button>
+          </template>
+
+          <template v-else-if="activeSheet === 'playlist-picker'">
+            <sky-list
+              v-if="music.playlists.length"
+              inset
+              strong
+              class="music-picker-list"
+            >
+              <sky-list-item
+                v-for="playlist in music.playlists"
+                :key="playlist.id"
+                :link="!actionTrackIsInPlaylist(playlist)"
+                link-component="button"
+                :chevron="false"
+                :link-props="{
+                  type: 'button',
+                  disabled:
+                    music.isLoading || actionTrackIsInPlaylist(playlist),
+                }"
+                :title="playlist.name"
+                :subtitle="
+                  phone.t('Apps.music.songCount', {
+                    count: String(playlist.entries.length),
+                  })
+                "
+                @click="addTrackToPlaylist(playlist)"
+              >
+                <template #media><ListMusic :size="22" /></template>
+                <template #after>
+                  <span
+                    v-if="actionTrackIsInPlaylist(playlist)"
+                    class="music-picker-added"
+                  >
+                    <Check :size="16" />
+                    {{ phone.t('Apps.music.alreadyAdded') }}
+                  </span>
+                  <CirclePlus v-else :size="19" />
+                </template>
+              </sky-list-item>
+            </sky-list>
+            <sky-button
+              v-if="music.playlists.length"
+              rounded
+              tonal
+              class="music-picker-create"
               :disabled="music.isLoading"
               @click="openNewPlaylist(actionTrack)"
-              >{{ phone.t('Apps.music.newPlaylist') }}</k-button
             >
-          </k-block>
-          <p v-if="music.error" class="music-form-error" role="alert">
-            {{ errorText() }}
-          </p>
-        </template>
+              <Plus :size="17" /> {{ phone.t('Apps.music.newPlaylist') }}
+            </sky-button>
+            <sky-block v-else class="music-empty" inset>
+              <ListMusic :size="42" />
+              <strong>{{ phone.t('Apps.music.noPlaylists') }}</strong>
+              <span>{{ phone.t('Apps.music.createPlaylistFirst') }}</span>
+              <sky-button
+                rounded
+                :disabled="music.isLoading"
+                @click="openNewPlaylist(actionTrack)"
+                >{{ phone.t('Apps.music.newPlaylist') }}</sky-button
+              >
+            </sky-block>
+            <p v-if="music.error" class="music-form-error" role="alert">
+              {{ errorText() }}
+            </p>
+          </template>
 
-        <template v-else-if="activeSheet === 'track-picker'">
-          <p>{{ phone.t('Apps.music.addSongsBody') }}</p>
-          <k-list
-            v-if="availablePlaylistTracks.length"
-            inset
-            strong
-            class="music-picker-list"
-          >
-            <k-list-item
-              v-for="track in availablePlaylistTracks"
-              :key="`${track.source}:${track.id}`"
-              link
-              link-component="button"
-              :chevron="false"
-              :link-props="{ type: 'button', disabled: music.isLoading }"
-              :title="track.title"
-              :subtitle="track.artist"
-              @click="addTrackToActivePlaylist(track)"
+          <template v-else-if="activeSheet === 'track-picker'">
+            <p>{{ phone.t('Apps.music.addSongsBody') }}</p>
+            <sky-list
+              v-if="availablePlaylistTracks.length"
+              inset
+              strong
+              class="music-picker-list"
             >
-              <template #media>
-                <span class="music-row-art" :style="fallbackArtwork(track)">
-                  <img
-                    v-if="track.artwork"
-                    :src="track.artwork"
-                    alt=""
-                    @error="hideBrokenArtwork"
-                  />
-                  <Music2 v-else :size="20" />
-                </span>
-              </template>
-              <template #after><CirclePlus :size="20" /></template>
-            </k-list-item>
-          </k-list>
-          <k-block v-else class="music-empty" inset>
-            <Check v-if="allTracks.length" :size="42" />
-            <Music2 v-else :size="42" />
-            <strong>{{
-              phone.t(
-                allTracks.length
-                  ? 'Apps.music.allSongsAdded'
-                  : 'Apps.music.emptyLibrary',
-              )
-            }}</strong>
-            <span>{{
-              phone.t(
-                allTracks.length
-                  ? 'Apps.music.allSongsAddedBody'
-                  : 'Apps.music.emptyLibraryBody',
-              )
-            }}</span>
-          </k-block>
-          <p v-if="music.error" class="music-form-error" role="alert">
-            {{ errorText() }}
-          </p>
-        </template>
+              <sky-list-item
+                v-for="track in availablePlaylistTracks"
+                :key="`${track.source}:${track.id}`"
+                link
+                link-component="button"
+                :chevron="false"
+                :link-props="{ type: 'button', disabled: music.isLoading }"
+                :title="track.title"
+                :subtitle="track.artist"
+                @click="addTrackToActivePlaylist(track)"
+              >
+                <template #media>
+                  <span class="music-row-art" :style="fallbackArtwork(track)">
+                    <img
+                      v-if="track.artwork"
+                      :src="track.artwork"
+                      alt=""
+                      @error="hideBrokenArtwork"
+                    />
+                    <Music2 v-else :size="20" />
+                  </span>
+                </template>
+                <template #after><CirclePlus :size="20" /></template>
+              </sky-list-item>
+            </sky-list>
+            <sky-block v-else class="music-empty" inset>
+              <Check v-if="allTracks.length" :size="42" />
+              <Music2 v-else :size="42" />
+              <strong>{{
+                phone.t(
+                  allTracks.length
+                    ? 'Apps.music.allSongsAdded'
+                    : 'Apps.music.emptyLibrary',
+                )
+              }}</strong>
+              <span>{{
+                phone.t(
+                  allTracks.length
+                    ? 'Apps.music.allSongsAddedBody'
+                    : 'Apps.music.emptyLibraryBody',
+                )
+              }}</span>
+            </sky-block>
+            <p v-if="music.error" class="music-form-error" role="alert">
+              {{ errorText() }}
+            </p>
+          </template>
 
-        <template v-else>
-          <div class="music-sheet-icon"><ListMusic :size="29" /></div>
-          <p>{{ phone.t('Apps.music.playlistBody') }}</p>
-          <k-list inset strong>
-            <k-list-input
-              :label="phone.t('Apps.music.playlistName')"
-              input-id="music-playlist-name"
-              maxlength="80"
-              :disabled="music.isLoading"
-              :placeholder="phone.t('Apps.music.playlistPlaceholder')"
-              :value="playlistName"
-              @input="playlistName = eventValue($event)"
-              @keydown.enter="handleEnterAction($event, submitPlaylist)"
-            />
-          </k-list>
-          <p v-if="music.error" class="music-form-error" role="alert">
-            {{ errorText() }}
-          </p>
-          <k-button
-            large
-            rounded
-            :disabled="music.isLoading || !playlistName.trim()"
-            @click="submitPlaylist"
-          >
-            <k-preloader v-if="music.isLoading" />
-            <template v-else>{{ phone.t('Common.save') }}</template>
-          </k-button>
-        </template>
+          <template v-else>
+            <div class="music-sheet-icon"><ListMusic :size="29" /></div>
+            <p>{{ phone.t('Apps.music.playlistBody') }}</p>
+            <sky-list inset strong>
+              <sky-field
+                :label="phone.t('Apps.music.playlistName')"
+                input-id="music-playlist-name"
+                maxlength="80"
+                :disabled="music.isLoading"
+                :placeholder="phone.t('Apps.music.playlistPlaceholder')"
+                :value="playlistName"
+                @input="playlistName = eventValue($event)"
+                @keydown.enter="handleEnterAction($event, submitPlaylist)"
+              />
+            </sky-list>
+            <p v-if="music.error" class="music-form-error" role="alert">
+              {{ errorText() }}
+            </p>
+            <sky-button
+              large
+              rounded
+              :disabled="music.isLoading || !playlistName.trim()"
+              @click="submitPlaylist"
+            >
+              <sky-spinner v-if="music.isLoading" />
+              <template v-else>{{ phone.t('Common.save') }}</template>
+            </sky-button>
+          </template>
         </section>
-      </k-sheet>
+      </sky-sheet>
     </div>
 
     <div class="music-player-sheet">
-      <k-sheet
-        :opened="playerOpened"
-        @backdropclick="playerOpened = false"
-      >
+      <sky-sheet :opened="playerOpened" @backdropclick="playerOpened = false">
         <section v-if="music.currentTrack" class="music-player">
-        <header>
-          <k-link
-            component="button"
-            icon-only
-            :aria-label="phone.t('Common.close')"
-            @click="playerOpened = false"
-          >
-            <X :size="20" />
-          </k-link>
-          <span>{{ phone.t('Apps.music.nowPlaying') }}</span>
-          <div class="music-player-header-actions">
-            <k-link
+          <header>
+            <sky-link
               component="button"
               icon-only
-              :aria-label="phone.t('Apps.easyShare.share')"
-              @click="shareTrack(music.currentTrack)"
+              :aria-label="phone.t('Common.close')"
+              @click="playerOpened = false"
             >
-              <Share2 :size="20" />
-            </k-link>
-            <k-link
-              component="button"
-              icon-only
-              :aria-label="phone.t('Apps.music.addToPlaylist')"
-              @click="openCurrentTrackPlaylistPicker"
-            >
-              <CirclePlus :size="21" />
-            </k-link>
+              <X :size="20" />
+            </sky-link>
+            <span>{{ phone.t('Apps.music.nowPlaying') }}</span>
+            <div class="music-player-header-actions">
+              <sky-link
+                component="button"
+                icon-only
+                :aria-label="phone.t('Apps.easyShare.share')"
+                @click="shareTrack(music.currentTrack)"
+              >
+                <Share2 :size="20" />
+              </sky-link>
+              <sky-link
+                component="button"
+                icon-only
+                :aria-label="phone.t('Apps.music.addToPlaylist')"
+                @click="openCurrentTrackPlaylistPicker"
+              >
+                <CirclePlus :size="21" />
+              </sky-link>
+            </div>
+          </header>
+          <div
+            class="music-player-art"
+            :style="fallbackArtwork(music.currentTrack)"
+          >
+            <img
+              v-if="music.currentTrack.artwork"
+              :src="music.currentTrack.artwork"
+              :alt="music.currentTrack.title"
+              @error="hideBrokenArtwork"
+            />
+            <Music2 v-else :size="86" />
           </div>
-        </header>
-        <div
-          class="music-player-art"
-          :style="fallbackArtwork(music.currentTrack)"
-        >
-          <img
-            v-if="music.currentTrack.artwork"
-            :src="music.currentTrack.artwork"
-            :alt="music.currentTrack.title"
-            @error="hideBrokenArtwork"
-          />
-          <Music2 v-else :size="86" />
-        </div>
-        <div class="music-player-copy">
-          <strong>{{ music.currentTrack.title }}</strong>
-          <span>{{ music.currentTrack.artist }}</span>
-        </div>
-        <div class="music-progress">
-          <k-range
-            :value="music.currentTime"
-            :min="0"
-            :max="Math.max(1, music.duration)"
-            :aria-label="phone.t('Apps.music.progress')"
-            @input="updateSeek"
-          />
-          <div>
-            <span>{{ formatTime(music.currentTime) }}</span
-            ><span
-              >-{{
-                formatTime(Math.max(0, music.duration - music.currentTime))
-              }}</span
-            >
+          <div class="music-player-copy">
+            <strong>{{ music.currentTrack.title }}</strong>
+            <span>{{ music.currentTrack.artist }}</span>
           </div>
-        </div>
-        <div class="music-player-controls">
-          <button
-            type="button"
-            :aria-label="phone.t('Apps.music.previous')"
-            @click="music.previous"
-          >
-            <SkipBack :size="38" fill="currentColor" />
-          </button>
-          <button
-            type="button"
-            :aria-label="
-              phone.t(music.isPlaying ? 'Common.pause' : 'Apps.music.play')
-            "
-            @click="music.toggle"
-          >
-            <Pause v-if="music.isPlaying" :size="50" fill="currentColor" />
-            <Play v-else :size="50" fill="currentColor" />
-          </button>
-          <button
-            type="button"
-            :aria-label="phone.t('Apps.music.next')"
-            @click="music.next"
-          >
-            <SkipForward :size="38" fill="currentColor" />
-          </button>
-        </div>
-        <div class="music-volume">
-          <Volume1 :size="18" />
-          <k-range
-            :value="Math.round(music.volume * 100)"
-            :min="0"
-            :max="100"
-            :aria-label="phone.t('Apps.music.volume')"
-            @input="updateVolume"
-          />
-          <Volume2 :size="20" />
-        </div>
-        <p v-if="music.playbackError" class="music-player-error">
-          {{ phone.t('Apps.music.errors.playback_failed') }}
-        </p>
+          <div class="music-progress">
+            <sky-range
+              :value="music.currentTime"
+              :min="0"
+              :max="Math.max(1, music.duration)"
+              :aria-label="phone.t('Apps.music.progress')"
+              @input="updateSeek"
+            />
+            <div>
+              <span>{{ formatTime(music.currentTime) }}</span
+              ><span
+                >-{{
+                  formatTime(Math.max(0, music.duration - music.currentTime))
+                }}</span
+              >
+            </div>
+          </div>
+          <div class="music-player-controls">
+            <button
+              type="button"
+              :aria-label="phone.t('Apps.music.previous')"
+              @click="music.previous"
+            >
+              <SkipBack :size="38" fill="currentColor" />
+            </button>
+            <button
+              type="button"
+              :aria-label="
+                phone.t(music.isPlaying ? 'Common.pause' : 'Apps.music.play')
+              "
+              @click="music.toggle"
+            >
+              <Pause v-if="music.isPlaying" :size="50" fill="currentColor" />
+              <Play v-else :size="50" fill="currentColor" />
+            </button>
+            <button
+              type="button"
+              :aria-label="phone.t('Apps.music.next')"
+              @click="music.next"
+            >
+              <SkipForward :size="38" fill="currentColor" />
+            </button>
+          </div>
+          <div class="music-volume">
+            <Volume1 :size="18" />
+            <sky-range
+              :value="Math.round(music.volume * 100)"
+              :min="0"
+              :max="100"
+              :aria-label="phone.t('Apps.music.volume')"
+              @input="updateVolume"
+            />
+            <Volume2 :size="20" />
+          </div>
+          <p v-if="music.playbackError" class="music-player-error">
+            {{ phone.t('Apps.music.errors.playback_failed') }}
+          </p>
         </section>
-      </k-sheet>
+      </sky-sheet>
     </div>
 
-    <k-dialog
+    <sky-dialog
       :opened="confirmRemoveTrack"
       :title="phone.t('Apps.music.removeSongTitle')"
       :content="phone.t('Apps.music.removeSongBody')"
       @backdropclick="cancelRemoveTrack"
     >
       <template #buttons>
-        <k-dialog-button @click="cancelRemoveTrack">{{
+        <sky-dialog-button @click="cancelRemoveTrack">{{
           phone.t('Common.cancel')
-        }}</k-dialog-button>
-        <k-dialog-button strong @click="removePersonalTrack">{{
+        }}</sky-dialog-button>
+        <sky-dialog-button strong @click="removePersonalTrack">{{
           phone.t('Common.delete')
-        }}</k-dialog-button>
+        }}</sky-dialog-button>
       </template>
-    </k-dialog>
+    </sky-dialog>
 
-    <k-dialog
+    <sky-dialog
       :opened="confirmDeletePlaylist"
       :title="phone.t('Apps.music.deletePlaylistTitle')"
       :content="phone.t('Apps.music.deletePlaylistBody')"
       @backdropclick="confirmDeletePlaylist = false"
     >
       <template #buttons>
-        <k-dialog-button @click="confirmDeletePlaylist = false">{{
+        <sky-dialog-button @click="confirmDeletePlaylist = false">{{
           phone.t('Common.cancel')
-        }}</k-dialog-button>
-        <k-dialog-button strong @click="deleteActivePlaylist">{{
+        }}</sky-dialog-button>
+        <sky-dialog-button strong @click="deleteActivePlaylist">{{
           phone.t('Common.delete')
-        }}</k-dialog-button>
+        }}</sky-dialog-button>
       </template>
-    </k-dialog>
+    </sky-dialog>
 
-    <k-toast position="center" :opened="Boolean(toastText)">{{
+    <sky-toast position="center" :opened="Boolean(toastText)">{{
       toastText
-    }}</k-toast>
-  </k-page>
+    }}</sky-toast>
+  </sky-app-page>
 </template>
 
 <style scoped>
@@ -1463,8 +1498,6 @@ onBeforeUnmount(() => {
   --music-label: #111114;
   --music-muted: #74747c;
   --music-line: rgb(18 18 23 / 9%);
-  --k-safe-area-top: 46px;
-  --k-safe-area-bottom: 25px;
   position: relative;
   display: flex !important;
   flex-direction: column;
@@ -1784,6 +1817,17 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.music-playlist-placeholder {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  overflow: hidden;
+}
+
 .music-playlist-tile > svg,
 .music-playlist-art > svg {
   grid-column: 1 / -1;
@@ -1841,9 +1885,9 @@ onBeforeUnmount(() => {
 .music-mini-player {
   position: absolute;
   z-index: 32;
-  right: 8px;
+  right: calc(var(--sky-safe-area-right) + var(--sky-space-4));
   bottom: var(--music-mini-player-bottom);
-  left: 8px;
+  left: calc(var(--sky-safe-area-left) + var(--sky-space-4));
   height: var(--music-mini-player-height);
   padding: 6px 10px 6px 7px;
   border-radius: 17px;
@@ -1992,46 +2036,7 @@ onBeforeUnmount(() => {
   margin: 14px 16px 0 !important;
 }
 
-.music-popover-dismiss {
-  position: absolute;
-  z-index: 199;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.music-popover {
-  position: absolute !important;
-  z-index: 200 !important;
-  width: 240px !important;
-  overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 13%);
-  border-radius: 28px;
-  background: #303034 !important;
-  box-shadow: none !important;
-  translate: none !important;
-  transform: none !important;
-  transition: none !important;
-}
-
-.music-popover :deep(.k-list) {
-  z-index: auto;
-  background: transparent;
-}
-
-.music-popover.phone-app--light {
-  border-color: rgb(0 0 0 / 10%);
-  background: #f8f8fa !important;
-}
-
-.music-destructive {
-  color: #ff453a !important;
-}
-
-.music-player-sheet :deep(.k-sheet) {
+.music-player-sheet :deep(.sky-sheet__panel) {
   background: rgb(22 22 25 / 96%) !important;
 }
 

@@ -8,14 +8,14 @@ import {
   UserRound,
 } from 'lucide-vue-next'
 import {
-  kButton,
-  kGlass,
-  kList,
-  kListInput,
-  kPreloader,
-  kSegmented,
-  kSegmentedButton,
-} from 'konsta/vue'
+  SkyButton as kButton,
+  SkyField as kListInput,
+  SkyGlass as kGlass,
+  SkyList as kList,
+  SkySegmented as kSegmented,
+  SkySegmentedButton as kSegmentedButton,
+  SkySpinner as kPreloader,
+} from '@/ui'
 import { computed } from 'vue'
 
 const props = withDefaults(
@@ -328,7 +328,7 @@ const canSubmit = computed(() => {
   flex: 1;
   gap: 6px;
 }
-.app-profile-auth__photo :deep(.k-button) {
+.app-profile-auth__photo :deep(.sky-button) {
   min-height: 32px;
   justify-content: flex-start;
   gap: 6px;
@@ -410,8 +410,8 @@ const canSubmit = computed(() => {
   font-size: 11px;
 }
 .app-profile-auth__submit {
-  --k-button-bg-color: var(--auth-accent, var(--yellow, #ffd63e));
-  --k-button-text-color: #fff;
+  --sky-app-accent: var(--auth-accent, var(--yellow, #ffd63e));
+  --sky-button-text: #fff;
   width: 100%;
   min-height: 44px;
   display: flex;

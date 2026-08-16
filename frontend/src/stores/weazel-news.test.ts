@@ -21,6 +21,16 @@ const article: WeazelNewsArticle = {
   id: '7d28b252-0532-4869-9512-e313e34d2fb8',
   imageMediaId: 12,
   imageUrl: 'https://media.invalid/weazel/article.webp',
+  images: [
+    {
+      mediaId: 12,
+      url: 'https://media.invalid/weazel/article.webp',
+    },
+    {
+      mediaId: 13,
+      url: 'https://media.invalid/weazel/article-2.webp',
+    },
+  ],
   publishedAt: 1_754_000_100,
   revision: 4,
   status: 'published',
@@ -31,7 +41,7 @@ const article: WeazelNewsArticle = {
 const draft: WeazelNewsArticleDraft = {
   body: 'Updated body.',
   category: 'business',
-  imageMediaId: null,
+  imageMediaIds: [33, 34],
   status: 'draft',
   title: 'Updated headline',
 }
@@ -52,6 +62,7 @@ describe('Weazel News store', () => {
         ],
         jobGradeLabel: 'Editor',
         jobLabel: 'Weazel News',
+        maximumImages: 6,
       },
       success: true,
     })
@@ -61,6 +72,7 @@ describe('Weazel News store', () => {
     expect(mockNuiCall).toHaveBeenCalledWith('weazel-news:context')
     expect(store.context?.canManage).toBe(true)
     expect(store.context?.categories[0]).toEqual({ count: 3, id: 'news' })
+    expect(store.context?.maximumImages).toBe(6)
   })
 
   it('loads and deduplicates appended public pages', async () => {
@@ -100,6 +112,50 @@ describe('Weazel News store', () => {
     })
     expect(store.publicItems).toHaveLength(2)
     expect(store.publicItems[0]?.title).toBe('Canonical headline')
+    expect(store.publicHasMore).toBe(false)
+  })
+
+  it('normalizes the public response to newest first without changing images', async () => {
+    const older = {
+      ...article,
+      id: 'older-article',
+      publishedAt: (article.publishedAt ?? 0) - 1_000,
+    }
+    const newer = {
+      ...article,
+      id: 'newer-article',
+      images: [...article.images].reverse(),
+      publishedAt: (article.publishedAt ?? 0) + 1_000,
+    }
+    mockNuiCall.mockResolvedValueOnce({
+      data: { hasMore: false, items: [older, newer] },
+      success: true,
+    })
+    const store = useWeazelNewsStore()
+
+    expect(await store.loadPublic()).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledWith('weazel-news:list', {
+      category: null,
+      offset: 0,
+      search: '',
+    })
+    expect(store.publicItems.map((item) => item.id)).toEqual([
+      'newer-article',
+      'older-article',
+    ])
+    expect(store.publicItems[0]?.images).toEqual(newer.images)
+  })
+
+  it('replaces stale search results with a successful empty response', async () => {
+    mockNuiCall.mockResolvedValueOnce({
+      data: { hasMore: false, items: [] },
+      success: true,
+    })
+    const store = useWeazelNewsStore()
+    store.publicItems = [article]
+
+    expect(await store.loadPublic({ search: 'missing headline' })).toBe(true)
+    expect(store.publicItems).toEqual([])
     expect(store.publicHasMore).toBe(false)
   })
 
