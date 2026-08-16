@@ -73,6 +73,7 @@ const wrapperStyle = computed<CSSProperties>(() => ({
             preview
           />
           <PhoneNotifications
+            :dark="isDarkMode"
             :notification="notification"
             @close="emit('close')"
             @open="emit('open', $event)"

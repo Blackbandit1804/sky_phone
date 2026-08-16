@@ -536,18 +536,61 @@ button {
   border: 0 !important;
   opacity: 0 !important;
 }
+.phone-notification-provider {
+  --phone-notification-background: rgb(247 247 248 / 94%);
+  --phone-notification-shadow:
+    0 10px 30px rgb(0 0 0 / 18%), inset 0 0.5px 0 rgb(255 255 255 / 90%);
+  position: absolute;
+  z-index: 85;
+  inset: 0;
+  pointer-events: none;
+}
+.phone-notification-provider.sky-ui-provider--dark {
+  --phone-notification-background: rgb(36 36 39 / 94%);
+  --phone-notification-shadow:
+    0 12px 34px rgb(0 0 0 / 36%), inset 0 0.5px 0 rgb(255 255 255 / 16%);
+}
 .phone-notification {
+  --phone-notification-drag-y: 0px;
   z-index: 85 !important;
-  top: 68px !important;
-  right: 8px !important;
-  left: 8px !important;
+  top: 51px !important;
+  right: 10px !important;
+  left: 10px !important;
   width: auto !important;
   margin-left: 0 !important;
+  pointer-events: auto;
+  background: var(--phone-notification-background) !important;
+  box-shadow: var(--phone-notification-shadow) !important;
+  transform: translate3d(0, var(--phone-notification-drag-y), 0);
+  transition: transform 280ms var(--sky-ease-out, ease-out);
+  will-change: transform;
 }
 .phone-notification__icon {
   width: 38px;
   height: 38px;
+  border-radius: 10px;
   object-fit: contain;
+}
+.phone-notification__open {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.phone-notification__open:active {
+  background: var(--sky-pressed);
+}
+.phone-notification__open:focus-visible {
+  outline: 2px solid var(--sky-app-accent);
+  outline-offset: -3px;
+}
+.phone-notification.phone-notification--dragging {
+  transition: none !important;
 }
 .phone-status-bar {
   position: absolute;

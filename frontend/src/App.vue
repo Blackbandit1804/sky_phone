@@ -1311,6 +1311,17 @@ onMounted(() => {
     if (developmentParameters.has('payphonePreview')) {
       openDevelopmentPayphonePreview()
     }
+    if (developmentParameters.has('notificationPreview')) {
+      window.setTimeout(() => {
+        notifications.show({
+          appId: 'messages',
+          persistent: true,
+          route: '/apps/messages',
+          text: 'You still got that spare alternator?',
+          title: 'Tommy V',
+        })
+      }, 250)
+    }
   }
 })
 
