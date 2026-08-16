@@ -158,6 +158,35 @@ describe('flare store', () => {
     expect(flare.error).toBe('invalid_discovery')
   })
 
+  it('clears Flare state after the server deletes the owned profile', async () => {
+    mockNuiCall.mockResolvedValueOnce({ success: true })
+    const flare = useFlareStore()
+    flare.applyBootstrap(bootstrap)
+    flare.activeMatchId = 'match-to-delete'
+
+    expect(await flare.deleteProfile()).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledWith('flare:delete-profile')
+    expect(flare.profile).toBeNull()
+    expect(flare.activeMatchId).toBe('')
+    expect(flare.likes).toEqual([])
+    expect(flare.matches).toEqual([])
+    expect(flare.suggestions).toEqual([])
+    expect(flare.error).toBe('')
+  })
+
+  it('keeps the Flare profile when account deletion is rejected', async () => {
+    mockNuiCall.mockResolvedValueOnce({
+      error: 'request_failed',
+      success: false,
+    })
+    const flare = useFlareStore()
+    flare.applyBootstrap(bootstrap)
+
+    expect(await flare.deleteProfile()).toBe(false)
+    expect(flare.profile).toEqual(bootstrap.profile)
+    expect(flare.error).toBe('request_failed')
+  })
+
   it('sends media messages and keeps numeric database timestamps intact', async () => {
     const match: FlareMatch = {
       id: 'match-media',

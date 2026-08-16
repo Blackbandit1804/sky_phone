@@ -22,6 +22,8 @@ import {
   SkyNavbar,
   SkyNavbarBackLink,
   SkyAppPage,
+  SkySettingsGroup,
+  SkySettingsRow,
   SkySpinner,
   SkySheet,
   SkyTabBar,
@@ -42,6 +44,7 @@ import {
   Heart,
   ImagePlay,
   Images,
+  LogOut,
   MapPin,
   MessageCircle,
   Pencil,
@@ -52,6 +55,7 @@ import {
   Share2,
   Star,
   SlidersHorizontal,
+  Trash2,
   UserRound,
   Video,
   X,
@@ -72,6 +76,8 @@ import profilesSprite from '@/assets/img/flare/profiles-source.png'
 import FullEmojiPicker from '@/components/FullEmojiPicker.vue'
 import MessageAttachmentBubble from '@/components/MessageAttachmentBubble.vue'
 import SharedContentCard from '@/components/SharedContentCard.vue'
+import { useAccountStore } from '@/stores/account'
+import { useAppAuthStore } from '@/stores/app-auth'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { useFlareStore } from '@/stores/flare'
 import { useMessageMediaStore } from '@/stores/messageMedia'
@@ -107,6 +113,8 @@ type FlareMediaContext = {
 type FlareChatMediaContext = { matchId: string }
 
 const phone = usePhoneStore()
+const account = useAccountStore()
+const appAuth = useAppAuthStore()
 const easyShare = useEasyShareStore()
 const flare = useFlareStore()
 const messageMedia = useMessageMediaStore()
@@ -130,6 +138,9 @@ const profileSettings = ref(false)
 const profileSaving = ref(false)
 const photoSourceOpened = ref(false)
 const discoverySaving = ref(false)
+const signOutDialogOpened = ref(false)
+const deleteAccountDialogOpened = ref(false)
+const accountActionPending = ref(false)
 const unmatchDialog = ref(false)
 const activeExploreMode = ref<ExploreMode>('all')
 const actionToast = ref('')
@@ -158,24 +169,30 @@ function shareProfile(): void {
 }
 const gifNextOffset = ref(0)
 const draftPhotos = ref<FlareDraftPhoto[]>([])
+const ownPhotoIndex = ref(0)
 const activeChoiceField = ref<FlareChoiceField>('gender')
 const choiceOpened = ref(false)
 const choiceSheetContent = ref<HTMLElement | null>(null)
 let activeChoiceTrigger: HTMLElement | null = null
 let gifSearchTimer: ReturnType<typeof setTimeout> | undefined
-const profileDraft = reactive<FlareProfileDraft>({
-  age: 25,
-  avatar: 0,
-  bio: '',
-  gender: 'woman',
-  interestedIn: 'everyone',
-  interests: [],
-  lookingFor: 'longTerm',
-  maxAge: 45,
-  minAge: 21,
-  name: '',
-  photoMediaIds: [],
-})
+
+function createDefaultProfileDraft(): FlareProfileDraft {
+  return {
+    age: 25,
+    avatar: 0,
+    bio: '',
+    gender: 'woman',
+    interestedIn: 'everyone',
+    interests: [],
+    lookingFor: 'longTerm',
+    maxAge: 45,
+    minAge: 21,
+    name: '',
+    photoMediaIds: [],
+  }
+}
+
+const profileDraft = reactive<FlareProfileDraft>(createDefaultProfileDraft())
 const bioInputStyle: CSSProperties = {
   height: '116px',
   lineHeight: '1.4',
@@ -216,6 +233,9 @@ const currentPhotoCount = computed(() =>
 )
 const normalizedPhotoIndex = computed(
   () => currentPhotoIndex.value % currentPhotoCount.value,
+)
+const normalizedOwnPhotoIndex = computed(
+  () => ownPhotoIndex.value % Math.max(1, draftPhotos.value.length),
 )
 const newMatches = computed(() =>
   flare.matches.filter((match) => !match.lastMessage && !match.lastMessageType),
@@ -266,11 +286,27 @@ function profilePhotoStyle(
   return selectedPhoto ? photoStyle(selectedPhoto) : avatarStyle(profile.avatar)
 }
 
-function ownPhotoStyle(): Record<string, string> {
-  const primaryPhoto = draftPhotos.value[0]
-  return primaryPhoto
-    ? photoStyle(primaryPhoto.url)
+function ownPhotoStyle(
+  photoIndex = normalizedOwnPhotoIndex.value,
+): Record<string, string> {
+  const selectedPhoto = draftPhotos.value[photoIndex]
+  return selectedPhoto
+    ? photoStyle(selectedPhoto.url)
     : avatarStyle(profileDraft.avatar)
+}
+
+function ownPhotoLabel(photoIndex = normalizedOwnPhotoIndex.value): string {
+  if (!draftPhotos.value.length) {
+    return phone.t('Apps.flare.profilePhotoFallback')
+  }
+  return phone.t('Apps.flare.profilePhotoNumber', {
+    count: String(draftPhotos.value.length),
+    number: String(photoIndex + 1),
+  })
+}
+
+function selectOwnPhoto(photoIndex: number): void {
+  ownPhotoIndex.value = photoIndex
 }
 
 function syncDraft(): void {
@@ -292,6 +328,9 @@ function syncDraft(): void {
     const url = flare.profile?.photoUrls[index]
     return url ? [{ id, url }] : []
   })
+  if (ownPhotoIndex.value >= draftPhotos.value.length) {
+    ownPhotoIndex.value = 0
+  }
 }
 
 function cloneDraft(): FlareProfileDraft {
@@ -300,6 +339,12 @@ function cloneDraft(): FlareProfileDraft {
     interests: [...profileDraft.interests],
     photoMediaIds: [...profileDraft.photoMediaIds],
   }
+}
+
+function resetProfileDraft(): void {
+  Object.assign(profileDraft, createDefaultProfileDraft())
+  draftPhotos.value = []
+  ownPhotoIndex.value = 0
 }
 
 function openPhotoSourcePicker(): void {
@@ -589,6 +634,46 @@ async function setDiscovery(enabled: boolean): Promise<void> {
   discoverySaving.value = true
   if (!(await flare.setDiscovery(enabled))) showActionError()
   discoverySaving.value = false
+}
+
+function closeSignOutDialog(): void {
+  if (!accountActionPending.value) signOutDialogOpened.value = false
+}
+
+function closeDeleteAccountDialog(): void {
+  if (!accountActionPending.value) deleteAccountDialogOpened.value = false
+}
+
+async function signOut(): Promise<void> {
+  if (accountActionPending.value) return
+  accountActionPending.value = true
+  const success = await account.logout()
+  accountActionPending.value = false
+  if (!success) {
+    showActionError('request_failed')
+    return
+  }
+  appAuth.clear()
+  signOutDialogOpened.value = false
+  profileSettings.value = false
+  profileEditing.value = false
+  resetProfileDraft()
+  flare.reset('not_authenticated')
+}
+
+async function deleteFlareAccount(): Promise<void> {
+  if (accountActionPending.value) return
+  accountActionPending.value = true
+  const success = await flare.deleteProfile()
+  accountActionPending.value = false
+  if (!success) {
+    showActionError()
+    return
+  }
+  deleteAccountDialogOpened.value = false
+  profileSettings.value = false
+  profileEditing.value = false
+  resetProfileDraft()
 }
 
 async function confirmUnmatch(): Promise<void> {
@@ -1219,16 +1304,13 @@ onBeforeUnmount(() => {
               : activeTab
         "
         class="flare-navbar"
+        :show-back="
+          activeTab === 'profile' && (profileEditing || profileSettings)
+        "
+        back-appearance="surface"
+        :back-label="phone.t('Common.back')"
+        @back="closeProfileScreen"
       >
-        <template
-          v-if="activeTab === 'profile' && (profileEditing || profileSettings)"
-          #left
-        >
-          <sky-navbar-back-link
-            :text="phone.t('Common.back')"
-            @click="closeProfileScreen"
-          />
-        </template>
         <template #title>
           <span v-if="activeTab === 'discover'" class="flare-title">
             <Flame fill="currentColor" /> Flare
@@ -1598,6 +1680,35 @@ onBeforeUnmount(() => {
             @input="updateNumber('maxAge', $event)"
           />
         </sky-list>
+
+        <sky-settings-group
+          class="flare-account-actions"
+          :title="phone.t('Apps.flare.accountActions')"
+          :footer="phone.t('Apps.flare.signOutHint')"
+        >
+          <sky-settings-row
+            kind="action"
+            :pending="accountActionPending"
+            :title="phone.t('Apps.flare.signOut')"
+            @activate="signOutDialogOpened = true"
+          >
+            <template #leading>
+              <LogOut :size="20" aria-hidden="true" />
+            </template>
+          </sky-settings-row>
+          <sky-settings-row
+            kind="action"
+            tone="danger"
+            :pending="accountActionPending"
+            :title="phone.t('Apps.flare.deleteAccount')"
+            @activate="deleteAccountDialogOpened = true"
+          >
+            <template #leading>
+              <Trash2 :size="20" aria-hidden="true" />
+            </template>
+          </sky-settings-row>
+        </sky-settings-group>
+
         <p v-if="flare.error" class="flare-error">
           {{ phone.t(`Apps.flare.errors.${flare.error}`) }}
         </p>
@@ -1608,8 +1719,35 @@ onBeforeUnmount(() => {
         class="flare-scroll-view flare-profile-overview"
       >
         <div class="flare-profile-portrait">
-          <i :style="ownPhotoStyle()" />
+          <i
+            :style="ownPhotoStyle()"
+            role="img"
+            :aria-label="ownPhotoLabel()"
+          />
           <span><Flame :size="16" fill="currentColor" /></span>
+        </div>
+        <div
+          v-if="draftPhotos.length > 1"
+          class="flare-profile-photo-strip"
+          role="group"
+          :aria-label="phone.t('Apps.flare.profilePhotos')"
+        >
+          <button
+            v-for="(photo, index) in draftPhotos"
+            :key="photo.id"
+            type="button"
+            :class="{ active: index === normalizedOwnPhotoIndex }"
+            :aria-label="
+              phone.t('Apps.flare.viewProfilePhoto', {
+                count: String(draftPhotos.length),
+                number: String(index + 1),
+              })
+            "
+            :aria-pressed="index === normalizedOwnPhotoIndex"
+            @click="selectOwnPhoto(index)"
+          >
+            <i :style="photoStyle(photo.url)" aria-hidden="true" />
+          </button>
         </div>
         <h1>{{ profileDraft.name }}, {{ profileDraft.age }}</h1>
         <p>{{ profileDraft.bio }}</p>
@@ -1988,7 +2126,69 @@ onBeforeUnmount(() => {
       </sky-sheet>
     </div>
 
-    <sky-dialog :opened="unmatchDialog" @backdropclick="unmatchDialog = false">
+    <sky-dialog
+      :opened="signOutDialogOpened"
+      :title="phone.t('Apps.flare.signOutTitle')"
+      :content="phone.t('Apps.flare.signOutBody')"
+      @backdropclick="closeSignOutDialog"
+      @escape="closeSignOutDialog"
+    >
+      <template #buttons>
+        <sky-dialog-button
+          :disabled="accountActionPending"
+          @click="closeSignOutDialog"
+        >
+          {{ phone.t('Common.cancel') }}
+        </sky-dialog-button>
+        <sky-dialog-button
+          strong
+          :disabled="accountActionPending"
+          @click="signOut"
+        >
+          {{
+            accountActionPending
+              ? phone.t('Apps.flare.signingOut')
+              : phone.t('Apps.flare.signOut')
+          }}
+        </sky-dialog-button>
+      </template>
+    </sky-dialog>
+
+    <sky-dialog
+      :opened="deleteAccountDialogOpened"
+      role="alertdialog"
+      :title="phone.t('Apps.flare.deleteAccountTitle')"
+      :content="phone.t('Apps.flare.deleteAccountBody')"
+      @backdropclick="closeDeleteAccountDialog"
+      @escape="closeDeleteAccountDialog"
+    >
+      <template #buttons>
+        <sky-dialog-button
+          :disabled="accountActionPending"
+          @click="closeDeleteAccountDialog"
+        >
+          {{ phone.t('Common.cancel') }}
+        </sky-dialog-button>
+        <sky-dialog-button
+          strong
+          class="flare-dialog-button--danger"
+          :disabled="accountActionPending"
+          @click="deleteFlareAccount"
+        >
+          {{
+            accountActionPending
+              ? phone.t('Apps.flare.deletingAccount')
+              : phone.t('Common.delete')
+          }}
+        </sky-dialog-button>
+      </template>
+    </sky-dialog>
+
+    <sky-dialog
+      :opened="unmatchDialog"
+      @backdropclick="unmatchDialog = false"
+      @escape="unmatchDialog = false"
+    >
       <template #title>{{ phone.t('Apps.flare.unmatchTitle') }}</template>
       <p>
         {{
@@ -2615,6 +2815,47 @@ onBeforeUnmount(() => {
   color: #fff;
   background: var(--flare);
 }
+.flare-profile-photo-strip {
+  max-width: 100%;
+  margin: -2px auto 14px;
+  padding: 2px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.flare-profile-photo-strip > button {
+  width: 44px;
+  height: 52px;
+  margin: 0;
+  padding: 2px;
+  display: grid;
+  place-items: center;
+  border: 2px solid transparent;
+  border-radius: 13px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+.flare-profile-photo-strip > button > i {
+  width: 36px;
+  height: 44px;
+  display: block;
+  border-radius: 9px;
+  background-repeat: no-repeat;
+}
+.flare-profile-photo-strip > button.active {
+  border-color: var(--flare);
+}
+.flare-profile-photo-strip > button:active {
+  transform: scale(0.96);
+}
+.flare-profile-photo-strip > button:focus-visible {
+  outline: 2px solid var(--flare);
+  outline-offset: 2px;
+}
 .flare-profile-overview > h1 {
   margin: 0;
   font-size: 24px;
@@ -2947,6 +3188,22 @@ onBeforeUnmount(() => {
   color: var(--flare-muted);
   font-size: 11px;
   line-height: 1.45;
+}
+.flare-account-actions {
+  margin: 0 var(--sky-page-gutter) var(--sky-space-6);
+}
+.flare-account-actions :deep(.sky-settings-group__title),
+.flare-account-actions :deep(.sky-settings-group__footer) {
+  margin-right: 0;
+  margin-left: 0;
+}
+.flare-account-actions
+  :deep(.sky-settings-row--danger .sky-settings-row__leading) {
+  color: var(--sky-danger);
+}
+.flare-dialog-button--danger:not(:disabled) {
+  background: var(--sky-danger);
+  color: #fff;
 }
 
 .flare-choice-sheet :deep(.sky-sheet__panel) {

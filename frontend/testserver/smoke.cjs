@@ -681,6 +681,79 @@ async function verifyStatefulActions(baseUrl) {
     remainingTrash.items.some((message) => message.id === 4),
     'mail:delete-many removed non-selected trash mail',
   )
+
+  const flareBeforeDelete = await expectSuccess(
+    baseUrl,
+    'flare:bootstrap',
+    {},
+    true,
+  )
+  assert(flareBeforeDelete.profile, 'flare:bootstrap did not include a profile')
+  assert(
+    flareBeforeDelete.matches.length > 0,
+    'flare:bootstrap did not include a deletable match',
+  )
+  const swipedProfile = flareBeforeDelete.suggestions[0]
+  await expectSuccess(baseUrl, 'flare:swipe', {
+    choice: 'pass',
+    targetId: swipedProfile.id,
+  })
+  const flareAfterSwipe = await expectSuccess(
+    baseUrl,
+    'flare:bootstrap',
+    {},
+    true,
+  )
+  assert(
+    !flareAfterSwipe.suggestions.some(
+      (profile) => profile.id === swipedProfile.id,
+    ),
+    'flare:swipe did not filter the swiped profile',
+  )
+  await expectSuccess(baseUrl, 'flare:delete-profile')
+  const flareAfterDelete = await expectSuccess(
+    baseUrl,
+    'flare:bootstrap',
+    {},
+    true,
+  )
+  assert.equal(flareAfterDelete.profile, null)
+  assert.deepEqual(flareAfterDelete.suggestions, [])
+  assert.deepEqual(flareAfterDelete.likes, [])
+  assert.deepEqual(flareAfterDelete.matches, [])
+  const repeatedFlareDelete = await post(baseUrl, 'flare:delete-profile')
+  assert.deepEqual(repeatedFlareDelete, {
+    error: 'profile_not_found',
+    success: false,
+  })
+  const recreatedFlare = await expectSuccess(
+    baseUrl,
+    'flare:save-profile',
+    {
+      ...flareBeforeDelete.profile,
+      photoMediaIds: [],
+      photoUrls: undefined,
+    },
+    true,
+  )
+  assert(
+    recreatedFlare.suggestions.some(
+      (profile) => profile.id === swipedProfile.id,
+    ),
+    'recreated Flare profile retained a deleted swipe filter',
+  )
+
+  await expectSuccess(baseUrl, 'account:logout')
+  const signedOutFlareBootstrap = await post(baseUrl, 'flare:bootstrap')
+  assert.deepEqual(signedOutFlareBootstrap, {
+    error: 'not_authenticated',
+    success: false,
+  })
+  const signedOutFlareDelete = await post(baseUrl, 'flare:delete-profile')
+  assert.deepEqual(signedOutFlareDelete, {
+    error: 'not_authenticated',
+    success: false,
+  })
 }
 
 async function main() {

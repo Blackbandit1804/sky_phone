@@ -862,6 +862,9 @@ const defaultLocales: LocaleTree = {
       choosePhotos: 'Choose from Photos',
       primaryPhoto: 'Main',
       removePhoto: 'Remove photo {number}',
+      profilePhotoFallback: 'Flare profile avatar',
+      profilePhotoNumber: 'Profile photo {number} of {count}',
+      viewProfilePhoto: 'Show profile photo {number} of {count}',
       yourName: 'Your name',
       namePlaceholder: 'What should people call you?',
       age: 'Age',
@@ -917,6 +920,19 @@ const defaultLocales: LocaleTree = {
       editProfile: 'Edit profile',
       editRelationshipGoal: 'Edit relationship goal',
       profileGoalBody: 'Shown on your discovery card.',
+      accountActions: 'Account',
+      signOut: 'Sign Out',
+      signOutTitle: 'Sign out of Sky Cloud?',
+      signOutBody:
+        'This signs the whole phone out of Sky Cloud. Your Flare profile, matches and chats stay stored.',
+      signingOut: 'Signing Out...',
+      signOutHint:
+        'Signing out affects every app that uses Sky Cloud on this phone.',
+      deleteAccount: 'Delete Flare Account',
+      deleteAccountTitle: 'Delete your Flare account?',
+      deleteAccountBody:
+        'Your Flare profile, swipes, matches and conversations will be permanently deleted. Your Sky Cloud account and Photos library stay available.',
+      deletingAccount: 'Deleting...',
       relationshipGoal: 'Relationship goal',
       interests: 'Interests',
       interestsPlaceholder: 'Music, travel, coffee',
@@ -978,6 +994,7 @@ const defaultLocales: LocaleTree = {
       },
       errors: {
         invalid_profile: 'Check your name, age and profile text.',
+        profile_not_found: 'This Flare account is no longer available.',
         invalid_profile_photos:
           'Choose or take up to six photos saved in your own Photos library.',
         request_failed: 'Flare could not save those changes. Try again.',

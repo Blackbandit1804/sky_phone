@@ -467,6 +467,42 @@ Bridge.Callbacks.Register("sky_phone:flare:bootstrap", function(source)
     return { success = true, data = bootstrap(account.id) }
 end)
 
+Bridge.Callbacks.Register("sky_phone:flare:delete-profile", function(source)
+    if not SkyPhone.AllowOperation(source, "flare_profile_delete", 3, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local account, error_response = SkyPhone.RequireAccount(source)
+    if not account then
+        return error_response
+    end
+    if not load_profile(account.id) then
+        return { success = false, error = "profile_not_found" }
+    end
+    if not Bridge.Database.Transaction({
+        {
+            query = [[
+                DELETE FROM `sky_phone_flare_matches`
+                WHERE `account_a_id` = ? OR `account_b_id` = ?
+            ]],
+            params = { account.id, account.id },
+        },
+        {
+            query = [[
+                DELETE FROM `sky_phone_flare_swipes`
+                WHERE `swiper_account_id` = ? OR `target_account_id` = ?
+            ]],
+            params = { account.id, account.id },
+        },
+        {
+            query = "DELETE FROM `sky_phone_flare_profiles` WHERE `account_id` = ?",
+            params = { account.id },
+        },
+    }) then
+        return { success = false, error = "request_failed" }
+    end
+    return { success = true }
+end)
+
 Bridge.Callbacks.Register("sky_phone:flare:save-profile", function(source, data)
     if not SkyPhone.AllowOperation(source, "flare_profile", 12, 60) then
         return { success = false, error = "rate_limited" }

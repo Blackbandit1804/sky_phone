@@ -272,6 +272,7 @@ local server_callbacks = {
     "darkchat:report",
     "darkchat:clear",
     "flare:bootstrap",
+    "flare:delete-profile",
     "flare:save-profile",
     "flare:set-discovery",
     "flare:swipe",

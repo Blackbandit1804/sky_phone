@@ -3423,6 +3423,11 @@ let flareSuggestions = [
     photoUrls: [],
   },
 ]
+const flareSuggestionFixtures = flareSuggestions.map((profile) => ({
+  ...profile,
+  interests: [...profile.interests],
+  photoUrls: [...profile.photoUrls],
+}))
 const flareMatches = [
   {
     id: 'flare-match-demo-0000-0000-0000000001',
@@ -3488,12 +3493,22 @@ const flareMessages = {
 }
 
 function flareBootstrap() {
+  const hasProfile = Boolean(flareProfile)
   return {
     profile: flareProfile,
-    suggestions: flareProfile.discoverable ? flareSuggestions : [],
-    likes: flareLikes,
-    matches: flareMatches,
+    suggestions:
+      hasProfile && flareProfile.discoverable ? flareSuggestions : [],
+    likes: hasProfile ? flareLikes : [],
+    matches: hasProfile ? flareMatches : [],
   }
+}
+
+function freshFlareSuggestions() {
+  return flareSuggestionFixtures.map((profile) => ({
+    ...profile,
+    interests: [...profile.interests],
+    photoUrls: [...profile.photoUrls],
+  }))
 }
 
 const companyCategories = [
@@ -6265,8 +6280,28 @@ app.post('/api/:endpoint', (request, response) => {
         .map(billingInvoice),
     }
   }
+  if (endpoint.startsWith('flare:') && !authenticated) {
+    response.json({ success: false, error: 'not_authenticated' })
+    return
+  }
   if (endpoint === 'flare:bootstrap') {
     response.json({ success: true, data: flareBootstrap() })
+    return
+  }
+  if (endpoint === 'flare:delete-profile') {
+    if (!flareProfile) {
+      response.json({ success: false, error: 'profile_not_found' })
+      return
+    }
+    flareProfile = null
+    flareSuggestions = freshFlareSuggestions()
+    flareLikes = []
+    flareLastSwipe = null
+    flareMatches.splice(0, flareMatches.length)
+    for (const matchId of Object.keys(flareMessages)) {
+      delete flareMessages[matchId]
+    }
+    response.json({ success: true })
     return
   }
   if (endpoint === 'flare:save-profile') {
@@ -6297,13 +6332,17 @@ app.post('/api/:endpoint', (request, response) => {
     flareProfile = {
       ...flareProfile,
       ...request.body,
-      discoverable: flareProfile.discoverable,
+      discoverable: flareProfile?.discoverable ?? true,
       ...photoUpdate,
     }
     response.json({ success: true, data: flareBootstrap() })
     return
   }
   if (endpoint === 'flare:set-discovery') {
+    if (!flareProfile) {
+      response.json({ success: false, error: 'invalid_profile' })
+      return
+    }
     if (typeof request.body.enabled !== 'boolean') {
       response.json({ success: false, error: 'invalid_discovery' })
       return
@@ -6313,7 +6352,7 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'flare:swipe') {
-    if (!flareProfile.discoverable) {
+    if (!flareProfile?.discoverable) {
       response.json({ success: false, error: 'discovery_disabled' })
       return
     }
