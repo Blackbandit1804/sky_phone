@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Compass,
   Eye,
+  Grid3X3,
   Heart,
   Home,
   ImagePlus,
@@ -78,7 +79,7 @@ type Tab = 'home' | 'explore' | 'create' | 'activity' | 'profile'
 type AuthMode = 'login' | 'register'
 type ComposeKind = 'post' | 'story'
 type ConnectionMode = 'followers' | 'following'
-type ProfileSection = 'photos' | 'saved'
+type ProfileSection = 'all' | 'videos' | 'tagged'
 type MediaSource = 'camera' | 'photos'
 
 const phone = usePhoneStore()
@@ -102,8 +103,9 @@ const storyText = ref('')
 const commentsEnabled = ref(true)
 const publishing = ref(false)
 const search = ref('')
-const profileSection = ref<ProfileSection>('photos')
+const profileSection = ref<ProfileSection>('all')
 const selectedPost = ref<PicstagramPost | null>(null)
+const commentPost = ref<PicstagramPost | null>(null)
 const actionPost = ref<PicstagramPost | null>(null)
 const selectedStory = ref<PicstagramStory | null>(null)
 const commentsOpen = ref(false)
@@ -138,6 +140,7 @@ const moderationOpen = ref(false)
 const feedback = ref('')
 const carouselIndexes = ref<Record<string, number>>({})
 const commentLikePulseId = ref<string | null>(null)
+const expandedCommentThreads = ref<Set<string>>(new Set())
 const reactionPulse = ref<{ id: string; kind: 'like' | 'save' } | null>(null)
 let feedbackTimer: number | null = null
 let searchTimer: number | null = null
@@ -151,11 +154,25 @@ const unreadCount = computed(
 const tabIndex = computed(() =>
   ['home', 'explore', 'create', 'activity', 'profile'].indexOf(tab.value),
 )
-const profileGrid = computed(() =>
-  profileSection.value === 'saved' && currentProfile.value?.is_owner
-    ? store.saved
-    : store.profilePosts,
-)
+const taggedProfilePosts = computed(() => {
+  const handle = currentProfile.value?.handle.trim().toLowerCase()
+  if (!handle) return []
+  const mention = `@${handle}`
+  const matches = store
+    .allPostCollections()
+    .flat()
+    .filter((post) => post.caption.toLowerCase().includes(mention))
+  return [...new Map(matches.map((post) => [post.id, post])).values()]
+})
+const profileGrid = computed(() => {
+  if (profileSection.value === 'videos') {
+    return store.profilePosts.filter((post) =>
+      post.media.some((media) => media.media_type === 'video'),
+    )
+  }
+  if (profileSection.value === 'tagged') return taggedProfilePosts.value
+  return store.profilePosts
+})
 const commentThreads = computed(() => {
   const roots = store.comments.filter((comment) => !comment.parent_id)
   return roots.map((comment) => ({
@@ -292,7 +309,7 @@ async function showTab(next: Tab): Promise<void> {
   if (next === 'profile' && store.profile) {
     await store.loadProfile({ profileId: store.profile.id })
     store.viewedProfile = null
-    profileSection.value = 'photos'
+    profileSection.value = 'all'
   }
 }
 
@@ -302,11 +319,11 @@ async function openProfile(profile: PicstagramProfile | string): Promise<void> {
     notify(errorMessage('profile_not_found'))
     return
   }
-  commentsOpen.value = false
+  closeComments()
   connectionsOpen.value = false
   selectedPost.value = null
   tab.value = 'profile'
-  profileSection.value = 'photos'
+  profileSection.value = 'all'
 }
 
 async function openConnectionProfile(
@@ -330,10 +347,29 @@ function closePost(): void {
 }
 
 async function openComments(post: PicstagramPost): Promise<void> {
-  selectedPost.value = post
+  commentPost.value = post
+  selectedPost.value = null
   await store.loadComments(post.id)
   replyingTo.value = null
+  expandedCommentThreads.value = new Set()
   commentsOpen.value = true
+}
+
+function closeComments(): void {
+  commentsOpen.value = false
+  commentPost.value = null
+  replyingTo.value = null
+}
+
+function toggleCommentThread(id: string): void {
+  const next = new Set(expandedCommentThreads.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedCommentThreads.value = next
+}
+
+function shareCommentPost(): void {
+  if (commentPost.value) sharePost(commentPost.value)
 }
 
 function startReply(comment: PicstagramComment): void {
@@ -342,12 +378,12 @@ function startReply(comment: PicstagramComment): void {
 }
 
 async function submitComment(): Promise<void> {
-  if (!selectedPost.value || !commentBody.value.trim()) return
+  if (!commentPost.value || !commentBody.value.trim()) return
   const body = replyingTo.value
     ? `@${replyingTo.value.handle} ${commentBody.value.trim()}`
     : commentBody.value.trim()
   const response = await store.comment(
-    selectedPost.value.id,
+    commentPost.value.id,
     body,
     replyingTo.value?.parent_id ?? replyingTo.value?.id,
     replyingTo.value?.id,
@@ -356,10 +392,10 @@ async function submitComment(): Promise<void> {
     notify(errorMessage(response.error))
     return
   }
-  selectedPost.value.comment_count += 1
+  commentPost.value.comment_count += 1
   commentBody.value = ''
   replyingTo.value = null
-  await store.loadComments(selectedPost.value.id)
+  await store.loadComments(commentPost.value.id)
 }
 
 async function reactComment(comment: PicstagramComment): Promise<void> {
@@ -417,9 +453,22 @@ function resetComposer(): void {
   commentsEnabled.value = true
 }
 
+function removeComposeMedia(id: number): void {
+  selectedMedia.value = selectedMedia.value.filter((media) => media.id !== id)
+}
+
+function changeComposeSelection(): void {
+  openComposeMedia('photos', selectedMedia.value[0]?.mediaType ?? 'photo')
+}
+
 function beginStoryCompose(): void {
   void showTab('create')
-  composeKind.value = 'story'
+  setComposeKind('story')
+}
+
+function beginPostCompose(): void {
+  void showTab('create')
+  setComposeKind('post')
 }
 
 function setComposeKind(kind: ComposeKind): void {
@@ -611,7 +660,7 @@ function reportCurrentProfile(): void {
 }
 
 function reportComment(comment: PicstagramComment): void {
-  commentsOpen.value = false
+  closeComments()
   startReport('comment', comment.id, `@${comment.handle}`)
 }
 
@@ -722,11 +771,6 @@ watch(search, (value) => {
       store.searchProfiles = []
     }
   }, 300)
-})
-
-watch(profileSection, (section) => {
-  if (section === 'saved' && currentProfile.value?.is_owner)
-    void store.loadSaved()
 })
 
 onMounted(async () => {
@@ -899,13 +943,15 @@ onBeforeUnmount(() => {
                   }}</small></span
                 >
               </button>
-              <button
-                class="ps-icon-button"
+              <SkyLink
+                component="button"
+                icon-only
+                class="ps-post-more"
                 :aria-label="t('more')"
                 @click="showPostActions(selectedPost)"
               >
                 <MoreHorizontal />
-              </button>
+              </SkyLink>
             </header>
             <div class="ps-carousel-shell">
               <div
@@ -976,9 +1022,11 @@ onBeforeUnmount(() => {
                   <Heart
                     :fill="selectedPost.is_liked ? 'currentColor' : 'none'"
                   />
+                  <span>{{ count(selectedPost.like_count) }}</span>
                 </button>
                 <button @click="openComments(selectedPost)">
                   <MessageCircle />
+                  <span>{{ count(selectedPost.comment_count) }}</span>
                 </button>
                 <button @click="sharePost(selectedPost)"><Share2 /></button>
               </div>
@@ -1000,9 +1048,6 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <div class="ps-post-copy">
-              <strong>{{
-                t('likes', { count: count(selectedPost.like_count) })
-              }}</strong>
               <p v-if="selectedPost.caption">
                 <b>@{{ selectedPost.handle }}</b> {{ selectedPost.caption }}
               </p>
@@ -1023,15 +1068,17 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else-if="tab === 'home'">
-        <SkyNavbar :title="t('name')" variant="medium">
-          <template #right>
+        <SkyNavbar :title="t('name')" variant="compact">
+          <template #left>
             <SkyLink
               component="button"
               icon-only
-              :aria-label="t('newStory')"
-              @click="beginStoryCompose"
+              :aria-label="t('newPost')"
+              @click="beginPostCompose"
               ><Plus
             /></SkyLink>
+          </template>
+          <template #right>
             <SkyLink
               component="button"
               icon-only
@@ -1107,13 +1154,15 @@ onBeforeUnmount(() => {
                   ><small v-if="post.location">{{ post.location }}</small></span
                 >
               </button>
-              <button
-                class="ps-icon-button"
+              <SkyLink
+                component="button"
+                icon-only
+                class="ps-post-more"
                 :aria-label="t('more')"
                 @click.stop="showPostActions(post)"
               >
                 <MoreHorizontal />
-              </button>
+              </SkyLink>
             </header>
             <div class="ps-carousel-shell">
               <div
@@ -1178,10 +1227,11 @@ onBeforeUnmount(() => {
                   }"
                   @click="reactWithPulse(post, 'like')"
                 >
-                  <Heart
-                    :fill="post.is_liked ? 'currentColor' : 'none'"
-                  /></button
-                ><button @click="openComments(post)"><MessageCircle /></button
+                  <Heart :fill="post.is_liked ? 'currentColor' : 'none'" />
+                  <span>{{ count(post.like_count) }}</span></button
+                ><button @click="openComments(post)">
+                  <MessageCircle />
+                  <span>{{ count(post.comment_count) }}</span></button
                 ><button @click="sharePost(post)"><Share2 /></button>
               </div>
               <button
@@ -1200,9 +1250,6 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <div class="ps-post-copy">
-              <strong>{{
-                t('likes', { count: count(post.like_count) })
-              }}</strong>
               <p v-if="post.caption">
                 <b>@{{ post.handle }}</b> {{ post.caption }}
               </p>
@@ -1225,7 +1272,7 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else-if="tab === 'explore'">
-        <SkyNavbar :title="t('explore')" variant="large">
+        <SkyNavbar :title="t('explore')" variant="compact">
           <template #subnavbar
             ><SkySearchbar
               v-model="search"
@@ -1300,7 +1347,7 @@ onBeforeUnmount(() => {
       <template v-else-if="tab === 'create'">
         <SkyNavbar
           :title="t(composeKind === 'post' ? 'newPost' : 'newStory')"
-          variant="large"
+          variant="compact"
         />
         <SkyScrollArea with-tabbar class="ps-screen ps-create">
           <SkySegmented strong>
@@ -1317,21 +1364,27 @@ onBeforeUnmount(() => {
           </SkySegmented>
           <SkyCard class="ps-create-card">
             <div v-if="selectedMedia.length" class="ps-selection-preview">
-              <template v-for="media in selectedMedia" :key="media.id"
-                ><video
+              <div
+                v-for="media in selectedMedia"
+                :key="media.id"
+                class="ps-selection-slide"
+              >
+                <video
                   v-if="media.mediaType === 'video'"
                   :src="media.url"
                   autoplay
                   loop
                   muted
-                  playsinline /><img v-else :src="media.url" alt=""
-              /></template>
-              <button
-                :aria-label="t('changePhotos')"
-                @click="selectedMedia = []"
-              >
-                <X />
-              </button>
+                  playsinline
+                />
+                <img v-else :src="media.url" alt="" />
+                <button
+                  :aria-label="t('remove')"
+                  @click="removeComposeMedia(media.id)"
+                >
+                  <X />
+                </button>
+              </div>
               <SkyChip>{{
                 t('selectedPhotos', { count: String(selectedMedia.length) })
               }}</SkyChip>
@@ -1384,6 +1437,16 @@ onBeforeUnmount(() => {
                 </button>
               </div>
             </template>
+            <SkyButton
+              v-if="selectedMedia.length"
+              block
+              rounded
+              tonal
+              class="ps-change-selection"
+              @click="changeComposeSelection"
+            >
+              <Images />{{ t('changePhotos') }}
+            </SkyButton>
           </SkyCard>
           <div class="ps-compose-fields">
             <SkyField
@@ -1393,7 +1456,6 @@ onBeforeUnmount(() => {
               :placeholder="t('captionPlaceholder')"
               type="textarea"
               :rows="4"
-              outline
             />
             <SkyField
               v-else
@@ -1402,14 +1464,12 @@ onBeforeUnmount(() => {
               :placeholder="t('storyTextPlaceholder')"
               type="textarea"
               :rows="4"
-              outline
             />
             <SkyField
               v-if="composeKind === 'post'"
               v-model="location"
               :label="t('location')"
               :placeholder="t('locationPlaceholder')"
-              outline
               ><template #media><MapPin /></template
             ></SkyField>
             <label v-if="composeKind === 'post'" class="ps-toggle-row"
@@ -1499,13 +1559,39 @@ onBeforeUnmount(() => {
 
       <template v-else-if="tab === 'profile'">
         <SkyNavbar
-          :title="currentProfile ? `@${currentProfile.handle}` : t('profile')"
-          :show-back="Boolean(store.viewedProfile)"
-          :back-label="phone.t('Common.back')"
-          back-appearance="surface"
-          variant="medium"
-          @back="goBackFromProfile"
-          ><template #right
+          :title="currentProfile?.display_name ?? t('profile')"
+          variant="compact"
+        >
+          <template #left>
+            <SkyLink
+              v-if="currentProfile?.is_owner"
+              component="button"
+              icon-only
+              :aria-label="t('newPost')"
+              @click="beginPostCompose"
+            >
+              <Plus />
+            </SkyLink>
+            <SkyLink
+              v-else
+              component="button"
+              icon-only
+              :aria-label="phone.t('Common.back')"
+              @click="goBackFromProfile"
+            >
+              <ChevronLeft />
+            </SkyLink>
+          </template>
+          <template #title>
+            <span class="ps-profile-navbar-title">
+              {{ currentProfile?.display_name ?? t('profile') }}
+              <LockKeyhole
+                v-if="currentProfile?.private"
+                :aria-label="t('privateProfileSetting')"
+              />
+            </span>
+          </template>
+          <template #right
             ><SkyLink
               component="button"
               icon-only
@@ -1547,7 +1633,18 @@ onBeforeUnmount(() => {
               /></strong>
               <p>{{ currentProfile.bio || t('emptyBio') }}</p>
             </div>
-            <div v-if="!currentProfile.is_owner" class="ps-profile-buttons">
+            <div
+              v-if="currentProfile.is_owner"
+              class="ps-profile-owner-actions"
+            >
+              <SkyButton block rounded @click="editProfile">
+                {{ t('editProfile') }}
+              </SkyButton>
+              <SkyButton block rounded tonal @click="shareCurrentProfile">
+                <Share2 />{{ t('shareProfile') }}
+              </SkyButton>
+            </div>
+            <div v-else class="ps-profile-buttons">
               <SkyButton
                 rounded
                 :tonal="
@@ -1571,20 +1668,26 @@ onBeforeUnmount(() => {
             ><span>{{ t('privateProfileBody') }}</span>
           </div>
           <template v-else>
-            <SkySegmented
-              v-if="currentProfile.is_owner"
-              strong
-              class="ps-profile-segments"
+            <SkySegmented strong class="ps-profile-segments"
               ><SkySegmentedButton
-                :active="profileSection === 'photos'"
-                @click="profileSection = 'photos'"
-                ><Images />{{ t('photos') }}</SkySegmentedButton
+                :active="profileSection === 'all'"
+                :aria-label="t('allPosts')"
+                :title="t('allPosts')"
+                @click="profileSection = 'all'"
+                ><Grid3X3 /></SkySegmentedButton
               ><SkySegmentedButton
-                :active="profileSection === 'saved'"
-                @click="profileSection = 'saved'"
-                ><Bookmark />{{ t('saved') }}</SkySegmentedButton
-              ></SkySegmented
-            >
+                :active="profileSection === 'videos'"
+                :aria-label="t('videos')"
+                :title="t('videos')"
+                @click="profileSection = 'videos'"
+                ><Video /></SkySegmentedButton
+              ><SkySegmentedButton
+                :active="profileSection === 'tagged'"
+                :aria-label="t('taggedPosts')"
+                :title="t('taggedPosts')"
+                @click="profileSection = 'tagged'"
+                ><UserRound /></SkySegmentedButton
+            ></SkySegmented>
             <div class="ps-grid">
               <button
                 v-for="post in profileGrid"
@@ -1666,14 +1769,17 @@ onBeforeUnmount(() => {
       :opened="commentsOpen"
       class="ps-sheet"
       :aria-label="t('comments')"
-      @backdropclick="commentsOpen = false"
-      @escape="commentsOpen = false"
+      swipe-to-close
+      @backdropclick="closeComments"
+      @escape="closeComments"
+      @swipeclose="closeComments"
     >
-      <div class="ps-sheet-handle" />
       <section class="ps-comments-sheet">
         <header>
           <strong>{{ t('comments') }}</strong
-          ><button @click="commentsOpen = false"><X /></button>
+          ><button :aria-label="t('share')" @click="shareCommentPost">
+            <Share2 />
+          </button>
         </header>
         <div class="ps-comments-list">
           <div v-if="!store.comments.length" class="ps-empty">
@@ -1734,60 +1840,82 @@ onBeforeUnmount(() => {
                 /><small>{{ thread.comment.like_count || '' }}</small>
               </button>
             </article>
-            <article
-              v-for="reply in thread.replies"
-              :key="reply.id"
-              class="ps-comment-row ps-comment-row--reply"
+            <button
+              v-if="thread.replies.length"
+              class="ps-comment-replies-toggle"
+              @click="toggleCommentThread(thread.comment.id)"
             >
-              <button
-                class="ps-avatar ps-avatar--reply"
-                @click="openProfile(reply.profile_id)"
+              <span />
+              {{
+                t(
+                  expandedCommentThreads.has(thread.comment.id)
+                    ? 'hideReplies'
+                    : 'showReplies',
+                  { count: count(thread.replies.length) },
+                )
+              }}
+            </button>
+            <template v-if="expandedCommentThreads.has(thread.comment.id)">
+              <article
+                v-for="reply in thread.replies"
+                :key="reply.id"
+                class="ps-comment-row ps-comment-row--reply"
               >
-                <img
-                  v-if="reply.avatar_url"
-                  :src="reply.avatar_url"
-                  alt=""
-                /><template v-else>{{ initials(reply.display_name) }}</template>
-              </button>
-              <div class="ps-comment-copy">
-                <header>
-                  <button @click="openProfile(reply.profile_id)">
-                    {{ reply.display_name }}
-                    <Check v-if="reply.verified" class="ps-verified" /></button
-                  ><time>{{ relativeTime(reply.created_at) }}</time>
-                </header>
-                <p>
-                  <b v-if="reply.display_reply_to_handle"
-                    >@{{ reply.display_reply_to_handle }}</b
-                  >
-                  {{ reply.display_body }}
-                </p>
-                <footer>
-                  <button @click="startReply(reply)">
-                    <Reply />{{ t('reply') }}</button
-                  ><button
-                    v-if="reply.is_owner"
-                    @click="store.removeComment(reply.id)"
-                  >
-                    <Trash2 />{{ t('remove') }}</button
-                  ><button v-else @click="reportComment(reply)">
-                    {{ t('report') }}
-                  </button>
-                </footer>
-              </div>
-              <button
-                class="ps-comment-like"
-                :class="{
-                  active: reply.is_liked,
-                  pulse: commentLikePulseId === reply.id,
-                }"
-                @click="reactComment(reply)"
-              >
-                <Heart
-                  :fill="reply.is_liked ? 'currentColor' : 'none'"
-                /><small>{{ reply.like_count || '' }}</small>
-              </button>
-            </article>
+                <button
+                  class="ps-avatar ps-avatar--reply"
+                  @click="openProfile(reply.profile_id)"
+                >
+                  <img
+                    v-if="reply.avatar_url"
+                    :src="reply.avatar_url"
+                    alt=""
+                  /><template v-else>{{
+                    initials(reply.display_name)
+                  }}</template>
+                </button>
+                <div class="ps-comment-copy">
+                  <header>
+                    <button @click="openProfile(reply.profile_id)">
+                      {{ reply.display_name }}
+                      <Check
+                        v-if="reply.verified"
+                        class="ps-verified"
+                      /></button
+                    ><time>{{ relativeTime(reply.created_at) }}</time>
+                  </header>
+                  <p>
+                    <b v-if="reply.display_reply_to_handle"
+                      >@{{ reply.display_reply_to_handle }}</b
+                    >
+                    {{ reply.display_body }}
+                  </p>
+                  <footer>
+                    <button @click="startReply(reply)">
+                      <Reply />{{ t('reply') }}</button
+                    ><button
+                      v-if="reply.is_owner"
+                      @click="store.removeComment(reply.id)"
+                    >
+                      <Trash2 />{{ t('remove') }}</button
+                    ><button v-else @click="reportComment(reply)">
+                      {{ t('report') }}
+                    </button>
+                  </footer>
+                </div>
+                <button
+                  class="ps-comment-like"
+                  :class="{
+                    active: reply.is_liked,
+                    pulse: commentLikePulseId === reply.id,
+                  }"
+                  @click="reactComment(reply)"
+                >
+                  <Heart
+                    :fill="reply.is_liked ? 'currentColor' : 'none'"
+                  /><small>{{ reply.like_count || '' }}</small>
+                </button>
+              </article>
+            </template>
           </div>
         </div>
         <div
@@ -2387,7 +2515,7 @@ button {
   display: flex;
   gap: 14px;
   overflow-x: auto;
-  padding: 2px var(--sky-page-gutter) var(--sky-space-4);
+  padding: 10px var(--sky-page-gutter) var(--sky-space-4);
   scrollbar-width: none;
 }
 .ps-stories::-webkit-scrollbar,
@@ -2659,11 +2787,15 @@ button {
   display: flex;
 }
 .ps-post-actions button {
-  display: grid;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   place-items: center;
-  width: 42px;
+  width: auto;
+  min-width: 42px;
   height: 42px;
-  padding: 0;
+  padding: 0 7px;
   border: 0;
   background: transparent;
 }
@@ -2674,6 +2806,16 @@ button {
   width: 25px;
   height: 25px;
   stroke-width: 1.8;
+}
+.ps-post-actions button > span {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1;
+}
+.ps-post-more :deep(svg) {
+  width: 21px;
+  height: 21px;
 }
 .ps-post-actions button.reaction-pop svg {
   animation: ps-reaction-pop 0.44s var(--sky-ease-out);
@@ -2723,6 +2865,7 @@ button {
 }
 
 .ps-explore {
+  padding-top: 2px;
   padding-inline: 2px;
 }
 .ps-profile-results {
@@ -2887,11 +3030,14 @@ button {
 .ps-selection-preview video {
   width: 100%;
   height: 100%;
-  flex: 0 0 100%;
   object-fit: cover;
+}
+.ps-selection-slide {
+  position: relative;
+  flex: 0 0 100%;
   scroll-snap-align: start;
 }
-.ps-selection-preview > button {
+.ps-selection-slide > button {
   position: absolute;
   top: 9px;
   right: 9px;
@@ -2926,6 +3072,13 @@ button {
 .ps-video-preview-badge svg {
   width: 14px;
   height: 14px;
+}
+.ps-change-selection {
+  margin-top: 10px;
+}
+.ps-change-selection :deep(svg) {
+  width: 17px;
+  height: 17px;
 }
 .ps-toggle-row {
   display: flex;
@@ -2981,6 +3134,18 @@ button {
 .ps-profile {
   padding-inline: var(--sky-page-gutter);
 }
+.ps-profile-navbar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 190px;
+}
+.ps-profile-navbar-title svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--sky-muted);
+}
 .ps-profile-header {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -3009,6 +3174,7 @@ button {
 }
 .ps-profile-copy,
 .ps-profile-buttons,
+.ps-profile-owner-actions,
 .ps-profile-segments {
   grid-column: 1 / -1;
 }
@@ -3026,6 +3192,14 @@ button {
   display: grid;
   grid-template-columns: 1fr;
 }
+.ps-profile-owner-actions {
+  display: grid;
+  gap: 8px;
+}
+.ps-profile-owner-actions svg {
+  width: 16px;
+  height: 16px;
+}
 .ps-profile-buttons :deep(.sky-button) {
   min-width: 0;
 }
@@ -3036,7 +3210,8 @@ button {
   margin-bottom: var(--sky-space-3);
 }
 .ps-profile-segments svg {
-  width: 17px;
+  width: 19px;
+  height: 19px;
 }
 .ps-private {
   min-height: 300px;
@@ -3113,6 +3288,23 @@ button {
 }
 .ps-comment-thread:last-child {
   border-bottom: 0;
+}
+.ps-comment-replies-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 1px 0 3px 44px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--sky-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.ps-comment-replies-toggle > span {
+  width: 22px;
+  height: 1px;
+  background: var(--sky-hairline);
 }
 .ps-comment-row {
   display: grid;
@@ -3302,7 +3494,6 @@ button {
   padding: 0 var(--sky-page-gutter);
 }
 .ps-fields :deep(.sky-field),
-.ps-compose-fields :deep(.sky-field),
 .ps-edit-fields :deep(.sky-field) {
   overflow: hidden;
   margin: 0;
@@ -3312,17 +3503,14 @@ button {
   background: var(--sky-surface);
 }
 .ps-fields :deep(.sky-field__inner),
-.ps-compose-fields :deep(.sky-field__inner),
 .ps-edit-fields :deep(.sky-field__inner) {
   padding: 0;
 }
 .ps-fields :deep(.sky-field__label),
-.ps-compose-fields :deep(.sky-field__label),
 .ps-edit-fields :deep(.sky-field__label) {
   margin-top: 0;
 }
 .ps-fields :deep(.sky-field__label-text),
-.ps-compose-fields :deep(.sky-field__label-text),
 .ps-edit-fields :deep(.sky-field__label-text) {
   top: auto;
   margin: 0;
@@ -3330,20 +3518,55 @@ button {
   background: transparent;
 }
 .ps-fields :deep(.sky-field__control),
-.ps-compose-fields :deep(.sky-field__control),
 .ps-edit-fields :deep(.sky-field__control) {
   margin: 0;
   border-radius: calc(var(--sky-radius-control) + 10px);
   background: var(--sky-surface-muted);
 }
 .ps-fields :deep(.sky-field__border),
-.ps-compose-fields :deep(.sky-field__border),
 .ps-edit-fields :deep(.sky-field__border) {
   display: none;
 }
-.ps-compose-fields :deep(.sky-field__textarea),
 .ps-edit-fields :deep(.sky-field__textarea) {
   padding-inline: 4px;
+}
+.ps-compose-fields :deep(.sky-field) {
+  overflow: hidden;
+  margin: 0;
+  padding-left: 14px;
+  border: 1px solid var(--sky-hairline);
+  border-radius: var(--sky-radius-card);
+  background: var(--sky-surface);
+}
+.ps-compose-fields :deep(.sky-field__media) {
+  margin-right: 10px;
+  color: var(--ps-accent);
+}
+.ps-compose-fields :deep(.sky-field__media svg) {
+  width: 19px;
+  height: 19px;
+}
+.ps-compose-fields :deep(.sky-field__inner) {
+  padding: 11px 14px 11px 0;
+}
+.ps-compose-fields :deep(.sky-field__label) {
+  color: var(--sky-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.ps-compose-fields :deep(.sky-field__control) {
+  margin: 0;
+  background: transparent;
+}
+.ps-compose-fields :deep(.sky-field__input) {
+  height: 36px;
+  min-height: 36px;
+  font-size: 14px;
+}
+.ps-compose-fields :deep(.sky-field__textarea) {
+  min-height: 88px;
+  padding: 6px 0 0;
+  resize: none;
 }
 .ps-compose-fields > .ps-toggle-row,
 .ps-edit-fields > .ps-toggle-row {
