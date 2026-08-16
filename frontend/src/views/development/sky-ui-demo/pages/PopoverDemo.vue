@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import {
   SkyBlock,
   SkyButton,
+  SkyDropdown,
   SkyLink,
   SkyList,
   SkyListItem,
@@ -14,6 +15,18 @@ import SkyUiDemoPage from '../SkyUiDemoPage.vue'
 
 const popoverOpened = ref(false)
 const popoverTarget = ref<string | null>(null)
+const dropdownOpened = ref(false)
+const dropdownItems = [
+  { checked: true, id: 'newest', label: 'Newest First' },
+  { checked: false, id: 'oldest', label: 'Oldest First' },
+  {
+    checked: true,
+    id: 'all',
+    label: 'All Items',
+    separatorBefore: true,
+  },
+  { checked: false, id: 'favorites', label: 'Favorites' },
+]
 
 function openPopover(target: string): void {
   popoverTarget.value = target
@@ -22,6 +35,10 @@ function openPopover(target: string): void {
 
 function closePopover(): void {
   popoverOpened.value = false
+}
+
+function selectDropdownItem(): void {
+  dropdownOpened.value = false
 }
 </script>
 
@@ -43,6 +60,13 @@ function closePopover(): void {
         @click="openPopover('#sky-ui-demo-popover-button')"
       >
         Open popover on me
+      </SkyButton>
+      <SkyButton
+        id="sky-ui-demo-dropdown-button"
+        rounded
+        @click="dropdownOpened = true"
+      >
+        Open dropdown
       </SkyButton>
     </SkyBlock>
 
@@ -127,6 +151,15 @@ function closePopover(): void {
           />
         </SkyList>
       </SkyPopover>
+      <SkyDropdown
+        :items="dropdownItems"
+        label="Dropdown menu"
+        :opened="dropdownOpened"
+        target="#sky-ui-demo-dropdown-button"
+        @backdropclick="dropdownOpened = false"
+        @escape="dropdownOpened = false"
+        @select="selectDropdownItem"
+      />
     </template>
   </SkyUiDemoPage>
 </template>
