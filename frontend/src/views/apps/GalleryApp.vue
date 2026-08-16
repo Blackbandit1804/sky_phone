@@ -144,22 +144,30 @@ const orderedMedia = computed(() => orderMedia(media.value, sortOrder.value))
 const sortMenuItems = computed(() => [
   {
     checked: sortOrder.value === 'newest',
+    group: 'sort',
+    groupLabel: phone.t('Apps.photos.sorting.title'),
     id: 'sort-newest',
     label: phone.t('Apps.photos.sorting.newestFirst'),
   },
   {
     checked: sortOrder.value === 'oldest',
+    group: 'sort',
+    groupLabel: phone.t('Apps.photos.sorting.title'),
     id: 'sort-oldest',
     label: phone.t('Apps.photos.sorting.oldestFirst'),
   },
   {
     checked: !favoritesOnly.value,
+    group: 'show',
+    groupLabel: phone.t('Apps.photos.sorting.show'),
     id: 'show-all',
     label: phone.t('Apps.photos.sorting.allItems'),
     separatorBefore: true,
   },
   {
     checked: favoritesOnly.value,
+    group: 'show',
+    groupLabel: phone.t('Apps.photos.sorting.show'),
     id: 'show-favorites',
     label: phone.t('Apps.photos.sorting.favorites'),
   },
@@ -1846,13 +1854,11 @@ onBeforeUnmount(() => {
   transition: transform var(--sky-transition-fast, 100ms) ease;
 }
 @media (hover: hover) {
-  .gallery-detail-navbar
-    :deep(.gallery-detail-back:hover:not(:disabled)) {
+  .gallery-detail-navbar :deep(.gallery-detail-back:hover:not(:disabled)) {
     background: rgba(255, 255, 255, 0.16);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   }
-  .gallery-detail-navbar
-    :deep(.gallery-detail-back:hover:not(:disabled) svg) {
+  .gallery-detail-navbar :deep(.gallery-detail-back:hover:not(:disabled) svg) {
     transform: translateX(-2px);
   }
 }

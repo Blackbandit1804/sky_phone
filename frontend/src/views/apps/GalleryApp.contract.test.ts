@@ -61,11 +61,17 @@ describe('GalleryApp import action', () => {
     expect(source).toContain("id: 'sort-oldest'")
     expect(source).toContain("id: 'show-all'")
     expect(source).toContain("id: 'show-favorites'")
+    expect(source).toContain("group: 'sort'")
+    expect(source).toContain("group: 'show'")
+    expect(source).toContain("phone.t('Apps.photos.sorting.title')")
+    expect(source).toContain("phone.t('Apps.photos.sorting.show')")
     expect(source).toContain('orderMedia(media.value, sortOrder.value)')
   })
 
   it('starts with the newest media at the bottom-right and loads older media above', () => {
-    expect(source).toContain("const sortOrder = ref<GallerySortOrder>('newest')")
+    expect(source).toContain(
+      "const sortOrder = ref<GallerySortOrder>('newest')",
+    )
     expect(source).toContain(
       'galleryContent.value.scrollTop = galleryContent.value.scrollHeight',
     )
@@ -81,9 +87,9 @@ describe('GalleryApp import action', () => {
     expect(source).toContain('v-if="selectionMode"')
     expect(source).toContain('selectedCountText')
     expect(source).toContain('shareSelection')
-    expect(source.match(/<SkyToolbarPane class="gallery-selection-action">/g)).toHaveLength(
-      2,
-    )
+    expect(
+      source.match(/<SkyToolbarPane class="gallery-selection-action">/g),
+    ).toHaveLength(2)
     expect(source).toContain('<div class="gallery-selection-actions">')
     expect(source).toMatch(
       /\.gallery-selection-actions\s*\{[^}]*display:\s*flex;[^}]*gap:\s*var\(--sky-space-2\);/s,
@@ -133,7 +139,9 @@ describe('GalleryApp import action', () => {
     expect(source).toContain(
       'galleryContent.value.scrollTop = galleryReturnScrollTop',
     )
-    expect(source).toMatch(/async function closeMedia[\s\S]*?await nextTick\(\)/)
+    expect(source).toMatch(
+      /async function closeMedia[\s\S]*?await nextTick\(\)/,
+    )
     expect(source).toContain('@wheel.prevent="zoomImageWithWheel"')
     expect(source).toContain('media.clientWidth / bounds.width')
     expect(source).toContain('media.clientHeight / bounds.height')

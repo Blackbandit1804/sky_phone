@@ -472,6 +472,7 @@ local schema = {
             { name = "name", type = "VARCHAR(80) NOT NULL" },
             { name = "notes", type = "VARCHAR(500) NULL" },
             { name = "organization", type = "VARCHAR(80) NULL" },
+            { name = "email", type = "VARCHAR(64) NULL", characterSet = "ascii", collation = "ascii_general_ci" },
             { name = "phone_number", type = "VARCHAR(24) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "avatar_media_id", type = "BIGINT UNSIGNED NULL" },
             { name = "favorite", type = "TINYINT(1) NOT NULL DEFAULT 0" },
@@ -513,6 +514,33 @@ local schema = {
         foreignKeys = {
             { column = "caller_sim_id", references = "`sky_phone_sims` (`id`) ON DELETE CASCADE" },
             { column = "callee_sim_id", references = "`sky_phone_sims` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_call_blocks",
+        columns = {
+            {
+                name = "blocker_sim_id",
+                type = "CHAR(36) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            {
+                name = "blocked_sim_id",
+                type = "CHAR(36) NOT NULL",
+                characterSet = "ascii",
+                collation = "ascii_bin",
+            },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = { "blocker_sim_id", "blocked_sim_id" },
+        indexes = {
+            { name = "idx_sky_phone_call_blocks_blocked", columns = "(`blocked_sim_id`)" },
+        },
+        foreignKeys = {
+            { column = "blocker_sim_id", references = "`sky_phone_sims` (`id`) ON DELETE CASCADE" },
+            { column = "blocked_sim_id", references = "`sky_phone_sims` (`id`) ON DELETE CASCADE" },
         },
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
@@ -681,7 +709,7 @@ local schema = {
             { name = "media_duration_ms", type = "INT UNSIGNED NULL" },
             { name = "media_waveform", type = "TEXT NULL" },
             { name = "read_at", type = "DATETIME NULL" },
-            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+            { name = "created_at", type = "DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)" },
         },
         primaryKey = "id",
         indexes = {
@@ -2765,6 +2793,10 @@ Bridge.Database.Query([[
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_sms_messages`
     MODIFY COLUMN `message_type` ENUM('text', 'voice', 'image', 'gif', 'video', 'contact', 'share') NOT NULL DEFAULT 'text'
+]], {})
+Bridge.Database.Query([[
+    ALTER TABLE `sky_phone_sms_messages`
+    MODIFY COLUMN `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 ]], {})
 Bridge.Database.Query([[
     ALTER TABLE `sky_phone_darkchat_messages`

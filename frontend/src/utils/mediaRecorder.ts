@@ -18,7 +18,9 @@ export function bindMediaRecorderError(
   }
 }
 
-export async function stopMediaRecorder(recorder: MediaRecorder): Promise<void> {
+export async function stopMediaRecorder(
+  recorder: MediaRecorder,
+): Promise<void> {
   if (recorder.state === 'inactive') return
 
   await new Promise<void>((resolve, reject) => {
@@ -59,4 +61,26 @@ export function setBoundedMapEntry<Key, Value>(
     if (oldest.done) break
     entries.delete(oldest.value)
   }
+}
+
+export function compressWaveformSamples(
+  samples: number[],
+  sampleCount: number,
+  minimum = 0.08,
+): number[] {
+  const count = Math.max(1, Math.floor(sampleCount))
+  const floor = Math.max(0, Math.min(1, minimum))
+  if (!samples.length) return Array(count).fill(floor)
+
+  const bucketSize = samples.length / count
+  const fallback = samples.at(-1) ?? floor
+  return Array.from({ length: count }, (_, index) => {
+    const start = Math.floor(index * bucketSize)
+    const end = Math.max(start + 1, Math.floor((index + 1) * bucketSize))
+    const bucket = samples.slice(start, end)
+    const average = bucket.length
+      ? bucket.reduce((total, sample) => total + sample, 0) / bucket.length
+      : fallback
+    return Math.max(floor, Math.min(1, average))
+  })
 }

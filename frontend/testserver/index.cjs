@@ -1435,12 +1435,14 @@ const mockHousingCandidates = [
 ]
 
 let contactSequence = 40
+let smsSequence = 1
 const contacts = [
   {
     avatar_media_id: 1,
     avatar_url: 'https://picsum.photos/seed/sky-phone-1/600/800',
     created_at: isoTime(-42 * 86_400_000),
     favorite: true,
+    email: 'alex.rivera@ifruit.com',
     id: 'contact-alex',
     name: 'Alex Rivera',
     notes: 'Meeting on Friday at 18:00 near the bank.',
@@ -8728,6 +8730,7 @@ app.post('/api/:endpoint', (request, response) => {
       (messageType === 'voice' && !request.body.mediaPayload) ||
       (messageType === 'contact' && !selectedContact) ||
       (messageType === 'share' && !request.body.sharePayload) ||
+      (isAttachment && body.length > 2000) ||
       (isAttachment &&
         !attachmentAssets[messageType].has(attachmentId) &&
         !attachmentId.startsWith('https://') &&
@@ -8752,7 +8755,7 @@ app.post('/api/:endpoint', (request, response) => {
         : null,
       created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
       direction: 'sent',
-      id: `sms-${Date.now()}`,
+      id: `sms-${Date.now()}-${smsSequence++}`,
       media_duration_ms: ['voice', 'video'].includes(messageType)
         ? (request.body.mediaDurationMs ?? null)
         : null,
@@ -8818,6 +8821,19 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'contacts:save') {
     const name = String(request.body.name ?? '').trim()
+    let email = String(request.body.email ?? '')
+      .trim()
+      .toLowerCase()
+    if (email && !email.includes('@')) email = `${email}@ifruit.com`
+    const emailLocalPart = email.match(
+      /^([a-z0-9][a-z0-9._-]*[a-z0-9])@ifruit\.com$/,
+    )?.[1]
+    const emailValid =
+      !email ||
+      (Boolean(emailLocalPart) &&
+        emailLocalPart.length >= 3 &&
+        emailLocalPart.length <= 32 &&
+        !emailLocalPart.includes('..'))
     const notes = String(request.body.notes ?? '')
       .trim()
       .slice(0, 500)
@@ -8831,7 +8847,12 @@ app.post('/api/:endpoint', (request, response) => {
           (item) => item.id === avatarMediaId && item.mediaType === 'photo',
         )
       : null
-    if (!name || !phoneNumber || (avatarMediaId && !avatarMedia)) {
+    if (
+      !name ||
+      !phoneNumber ||
+      !emailValid ||
+      (avatarMediaId && !avatarMedia)
+    ) {
       response.json({ success: false, error: 'invalid_contact' })
       return
     }
@@ -8842,6 +8863,7 @@ app.post('/api/:endpoint', (request, response) => {
     }
     if (contact) {
       contact.name = name
+      contact.email = email || null
       contact.notes = notes || null
       contact.organization = organization || null
       contact.phone_number = phoneNumber
@@ -8856,6 +8878,7 @@ app.post('/api/:endpoint', (request, response) => {
       contact = {
         created_at: now,
         favorite: false,
+        email: email || null,
         id: `contact-${contactSequence++}`,
         name,
         notes: notes || null,

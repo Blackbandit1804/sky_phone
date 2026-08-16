@@ -360,6 +360,40 @@ async function verifyStatefulActions(baseUrl) {
   })
   assert.equal(tooManyImages.success, false)
   assert.equal(tooManyImages.error, 'invalid_attachment')
+
+  const firstSmsPhoto = await expectSuccess(
+    baseUrl,
+    'messages:send',
+    {
+      body: '',
+      mediaAssetId: String(articlePhotos[0].id),
+      messageType: 'image',
+      phoneNumber: '5558675309',
+    },
+    true,
+  )
+  const captionedSmsPhoto = await expectSuccess(
+    baseUrl,
+    'messages:send',
+    {
+      body: 'Two photos from one composer draft.',
+      mediaAssetId: String(articlePhotos[1].id),
+      messageType: 'image',
+      phoneNumber: '5558675309',
+    },
+    true,
+  )
+  assert.notEqual(firstSmsPhoto.id, captionedSmsPhoto.id)
+  assert.equal(captionedSmsPhoto.body, 'Two photos from one composer draft.')
+  const smsPhotoThread = await expectSuccess(
+    baseUrl,
+    'messages:thread',
+    { phoneNumber: '5558675309' },
+    true,
+  )
+  assert(smsPhotoThread.some((message) => message.id === firstSmsPhoto.id))
+  assert(smsPhotoThread.some((message) => message.id === captionedSmsPhoto.id))
+
   await expectSuccess(baseUrl, 'weazel-news:delete', {
     id: updatedArticle.id,
     revision: updatedArticle.revision,
@@ -486,9 +520,14 @@ async function verifyStatefulActions(baseUrl) {
   const contact = await expectSuccess(
     baseUrl,
     'contacts:save',
-    { name: 'Browser Tester', phoneNumber: '5552223333' },
+    {
+      email: 'browser.tester',
+      name: 'Browser Tester',
+      phoneNumber: '5552223333',
+    },
     true,
   )
+  assert.equal(contact.email, 'browser.tester@ifruit.com')
   await expectSuccess(
     baseUrl,
     'contacts:favorite',
@@ -496,7 +535,9 @@ async function verifyStatefulActions(baseUrl) {
     true,
   )
   let contacts = await expectSuccess(baseUrl, 'contacts:list', {}, true)
-  assert.equal(contacts.find((item) => item.id === contact.id)?.favorite, true)
+  const savedContact = contacts.find((item) => item.id === contact.id)
+  assert.equal(savedContact?.favorite, true)
+  assert.equal(savedContact?.email, 'browser.tester@ifruit.com')
   await expectSuccess(baseUrl, 'contacts:delete', { id: contact.id })
   contacts = await expectSuccess(baseUrl, 'contacts:list', {}, true)
   assert(

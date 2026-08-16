@@ -55,4 +55,20 @@ describe('phone locale fallback', () => {
       'Character name',
     )
   })
+
+  it('keeps Messages media controls translated with a partial server locale', () => {
+    const phone = usePhoneStore()
+    phone.open({ locales: { Apps: { messages: { name: 'Messages' } } } })
+
+    expect(phone.t('Apps.messages.attachmentPreview')).toBe(
+      'Selected attachments',
+    )
+    expect(phone.t('Apps.messages.attachmentLimit', { count: '6' })).toBe(
+      'You can attach up to 6 photos or videos.',
+    )
+    expect(phone.t('Apps.messages.removeAttachment', { number: '2' })).toBe(
+      'Remove attachment 2',
+    )
+    expect(phone.t('Apps.messages.seekAudio')).toBe('Seek Audio')
+  })
 })

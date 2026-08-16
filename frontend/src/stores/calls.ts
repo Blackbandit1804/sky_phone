@@ -36,6 +36,7 @@ export const useCallsStore = defineStore('calls', () => {
 
   async function saveContact(contact: {
     avatarMediaId?: number | null
+    email?: string
     id?: string
     name: string
     notes?: string

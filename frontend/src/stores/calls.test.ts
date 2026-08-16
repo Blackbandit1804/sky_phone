@@ -167,6 +167,39 @@ describe('calls store', () => {
     expect(calls.contacts[0]?.favorite).toBe(true)
   })
 
+  it('sends a contact email and refreshes the contact list after saving', async () => {
+    const savedContact = {
+      email: 'alex.rivera@ifruit.com',
+      id: 'contact-alex',
+      name: 'Alex Rivera',
+      organization: 'Maze Bank',
+      phone_number: '5551110001',
+    }
+    vi.mocked(nuiCall)
+      .mockResolvedValueOnce({ success: true, data: savedContact })
+      .mockResolvedValueOnce({ success: true, data: [savedContact] })
+    const calls = useCallsStore()
+
+    const response = await calls.saveContact({
+      email: 'alex.rivera@ifruit.com',
+      id: 'contact-alex',
+      name: 'Alex Rivera',
+      organization: 'Maze Bank',
+      phoneNumber: '5551110001',
+    })
+
+    expect(response).toEqual({ success: true, data: savedContact })
+    expect(nuiCall).toHaveBeenNthCalledWith(1, 'contacts:save', {
+      email: 'alex.rivera@ifruit.com',
+      id: 'contact-alex',
+      name: 'Alex Rivera',
+      organization: 'Maze Bank',
+      phoneNumber: '5551110001',
+    })
+    expect(nuiCall).toHaveBeenNthCalledWith(2, 'contacts:list')
+    expect(calls.contacts[0]?.email).toBe('alex.rivera@ifruit.com')
+  })
+
   it('keeps configured company branding on system contacts', async () => {
     vi.mocked(nuiCall).mockResolvedValueOnce({
       success: true,
@@ -189,8 +222,7 @@ describe('calls store', () => {
     await calls.loadContacts()
 
     expect(calls.contacts[0]).toMatchObject({
-      avatar_url:
-        'https://picsum.photos/seed/companies-police-logo/180/180',
+      avatar_url: 'https://picsum.photos/seed/companies-police-logo/180/180',
       organization: 'Los Santos Police Department',
       source: 'company',
     })

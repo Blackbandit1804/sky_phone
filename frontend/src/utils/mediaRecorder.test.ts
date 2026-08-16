@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   bindMediaRecorderError,
+  compressWaveformSamples,
   setBoundedMapEntry,
   stopMediaRecorder,
 } from '@/utils/mediaRecorder'
@@ -62,5 +63,17 @@ describe('media recorder lifecycle', () => {
       ['second', 2],
       ['third', 3],
     ])
+  })
+
+  it('normalizes short recordings to the requested waveform width', () => {
+    const waveform = compressWaveformSamples([0.1, 0.45, 0.9], 48)
+
+    expect(waveform).toHaveLength(48)
+    expect(waveform.every((sample) => sample >= 0.08 && sample <= 1)).toBe(true)
+    expect(waveform).toContain(0.9)
+  })
+
+  it('fills silent recordings with a stable minimum level', () => {
+    expect(compressWaveformSamples([], 8)).toEqual(Array(8).fill(0.08))
   })
 })

@@ -41,7 +41,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { useCallsStore } from '@/stores/calls'
 import { useEasyShareStore } from '@/stores/easyshare'
@@ -60,6 +60,7 @@ type ContactPhotoContext = {
   avatarMediaId: number | null
   avatarUrl: string
   contactId?: string
+  email: string
   firstName: string
   lastName: string
   notes: string
@@ -72,6 +73,7 @@ const calls = useCallsStore()
 const easyShare = useEasyShareStore()
 const mediaPicker = useMessageMediaStore()
 const messages = useMessagesStore()
+const route = useRoute()
 const router = useRouter()
 const tab = ref<PhoneTab>('recents')
 const query = ref('')
@@ -87,6 +89,7 @@ const editingContact = ref<PhoneContact | null>(null)
 const contactFirstName = ref('')
 const contactLastName = ref('')
 const contactOrganization = ref('')
+const contactEmail = ref('')
 const contactNotes = ref('')
 const contactNumber = ref('')
 const contactAvatarMediaId = ref<number | null>(null)
@@ -262,6 +265,7 @@ function openContact(contact?: PhoneContact, number = ''): void {
   contactFirstName.value = nameParts.shift() ?? ''
   contactLastName.value = nameParts.join(' ')
   contactOrganization.value = contact?.organization ?? ''
+  contactEmail.value = contact?.email ?? ''
   contactNotes.value = contact?.notes ?? ''
   contactNumber.value = contact?.phone_number ?? number
   contactAvatarMediaId.value = contact?.avatar_media_id ?? null
@@ -275,6 +279,7 @@ function openContactPhotoPicker(source: 'camera' | 'photos'): void {
     avatarMediaId: contactAvatarMediaId.value,
     avatarUrl: contactAvatarUrl.value,
     contactId: editingContact.value?.id,
+    email: contactEmail.value,
     firstName: contactFirstName.value,
     lastName: contactLastName.value,
     notes: contactNotes.value,
@@ -405,6 +410,7 @@ async function saveContact(): Promise<void> {
   }
   const response = await calls.saveContact({
     avatarMediaId: contactAvatarMediaId.value,
+    email: contactEmail.value.trim(),
     id: editingContact.value?.id,
     name,
     notes: contactNotes.value.trim(),
@@ -654,6 +660,7 @@ onMounted(async () => {
       : null
     contactFirstName.value = context?.firstName ?? ''
     contactLastName.value = context?.lastName ?? ''
+    contactEmail.value = context?.email ?? ''
     contactNotes.value = context?.notes ?? ''
     contactOrganization.value = context?.organization ?? ''
     contactNumber.value = context?.phoneNumber ?? ''
@@ -665,6 +672,19 @@ onMounted(async () => {
     }
     tab.value = 'contacts'
     editorOpened.value = true
+  } else if (typeof route.query.contactId === 'string') {
+    const requestedContact = calls.contacts.find(
+      (contact) => contact.id === route.query.contactId,
+    )
+    if (requestedContact) {
+      tab.value = 'contacts'
+      openRecentDetail(requestedContact.phone_number)
+    }
+    await router.replace('/apps/phone')
+  } else if (typeof route.query.newContactNumber === 'string') {
+    tab.value = 'contacts'
+    openContact(undefined, route.query.newContactNumber)
+    await router.replace('/apps/phone')
   }
   callClock = window.setInterval(updateCallElapsed, 500)
 })
@@ -1584,6 +1604,14 @@ onBeforeUnmount(() => {
               autocomplete="organization"
               :readonly="editingContact?.readonly"
               @input="contactOrganization = eventValue($event)"
+            />
+            <sky-field
+              :value="contactEmail"
+              type="email"
+              :placeholder="phone.t('Apps.phone.mail')"
+              autocomplete="email"
+              :readonly="editingContact?.readonly"
+              @input="contactEmail = eventValue($event)"
             />
           </sky-list>
 

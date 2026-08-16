@@ -1,20 +1,21 @@
 <script setup lang="ts">
 import {
   ArrowUpCircle,
+  Ban,
   Camera,
   Check,
   ChevronRight,
+  Ellipsis,
   ImagePlay,
   Images,
+  Mail,
   MessageCircle,
   Mic,
-  Pencil,
   Phone as PhoneIcon,
   Plus,
   SquarePen,
   Trash2,
   ContactRound,
-  UserPlus,
   Video,
   X,
 } from 'lucide-vue-next'
@@ -29,10 +30,15 @@ import VoiceMessageBubble from '@/components/VoiceMessageBubble.vue'
 import { useCallsStore } from '@/stores/calls'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { useMessagesStore } from '@/stores/messages'
-import { useMessageMediaStore } from '@/stores/messageMedia'
+import {
+  useMessageMediaStore,
+  type MediaSelectionResult,
+} from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
 import { handleEnterAction } from '@/utils/keyboard'
+import { normalizeMailAddress } from '@/utils/mail'
+import { compressWaveformSamples } from '@/utils/mediaRecorder'
 import { sortContactsByMessageRecency } from '@/utils/messages'
 import type {
   GifSearchResult,
@@ -43,10 +49,15 @@ import type {
 } from '@/types/messages'
 import type { PhoneContact } from '@/types/phone'
 import type { EasySharePayload } from '@/types/easyshare'
+import type { PhoneMedia } from '@/types/media'
 import {
   SkyAppPage,
   SkyButton,
+  SkyDialog,
+  SkyDialogButton,
+  SkyDropdown,
   SkyEmptyState,
+  SkyFab,
   SkyField,
   SkyGlass,
   SkyLink,
@@ -60,15 +71,25 @@ import {
   SkyPillNavigation,
   SkyScrollArea,
   SkySearchbar,
-  SkySegmented,
-  SkySegmentedButton,
+  SkySettingsGroup,
+  SkySettingsRow,
   SkySpinner,
   SkyToast,
+  SkyToolbar,
 } from '@/ui'
 
 const VOICE_MAX_DURATION_MS = 30_000
 const VOICE_MAX_BYTES = 135_000
 const WAVEFORM_SAMPLES = 48
+const MAX_PENDING_ATTACHMENTS = 6
+
+type MessagesMediaContext = {
+  draft: string
+  pendingAttachments: PhoneMedia[]
+  shareDraft: EasySharePayload | null
+}
+
+type ConversationSort = 'newest' | 'oldest'
 
 const phone = usePhoneStore()
 const calls = useCallsStore()
@@ -78,8 +99,11 @@ const messageMedia = useMessageMediaStore()
 const router = useRouter()
 const search = ref('')
 const showUnreadOnly = ref(false)
+const conversationSort = ref<ConversationSort>('newest')
 const editingList = ref(false)
 const selectedNumbers = ref<string[]>([])
+const inboxMenuOpened = ref(false)
+const inboxMenuTarget = ref<HTMLElement | null>(null)
 const composerNumber = ref('')
 const draft = ref('')
 const queuedSharePayload = ref<EasySharePayload | null>(null)
@@ -91,10 +115,10 @@ const toastText = ref('')
 const emojiOpen = ref(false)
 const attachmentMenuOpen = ref(false)
 const attachmentPicker = ref<'contacts' | 'gifs' | null>(null)
+const pendingAttachments = ref<PhoneMedia[]>([])
 const contactDetailsOpen = ref(false)
-const contactEditing = ref(false)
-const contactNameDraft = ref('')
-const contactNumberDraft = ref('')
+const blockDialogOpened = ref(false)
+const blockingContact = ref(false)
 const gifQuery = ref('')
 const gifResults = ref<GifSearchResult[]>([])
 const gifLoading = ref(false)
@@ -102,6 +126,7 @@ const gifError = ref<string | null>(null)
 const gifHasMore = ref(true)
 const gifNextOffset = ref(0)
 const recording = ref(false)
+const recordingStarting = ref(false)
 const recordingElapsedMs = ref(0)
 const recordingLevels = ref<number[]>(Array(32).fill(0.16))
 const threadBottom = ref<HTMLElement | null>(null)
@@ -117,17 +142,27 @@ let recordingChunks: Blob[] = []
 let recordingSamples: number[] = []
 let recordingBytes = 0
 let discardRecording = false
+let recordingRequestId = 0
 
 const hasSim = computed(() => Boolean(phone.device?.sim))
 const filteredConversations = computed(() => {
   const query = search.value.trim().toLocaleLowerCase(phone.lang)
-  return messages.conversations.filter((conversation) => {
-    if (showUnreadOnly.value && conversation.unread === 0) return false
-    if (!query) return true
-    return `${contactName(conversation.phoneNumber)} ${conversation.phoneNumber} ${conversationPreview(conversation)}`
-      .toLocaleLowerCase(phone.lang)
-      .includes(query)
-  })
+  return messages.conversations
+    .filter((conversation) => {
+      if (showUnreadOnly.value && conversation.unread === 0) return false
+      if (!query) return true
+      return `${contactName(conversation.phoneNumber)} ${conversation.phoneNumber} ${conversationPreview(conversation)}`
+        .toLocaleLowerCase(phone.lang)
+        .includes(query)
+    })
+    .sort((left, right) => {
+      const direction = conversationSort.value === 'newest' ? -1 : 1
+      return (
+        direction *
+        (parseDatabaseDate(left.lastMessageAt).getTime() -
+          parseDatabaseDate(right.lastMessageAt).getTime())
+      )
+    })
 })
 const knownContactNumbers = computed(
   () => new Set(calls.contacts.map((contact) => contact.phone_number)),
@@ -166,14 +201,68 @@ const activeContact = computed(() =>
 const activeCanMessage = computed(
   () => activeContact.value?.canMessage !== false,
 )
+const activeContactEmail = computed(() =>
+  normalizeMailAddress(activeContact.value?.email ?? ''),
+)
+const inboxMenuItems = computed(() => [
+  {
+    checked: conversationSort.value === 'newest',
+    group: 'sort',
+    groupLabel: phone.t('Apps.messages.sortLabel'),
+    id: 'sort-newest',
+    label: phone.t('Apps.messages.sortNewest'),
+  },
+  {
+    checked: conversationSort.value === 'oldest',
+    group: 'sort',
+    groupLabel: phone.t('Apps.messages.sortLabel'),
+    id: 'sort-oldest',
+    label: phone.t('Apps.messages.sortOldest'),
+  },
+  {
+    checked: !showUnreadOnly.value,
+    group: 'filter',
+    groupLabel: phone.t('Apps.messages.filterLabel'),
+    id: 'filter-all',
+    label: phone.t('Apps.messages.allMessages'),
+    separatorBefore: true,
+  },
+  {
+    checked: showUnreadOnly.value,
+    group: 'filter',
+    groupLabel: phone.t('Apps.messages.filterLabel'),
+    id: 'filter-unread',
+    label: phone.t('Apps.messages.unreadMessages'),
+  },
+  {
+    id: 'edit',
+    label: phone.t('Common.edit'),
+    separatorBefore: true,
+  },
+])
 const attachmentPanelOpen = computed(
   () => emojiOpen.value || attachmentPicker.value !== null,
+)
+const composerHasContent = computed(
+  () =>
+    Boolean(draft.value.trim() || shareDraft.value) ||
+    pendingAttachments.value.length > 0,
 )
 function contactName(number: string): string {
   return (
     calls.contacts.find((contact) => contact.phone_number === number)?.name ??
     number
   )
+}
+
+function conversationLabel(conversation: SmsConversation): string {
+  const name = contactName(conversation.phoneNumber)
+  return conversation.unread > 0
+    ? phone.t('Apps.messages.unreadConversation', {
+        count: String(conversation.unread),
+        name,
+      })
+    : name
 }
 
 function conversationPreview(conversation: SmsConversation): string {
@@ -316,6 +405,7 @@ function errorText(error?: string): string {
     'recipient_not_found',
     'no_sim',
     'rate_limited',
+    'blocked',
     'request_failed',
   ]
   return phone.t(
@@ -375,7 +465,29 @@ async function openEasyShareDraft(): Promise<void> {
 function toggleListEditing(): void {
   editingList.value = !editingList.value
   selectedNumbers.value = []
-  showUnreadOnly.value = false
+  inboxMenuOpened.value = false
+}
+
+function openInboxMenu(event: MouseEvent): void {
+  inboxMenuTarget.value = event.currentTarget as HTMLElement
+  inboxMenuOpened.value = true
+}
+
+function dismissInboxMenu(): void {
+  inboxMenuOpened.value = false
+}
+
+function selectInboxMenuItem(id: string): void {
+  dismissInboxMenu()
+  if (id === 'sort-newest' || id === 'sort-oldest') {
+    conversationSort.value = id === 'sort-newest' ? 'newest' : 'oldest'
+    return
+  }
+  if (id === 'filter-all' || id === 'filter-unread') {
+    showUnreadOnly.value = id === 'filter-unread'
+    return
+  }
+  if (id === 'edit') toggleListEditing()
 }
 
 async function deleteSelectedConversations(): Promise<void> {
@@ -394,6 +506,7 @@ function beginCompose(): void {
   composing.value = true
   composerNumber.value = ''
   draft.value = ''
+  pendingAttachments.value = []
 }
 
 async function chooseRecipient(number: string): Promise<void> {
@@ -418,7 +531,6 @@ async function chooseRecipient(number: string): Promise<void> {
 function goBack(): void {
   if (contactDetailsOpen.value) {
     contactDetailsOpen.value = false
-    contactEditing.value = false
     return
   }
   cancelVoiceRecording()
@@ -427,6 +539,7 @@ function goBack(): void {
   composerNumber.value = ''
   draft.value = ''
   shareDraft.value = null
+  pendingAttachments.value = []
   emojiOpen.value = false
   attachmentMenuOpen.value = false
   attachmentPicker.value = null
@@ -438,46 +551,46 @@ function appendEmoji(emoji: string): void {
 
 function openContactDetails(): void {
   if (!messages.activeNumber) return
-  contactNameDraft.value = activeContact.value?.name ?? ''
-  contactNumberDraft.value = messages.activeNumber
-  contactEditing.value = false
   contactDetailsOpen.value = true
 }
 
-async function saveContactDetails(): Promise<void> {
-  if (activeContact.value?.readonly) {
-    showToast(phone.t('Apps.phone.errors.readonly_contact'))
-    return
-  }
-  if (!contactNameDraft.value.trim() || !contactNumberDraft.value.trim()) return
-  const response = await calls.saveContact({
-    id: activeContact.value?.id,
-    name: contactNameDraft.value.trim(),
-    notes: activeContact.value?.notes ?? '',
-    organization: activeContact.value?.organization ?? '',
-    phoneNumber: contactNumberDraft.value,
+async function openActiveContactInPhone(): Promise<void> {
+  if (!messages.activeNumber) return
+  await router.push({
+    path: '/apps/phone',
+    query: activeContact.value
+      ? { contactId: activeContact.value.id }
+      : { newContactNumber: messages.activeNumber },
   })
-  if (!response.success) {
-    showToast(phone.t('Apps.messages.contactSaveFailed'))
-    return
-  }
-  contactEditing.value = false
-  contactNumberDraft.value =
-    response.data?.phone_number ?? contactNumberDraft.value
 }
 
-async function deleteActiveContact(): Promise<void> {
-  if (!activeContact.value) return
-  if (activeContact.value.readonly) {
-    showToast(phone.t('Apps.phone.errors.readonly_contact'))
+async function mailActiveContact(): Promise<void> {
+  if (!activeContactEmail.value) return
+  await router.push({
+    path: '/apps/mail',
+    query: { compose: '1', to: activeContactEmail.value },
+  })
+}
+
+function confirmBlockActiveContact(): void {
+  if (!messages.activeNumber) return
+  blockDialogOpened.value = true
+}
+
+async function blockActiveContact(): Promise<void> {
+  if (!messages.activeNumber || blockingContact.value) return
+  blockingContact.value = true
+  const response = await calls.blockNumber(messages.activeNumber)
+  blockingContact.value = false
+  if (!response.success) {
+    showToast(phone.t('Apps.messages.blockContactFailed'))
     return
   }
-  if (!(await calls.deleteContact(activeContact.value.id))) {
-    showToast(phone.t('Apps.messages.contactDeleteFailed'))
-    return
-  }
+  blockDialogOpened.value = false
   contactDetailsOpen.value = false
-  contactEditing.value = false
+  messages.closeThread()
+  await messages.loadConversations()
+  showToast(phone.t('Apps.messages.contactBlocked'))
 }
 
 async function callActiveContact(): Promise<void> {
@@ -516,12 +629,59 @@ function openMediaApp(
   mediaType: 'photo' | 'video',
 ): void {
   if (!messages.activeNumber) return
+  const remainingSlots =
+    MAX_PENDING_ATTACHMENTS - pendingAttachments.value.length
+  if (remainingSlots < 1) {
+    showToast(
+      phone.t('Apps.messages.attachmentLimit', {
+        count: String(MAX_PENDING_ATTACHMENTS),
+      }),
+    )
+    return
+  }
   attachmentMenuOpen.value = false
-  messageMedia.begin(messages.activeNumber, mediaType)
+  messageMedia.begin(
+    messages.activeNumber,
+    mediaType,
+    '/apps/messages',
+    app === 'photos' && mediaType === 'photo' ? remainingSlots : 1,
+    {
+      draft: draft.value,
+      pendingAttachments: [...pendingAttachments.value],
+      shareDraft: shareDraft.value,
+    } satisfies MessagesMediaContext,
+  )
   void router.push({
     path: `/apps/${app}`,
     query: { messageAttachment: mediaType },
   })
+}
+
+function removePendingAttachment(id: number): void {
+  if (sending.value) return
+  pendingAttachments.value = pendingAttachments.value.filter(
+    (media) => media.id !== id,
+  )
+}
+
+function restoreMediaSelection(
+  selection: MediaSelectionResult<MessagesMediaContext> | null,
+): void {
+  if (!selection) return
+  draft.value = selection.context?.draft ?? ''
+  shareDraft.value = selection.context?.shareDraft ?? null
+  const combined = [
+    ...(selection.context?.pendingAttachments ?? []),
+    ...selection.media,
+  ]
+  const seen = new Set<number>()
+  pendingAttachments.value = combined
+    .filter((media) => {
+      if (seen.has(media.id)) return false
+      seen.add(media.id)
+      return true
+    })
+    .slice(0, MAX_PENDING_ATTACHMENTS)
 }
 
 async function sendAttachment(
@@ -627,30 +787,58 @@ async function sendTextMessage(): Promise<void> {
   if (
     !messages.activeNumber ||
     !activeCanMessage.value ||
-    (!draft.value.trim() && !shareDraft.value) ||
+    !composerHasContent.value ||
     sending.value
   ) {
     return
   }
   const body = draft.value
   const shared = shareDraft.value
-  draft.value = ''
-  shareDraft.value = null
+  const queuedAttachments = [...pendingAttachments.value]
   emojiOpen.value = false
   attachmentMenuOpen.value = false
   attachmentPicker.value = null
   sending.value = true
   await scrollToBottom()
-  const response = await messages.send(
-    shared
-      ? { body, messageType: 'share', sharePayload: shared }
-      : { body, messageType: 'text' },
-  )
+
+  let sendError: string | undefined
+  for (const [index, media] of queuedAttachments.entries()) {
+    const response = await messages.send(
+      {
+        body:
+          !shared && index === queuedAttachments.length - 1 ? body : undefined,
+        mediaAssetId: import.meta.env.DEV ? media.url : String(media.id),
+        messageType: media.mediaType === 'photo' ? 'image' : 'video',
+      },
+      { discardFailedOptimistic: true },
+    )
+    if (!response.success) {
+      sendError = response.error ?? 'request_failed'
+      break
+    }
+    pendingAttachments.value = pendingAttachments.value.filter(
+      (pending) => pending.id !== media.id,
+    )
+  }
+
+  if (!sendError && shared) {
+    const response = await messages.send({
+      body,
+      messageType: 'share',
+      sharePayload: shared,
+    })
+    if (!response.success) sendError = response.error ?? 'request_failed'
+  } else if (!sendError && queuedAttachments.length === 0) {
+    const response = await messages.send({ body, messageType: 'text' })
+    if (!response.success) sendError = response.error ?? 'request_failed'
+  }
+
   sending.value = false
-  if (!response.success) {
-    draft.value = body
-    shareDraft.value = shared
-    showToast(errorText(response.error))
+  if (sendError) {
+    showToast(errorText(sendError))
+  } else {
+    draft.value = ''
+    shareDraft.value = null
   }
   await scrollToBottom()
 }
@@ -679,7 +867,9 @@ function sampleMicrophone(): void {
 }
 
 async function startVoiceRecording(): Promise<void> {
-  if (!activeCanMessage.value) return
+  if (!activeCanMessage.value || recording.value || recordingStarting.value) {
+    return
+  }
   emojiOpen.value = false
   if (
     !navigator.mediaDevices?.getUserMedia ||
@@ -693,14 +883,23 @@ async function startVoiceRecording(): Promise<void> {
     showToast(phone.t('Apps.messages.microphoneUnavailable'))
     return
   }
+  const requestId = ++recordingRequestId
+  recordingStarting.value = true
+  let requestedStream: MediaStream | undefined
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({
+    requestedStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         autoGainControl: true,
         echoCancellation: true,
         noiseSuppression: true,
       },
     })
+    if (requestId !== recordingRequestId) {
+      requestedStream.getTracks().forEach((track) => track.stop())
+      return
+    }
+    mediaStream = requestedStream
+    requestedStream = undefined
     recordingChunks = []
     recordingSamples = []
     recordingBytes = 0
@@ -727,9 +926,13 @@ async function startVoiceRecording(): Promise<void> {
     mediaRecorder.start(250)
     recordingTimer = setInterval(sampleMicrophone, 100)
   } catch (error) {
+    requestedStream?.getTracks().forEach((track) => track.stop())
+    if (requestId !== recordingRequestId) return
     console.error('[Messages] Could not start audio recording:', error)
     cleanupRecorder()
     showToast(phone.t('Apps.messages.microphoneUnavailable'))
+  } finally {
+    if (requestId === recordingRequestId) recordingStarting.value = false
   }
 }
 
@@ -745,6 +948,8 @@ function cancelVoiceRecording(): void {
 }
 
 function cleanupRecorder(): void {
+  recordingRequestId += 1
+  recordingStarting.value = false
   if (recordingTimer) clearInterval(recordingTimer)
   recordingTimer = undefined
   mediaStream?.getTracks().forEach((track) => track.stop())
@@ -757,25 +962,7 @@ function cleanupRecorder(): void {
 }
 
 function compressedWaveform(): number[] {
-  if (!recordingSamples.length) return Array(16).fill(0.12)
-  const result: number[] = []
-  const bucketSize = recordingSamples.length / WAVEFORM_SAMPLES
-  const count = Math.min(WAVEFORM_SAMPLES, recordingSamples.length)
-  for (let index = 0; index < count; index += 1) {
-    const start = Math.floor(index * bucketSize)
-    const end = Math.max(start + 1, Math.floor((index + 1) * bucketSize))
-    const bucket = recordingSamples.slice(start, end)
-    result.push(
-      Math.max(
-        0.08,
-        Math.min(
-          1,
-          bucket.reduce((sum, value) => sum + value, 0) / bucket.length,
-        ),
-      ),
-    )
-  }
-  return result
+  return compressWaveformSamples(recordingSamples, WAVEFORM_SAMPLES)
 }
 
 async function blobBase64(blob: Blob): Promise<string> {
@@ -822,13 +1009,9 @@ onMounted(async () => {
   await Promise.all([messages.loadConversations(), calls.loadContacts()])
   await openEasyShareDraft()
   if (messages.activeNumber) {
-    const media = messageMedia.consume(messages.activeNumber)
-    if (media) {
-      await sendAttachment(
-        media.mediaType === 'photo' ? 'image' : 'video',
-        import.meta.env.DEV ? media.url : String(media.id),
-      )
-    }
+    restoreMediaSelection(
+      messageMedia.consumeMany<MessagesMediaContext>(messages.activeNumber),
+    )
     await scrollToBottom(false)
   }
 })
@@ -886,67 +1069,34 @@ onBeforeUnmount(() => {
           : phone.t('Apps.messages.name')
       "
     >
-      <template #left>
-        <SkyLink class="messages-sky-edit" @click="toggleListEditing">
-          {{ phone.t(editingList ? 'Common.done' : 'Common.edit') }}
-        </SkyLink>
-      </template>
       <template #right>
         <SkyLink
           v-if="editingList"
-          icon-only
-          class="messages-sky-delete"
-          :disabled="!selectedNumbers.length"
-          :aria-label="phone.t('Apps.messages.deleteSelected')"
-          @click="deleteSelectedConversations"
+          class="messages-sky-edit"
+          @click="toggleListEditing"
         >
-          <Trash2 :size="20" />
+          {{ phone.t('Common.done') }}
         </SkyLink>
         <SkyLink
           v-else
           icon-only
-          :aria-label="phone.t('Apps.messages.compose')"
-          @click="beginCompose"
+          class="messages-sky-inbox-menu-trigger"
+          aria-haspopup="menu"
+          :aria-expanded="inboxMenuOpened"
+          aria-controls="messages-inbox-menu"
+          :aria-label="phone.t('Apps.messages.inboxActions')"
+          @click="openInboxMenu"
         >
-          <SquarePen :size="21" />
+          <Ellipsis :size="22" />
         </SkyLink>
-      </template>
-      <template #subnavbar>
-        <SkySearchbar
-          v-model="search"
-          class="messages-sky-search"
-          :label="phone.t('Apps.messages.search')"
-          :placeholder="phone.t('Apps.messages.search')"
-          :clear-label="phone.t('Common.clear')"
-        />
       </template>
     </SkyNavbar>
 
-    <SkyScrollArea padded with-tabbar class="messages-sky-inbox-scroll">
-      <SkySegmented
-        v-if="!editingList"
-        navigation
-        rounded
-        strong
-        class="messages-sky-filters"
-        :active-index="showUnreadOnly ? 1 : 0"
-        :aria-label="phone.t('Apps.messages.filterLabel')"
-        :item-count="2"
-      >
-        <SkySegmentedButton
-          :active="!showUnreadOnly"
-          @click="showUnreadOnly = false"
-        >
-          {{ phone.t('Apps.messages.allMessages') }}
-        </SkySegmentedButton>
-        <SkySegmentedButton
-          :active="showUnreadOnly"
-          @click="showUnreadOnly = true"
-        >
-          {{ phone.t('Apps.messages.unreadMessages') }}
-        </SkySegmentedButton>
-      </SkySegmented>
-
+    <SkyScrollArea
+      padded
+      :with-tabbar="editingList"
+      class="messages-sky-inbox-scroll"
+    >
       <SkyList
         v-if="filteredConversations.length"
         flush
@@ -959,7 +1109,16 @@ onBeforeUnmount(() => {
           link-component="button"
           :chevron="false"
           :active="selectedNumbers.includes(conversation.phoneNumber)"
-          :aria-label="contactName(conversation.phoneNumber)"
+          :link-props="
+            editingList
+              ? {
+                  'aria-pressed': selectedNumbers.includes(
+                    conversation.phoneNumber,
+                  ),
+                }
+              : {}
+          "
+          :aria-label="conversationLabel(conversation)"
           class="messages-sky-conversation"
           :class="{
             'messages-sky-conversation--unread': conversation.unread > 0,
@@ -967,49 +1126,52 @@ onBeforeUnmount(() => {
           @click="openConversation(conversation)"
         >
           <template #media>
-            <span
-              class="messages-avatar"
-              :class="{
-                'messages-avatar--unknown': !knownContactNumbers.has(
-                  conversation.phoneNumber,
-                ),
-              }"
-              aria-hidden="true"
-            >
-              <img
-                v-if="contactAvatarUrls.get(conversation.phoneNumber)"
-                class="messages-avatar__image"
-                :src="contactAvatarUrls.get(conversation.phoneNumber)"
-                alt=""
+            <span class="messages-conversation-media" aria-hidden="true">
+              <span
+                class="messages-sky-unread-slot"
+                :class="{
+                  'is-visible': !editingList && conversation.unread > 0,
+                }"
               />
               <span
-                v-else-if="knownContactNumbers.has(conversation.phoneNumber)"
-                class="messages-avatar__initials"
-              >
-                {{ contactInitials(conversation.phoneNumber) }}
-              </span>
-              <span v-else class="messages-avatar__placeholder">
-                <i />
-                <b />
-              </span>
-              <span
-                v-if="editingList"
-                class="messages-sky-selection"
+                class="messages-avatar"
                 :class="{
-                  'is-selected': selectedNumbers.includes(
+                  'messages-avatar--unknown': !knownContactNumbers.has(
                     conversation.phoneNumber,
                   ),
                 }"
               >
-                <Check
-                  v-if="selectedNumbers.includes(conversation.phoneNumber)"
-                  :size="13"
+                <img
+                  v-if="contactAvatarUrls.get(conversation.phoneNumber)"
+                  class="messages-avatar__image"
+                  :src="contactAvatarUrls.get(conversation.phoneNumber)"
+                  alt=""
                 />
+                <span
+                  v-else-if="knownContactNumbers.has(conversation.phoneNumber)"
+                  class="messages-avatar__initials"
+                >
+                  {{ contactInitials(conversation.phoneNumber) }}
+                </span>
+                <span v-else class="messages-avatar__placeholder">
+                  <i />
+                  <b />
+                </span>
+                <span
+                  v-if="editingList"
+                  class="messages-sky-selection"
+                  :class="{
+                    'is-selected': selectedNumbers.includes(
+                      conversation.phoneNumber,
+                    ),
+                  }"
+                >
+                  <Check
+                    v-if="selectedNumbers.includes(conversation.phoneNumber)"
+                    :size="13"
+                  />
+                </span>
               </span>
-              <span
-                v-else-if="conversation.unread"
-                class="messages-sky-unread-dot"
-              />
             </span>
           </template>
           <template #title>
@@ -1034,19 +1196,47 @@ onBeforeUnmount(() => {
         class="messages-sky-empty"
         :title="
           phone.t(
-            search ? 'Apps.messages.noResults' : 'Apps.messages.noMessages',
+            search || showUnreadOnly
+              ? 'Apps.messages.noResults'
+              : 'Apps.messages.noMessages',
           )
         "
-        :body="search ? '' : phone.t('Apps.messages.noMessagesBody')"
+        :body="
+          search || showUnreadOnly
+            ? ''
+            : phone.t('Apps.messages.noMessagesBody')
+        "
       >
         <template #icon><MessageCircle :size="32" /></template>
-        <template v-if="!search" #actions>
+        <template v-if="!search && !showUnreadOnly" #actions>
           <SkyButton rounded @click="beginCompose">
             {{ phone.t('Apps.messages.compose') }}
           </SkyButton>
         </template>
       </SkyEmptyState>
     </SkyScrollArea>
+
+    <SkyToolbar
+      v-if="!editingList"
+      class="messages-sky-inbox-toolbar"
+      component="footer"
+      :aria-label="phone.t('Apps.messages.search')"
+    >
+      <SkySearchbar
+        v-model="search"
+        class="messages-sky-search"
+        :label="phone.t('Apps.messages.search')"
+        :placeholder="phone.t('Apps.messages.search')"
+        :clear-label="phone.t('Common.clear')"
+      />
+      <SkyFab
+        variant="neutral"
+        :aria-label="phone.t('Apps.messages.compose')"
+        @click="beginCompose"
+      >
+        <template #icon><SquarePen :size="21" /></template>
+      </SkyFab>
+    </SkyToolbar>
 
     <SkyPillNavigation
       v-if="editingList"
@@ -1065,6 +1255,18 @@ onBeforeUnmount(() => {
         {{ phone.t('Apps.messages.deleteSelected') }}
       </SkyButton>
     </SkyPillNavigation>
+
+    <SkyDropdown
+      id="messages-inbox-menu"
+      :items="inboxMenuItems"
+      :label="phone.t('Apps.messages.inboxActions')"
+      :opened="inboxMenuOpened"
+      :target="inboxMenuTarget"
+      @backdropclick="dismissInboxMenu"
+      @escape="dismissInboxMenu"
+      @positionerror="dismissInboxMenu"
+      @select="selectInboxMenuItem"
+    />
   </SkyAppPage>
 
   <SkyAppPage
@@ -1156,9 +1358,11 @@ onBeforeUnmount(() => {
   >
     <SkyNavbar
       class="messages-sky-thread-navbar"
+      :aria-hidden="contactDetailsOpen"
+      :inert="contactDetailsOpen || undefined"
       :title="activeTitle"
       show-back
-      back-appearance="plain"
+      back-appearance="surface"
       :back-label="phone.t('Common.back')"
       @back="goBack"
     >
@@ -1200,6 +1404,7 @@ onBeforeUnmount(() => {
     <SkyAppPage
       v-if="contactDetailsOpen"
       class="messages-contact-overlay"
+      component="section"
       :label="phone.t('Apps.messages.contactDetails')"
       :dark="phone.isDarkMode"
       accent="#34c759"
@@ -1211,23 +1416,9 @@ onBeforeUnmount(() => {
         back-appearance="surface"
         :back-label="phone.t('Common.back')"
         @back="contactDetailsOpen = false"
-      >
-        <template #right>
-          <SkyLink
-            v-if="!activeContact?.readonly"
-            icon-only
-            :aria-label="phone.t('Common.edit')"
-            @click="
-              contactEditing ? saveContactDetails() : (contactEditing = true)
-            "
-          >
-            <Check v-if="contactEditing" :size="19" />
-            <Pencil v-else :size="18" />
-          </SkyLink>
-        </template>
-      </SkyNavbar>
+      />
       <SkyScrollArea padded class="messages-contact-overlay__scroll">
-        <div class="messages-contact-details__hero">
+        <div class="messages-contact-profile__hero">
           <span
             class="messages-avatar messages-avatar--contact"
             :class="{ 'messages-avatar--unknown': !activeContact }"
@@ -1251,75 +1442,101 @@ onBeforeUnmount(() => {
             </span>
           </span>
           <h2>{{ activeTitle }}</h2>
-          <small>
-            {{ messages.activeNumber }}
-            <template v-if="activeContact?.readonly">
-              · {{ phone.t('Apps.phone.officialContact') }}
-            </template>
+          <small v-if="activeContact?.readonly">
+            {{ phone.t('Apps.phone.officialContact') }}
           </small>
         </div>
-        <div class="messages-contact-details__actions">
-          <SkyGlass
+        <div class="messages-contact-profile__actions">
+          <SkyButton
             v-if="activeContact?.canCall !== false"
-            component="button"
-            type="button"
+            icon-only
+            rounded
+            tonal
+            :aria-label="phone.t('Apps.messages.call')"
             @click="callActiveContact"
           >
-            <PhoneIcon :size="20" />
-            <span>{{ phone.t('Apps.messages.call') }}</span>
-          </SkyGlass>
-          <SkyGlass
+            <PhoneIcon :size="22" />
+          </SkyButton>
+          <SkyButton
             v-if="activeCanMessage"
-            component="button"
-            type="button"
+            icon-only
+            rounded
+            tonal
+            :aria-label="phone.t('Apps.messages.messageAction')"
             @click="contactDetailsOpen = false"
           >
-            <MessageCircle :size="20" />
-            <span>{{ phone.t('Apps.messages.messageAction') }}</span>
-          </SkyGlass>
+            <MessageCircle :size="22" />
+          </SkyButton>
+          <SkyButton
+            v-if="activeContactEmail"
+            icon-only
+            rounded
+            tonal
+            :aria-label="phone.t('Apps.phone.mail')"
+            @click="mailActiveContact"
+          >
+            <Mail :size="22" />
+          </SkyButton>
         </div>
-        <SkyList inset strong class="messages-contact-details__fields">
-          <SkyField
-            v-model="contactNameDraft"
-            :label="phone.t('Apps.messages.contactName')"
-            :readonly="!contactEditing || activeContact?.readonly"
-            :placeholder="phone.t('Apps.messages.contactName')"
-          />
-          <SkyField
-            v-model="contactNumberDraft"
-            :label="phone.t('Apps.messages.phoneNumber')"
-            :readonly="!contactEditing || activeContact?.readonly"
-            input-mode="tel"
-            type="tel"
-          />
-        </SkyList>
-        <SkyButton
-          v-if="!activeContact"
-          block
-          rounded
-          tonal
-          class="messages-contact-details__primary"
-          @click="contactEditing = true"
+        <SkySettingsGroup
+          class="messages-contact-profile__details"
+          :title="phone.t('Apps.messages.details')"
         >
-          <UserPlus :size="18" />
-          {{ phone.t('Apps.messages.addContact') }}
-        </SkyButton>
-        <SkyButton
-          v-else-if="!activeContact.readonly"
-          block
-          rounded
-          tonal
-          variant="danger"
-          class="messages-contact-details__delete"
-          @click="deleteActiveContact"
+          <SkySettingsRow
+            :title="phone.t('Apps.phone.mobile')"
+            :value="messages.activeNumber ?? ''"
+          />
+          <SkySettingsRow
+            v-if="activeContact?.organization"
+            :title="phone.t('Apps.messages.company')"
+            :value="activeContact.organization"
+          />
+          <SkySettingsRow
+            v-if="activeContactEmail"
+            :title="phone.t('Apps.phone.mail')"
+            :value="activeContactEmail"
+          />
+          <SkySettingsRow
+            v-if="activeContact?.notes"
+            :title="phone.t('Apps.phone.notes')"
+            :description="activeContact.notes"
+          />
+        </SkySettingsGroup>
+        <SkySettingsGroup
+          class="messages-contact-profile__options"
+          :aria-label="phone.t('Apps.messages.contactActions')"
         >
-          <Trash2 :size="18" />
-          {{ phone.t('Apps.messages.deleteContact') }}
-        </SkyButton>
+          <SkySettingsRow
+            kind="navigation"
+            :title="
+              phone.t(
+                activeContact
+                  ? 'Apps.messages.showInContacts'
+                  : 'Apps.messages.addContact',
+              )
+            "
+            @activate="openActiveContactInPhone"
+          >
+            <template #leading><ContactRound :size="20" /></template>
+          </SkySettingsRow>
+          <SkySettingsRow
+            kind="action"
+            tone="danger"
+            :title="phone.t('Apps.messages.blockContact')"
+            @activate="confirmBlockActiveContact"
+          >
+            <template #leading><Ban :size="20" /></template>
+          </SkySettingsRow>
+        </SkySettingsGroup>
       </SkyScrollArea>
     </SkyAppPage>
 
-    <SkyScrollArea padded class="messages-sky-thread-scroll">
+    <SkyScrollArea
+      padded
+      class="messages-sky-thread-scroll"
+      :aria-hidden="contactDetailsOpen"
+      :inert="contactDetailsOpen || undefined"
+    >
       <SkyMessages class="messages-bubbles">
         <template
           v-for="(message, index) in messages.messages"
@@ -1381,6 +1598,8 @@ onBeforeUnmount(() => {
     <section
       v-if="activeCanMessage && attachmentMenuOpen"
       class="messages-attachment-menu"
+      :aria-hidden="contactDetailsOpen"
+      :inert="contactDetailsOpen || undefined"
     >
       <SkyGlass
         component="button"
@@ -1423,6 +1642,8 @@ onBeforeUnmount(() => {
     <section
       v-if="activeCanMessage && attachmentPicker"
       class="messages-media-picker"
+      :aria-hidden="contactDetailsOpen"
+      :inert="contactDetailsOpen || undefined"
     >
       <header>
         <strong>
@@ -1486,6 +1707,9 @@ onBeforeUnmount(() => {
           :key="gif.id"
           type="button"
           :aria-label="gif.title"
+          :style="{
+            aspectRatio: `${Math.max(1, gif.width)} / ${Math.max(1, gif.height)}`,
+          }"
           @click="sendAttachment('gif', gif.url)"
         >
           <img :src="gif.previewUrl" :alt="gif.title" loading="lazy" />
@@ -1515,6 +1739,8 @@ onBeforeUnmount(() => {
 
     <FullEmojiPicker
       v-if="activeCanMessage && emojiOpen"
+      :aria-hidden="contactDetailsOpen"
+      :inert="contactDetailsOpen || undefined"
       @close="emojiOpen = false"
       @pick="appendEmoji"
     />
@@ -1522,6 +1748,8 @@ onBeforeUnmount(() => {
     <div
       v-if="activeCanMessage && shareDraft && !recording"
       class="shared-composer-preview"
+      :aria-hidden="contactDetailsOpen"
+      :inert="contactDetailsOpen || undefined"
     >
       <SharedContentCard compact :payload="shareDraft" variant="messages" />
       <SkyLink
@@ -1533,7 +1761,12 @@ onBeforeUnmount(() => {
       </SkyLink>
     </div>
 
-    <section v-if="activeCanMessage && recording" class="messages-recorder">
+    <section
+      v-if="activeCanMessage && recording"
+      class="messages-recorder"
+      :aria-hidden="contactDetailsOpen"
+      :inert="contactDetailsOpen || undefined"
+    >
       <SkyLink
         icon-only
         class="messages-recorder__cancel"
@@ -1551,69 +1784,162 @@ onBeforeUnmount(() => {
           :style="{ height: `${Math.max(3, level * 24)}px` }"
         />
       </div>
-      <SkyLink
+      <SkyButton
         icon-only
+        rounded
+        tonal
         class="messages-recorder__send"
         :aria-label="phone.t('Apps.messages.stopAndSend')"
         @click="stopVoiceRecording"
       >
-        <ArrowUpCircle :size="29" fill="currentColor" />
-      </SkyLink>
+        <ArrowUpCircle :size="27" :stroke-width="2.4" />
+      </SkyButton>
     </section>
 
-    <div v-else-if="activeCanMessage" class="messages-sky-composer-shell">
-      <SkyGlass
-        component="div"
-        :highlight="false"
-        class="messages-sky-composer-pill"
+    <div
+      v-else-if="activeCanMessage"
+      class="messages-sky-composer-shell"
+      :aria-hidden="contactDetailsOpen"
+      :inert="contactDetailsOpen || undefined"
+    >
+      <div
+        v-if="pendingAttachments.length"
+        class="messages-pending-media"
+        role="list"
+        :aria-label="phone.t('Apps.messages.attachmentPreview')"
       >
+        <div
+          v-for="(media, index) in pendingAttachments"
+          :key="media.id"
+          class="messages-pending-media__item"
+          role="listitem"
+        >
+          <img
+            v-if="media.mediaType === 'photo' || media.thumbnailUrl"
+            :src="media.thumbnailUrl ?? media.url"
+            :alt="
+              phone.t(
+                media.mediaType === 'video'
+                  ? 'Apps.photos.videoAlt'
+                  : 'Apps.photos.photoAlt',
+              )
+            "
+          />
+          <video
+            v-else
+            :src="media.url"
+            :aria-label="phone.t('Apps.photos.videoAlt')"
+            muted
+            playsinline
+            preload="metadata"
+          />
+          <button
+            type="button"
+            :disabled="sending"
+            :aria-label="
+              phone.t('Apps.messages.removeAttachment', {
+                number: String(index + 1),
+              })
+            "
+            @click="removePendingAttachment(media.id)"
+          >
+            <X :size="13" :stroke-width="2.5" />
+          </button>
+        </div>
+      </div>
+
+      <div class="messages-sky-composer-row">
         <SkyGlass
           component="button"
+          type="button"
           class="messages-sky-messagebar__action messages-sky-messagebar__plus"
           :class="{ active: attachmentMenuOpen || attachmentPanelOpen }"
+          :disabled="sending"
           :aria-label="phone.t('Apps.messages.moreActions')"
           @click="toggleAttachmentMenu"
         >
           <Plus :size="24" />
         </SkyGlass>
-        <SkyMessagebar
-          v-model="draft"
-          class="messages-sky-messagebar"
-          embedded
-          :outline="false"
-          :placeholder="phone.t('Apps.messages.message')"
-          :disabled="sending"
-          @keydown.enter.exact="handleEnterAction($event, sendTextMessage)"
+        <SkyGlass
+          component="div"
+          :highlight="false"
+          class="messages-sky-composer-pill"
         >
-          <template #right>
-            <SkyLink
-              v-if="draft.trim() || shareDraft"
-              icon-only
-              class="messages-sky-messagebar__send"
-              :disabled="sending"
-              :aria-label="phone.t('Apps.messages.send')"
-              @click="sendTextMessage"
-            >
-              <ArrowUpCircle :size="29" :stroke-width="2.4" />
-            </SkyLink>
-            <SkyLink
-              v-else
-              icon-only
-              class="messages-sky-messagebar__send"
-              :disabled="sending"
-              :aria-label="phone.t('Apps.messages.recordVoice')"
-              @click="startVoiceRecording"
-            >
-              <Mic :size="21" :stroke-width="2.3" />
-            </SkyLink>
-          </template>
-        </SkyMessagebar>
-      </SkyGlass>
+          <SkyMessagebar
+            v-model="draft"
+            class="messages-sky-messagebar"
+            embedded
+            :outline="false"
+            :placeholder="phone.t('Apps.messages.message')"
+            :disabled="sending"
+            @keydown.enter.exact="handleEnterAction($event, sendTextMessage)"
+          >
+            <template #right>
+              <SkyLink
+                v-if="composerHasContent"
+                icon-only
+                class="messages-sky-messagebar__send"
+                :disabled="sending"
+                :aria-label="phone.t('Apps.messages.send')"
+                @click="sendTextMessage"
+              >
+                <ArrowUpCircle :size="29" :stroke-width="2.4" />
+              </SkyLink>
+              <SkyLink
+                v-else
+                icon-only
+                class="messages-sky-messagebar__send"
+                :disabled="sending || recordingStarting"
+                :aria-busy="recordingStarting"
+                :aria-label="phone.t('Apps.messages.recordVoice')"
+                @click="startVoiceRecording"
+              >
+                <Mic :size="21" :stroke-width="2.3" />
+              </SkyLink>
+            </template>
+          </SkyMessagebar>
+        </SkyGlass>
+      </div>
     </div>
-    <div v-else class="messages-sky-unavailable">
+    <div
+      v-else
+      class="messages-sky-unavailable"
+      :aria-hidden="contactDetailsOpen"
+      :inert="contactDetailsOpen || undefined"
+    >
       {{ phone.t('Apps.messages.messagingUnavailable') }}
     </div>
   </SkyAppPage>
+
+  <SkyDialog
+    :opened="blockDialogOpened"
+    @backdropclick="blockDialogOpened = false"
+    @escape="blockDialogOpened = false"
+  >
+    <template #title>{{ phone.t('Apps.messages.blockContactTitle') }}</template>
+    <p>
+      {{
+        phone.t('Apps.messages.blockContactBody', {
+          name: activeTitle,
+        })
+      }}
+    </p>
+    <template #buttons>
+      <SkyDialogButton
+        :disabled="blockingContact"
+        @click="blockDialogOpened = false"
+      >
+        {{ phone.t('Common.cancel') }}
+      </SkyDialogButton>
+      <SkyDialogButton
+        strong
+        :disabled="blockingContact"
+        @click="blockActiveContact"
+      >
+        {{ phone.t('Apps.messages.blockContact') }}
+      </SkyDialogButton>
+    </template>
+  </SkyDialog>
 
   <SkyToast
     :opened="toastOpened"
@@ -1625,10 +1951,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.messages-sky-page {
-  --sky-page-gutter: 14px;
-}
-
 .messages-sky-state-scroll,
 .messages-sky-loading {
   display: grid;
@@ -1639,34 +1961,24 @@ onBeforeUnmount(() => {
   margin: auto;
 }
 
-.messages-sky-edit,
-.messages-sky-delete {
+.messages-sky-edit {
   color: var(--sky-app-accent);
   font-size: 15px;
   font-weight: 650;
 }
 
-.messages-sky-delete {
-  color: var(--sky-danger);
+.messages-sky-search {
+  min-width: 0;
+  width: 100%;
+  flex: 1;
 }
 
-.messages-sky-search {
+.messages-sky-inbox-toolbar :deep(.sky-toolbar__inner) {
   width: 100%;
 }
 
 .messages-sky-inbox-scroll {
   padding-top: 4px;
-}
-
-.messages-sky-filters {
-  width: 100%;
-  margin-bottom: 12px;
-}
-
-.messages-sky-filters :deep(.sky-segmented-button) {
-  min-height: 40px;
-  font-size: 13px;
-  font-weight: 650;
 }
 
 .messages-sky-conversation-list {
@@ -1684,6 +1996,13 @@ onBeforeUnmount(() => {
 
 .messages-sky-conversation :deep(.sky-list-item__media) {
   position: relative;
+}
+
+.messages-conversation-media {
+  display: grid;
+  grid-template-columns: 10px 50px;
+  align-items: center;
+  gap: var(--sky-space-2);
 }
 
 .messages-sky-conversation :deep(.sky-list-item__title) {
@@ -1716,8 +2035,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.messages-sky-selection,
-.messages-sky-unread-dot {
+.messages-sky-selection {
   position: absolute;
   z-index: 2;
   border-radius: 50%;
@@ -1739,13 +2057,16 @@ onBeforeUnmount(() => {
   background: var(--sky-app-accent);
 }
 
-.messages-sky-unread-dot {
-  top: 0;
-  right: 0;
+.messages-sky-unread-slot {
   width: 10px;
   height: 10px;
-  border: 2px solid var(--sky-bg);
+  border-radius: 50%;
   background: var(--sky-app-accent);
+  opacity: 0;
+}
+
+.messages-sky-unread-slot.is-visible {
+  opacity: 1;
 }
 
 .messages-sky-empty {
@@ -1901,9 +2222,19 @@ onBeforeUnmount(() => {
 
 .messages-sky-composer-shell {
   z-index: 42;
+  display: flex;
   flex: none;
+  flex-direction: column;
+  gap: var(--sky-space-2);
   padding: 6px var(--sky-page-gutter) calc(var(--sky-safe-area-bottom) + 6px);
   background: var(--sky-bg);
+}
+
+.messages-sky-composer-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sky-space-2);
 }
 
 .messages-sky-composer-pill {
@@ -1911,6 +2242,7 @@ onBeforeUnmount(() => {
   min-height: 56px;
   padding: 5px 7px;
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 6px;
   overflow: hidden;
@@ -1974,6 +2306,70 @@ onBeforeUnmount(() => {
   color: var(--sky-app-accent);
 }
 
+.messages-pending-media {
+  display: flex;
+  gap: var(--sky-space-2);
+  overflow-x: auto;
+  padding: 2px;
+  scrollbar-width: none;
+}
+
+.messages-pending-media::-webkit-scrollbar {
+  display: none;
+}
+
+.messages-pending-media__item {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  overflow: visible;
+  border-radius: var(--sky-radius-card);
+  background: var(--sky-surface-muted);
+}
+
+.messages-pending-media__item > img,
+.messages-pending-media__item > video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: hidden;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.messages-pending-media__item > button {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--sky-bg);
+  border-radius: 50%;
+  background: var(--sky-text);
+  color: var(--sky-bg);
+}
+
+.messages-pending-media__item > button:disabled {
+  opacity: 0.45;
+}
+
+.messages-recorder__send {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  padding: 0;
+  color: var(--sky-app-accent);
+}
+
+.messages-recorder__wave i {
+  width: auto;
+  min-width: 1px;
+  flex: 1 1 2px;
+}
+
 .messages-sky-unavailable {
   padding: 12px 18px calc(var(--sky-safe-area-bottom) + 12px);
   color: var(--sky-muted);
@@ -1999,24 +2395,46 @@ onBeforeUnmount(() => {
   padding-top: 4px;
 }
 
-.messages-contact-details__hero {
-  padding-top: 10px;
+.messages-contact-profile__hero {
+  padding: var(--sky-space-3) 0 var(--sky-space-4);
+  display: grid;
+  justify-items: center;
+  gap: var(--sky-space-2);
+  text-align: center;
 }
 
-.messages-contact-details__actions :deep(.sky-glass) {
-  min-height: 62px;
-  flex-direction: column;
-  border-radius: var(--sky-radius-card);
+.messages-contact-profile__hero h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
 }
 
-.messages-contact-details__fields {
-  margin: 0 0 12px;
+.messages-contact-profile__hero small {
+  color: var(--sky-muted);
+  font-size: 12px;
 }
 
-.messages-contact-details__primary,
-.messages-contact-details__delete {
-  width: 100%;
-  margin: 10px 0 0;
+.messages-contact-profile__actions {
+  width: min(100%, 256px);
+  margin: 0 auto var(--sky-space-5);
+  display: flex;
+  justify-content: center;
+  gap: var(--sky-space-3);
+}
+
+.messages-contact-profile__actions :deep(.sky-button) {
+  width: 56px;
+  min-width: 56px;
+  height: 56px;
+  min-height: 56px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.messages-contact-profile__details,
+.messages-contact-profile__options {
+  margin-right: calc(var(--sky-page-gutter) * -1);
+  margin-left: calc(var(--sky-page-gutter) * -1);
 }
 
 .messages-gif-search {

@@ -35,10 +35,14 @@ describe('messages store', () => {
   })
 
   it('shows an outgoing message immediately and marks it delivered', async () => {
-    let resolveSend: ((value: { data: SmsMessage; success: true }) => void) | undefined
-    const response = new Promise<{ data: SmsMessage; success: true }>((resolve) => {
-      resolveSend = resolve
-    })
+    let resolveSend:
+      | ((value: { data: SmsMessage; success: true }) => void)
+      | undefined
+    const response = new Promise<{ data: SmsMessage; success: true }>(
+      (resolve) => {
+        resolveSend = resolve
+      },
+    )
     mockNuiCall
       .mockResolvedValueOnce({ data: [], success: true })
       .mockResolvedValueOnce({ data: [], success: true })
@@ -76,6 +80,64 @@ describe('messages store', () => {
     await messages.send({ body: 'Hello', messageType: 'text' })
 
     expect(messages.messages[0].delivery_status).toBe('failed')
+  })
+
+  it('discards a failed optimistic attachment when its preview remains retryable', async () => {
+    mockNuiCall
+      .mockResolvedValueOnce({ data: [], success: true })
+      .mockResolvedValueOnce({ data: [], success: true })
+      .mockResolvedValueOnce({ error: 'request_failed', success: false })
+
+    const messages = useMessagesStore()
+    await messages.openThread('4205550196')
+    await messages.send(
+      {
+        body: 'Retry this photo',
+        mediaAssetId: '17',
+        messageType: 'image',
+      },
+      { discardFailedOptimistic: true },
+    )
+
+    expect(messages.messages).toEqual([])
+  })
+
+  it('keeps a photo caption on the optimistic media message', async () => {
+    const serverMessage: SmsMessage = {
+      ...sentMessage('photo-server-id'),
+      body: 'Look at this',
+      media_asset_id: 'https://media.example/photo.jpg',
+      media_mime: 'image/jpeg',
+      message_type: 'image',
+    }
+    mockNuiCall
+      .mockResolvedValueOnce({ data: [], success: true })
+      .mockResolvedValueOnce({ data: [], success: true })
+      .mockResolvedValueOnce({ data: serverMessage, success: true })
+      .mockResolvedValueOnce({ data: [], success: true })
+
+    const messages = useMessagesStore()
+    await messages.openThread('4205550196')
+    const sending = messages.send({
+      body: '  Look at this  ',
+      mediaAssetId: '17',
+      messageType: 'image',
+    })
+
+    expect(messages.messages[0]).toMatchObject({
+      body: 'Look at this',
+      delivery_status: 'sending',
+      media_asset_id: '17',
+      message_type: 'image',
+    })
+
+    await sending
+    expect(mockNuiCall).toHaveBeenNthCalledWith(3, 'messages:send', {
+      body: '  Look at this  ',
+      mediaAssetId: '17',
+      messageType: 'image',
+      phoneNumber: '4205550196',
+    })
   })
 
   it('shows a shared contact immediately and sends only its id', async () => {

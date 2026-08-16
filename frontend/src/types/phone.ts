@@ -15,6 +15,7 @@ export type PhoneContact = {
   canMessage?: boolean
   companyId?: string
   created_at?: string
+  email?: string | null
   favorite?: boolean | number
   id: string
   name: string

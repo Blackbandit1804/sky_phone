@@ -530,7 +530,9 @@ Bridge.Callbacks.Register("sky_phone:messages:send", function(source, data)
         if not attachment then
             return { success = false, error = "invalid_attachment" }
         end
-        body = ""
+        if body ~= "" and #body > Config.Messages.BodyMaxLength then
+            return { success = false, error = "invalid_message" }
+        end
     else
         return { success = false, error = "invalid_request" }
     end
@@ -545,6 +547,15 @@ Bridge.Callbacks.Register("sky_phone:messages:send", function(source, data)
     local recipient = recipients[1]
     if not recipient then
         return { success = false, error = "recipient_not_found" }
+    end
+    local blocks = Bridge.Database.Query([[
+        SELECT 1 AS `blocked`
+        FROM `sky_phone_call_blocks`
+        WHERE `blocker_sim_id` = ? AND `blocked_sim_id` = ?
+        LIMIT 1
+    ]], { recipient.id, device.sim_id })
+    if blocks[1] then
+        return { success = false, error = "blocked" }
     end
     local id = uuid()
     Bridge.Database.Query([[
