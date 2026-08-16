@@ -406,7 +406,7 @@ Locales["en"] = {
             flare = {
                 name = "Flare", signInTitle = "Sign in to Flare", signInBody = "Flare profiles and matches are linked to your private Sky Cloud account.",
                 createProfile = "Create your profile", welcome = "Find your spark", welcomeBody = "Build a profile and meet people across Los Santos.",
-                photo = "Profile photo", profilePhotos = "Profile photos", profilePhotosBody = "Choose up to six photos from Photos. Your first photo is shown first.", addPhotos = "Add photos", choosePhotos = "Choose from Photos", primaryPhoto = "Main", removePhoto = "Remove photo {number}",
+                photo = "Profile photo", profilePhotos = "Profile photos", profilePhotosBody = "Add up to six photos from Photos or Camera. Your first photo is shown first.", addPhotos = "Add photos", choosePhotos = "Choose from Photos", primaryPhoto = "Main", removePhoto = "Remove photo {number}",
                 yourName = "Your name", namePlaceholder = "What should people call you?", age = "Age", bio = "About you", bioPlaceholder = "A short line that starts a conversation...",
                 gender = "I am", showMe = "Show me", woman = "Woman", man = "Man", nonbinary = "Non-binary", women = "Women", men = "Men", nonbinaryPeople = "Non-binary people", everyone = "Everyone",
                 minimumAge = "Minimum age", maximumAge = "Maximum age", start = "Start exploring", saveProfile = "Save profile", editProfileBody = "Keep your profile fresh and unmistakably you.",
@@ -416,7 +416,7 @@ Locales["en"] = {
                 exploreTitle = "Explore", exploreBody = "Find people who are into the same things.",
                 exploreModes = { forYou = "For You", dateNight = "Date Night", freeTonight = "Free Tonight", longTerm = "Long-term thing", newFriends = "New Friends", weekend = "Weekend plans" },
                 likesTitle = "Likes You", likesBody = "See who already likes you, then make your choice.", matched = "Matched", newMatches = "New Matches", messages = "Messages",
-                settings = "Settings", editProfile = "Edit profile", profileGoalBody = "Shown on your discovery card.", like = "Like", pass = "Pass",
+                settings = "Settings", editProfile = "Edit profile", editRelationshipGoal = "Edit relationship goal", profileGoalBody = "Shown on your discovery card.", like = "Like", pass = "Pass",
                 relationshipGoal = "Relationship goal", interests = "Interests", interestsPlaceholder = "Music, travel, coffee", interestsHint = "Separate up to five interests with commas.",
                 discoverySettings = "Discovery", discoveryPreferences = "Who you want to meet", showProfile = "Show me on Flare", showProfileBody = "Let new people discover your profile.",
                 discoveryPrivacyNote = "Turning Discovery off hides you from new people. Your existing matches and chats stay available.",
@@ -428,7 +428,7 @@ Locales["en"] = {
                 messagePlaceholder = "Write a message", itsAMatch = "It's a spark!", matchBody = "You and {name} liked each other.", sayHello = "Say hello", keepSwiping = "Keep exploring", newMatchNotification = "You and {sender} found a spark!", newMessageNotification = "New message from {sender}",
                 lookingFor = { longTerm = "Long-term connection", dates = "Good dates", friends = "New friends" },
                 errors = {
-                    invalid_profile = "Check your name, age and profile text.", invalid_profile_photos = "Choose up to six photos from your own Photos library.", request_failed = "Flare could not save those changes. Try again.", invalid_target = "This profile is no longer available.", invalid_choice = "That swipe could not be saved.", invalid_discovery = "That Discovery setting is invalid.", discovery_disabled = "Enable Discovery before swiping.",
+                    invalid_profile = "Check your name, age and profile text.", invalid_profile_photos = "Choose or take up to six photos saved in your own Photos library.", request_failed = "Flare could not save those changes. Try again.", invalid_target = "This profile is no longer available.", invalid_choice = "That swipe could not be saved.", invalid_discovery = "That Discovery setting is invalid.", discovery_disabled = "Enable Discovery before swiping.",
                     nothing_to_rewind = "There is no recent swipe to rewind.", cannot_rewind_match = "A swipe that created a match cannot be rewound.",
                     match_not_found = "This match is no longer available.", invalid_message = "Write a message before sending.", invalid_attachment = "This attachment is unavailable.", gif_provider_unconfigured = "GIF search is not configured.", gif_provider_unauthorized = "The GIF provider key is invalid.", gif_provider_rate_limited = "GIF search is busy. Try again shortly.", gif_provider_failed = "GIFs are temporarily unavailable.", rate_limited = "Slow down for a moment and try again.", default = "Flare could not complete the request.",
                 },

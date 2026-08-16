@@ -846,7 +846,7 @@ const defaultLocales: LocaleTree = {
       photo: 'Profile photo',
       profilePhotos: 'Profile photos',
       profilePhotosBody:
-        'Choose up to six photos from Photos. Your first photo is shown first.',
+        'Add up to six photos from Photos or Camera. Your first photo is shown first.',
       addPhotos: 'Add photos',
       choosePhotos: 'Choose from Photos',
       primaryPhoto: 'Main',
@@ -904,6 +904,7 @@ const defaultLocales: LocaleTree = {
       messages: 'Messages',
       settings: 'Settings',
       editProfile: 'Edit profile',
+      editRelationshipGoal: 'Edit relationship goal',
       profileGoalBody: 'Shown on your discovery card.',
       relationshipGoal: 'Relationship goal',
       interests: 'Interests',
@@ -967,7 +968,7 @@ const defaultLocales: LocaleTree = {
       errors: {
         invalid_profile: 'Check your name, age and profile text.',
         invalid_profile_photos:
-          'Choose up to six photos from your own Photos library.',
+          'Choose or take up to six photos saved in your own Photos library.',
         request_failed: 'Flare could not save those changes. Try again.',
         invalid_target: 'This profile is no longer available.',
         invalid_choice: 'That swipe could not be saved.',

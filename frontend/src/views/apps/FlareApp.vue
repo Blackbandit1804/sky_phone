@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import {
+  SkyActionButton,
+  SkyActionGroup,
+  SkyActionSheet,
+  SkyActionsLabel,
   SkyBadge,
   SkyBlock,
   SkyBlockTitle,
@@ -124,6 +128,7 @@ const messageScroll = ref<HTMLElement | null>(null)
 const profileEditing = ref(false)
 const profileSettings = ref(false)
 const profileSaving = ref(false)
+const photoSourceOpened = ref(false)
 const discoverySaving = ref(false)
 const unmatchDialog = ref(false)
 const activeExploreMode = ref<ExploreMode>('all')
@@ -297,14 +302,24 @@ function cloneDraft(): FlareProfileDraft {
   }
 }
 
-function openPhotoGallery(): void {
+function openPhotoSourcePicker(): void {
+  if (draftPhotos.value.length >= 6) return
+  photoSourceOpened.value = true
+}
+
+function closePhotoSourcePicker(): void {
+  photoSourceOpened.value = false
+}
+
+function openProfileMediaApp(app: 'camera' | 'photos'): void {
   const remaining = 6 - draftPhotos.value.length
   if (remaining < 1) return
+  closePhotoSourcePicker()
   messageMedia.begin(
     'flare:profile-photos',
     'photo',
     flare.profile ? '/apps/flare?profileEdit=1' : '/apps/flare',
-    remaining,
+    app === 'photos' ? remaining : 1,
     {
       draft: cloneDraft(),
       editing: Boolean(flare.profile),
@@ -312,7 +327,7 @@ function openPhotoGallery(): void {
     } satisfies FlareMediaContext,
   )
   void router.push({
-    path: '/apps/photos',
+    path: `/apps/${app}`,
     query: { mediaAttachment: 'photo' },
   })
 }
@@ -382,7 +397,7 @@ function choiceLinkProps(field: FlareChoiceField): Record<string, unknown> {
 
 async function openChoice(
   field: FlareChoiceField,
-  trigger: HTMLElement,
+  trigger: HTMLElement | null,
 ): Promise<void> {
   activeChoiceTrigger = trigger
   activeChoiceField.value = field
@@ -395,6 +410,11 @@ async function openChoice(
   choiceSheetContent.value
     ?.querySelector<HTMLElement>('[aria-selected="true"]')
     ?.focus({ preventScroll: true })
+}
+
+async function openProfileGoalEditor(): Promise<void> {
+  profileEditing.value = true
+  await openChoice('lookingFor', null)
 }
 
 function closeChoice(): void {
@@ -548,6 +568,7 @@ function openSettings(): void {
 }
 
 function closeProfileScreen(): void {
+  syncDraft()
   profileEditing.value = false
   profileSettings.value = false
 }
@@ -924,10 +945,10 @@ onBeforeUnmount(() => {
               clear
               class="flare-photo-add"
               :class="{ 'is-empty': !draftPhotos.length }"
-              @click="openPhotoGallery"
+              @click="openPhotoSourcePicker"
             >
-              <Images />
-              <span>{{ phone.t('Apps.flare.choosePhotos') }}</span>
+              <Plus />
+              <span>{{ phone.t('Apps.flare.addPhotos') }}</span>
             </sky-button>
           </div>
         </sky-card>
@@ -1617,7 +1638,16 @@ onBeforeUnmount(() => {
             {{ phone.t('Apps.easyShare.shareProfile') }}
           </button>
         </div>
-        <sky-card :content-wrap="false" class="flare-profile-card">
+        <sky-card
+          component="button"
+          type="button"
+          :content-wrap="false"
+          class="flare-profile-card"
+          aria-controls="flare-choice-sheet"
+          aria-haspopup="dialog"
+          :aria-label="phone.t('Apps.flare.editRelationshipGoal')"
+          @click="openProfileGoalEditor"
+        >
           <span><Heart fill="currentColor" /></span>
           <div>
             <strong>{{
@@ -1667,10 +1697,10 @@ onBeforeUnmount(() => {
               clear
               class="flare-photo-add"
               :class="{ 'is-empty': !draftPhotos.length }"
-              @click="openPhotoGallery"
+              @click="openPhotoSourcePicker"
             >
-              <Images />
-              <span>{{ phone.t('Apps.flare.choosePhotos') }}</span>
+              <Plus />
+              <span>{{ phone.t('Apps.flare.addPhotos') }}</span>
             </sky-button>
           </div>
         </sky-card>
@@ -1856,8 +1886,42 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <sky-action-sheet
+      :aria-label="phone.t('Apps.flare.addPhotos')"
+      :opened="photoSourceOpened"
+      @backdropclick="closePhotoSourcePicker"
+      @escape="closePhotoSourcePicker"
+    >
+      <sky-action-group>
+        <sky-actions-label>
+          {{ phone.t('Apps.flare.addPhotos') }}
+        </sky-actions-label>
+        <sky-action-button bold @click="openProfileMediaApp('photos')">
+          <span class="flare-photo-source-action">
+            <Images :size="20" />
+            {{ phone.t('Apps.flare.choosePhotos') }}
+          </span>
+        </sky-action-button>
+        <sky-action-button @click="openProfileMediaApp('camera')">
+          <span class="flare-photo-source-action">
+            <Camera :size="20" />
+            {{ phone.t('Apps.flare.takePhoto') }}
+          </span>
+        </sky-action-button>
+      </sky-action-group>
+      <sky-action-group>
+        <sky-action-button @click="closePhotoSourcePicker">
+          {{ phone.t('Common.cancel') }}
+        </sky-action-button>
+      </sky-action-group>
+    </sky-action-sheet>
+
     <div class="flare-choice-sheet">
-      <sky-sheet :opened="choiceOpened" @backdropclick="closeChoice">
+      <sky-sheet
+        :opened="choiceOpened"
+        @backdropclick="closeChoice"
+        @escape="closeChoice"
+      >
         <section
           id="flare-choice-sheet"
           ref="choiceSheetContent"
@@ -2625,15 +2689,29 @@ onBeforeUnmount(() => {
   box-shadow: 0 7px 18px rgb(255 56 92 / 25%);
 }
 .flare-profile-card {
+  box-sizing: border-box;
+  width: calc(100% - 4px);
+  min-height: 65px;
   margin: 26px 2px 0 !important;
   padding: 14px !important;
   display: flex;
   align-items: center;
   gap: 11px;
+  border: 0;
+  color: inherit;
+  font: inherit;
   text-align: left;
   border-radius: 15px !important;
   background: var(--flare-panel) !important;
   box-shadow: none !important;
+  cursor: pointer;
+}
+.flare-profile-card:active {
+  background: var(--sky-pressed) !important;
+}
+.flare-profile-card:focus-visible {
+  outline: 2px solid var(--flare);
+  outline-offset: 2px;
 }
 .flare-profile-card > span {
   width: 37px;
@@ -2833,6 +2911,11 @@ onBeforeUnmount(() => {
 .flare-photo-grid :deep(.flare-photo-add svg) {
   width: 25px;
   height: 25px;
+}
+.flare-photo-source-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sky-space-2);
 }
 .flare-error {
   margin: 8px 22px 0;

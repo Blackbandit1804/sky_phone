@@ -81,13 +81,17 @@ describe('flare store', () => {
     })
   })
 
-  it('sends only Gallery media ids when profile photos are saved', async () => {
+  it('preserves ordered profile media ids and urls when profile photos are saved', async () => {
     const updated = {
       ...bootstrap,
       profile: {
         ...bootstrap.profile!,
-        photoMediaIds: [42],
-        photoUrls: ['https://cdn.example.test/profile.jpg'],
+        photoMediaIds: [42, 17, 91],
+        photoUrls: [
+          'https://cdn.example.test/profile-primary.jpg',
+          'https://cdn.example.test/profile-secondary.jpg',
+          'https://cdn.example.test/profile-tertiary.jpg',
+        ],
       },
     }
     const draft: FlareProfileDraft = {
@@ -101,15 +105,18 @@ describe('flare store', () => {
       maxAge: bootstrap.profile!.maxAge,
       minAge: bootstrap.profile!.minAge,
       name: bootstrap.profile!.name,
-      photoMediaIds: [42],
+      photoMediaIds: [42, 17, 91],
     }
     mockNuiCall.mockResolvedValueOnce({ data: updated, success: true })
     const flare = useFlareStore()
 
     expect(await flare.saveProfile(draft)).toBe(true)
     expect(mockNuiCall).toHaveBeenCalledWith('flare:save-profile', draft)
+    expect(flare.profile?.photoMediaIds).toEqual([42, 17, 91])
     expect(flare.profile?.photoUrls).toEqual([
-      'https://cdn.example.test/profile.jpg',
+      'https://cdn.example.test/profile-primary.jpg',
+      'https://cdn.example.test/profile-secondary.jpg',
+      'https://cdn.example.test/profile-tertiary.jpg',
     ])
   })
 
