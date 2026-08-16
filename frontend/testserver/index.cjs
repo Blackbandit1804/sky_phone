@@ -5527,6 +5527,48 @@ app.post('/api/:endpoint', (request, response) => {
     )
     return
   }
+  if (endpoint === 'companies:dial-service-line') {
+    const context = companyWorkContext(testScenario)
+    if (!context.authorized || !context.permissions.canTakeCalls) {
+      response.json({ success: false, error: 'not_authorized' })
+      return
+    }
+    const phoneNumber = String(request.body.phoneNumber ?? '').replace(
+      /\D/g,
+      '',
+    )
+    if (
+      phoneNumber.length !== 10 ||
+      companyProfiles.some((company) => company.phoneNumber === phoneNumber)
+    ) {
+      response.json({ success: false, error: 'invalid_number' })
+      return
+    }
+    const id = `company-call-${Date.now()}`
+    const startedAt = Date.now()
+    recentCalls.unshift({
+      call_id: id,
+      created_at: new Date(startedAt).toISOString(),
+      direction: 'outgoing',
+      duration_seconds: 0,
+      id: recentCalls.length + 1,
+      other_number: phoneNumber,
+      status: 'ringing',
+    })
+    response.json({
+      success: true,
+      data: {
+        direction: 'outgoing',
+        id,
+        otherNumber: phoneNumber,
+        speakerEnabled: false,
+        speakerSupported: true,
+        startedAt,
+        state: 'ringing',
+      },
+    })
+    return
+  }
   if (endpoint === 'crewlink:bootstrap') {
     response.json({ success: true, data: crewLinkBootstrap(testScenario) })
     return

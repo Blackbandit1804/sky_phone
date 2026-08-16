@@ -223,6 +223,7 @@ local server_callbacks = {
     "companies:publish-announcement",
     "companies:set-call-availability",
     "companies:call-customer",
+    "companies:dial-service-line",
     "sim:insert",
     "sim:eject",
     "contacts:list",

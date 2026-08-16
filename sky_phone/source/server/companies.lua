@@ -2479,6 +2479,22 @@ Bridge.Callbacks.Register("sky_phone:companies:call-customer", function(source, 
     return result
 end)
 
+Bridge.Callbacks.Register("sky_phone:companies:dial-service-line", function(source, data)
+    local allowed, rate_error = allow_mutation(source, "dial_service_line", "RequestAction")
+    if not allowed then
+        return rate_error
+    end
+    local phone_number = type(data) == "table" and data.phoneNumber or nil
+    if type(phone_number) ~= "string" or phone_number == "" then
+        return { success = false, error = "invalid_number" }
+    end
+    local member = call_member(source)
+    if not member or member.definition.ServiceLine.CanCall ~= true then
+        return { success = false, error = "not_authorized" }
+    end
+    return SkyPhoneCalls.StartCompanyCall(source, member.company_id, phone_number)
+end)
+
 local function company_mutation_payload(source, company_id)
     local company = company_payload(company_id, true)
     if not company then

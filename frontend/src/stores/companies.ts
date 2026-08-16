@@ -524,6 +524,19 @@ export const useCompaniesStore = defineStore('companies', {
         : (response.error ?? 'request_failed')
       return response
     },
+    async dialServiceLine(
+      phoneNumber: string,
+    ): Promise<NuiResponse<PhoneCall>> {
+      this.mutating = true
+      const response = await nuiCall<PhoneCall>('companies:dial-service-line', {
+        phoneNumber,
+      })
+      this.mutating = false
+      this.mutationError = response.success
+        ? ''
+        : (response.error ?? 'request_failed')
+      return response
+    },
     async mutateRequest(
       endpoint: string,
       payload: Record<string, unknown>,

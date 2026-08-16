@@ -539,4 +539,28 @@ describe('companies store', () => {
       subject: 'Help needed',
     })
   })
+
+  it('dials through the service line with only the target number and returns the server call state', async () => {
+    const call = {
+      direction: 'outgoing' as const,
+      id: 'company-call-1',
+      otherNumber: '5551110001',
+      speakerEnabled: false,
+      speakerSupported: true,
+      startedAt: 1_776_000_000,
+      state: 'ringing' as const,
+    }
+    mockNuiCall.mockResolvedValueOnce({ data: call, success: true })
+    const store = useCompaniesStore()
+
+    const response = await store.dialServiceLine(call.otherNumber)
+
+    expect(mockNuiCall).toHaveBeenCalledOnce()
+    expect(mockNuiCall).toHaveBeenCalledWith('companies:dial-service-line', {
+      phoneNumber: call.otherNumber,
+    })
+    expect(response).toEqual({ data: call, success: true })
+    expect(store.mutating).toBe(false)
+    expect(store.mutationError).toBe('')
+  })
 })

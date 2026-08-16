@@ -189,6 +189,16 @@ function verifyBrowserTestData(dataByEndpoint) {
 }
 
 async function verifyStatefulActions(baseUrl) {
+  const companyCall = await expectSuccess(
+    baseUrl,
+    'companies:dial-service-line',
+    { phoneNumber: '5551110001' },
+    true,
+  )
+  assert.equal(companyCall.direction, 'outgoing')
+  assert.equal(companyCall.otherNumber, '5551110001')
+  assert.equal(companyCall.state, 'ringing')
+
   let gallery = await expectSuccess(baseUrl, 'gallery:list', {}, true)
   assert(gallery.length >= 10, 'gallery:list did not include enough test media')
   assert(
