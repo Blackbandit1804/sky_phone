@@ -81,7 +81,7 @@ describe('flare store', () => {
     })
   })
 
-  it('preserves ordered profile media ids and urls when profile photos are saved', async () => {
+  it('creates a profile with ordered media selected during onboarding', async () => {
     const updated = {
       ...bootstrap,
       profile: {
@@ -110,6 +110,7 @@ describe('flare store', () => {
     mockNuiCall.mockResolvedValueOnce({ data: updated, success: true })
     const flare = useFlareStore()
 
+    expect(flare.profile).toBeNull()
     expect(await flare.saveProfile(draft)).toBe(true)
     expect(mockNuiCall).toHaveBeenCalledWith('flare:save-profile', draft)
     expect(flare.profile?.photoMediaIds).toEqual([42, 17, 91])

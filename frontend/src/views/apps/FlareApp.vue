@@ -940,16 +940,29 @@ onBeforeUnmount(() => {
                 <X />
               </sky-link>
             </div>
-            <sky-button
+            <div
               v-if="draftPhotos.length < 6"
-              clear
-              class="flare-photo-add"
-              :class="{ 'is-empty': !draftPhotos.length }"
-              @click="openPhotoSourcePicker"
+              class="flare-photo-onboarding-sources"
+              role="group"
+              :aria-label="phone.t('Apps.flare.addPhotos')"
             >
-              <Plus />
-              <span>{{ phone.t('Apps.flare.addPhotos') }}</span>
-            </sky-button>
+              <sky-button
+                tonal
+                rounded
+                @click="openProfileMediaApp('photos')"
+              >
+                <Images :size="19" aria-hidden="true" />
+                <span>{{ phone.t('Apps.flare.choosePhotos') }}</span>
+              </sky-button>
+              <sky-button
+                tonal
+                rounded
+                @click="openProfileMediaApp('camera')"
+              >
+                <Camera :size="19" aria-hidden="true" />
+                <span>{{ phone.t('Apps.flare.takePhoto') }}</span>
+              </sky-button>
+            </div>
           </div>
         </sky-card>
         <sky-list inset strong>
@@ -2907,6 +2920,17 @@ onBeforeUnmount(() => {
   min-height: 104px;
   grid-column: 1 / -1;
   aspect-ratio: auto;
+}
+.flare-photo-onboarding-sources {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--sky-space-2);
+}
+.flare-photo-onboarding-sources :deep(.sky-button) {
+  min-height: var(--sky-touch-target);
+  height: auto;
+  justify-content: flex-start;
+  padding: var(--sky-space-2) var(--sky-space-4);
 }
 .flare-photo-grid :deep(.flare-photo-add svg) {
   width: 25px;

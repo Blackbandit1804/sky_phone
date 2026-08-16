@@ -14,6 +14,10 @@ import {
   SkyNavbar,
   SkyNavbarBackLink,
   SkyAppPage,
+  SkyPillNavigation,
+  SkyPopover,
+  SkySegmented,
+  SkySegmentedButton,
   SkySpinner,
   SkyRange,
   SkySearchbar,
@@ -40,7 +44,6 @@ import {
   Volume2,
   X,
 } from 'lucide-vue-next'
-import type { CSSProperties } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -51,7 +54,6 @@ import type { MusicPlaylist, MusicTrack } from '@/types/music'
 import { easyShareMusicTarget } from '@/utils/easyshare'
 import { consumeEscape, handleEnterAction } from '@/utils/keyboard'
 import { musicEscapeLayer } from '@/utils/musicEscape'
-import { SkyPillNavigation, SkySegmented, SkySegmentedButton } from '@/ui'
 
 type MusicTab = 'library' | 'playlists' | 'search'
 type MusicSheet =
@@ -61,10 +63,6 @@ type MusicSheet =
   | 'track-picker'
   | 'youtube'
 
-const MUSIC_POPOVER_WIDTH = 240
-const MUSIC_POPOVER_ITEM_HEIGHT = 52
-const MUSIC_POPOVER_INSET = 8
-const MUSIC_POPOVER_GAP = 7
 const MUSIC_SHEET_TRANSITION_MS = 420
 
 const music = useMusicStore()
@@ -84,10 +82,7 @@ const activePlaylist = ref<MusicPlaylist | null>(null)
 const addMenuOpened = ref(false)
 const actionMenuOpened = ref(false)
 const actionTrack = ref<MusicTrack | null>(null)
-const popoverStyle = ref<CSSProperties>({
-  top: `${MUSIC_POPOVER_INSET}px`,
-  left: `${MUSIC_POPOVER_INSET}px`,
-})
+const menuTarget = ref<HTMLElement | null>(null)
 const activeSheet = ref<MusicSheet | null>(null)
 const playerOpened = ref(false)
 const youtubeUrl = ref('')
@@ -162,47 +157,8 @@ function dismissMenus(): void {
   actionTrack.value = null
 }
 
-function positionPopover(target: HTMLElement, itemCount: number): boolean {
-  const app = target.closest<HTMLElement>('.music-app')
-  if (!app) return false
-
-  const appRect = app.getBoundingClientRect()
-  const targetRect = target.getBoundingClientRect()
-  const scale = app.offsetWidth ? appRect.width / app.offsetWidth : 1
-  const targetLeft = (targetRect.left - appRect.left) / scale
-  const targetTop = (targetRect.top - appRect.top) / scale
-  const targetWidth = targetRect.width / scale
-  const targetHeight = targetRect.height / scale
-  const popoverHeight = itemCount * MUSIC_POPOVER_ITEM_HEIGHT + 2
-  const desiredLeft = targetLeft + targetWidth - MUSIC_POPOVER_WIDTH
-  const belowTop = targetTop + targetHeight + MUSIC_POPOVER_GAP
-  const desiredTop =
-    belowTop + popoverHeight <= app.offsetHeight - MUSIC_POPOVER_INSET
-      ? belowTop
-      : targetTop - popoverHeight - MUSIC_POPOVER_GAP
-
-  popoverStyle.value = {
-    left: `${Math.max(
-      MUSIC_POPOVER_INSET,
-      Math.min(
-        desiredLeft,
-        app.offsetWidth - MUSIC_POPOVER_WIDTH - MUSIC_POPOVER_INSET,
-      ),
-    )}px`,
-    top: `${Math.max(
-      MUSIC_POPOVER_INSET,
-      Math.min(
-        desiredTop,
-        app.offsetHeight - popoverHeight - MUSIC_POPOVER_INSET,
-      ),
-    )}px`,
-  }
-  return true
-}
-
 function openAddMenu(event: MouseEvent): void {
-  const target = event.currentTarget as HTMLElement
-  if (!positionPopover(target, activePlaylist.value ? 4 : 2)) return
+  menuTarget.value = event.currentTarget as HTMLElement
   actionTrack.value = null
   actionMenuOpened.value = false
   addMenuOpened.value = true
@@ -275,10 +231,8 @@ function cancelRemoveTrack(): void {
 
 function openTrackMenu(event: MouseEvent, track: MusicTrack): void {
   event.stopPropagation()
+  menuTarget.value = event.currentTarget as HTMLElement
   actionTrack.value = track
-  const itemCount =
-    2 + (activePlaylist.value ? 1 : 0) + (track.source === 'youtube' ? 1 : 0)
-  if (!positionPopover(event.currentTarget as HTMLElement, itemCount)) return
   addMenuOpened.value = false
   actionMenuOpened.value = true
 }
@@ -1002,26 +956,21 @@ onBeforeUnmount(() => {
       </SkySegmented>
     </SkyPillNavigation>
 
-    <button
-      v-if="addMenuOpened || actionMenuOpened"
-      type="button"
-      class="music-popover-dismiss"
-      aria-hidden="true"
-      tabindex="-1"
-      @click="dismissMenus"
-    />
-    <section
-      v-if="addMenuOpened"
-      class="music-popover"
-      :style="popoverStyle"
-      :class="{
-        'phone-app--light': !phone.isDarkMode,
-      }"
-      role="group"
-      :aria-label="phone.t('Apps.music.addMusic')"
+    <SkyPopover
+      :aria-label="
+        phone.t(
+          addMenuOpened ? 'Apps.music.addMusic' : 'Apps.music.songActions',
+        )
+      "
+      :opened="addMenuOpened || actionMenuOpened"
+      role="dialog"
+      :target="menuTarget"
+      @backdropclick="dismissMenus"
+      @escape="dismissMenus"
+      @positionerror="dismissMenus"
     >
-      <sky-list nested>
-        <template v-if="activePlaylist">
+      <sky-list component="div" nested>
+        <template v-if="addMenuOpened && activePlaylist">
           <sky-list-button link-component="button" @click="shareActivePlaylist">
             <Share2 :size="18" /> {{ phone.t('Apps.easyShare.name') }}
           </sky-list-button>
@@ -1037,13 +986,13 @@ onBeforeUnmount(() => {
           </sky-list-button>
           <sky-list-button
             link-component="button"
-            class="music-destructive"
+            variant="danger"
             @click="requestDeletePlaylist"
           >
             <Trash2 :size="18" /> {{ phone.t('Apps.music.deletePlaylist') }}
           </sky-list-button>
         </template>
-        <template v-else>
+        <template v-else-if="addMenuOpened">
           <sky-list-button
             link-component="button"
             @click="openSheet('youtube')"
@@ -1054,47 +1003,35 @@ onBeforeUnmount(() => {
             <ListMusic :size="18" /> {{ phone.t('Apps.music.newPlaylist') }}
           </sky-list-button>
         </template>
+        <template v-else-if="actionMenuOpened">
+          <sky-list-button link-component="button" @click="shareTrack()">
+            <Share2 :size="18" /> {{ phone.t('Apps.easyShare.name') }}
+          </sky-list-button>
+          <sky-list-button
+            link-component="button"
+            @click="openPlaylistPicker(actionTrack)"
+          >
+            <CirclePlus :size="18" /> {{ phone.t('Apps.music.addToPlaylist') }}
+          </sky-list-button>
+          <sky-list-button
+            v-if="activePlaylist"
+            link-component="button"
+            variant="danger"
+            @click="removeFromActivePlaylist"
+          >
+            <X :size="18" /> {{ phone.t('Apps.music.removeFromPlaylist') }}
+          </sky-list-button>
+          <sky-list-button
+            v-if="actionTrack?.source === 'youtube'"
+            link-component="button"
+            variant="danger"
+            @click="requestRemoveTrack"
+          >
+            <Trash2 :size="18" /> {{ phone.t('Apps.music.removeFromLibrary') }}
+          </sky-list-button>
+        </template>
       </sky-list>
-    </section>
-
-    <section
-      v-if="actionMenuOpened"
-      class="music-popover"
-      :style="popoverStyle"
-      :class="{
-        'phone-app--light': !phone.isDarkMode,
-      }"
-      role="group"
-      :aria-label="phone.t('Apps.music.songActions')"
-    >
-      <sky-list nested>
-        <sky-list-button link-component="button" @click="shareTrack()">
-          <Share2 :size="18" /> {{ phone.t('Apps.easyShare.name') }}
-        </sky-list-button>
-        <sky-list-button
-          link-component="button"
-          @click="openPlaylistPicker(actionTrack)"
-        >
-          <CirclePlus :size="18" /> {{ phone.t('Apps.music.addToPlaylist') }}
-        </sky-list-button>
-        <sky-list-button
-          v-if="activePlaylist"
-          link-component="button"
-          class="music-destructive"
-          @click="removeFromActivePlaylist"
-        >
-          <X :size="18" /> {{ phone.t('Apps.music.removeFromPlaylist') }}
-        </sky-list-button>
-        <sky-list-button
-          v-if="actionTrack?.source === 'youtube'"
-          link-component="button"
-          class="music-destructive"
-          @click="requestRemoveTrack"
-        >
-          <Trash2 :size="18" /> {{ phone.t('Apps.music.removeFromLibrary') }}
-        </sky-list-button>
-      </sky-list>
-    </section>
+    </SkyPopover>
 
     <div class="music-form-sheet">
       <sky-sheet :opened="Boolean(activeSheet)" @backdropclick="closeSheet">
@@ -1473,8 +1410,6 @@ onBeforeUnmount(() => {
   --music-label: #111114;
   --music-muted: #74747c;
   --music-line: rgb(18 18 23 / 9%);
-  --sky-safe-area-top: 46px;
-  --sky-safe-area-bottom: 25px;
   position: relative;
   display: flex !important;
   flex-direction: column;
@@ -1851,9 +1786,9 @@ onBeforeUnmount(() => {
 .music-mini-player {
   position: absolute;
   z-index: 32;
-  right: 8px;
+  right: calc(var(--sky-safe-area-right) + var(--sky-space-4));
   bottom: var(--music-mini-player-bottom);
-  left: 8px;
+  left: calc(var(--sky-safe-area-left) + var(--sky-space-4));
   height: var(--music-mini-player-height);
   padding: 6px 10px 6px 7px;
   border-radius: 17px;
@@ -2000,45 +1935,6 @@ onBeforeUnmount(() => {
 .music-picker-create {
   width: calc(100% - 32px);
   margin: 14px 16px 0 !important;
-}
-
-.music-popover-dismiss {
-  position: absolute;
-  z-index: 199;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.music-popover {
-  position: absolute !important;
-  z-index: 200 !important;
-  width: 240px !important;
-  overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 13%);
-  border-radius: 28px;
-  background: #303034 !important;
-  box-shadow: none !important;
-  translate: none !important;
-  transform: none !important;
-  transition: none !important;
-}
-
-.music-popover :deep(.sky-list) {
-  z-index: auto;
-  background: transparent;
-}
-
-.music-popover.phone-app--light {
-  border-color: rgb(0 0 0 / 10%);
-  background: #f8f8fa !important;
-}
-
-.music-destructive {
-  color: #ff453a !important;
 }
 
 .music-player-sheet :deep(.sky-sheet__panel) {
