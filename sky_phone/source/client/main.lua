@@ -894,8 +894,8 @@ RegisterNetEvent("sky_phone:calls:changed", function()
     SendNUIMessage({ type = "calls:changed" })
 end)
 
-RegisterNetEvent("sky_phone:banking:changed", function()
-    SendNUIMessage({ type = "banking:changed" })
+RegisterNetEvent("sky_phone:banking:changed", function(data)
+    SendNUIMessage({ type = "banking:changed", data = data })
 end)
 
 RegisterNetEvent("sky_phone:billing:changed", function()

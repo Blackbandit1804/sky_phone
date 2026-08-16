@@ -90,6 +90,7 @@ type AppMessage = {
     | PicstagramVerificationData
     | PicstagramNotificationData
     | FeatherNotificationData
+    | BankingChangedData
     | BillingNotificationData
     | EasyShareEvent
     | PhoneCall
@@ -236,6 +237,13 @@ type BillingNotificationData = {
   issuer?: string
   text?: string
   title?: string
+}
+
+type BankingChangedData = {
+  amount?: number
+  currency?: string
+  kind?: 'transfer_in'
+  sender?: string
 }
 
 type CrewLinkNotificationData = {
@@ -973,7 +981,30 @@ function onMessage(event: MessageEvent<AppMessage>): void {
   } else if (event.data?.type === 'calls:changed') {
     void calls.loadRecents()
   } else if (event.data?.type === 'banking:changed') {
-    void banking.load()
+    const data = event.data.data as BankingChangedData | undefined
+    void banking.load(false, true)
+    if (
+      data?.kind === 'transfer_in' &&
+      typeof data.amount === 'number' &&
+      data.amount > 0
+    ) {
+      const formattedAmount = `${
+        data.currency ?? banking.overview?.currency ?? '$'
+      }${new Intl.NumberFormat(phone.lang, {
+        maximumFractionDigits: 0,
+        minimumFractionDigits: 0,
+      }).format(data.amount)}`
+      notifications.show({
+        appId: 'banking',
+        route: '/apps/banking',
+        subtitle: data.sender,
+        text: phone.t('Apps.banking.notifications.received', {
+          amount: formattedAmount,
+          sender: data.sender ?? '',
+        }),
+        title: phone.t('Apps.banking.notifications.receivedTitle'),
+      })
+    }
   } else if (event.data?.type === 'billing:changed') {
     void billing.loadOverview()
   } else if (event.data?.type === 'billing:new' && event.data.data) {

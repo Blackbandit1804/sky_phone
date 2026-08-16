@@ -79,8 +79,8 @@ local function record_transaction(identifier, kind, amount, label, reference)
     ]], { identifier, kind, amount, label or "", reference or "" })
 end
 
-local function notify_changed(source)
-    TriggerClientEvent("sky_phone:banking:changed", source)
+local function notify_changed(source, data)
+    TriggerClientEvent("sky_phone:banking:changed", source, data)
 end
 
 local function online_source_for_phone(number)
@@ -149,9 +149,15 @@ Bridge.Callbacks.Register("sky_phone:banking:transfer", function(source, data)
     end
 
     local reference = ("phone-transfer-%s-%s"):format(os.time(), source)
+    local sender_name = player_name(source)
     record_transaction(identifier, "transfer_out", amount, player_name(target), reference)
-    record_transaction(target_identifier, "transfer_in", amount, player_name(source), reference)
-    notify_changed(target)
+    record_transaction(target_identifier, "transfer_in", amount, sender_name, reference)
+    notify_changed(target, {
+        kind = "transfer_in",
+        amount = amount,
+        currency = Config.Banking.Currency,
+        sender = sender_name,
+    })
     return { success = true, data = overview(source, identifier) }
 end)
 

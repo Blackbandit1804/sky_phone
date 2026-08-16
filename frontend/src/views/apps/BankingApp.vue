@@ -10,7 +10,6 @@ import {
   Landmark,
   Send,
   WalletCards,
-  X,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -23,6 +22,10 @@ import type {
   BankingTransactionKind,
 } from '@/types/banking'
 import type { PhoneContact } from '@/types/phone'
+import {
+  normalizeBankingAmountInput,
+  parseBankingAmount,
+} from '@/utils/bankingAmount'
 import { handleEnterAction } from '@/utils/keyboard'
 import { formatPhoneNumber, normalizePhoneNumber } from '@/utils/phone'
 import {
@@ -50,6 +53,7 @@ const banking = useBankingStore()
 const calls = useCallsStore()
 const activeTab = ref<BankingTab>('home')
 const action = ref<BankingAction | null>(null)
+const selectedTransaction = ref<BankingTransaction | null>(null)
 const amount = ref('')
 const target = ref('')
 const formError = ref('')
@@ -57,6 +61,9 @@ const bankingScroll = ref<HTMLElement | null>(null)
 const isRefreshing = ref(false)
 const pullDistance = ref(0)
 const cooldownToastOpened = ref(false)
+const overlayOpened = computed(() =>
+  Boolean(action.value || selectedTransaction.value),
+)
 
 const pullThreshold = 56
 let pullStartY = 0
@@ -145,11 +152,15 @@ function transactionTitle(transaction: BankingTransaction): string {
   return phone.t(`Apps.banking.transactions.${transaction.kind}`)
 }
 
+async function selectTab(nextTab: BankingTab): Promise<void> {
+  if (activeTab.value === nextTab) return
+  activeTab.value = nextTab
+  await nextTick()
+  if (bankingScroll.value) bankingScroll.value.scrollTop = 0
+}
+
 function openAction(nextAction: BankingAction): void {
-  if (banking.cooldownUntil > Date.now()) {
-    banking.error = 'reload_cooldown'
-    return
-  }
+  selectedTransaction.value = null
   action.value = nextAction
   amount.value = ''
   target.value = ''
@@ -158,8 +169,14 @@ function openAction(nextAction: BankingAction): void {
 }
 
 function closeAction(): void {
-  if (banking.isLoading) return
+  if (action.value && banking.isLoading) return
   action.value = null
+  selectedTransaction.value = null
+}
+
+function openTransaction(transaction: BankingTransaction): void {
+  action.value = null
+  selectedTransaction.value = transaction
 }
 
 function updateTarget(event: Event): void {
@@ -186,7 +203,11 @@ function updateAmount(event: Event): void {
     console.error('[banking] Amount input emitted without an input target.')
     return
   }
-  amount.value = event.target.value
+  const normalizedAmount = normalizeBankingAmountInput(event.target.value)
+  if (event.target.value !== normalizedAmount) {
+    event.target.value = normalizedAmount
+  }
+  amount.value = normalizedAmount
   formError.value = ''
 }
 
@@ -248,14 +269,10 @@ function errorMessage(code: string): string {
 
 async function submitAction(): Promise<void> {
   if (!action.value) return
-  const parsedAmount = Number(amount.value)
+  const parsedAmount = parseBankingAmount(amount.value)
   const phoneNumber =
     action.value === 'transfer' ? normalizePhoneNumber(target.value) : undefined
-  if (
-    !Number.isSafeInteger(parsedAmount) ||
-    parsedAmount <= 0 ||
-    (action.value === 'transfer' && !phoneNumber)
-  ) {
+  if (parsedAmount === null || (action.value === 'transfer' && !phoneNumber)) {
     formError.value = phone.t('Apps.banking.errors.invalid_request')
     return
   }
@@ -310,8 +327,8 @@ onBeforeUnmount(() => {
 
     <SkyNavbar
       class="banking-navbar"
-      :aria-hidden="Boolean(action)"
-      :inert="Boolean(action)"
+      :aria-hidden="overlayOpened"
+      :inert="overlayOpened"
       :subtitle="phone.t('Apps.banking.welcome')"
       :title="banking.overview?.playerName ?? phone.t('Common.loading')"
     />
@@ -319,8 +336,8 @@ onBeforeUnmount(() => {
     <div
       v-if="!banking.overview && banking.isLoading"
       class="banking-loading"
-      :aria-hidden="Boolean(action)"
-      :inert="Boolean(action)"
+      :aria-hidden="overlayOpened"
+      :inert="overlayOpened"
     >
       <SkySpinner :label="phone.t('Common.loading')" />
       <span>{{ phone.t('Common.loading') }}</span>
@@ -329,9 +346,9 @@ onBeforeUnmount(() => {
     <SkyEmptyState
       v-else-if="!banking.overview"
       class="banking-empty"
-      :aria-hidden="Boolean(action)"
+      :aria-hidden="overlayOpened"
       :body="errorMessage(banking.error)"
-      :inert="Boolean(action)"
+      :inert="overlayOpened"
       :title="phone.t('Apps.banking.unavailable')"
     >
       <template #icon><Landmark :size="34" /></template>
@@ -346,8 +363,9 @@ onBeforeUnmount(() => {
       v-else
       ref="bankingScroll"
       class="banking-scroll"
-      :aria-hidden="Boolean(action)"
-      :inert="Boolean(action)"
+      :class="{ 'is-locked': overlayOpened }"
+      :aria-hidden="overlayOpened"
+      :inert="overlayOpened"
       @touchend="finishPull"
       @touchmove.passive="movePull"
       @touchstart.passive="startPull"
@@ -418,7 +436,7 @@ onBeforeUnmount(() => {
             <SkyLink
               component="button"
               type="button"
-              @click="activeTab = 'activity'"
+              @click="selectTab('activity')"
             >
               {{ phone.t('Apps.banking.viewAll') }}
             </SkyLink>
@@ -434,6 +452,9 @@ onBeforeUnmount(() => {
                 :key="transaction.id"
                 :subtitle="formatDate(transaction.createdAt)"
                 :title="transactionTitle(transaction)"
+                link
+                link-component="button"
+                @click="openTransaction(transaction)"
               >
                 <template #media>
                   <component
@@ -519,6 +540,9 @@ onBeforeUnmount(() => {
                 :key="transaction.id"
                 :subtitle="formatDate(transaction.createdAt)"
                 :title="transactionTitle(transaction)"
+                link
+                link-component="button"
+                @click="openTransaction(transaction)"
               >
                 <template #media>
                   <component
@@ -550,43 +574,44 @@ onBeforeUnmount(() => {
       icons
       labels
       class="banking-tabbar"
-      :aria-hidden="Boolean(action)"
-      :inert="Boolean(action)"
+      :aria-hidden="overlayOpened"
+      :inert="overlayOpened"
       :label="phone.t('Apps.banking.navigation')"
     >
       <SkyTabButton
         :active="activeTab === 'home'"
         :label="phone.t('Apps.banking.home')"
-        @click="activeTab = 'home'"
+        @click="selectTab('home')"
       >
         <template #icon><House :size="25" /></template>
       </SkyTabButton>
       <SkyTabButton
         :active="activeTab === 'activity'"
         :label="phone.t('Apps.banking.activity')"
-        @click="activeTab = 'activity'"
+        @click="selectTab('activity')"
       >
         <template #icon><BarChart3 :size="25" /></template>
       </SkyTabButton>
     </SkyTabBar>
 
     <SkySheet
-      :opened="Boolean(action)"
-      :ariaLabelledby="action ? `banking-${action}-title` : undefined"
+      :opened="overlayOpened"
+      :ariaLabelledby="
+        action
+          ? `banking-${action}-title`
+          : selectedTransaction
+            ? 'banking-transaction-detail-title'
+            : undefined
+      "
+      swipe-to-close
+      grabber-clickable
+      :grabber-label="phone.t('Common.close')"
       @backdropclick="closeAction"
       @escape="closeAction"
+      @grabberclick="closeAction"
+      @swipeclose="closeAction"
     >
       <section v-if="action" class="banking-sheet__content">
-        <SkyLink
-          component="button"
-          class="banking-modal__close"
-          :aria-label="phone.t('Common.close')"
-          icon-only
-          type="button"
-          @click="closeAction"
-        >
-          <X :size="17" />
-        </SkyLink>
         <span class="banking-modal__icon">
           <Send :size="23" />
         </span>
@@ -606,14 +631,16 @@ onBeforeUnmount(() => {
             @input="updateTarget"
           />
           <SkyField
+            autocomplete="off"
+            class="banking-amount-field"
             :label="phone.t('Apps.banking.amount')"
             :error="formError || false"
             input-id="banking-transfer-amount"
-            inputmode="numeric"
-            min="1"
+            inputmode="decimal"
             outline
+            pattern="[0-9]+([,][0-9]{0,2})?"
             :placeholder="phone.t('Apps.banking.amountPlaceholder')"
-            type="number"
+            type="text"
             :value="amount"
             @input="updateAmount"
             @keydown.enter="handleEnterAction($event, submitAction)"
@@ -651,6 +678,64 @@ onBeforeUnmount(() => {
             <ArrowRight :size="17" />
           </template>
         </SkyButton>
+      </section>
+      <section
+        v-else-if="selectedTransaction"
+        class="banking-sheet__content banking-transaction-detail"
+      >
+        <span
+          class="banking-modal__icon banking-transaction-detail__icon"
+          :class="{
+            'is-incoming': isIncoming(selectedTransaction.kind),
+          }"
+        >
+          <component
+            :is="transactionIcons[selectedTransaction.kind]"
+            :size="23"
+          />
+        </span>
+        <p class="banking-transaction-detail__eyebrow">
+          {{ phone.t('Apps.banking.transactionDetails') }}
+        </p>
+        <h2 id="banking-transaction-detail-title">
+          {{ transactionTitle(selectedTransaction) }}
+        </h2>
+        <strong
+          class="banking-transaction-detail__amount"
+          :class="{
+            'is-incoming': isIncoming(selectedTransaction.kind),
+          }"
+        >
+          {{
+            formatMoney(
+              isIncoming(selectedTransaction.kind)
+                ? selectedTransaction.amount
+                : -selectedTransaction.amount,
+              true,
+            )
+          }}
+        </strong>
+        <SkyList inset strong class="banking-transaction-detail__list">
+          <SkyListItem
+            :title="phone.t('Apps.banking.transactionDate')"
+            :after="formatDate(selectedTransaction.createdAt)"
+          />
+          <SkyListItem
+            :title="phone.t('Apps.banking.transactionDirection')"
+            :after="
+              phone.t(
+                isIncoming(selectedTransaction.kind)
+                  ? 'Apps.banking.incoming'
+                  : 'Apps.banking.outgoing',
+              )
+            "
+          />
+          <SkyListItem
+            v-if="selectedTransaction.reference"
+            :title="phone.t('Apps.banking.transactionReference')"
+            :subtitle="selectedTransaction.reference"
+          />
+        </SkyList>
       </section>
     </SkySheet>
 

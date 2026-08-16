@@ -1040,6 +1040,12 @@ Locales["en"] = {
                 recipientPhone = "Phone number", recipientPhonePlaceholder = "Enter the recipient's number",
                 chooseContact = "Choose from contacts", noContacts = "No contacts saved yet.",
                 amount = "Amount", amountPlaceholder = "Enter an amount",
+                transactionDetails = "Transaction details", transactionDate = "Date",
+                transactionDirection = "Direction", transactionReference = "Reference",
+                notifications = {
+                    receivedTitle = "Money received",
+                    received = "You received {amount} from {sender}.",
+                },
                 transactions = {
                     deposit = "Cash deposit", withdrawal = "Cash withdrawal",
                     transfer_in = "Incoming transfer", transfer_out = "Outgoing transfer",

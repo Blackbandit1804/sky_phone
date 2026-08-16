@@ -3720,6 +3720,9 @@ button {
   --bank-blue: #2d76ff;
   --bank-cyan: #57d5ff;
   --bank-green: #4ee6a4;
+  --banking-card-radius: 22px;
+  --banking-page-gutter: 16px;
+  --banking-section-gap: 16px;
   position: relative;
   height: 100%;
   overflow: hidden;
@@ -3772,8 +3775,16 @@ button {
   inset: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 108px 17px 112px;
+  overscroll-behavior-y: contain;
+  padding: 108px var(--banking-page-gutter) 112px;
   scrollbar-width: none;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.banking-scroll.is-locked {
+  overflow-y: hidden;
+  touch-action: none;
 }
 
 .banking-scroll::-webkit-scrollbar {
@@ -3828,8 +3839,8 @@ button {
 .banking-balance {
   position: relative;
   overflow: hidden;
-  padding: 22px 20px 20px;
-  border-radius: 27px;
+  padding: 20px;
+  border-radius: var(--banking-card-radius);
 }
 
 .banking-balance__label {
@@ -3871,8 +3882,8 @@ button {
 .banking-actions {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 9px;
-  margin: 13px 0 18px;
+  gap: 10px;
+  margin: 12px 0 var(--banking-section-gap);
 }
 
 .banking-action {
@@ -3884,7 +3895,7 @@ button {
   min-height: 64px;
   overflow: hidden;
   padding: 11px 12px;
-  border-radius: 19px;
+  border-radius: var(--banking-card-radius);
   color: rgb(237 243 255 / 82%);
   font-size: 10px;
 }
@@ -3933,7 +3944,8 @@ button {
 }
 
 .banking-card {
-  margin: 0 0 18px !important;
+  margin: 0 0 var(--banking-section-gap) !important;
+  border-radius: var(--banking-card-radius) !important;
 }
 
 .banking-transaction-card {
@@ -3944,7 +3956,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 11px;
+  margin-bottom: 10px;
 }
 
 .banking-section-title h2 {
@@ -3969,10 +3981,10 @@ button {
 }
 
 .banking-transactions {
-  padding: 0 3px;
+  padding: 0;
 }
 .banking-transactions--all {
-  margin-top: 18px;
+  margin-top: var(--banking-section-gap);
 }
 
 .banking-transaction-list b {
@@ -3989,7 +4001,7 @@ button {
 .banking-no-transactions {
   padding: 24px 12px;
   border: 1px solid rgb(255 255 255 / 8%);
-  border-radius: 22px;
+  border-radius: var(--banking-card-radius);
   background: rgb(255 255 255 / 3%);
   color: rgb(213 225 248 / 47%);
   font-size: 11px;
@@ -4000,7 +4012,7 @@ button {
   display: flex;
   align-items: center;
   flex-direction: column;
-  padding: 16px 0 20px;
+  padding: 12px 0 var(--banking-section-gap);
   text-align: center;
 }
 
@@ -4098,20 +4110,7 @@ button {
 .banking-sheet__content {
   position: relative;
   width: 100%;
-  padding: 22px 18px 18px;
-}
-
-.banking-modal__close {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 50%;
-  background: rgb(255 255 255 / 8%);
-  color: rgb(226 235 255 / 65%);
+  padding: 8px 18px calc(var(--sky-safe-area-bottom) + 18px);
 }
 
 .banking-modal__icon {
@@ -4140,11 +4139,11 @@ button {
 }
 
 .banking-form-list {
-  margin: 12px 0 0 !important;
+  margin: var(--banking-section-gap) 0 0 !important;
 }
 
 .banking-contact-picker {
-  margin-top: 12px;
+  margin-top: var(--banking-section-gap);
 }
 
 .banking-contact-picker > span {
@@ -4174,7 +4173,58 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 15px;
+  margin-top: var(--banking-section-gap);
+}
+
+.banking-transaction-detail {
+  text-align: center;
+}
+
+.banking-transaction-detail__icon {
+  margin: 0 auto;
+  background: linear-gradient(145deg, #d95867, #972937);
+}
+
+.banking-transaction-detail__icon.is-incoming {
+  background: linear-gradient(145deg, #38c58d, #147454);
+  box-shadow:
+    0 12px 28px rgb(20 116 84 / 32%),
+    inset 0 1px rgb(255 255 255 / 28%);
+}
+
+.banking-transaction-detail > .banking-transaction-detail__eyebrow {
+  margin: 12px 0 0;
+  color: rgb(213 225 248 / 52%);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.banking-transaction-detail h2 {
+  margin-top: 4px;
+}
+
+.banking-transaction-detail__amount {
+  display: block;
+  margin: 8px 0 18px;
+  color: #f2a0a8;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+
+.banking-transaction-detail__amount.is-incoming {
+  color: var(--bank-green);
+}
+
+.banking-transaction-detail__list {
+  margin: 0 !important;
+  text-align: left;
+}
+
+.banking-transaction-detail__list .sky-list-item__subtitle {
+  overflow-wrap: anywhere;
 }
 
 .phone-app--light .banking-app {
@@ -4209,7 +4259,6 @@ button {
 .phone-app--light .banking-activity-hero small,
 .phone-app--light .banking-chart-legend,
 .phone-app--light .banking-chart__day span,
-.phone-app--light .banking-modal__close,
 .phone-app--light .banking-sheet__content > p,
 .phone-app--light .banking-contact-picker > span,
 .phone-app--light .banking-contact-picker > p {
@@ -4217,8 +4266,7 @@ button {
 }
 
 .phone-app--light .banking-balance__label small,
-.phone-app--light .banking-no-transactions,
-.phone-app--light .banking-modal__close {
+.phone-app--light .banking-no-transactions {
   border-color: var(--sky-hairline);
   background: rgb(255 255 255 / 52%);
 }
