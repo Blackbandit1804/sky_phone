@@ -2,6 +2,8 @@
 import {
   Activity,
   ChartNoAxesColumnIncreasing,
+  Check,
+  ChevronDown,
   ContactRound,
   Flame,
   Footprints,
@@ -19,6 +21,10 @@ import { usePhoneStore } from '@/stores/phone'
 import type { HealthMedicalIdInput } from '@/types/health'
 import {
   SkyAppPage,
+  SkyActionButton,
+  SkyActionGroup,
+  SkyActionSheet,
+  SkyActionsLabel,
   SkyButton,
   SkyEmptyState,
   SkyField,
@@ -39,6 +45,7 @@ const phone = usePhoneStore()
 const health = useHealthStore()
 const activeTab = ref<HealthTab>('today')
 const editingMedicalId = ref(false)
+const bloodTypePickerOpened = ref(false)
 const actionError = ref('')
 const medicalDraft = reactive<HealthMedicalIdInput>({
   allergies: '',
@@ -168,6 +175,7 @@ function syncMedicalDraft(): void {
 
 async function toggleMedicalEdit(): Promise<void> {
   actionError.value = ''
+  bloodTypePickerOpened.value = false
   if (!editingMedicalId.value) {
     syncMedicalDraft()
     editingMedicalId.value = true
@@ -183,6 +191,11 @@ async function toggleMedicalEdit(): Promise<void> {
     translatedError === errorKey
       ? phone.t('Apps.health.medicalId.saveFailed')
       : translatedError
+}
+
+function selectBloodType(value: string): void {
+  medicalDraft.bloodType = value
+  bloodTypePickerOpened.value = false
 }
 
 async function dial(number: string): Promise<void> {
@@ -406,12 +419,18 @@ onBeforeUnmount(() => {
           <section class="health-section">
             <h2>{{ phone.t('Apps.health.medicalId.emergencyInformation') }}</h2>
             <ul class="health-form">
-              <SkyField
-                v-model="medicalDraft.bloodType"
-                :label="phone.t('Apps.health.medicalId.bloodType')"
-                :options="bloodTypeOptions"
-                type="select"
-              />
+              <li class="health-blood-type-field">
+                <button
+                  type="button"
+                  aria-haspopup="dialog"
+                  :aria-expanded="bloodTypePickerOpened"
+                  @click="bloodTypePickerOpened = true"
+                >
+                  <span>{{ phone.t('Apps.health.medicalId.bloodType') }}</span>
+                  <strong>{{ medicalDraft.bloodType || '—' }}</strong>
+                  <ChevronDown :size="17" aria-hidden="true" />
+                </button>
+              </li>
               <SkyField
                 v-model="medicalDraft.allergies"
                 :label="phone.t('Apps.health.medicalId.allergies')"
@@ -532,6 +551,39 @@ onBeforeUnmount(() => {
         </p>
       </template>
     </SkyScrollArea>
+
+    <SkyActionSheet
+      :aria-label="phone.t('Apps.health.medicalId.bloodType')"
+      :opened="bloodTypePickerOpened"
+      @backdropclick="bloodTypePickerOpened = false"
+      @escape="bloodTypePickerOpened = false"
+    >
+      <SkyActionGroup>
+        <SkyActionsLabel>
+          {{ phone.t('Apps.health.medicalId.bloodType') }}
+        </SkyActionsLabel>
+        <SkyActionButton
+          v-for="option in bloodTypeOptions"
+          :key="option.value || 'none'"
+          class="health-blood-type-option"
+          :bold="medicalDraft.bloodType === option.value"
+          :aria-pressed="medicalDraft.bloodType === option.value"
+          @click="selectBloodType(option.value)"
+        >
+          <span>{{ option.label }}</span>
+          <Check
+            v-if="medicalDraft.bloodType === option.value"
+            :size="18"
+            aria-hidden="true"
+          />
+        </SkyActionButton>
+      </SkyActionGroup>
+      <SkyActionGroup>
+        <SkyActionButton bold @click="bloodTypePickerOpened = false">
+          {{ phone.t('Common.cancel') }}
+        </SkyActionButton>
+      </SkyActionGroup>
+    </SkyActionSheet>
 
     <SkyPillNavigation
       class="health-navigation"
@@ -1073,6 +1125,53 @@ onBeforeUnmount(() => {
   border-radius: var(--sky-radius-card);
   background: var(--health-panel);
   list-style: none;
+}
+
+.health-blood-type-field button {
+  display: grid;
+  width: 100%;
+  min-height: 58px;
+  align-items: center;
+  padding: 8px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--sky-text);
+  cursor: pointer;
+  grid-template-columns: 1fr auto auto;
+  grid-template-rows: auto auto;
+  text-align: left;
+}
+
+.health-blood-type-field button:focus-visible {
+  outline: 2px solid var(--sky-app-accent);
+  outline-offset: -2px;
+}
+
+.health-blood-type-field span {
+  grid-column: 1 / -1;
+  color: var(--sky-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.health-blood-type-field strong {
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+.health-blood-type-field svg {
+  color: var(--sky-muted);
+}
+
+.health-blood-type-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.health-blood-type-option svg {
+  color: var(--sky-app-accent);
 }
 
 .health-action-error {

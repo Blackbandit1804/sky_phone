@@ -3710,6 +3710,8 @@ const defaultLocales: LocaleTree = {
       pin: 'Pin note',
       unpin: 'Unpin note',
       deleteNote: 'Delete note',
+      deleteTitle: 'Delete Note?',
+      deleteBody: 'This note will be permanently deleted.',
       tools: {
         bold: 'Bold',
         bulletList: 'Bullet list',

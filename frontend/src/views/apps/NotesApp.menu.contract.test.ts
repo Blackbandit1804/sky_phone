@@ -8,7 +8,7 @@ const menuSource = source.slice(
   source.indexOf('</SkyActionSheet>') + '</SkyActionSheet>'.length,
 )
 const listSource = source.slice(
-  source.indexOf('<k-page\n    v-if="!editorOpened"'),
+  source.indexOf('<k-page'),
   source.indexOf('<k-page v-else'),
 )
 
@@ -21,6 +21,15 @@ describe('NotesApp list controls', () => {
 
     expect(composerSource).toContain('component="footer"')
     expect(listSource).toContain('<SkyScrollArea as="main"')
+    expect(listSource).toContain('<SkyList v-if="visibleNotes.length"')
+    expect(listSource).toContain('<SkyListItem')
+    expect(listSource).toContain('#actions')
+    expect(listSource).toContain('<SkyButton')
+    expect(listSource).toContain('@click.stop="requestListDelete(note)"')
+    expect(listSource).toContain('<SkyDialog')
+    expect(listSource).toContain('role="alertdialog"')
+    expect(listSource).toContain('@click="confirmListDelete"')
+    expect(source).toContain('notes.deleteNote(noteId)')
     expect(composerSource).toContain('<SkySearchbar')
     expect(composerSource).toContain('v-model="searchQuery"')
     expect(composerSource).toContain('<SkyFab')

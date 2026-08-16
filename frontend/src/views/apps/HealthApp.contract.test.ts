@@ -28,6 +28,13 @@ describe('HealthApp Sky UI contract', () => {
     expect(source).toContain('health.saveMedicalId')
   })
 
+  it('uses the Sky iOS action sheet instead of a native blood type select', () => {
+    expect(source).toContain('<SkyActionSheet')
+    expect(source).toContain('<SkyActionButton')
+    expect(source).toContain('@click="selectBloodType(option.value)"')
+    expect(source).not.toContain(':options="bloodTypeOptions"')
+  })
+
   it('does not present values the phone cannot observe', () => {
     expect(source).not.toContain('healthPercent')
     expect(source).not.toContain('recoveryPercent')

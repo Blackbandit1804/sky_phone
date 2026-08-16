@@ -5,7 +5,6 @@ import {
   kLink,
   kList,
   kListButton,
-  kListItem,
   kNavbar,
   kNavbarBackLink,
   kPage,
@@ -27,7 +26,11 @@ import { usePhoneStore } from '@/stores/phone'
 import {
   SkyActionSheet,
   SkyButton,
+  SkyDialog,
+  SkyDialogButton,
   SkyFab,
+  SkyList,
+  SkyListItem,
   SkyScrollArea,
   SkySearchbar,
   SkyToolbar,
@@ -43,6 +46,7 @@ const editorId = ref<string | null>(null)
 const editorOpened = ref(false)
 const draftBody = ref('')
 const menuOpened = ref(false)
+const listDeleteCandidateId = ref<string | null>(null)
 const currentNote = computed(() =>
   editorId.value
     ? notes.notes.find((note) => note.id === editorId.value)
@@ -121,6 +125,21 @@ function editNote(note: Note): void {
   editorOpened.value = true
 }
 
+function requestListDelete(note: Note): void {
+  listDeleteCandidateId.value = note.id
+}
+
+function cancelListDelete(): void {
+  listDeleteCandidateId.value = null
+}
+
+function confirmListDelete(): void {
+  const noteId = listDeleteCandidateId.value
+  if (!noteId) return
+  notes.deleteNote(noteId)
+  listDeleteCandidateId.value = null
+}
+
 function persistDraft(): Note | undefined {
   const draft = {
     body: draftBody.value,
@@ -185,28 +204,41 @@ function shareNote(): void {
 <template>
   <k-page
     v-if="!editorOpened"
-    class="notes-list-page"
+    class="notes-list-page sky-ui-provider"
+    :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
     :aria-label="phone.t('Apps.notes.name')"
   >
     <k-navbar large transparent :title="phone.t('Apps.notes.name')" />
 
     <SkyScrollArea as="main" class="notes-list-scroll">
-      <k-list v-if="visibleNotes.length" strong inset>
-        <k-list-item
+      <SkyList v-if="visibleNotes.length" inset strong>
+        <SkyListItem
           v-for="note in visibleNotes"
           :key="note.id"
-          href="#"
+          link
+          link-component="button"
           :title="noteTitle(note)"
           :subtitle="noteSubtitle(note)"
           :chevron="false"
           strong-title="auto"
-          @click.prevent="editNote(note)"
+          @click="editNote(note)"
         >
           <template v-if="note.pinned" #after>
             <Pin :size="15" aria-hidden="true" />
           </template>
-        </k-list-item>
-      </k-list>
+          <template #actions>
+            <SkyButton
+              :aria-label="phone.t('Apps.notes.deleteNote')"
+              clear
+              icon-only
+              rounded
+              @click.stop="requestListDelete(note)"
+            >
+              <Trash2 :size="18" aria-hidden="true" />
+            </SkyButton>
+          </template>
+        </SkyListItem>
+      </SkyList>
 
       <template v-else>
         <k-block-title large>{{
@@ -228,8 +260,7 @@ function shareNote(): void {
     </SkyScrollArea>
 
     <SkyToolbar
-      class="notes-composer sky-ui-provider"
-      :class="{ 'sky-ui-provider--dark': phone.isDarkMode }"
+      class="notes-composer"
       component="footer"
       :aria-label="phone.t('Apps.notes.searchPlaceholder')"
     >
@@ -249,6 +280,28 @@ function shareNote(): void {
         </template>
       </SkyFab>
     </SkyToolbar>
+
+    <SkyDialog
+      :opened="listDeleteCandidateId !== null"
+      :title="phone.t('Apps.notes.deleteTitle')"
+      :content="phone.t('Apps.notes.deleteBody')"
+      role="alertdialog"
+      @backdropclick="cancelListDelete"
+      @escape="cancelListDelete"
+    >
+      <template #buttons>
+        <SkyDialogButton @click="cancelListDelete">
+          {{ phone.t('Common.cancel') }}
+        </SkyDialogButton>
+        <SkyDialogButton
+          strong
+          class="notes-delete-confirm"
+          @click="confirmListDelete"
+        >
+          {{ phone.t('Common.delete') }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
   </k-page>
 
   <k-page v-else class="notes-editor-page !pt-[44px] !pb-0">
@@ -330,6 +383,11 @@ function shareNote(): void {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.notes-delete-confirm {
+  color: var(--sky-danger);
+  background: var(--sky-danger-soft);
 }
 
 .notes-editor-page {

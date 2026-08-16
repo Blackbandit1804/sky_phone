@@ -20,6 +20,7 @@ import PhoneSetupAssistant from '@/components/PhoneSetupAssistant.vue'
 import PhoneNotifications from '@/components/PhoneNotifications.vue'
 import NotificationPhonePreview from '@/components/NotificationPhonePreview.vue'
 import PhoneStatusBar from '@/components/PhoneStatusBar.vue'
+import PhoneDynamicIsland from '@/components/PhoneDynamicIsland.vue'
 import EasyShareSheet from '@/components/EasyShareSheet.vue'
 import PayphoneOverlay from '@/components/PayphoneOverlay.vue'
 import RadioHud from '@/components/RadioHud.vue'
@@ -1031,7 +1032,10 @@ function onMessage(event: MessageEvent<AppMessage>): void {
       isUnlocking.value = false
       loadUnlockedPhoneData()
     }
-    window.setTimeout(() => void router.push('/apps/phone'), 0)
+    const call = event.data.data as PhoneCall
+    if (call.state !== 'ringing' || call.direction !== 'incoming') {
+      window.setTimeout(() => void router.push('/apps/phone'), 0)
+    }
   } else if (event.data?.type === 'sim:picker' && event.data.data) {
     simPicker.value = event.data.data as unknown as SimPickerPayload
   } else if (event.data?.type === 'sim:picker-close') {
@@ -1243,6 +1247,10 @@ function returnToActiveCall(): void {
   void router.push('/apps/phone')
 }
 
+function openAcceptedCall(): void {
+  void router.push('/apps/phone')
+}
+
 function unlockCamera(): void {
   if (phone.security.enabled) {
     pendingUnlockRoute.value = '/apps/camera'
@@ -1449,7 +1457,7 @@ onBeforeUnmount(() => {
           @open="openNotificationPreview"
         />
         <div
-          v-if="phone.isOpen || notifications.current"
+          v-if="phone.isOpen || notifications.current || calls.activeCall"
           class="phone-resolution-wrapper phone-resolution-wrapper--primary"
         >
           <section
@@ -1497,6 +1505,7 @@ onBeforeUnmount(() => {
                   @control-center="toggleControlCenter"
                   @lock="lockPhone"
                 />
+                <PhoneDynamicIsland @accepted="openAcceptedCall" />
                 <SpringboardView v-if="!isDevelopmentRoute && !setupRequired" />
                 <RouterView v-slot="{ Component }">
                   <Transition :name="appTransitionName">

@@ -21,6 +21,8 @@ describe('NotesRichTextEditor formatting tabbar', () => {
     expect(source).toContain('@click="formatMode = true"')
     expect(source).toContain('@click="formatMode = false"')
     expect(source).toContain(':disabled="editor.state.selection.empty"')
+    expect(source).toContain('class="notes-rich-editor sky-ui-provider"')
+    expect(source).toContain("'sky-ui-provider--dark': dark")
     expect(source).not.toContain('notes-rich-editor__toolbar-row')
     expect(source).not.toContain('scrollToolbar')
   })

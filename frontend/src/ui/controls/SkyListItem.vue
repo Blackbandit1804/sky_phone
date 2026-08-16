@@ -73,6 +73,7 @@ const emit = defineEmits<{
 }>()
 
 const slots = useSlots()
+const hasActions = computed(() => Boolean(slots.actions))
 const listContext = inject(skyListContextKey, undefined)
 const effectiveDividers = computed(
   () => props.dividers ?? listContext?.value.dividers ?? false,
@@ -160,6 +161,7 @@ function handleClick(event: MouseEvent): void {
       'sky-list-item--active': active,
       'sky-list-item--contacts': contacts,
       'sky-list-item--dividers': effectiveDividers,
+      'sky-list-item--with-actions': hasActions,
       'sky-list-item--no-dividers': !effectiveDividers,
       'sky-list-item--label': label,
       'sky-list-item--link': isLink,
@@ -237,6 +239,9 @@ function handleClick(event: MouseEvent): void {
       </span>
       <slot name="content" />
     </component>
+    <div v-if="hasActions" class="sky-list-item__actions">
+      <slot name="actions" />
+    </div>
     <slot />
   </component>
 </template>

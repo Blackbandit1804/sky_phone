@@ -263,8 +263,11 @@ onBeforeUnmount(() => editor.value?.destroy())
 
 <template>
   <section
-    class="notes-rich-editor"
-    :class="{ 'notes-rich-editor--dark': dark }"
+    class="notes-rich-editor sky-ui-provider"
+    :class="{
+      'notes-rich-editor--dark': dark,
+      'sky-ui-provider--dark': dark,
+    }"
   >
     <EditorContent
       v-if="editor"

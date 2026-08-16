@@ -861,6 +861,29 @@ a.sky-chip::before {
     color 300ms ease;
 }
 
+.sky-list-item--with-actions {
+  display: flex;
+  align-items: stretch;
+}
+
+.sky-list-item--with-actions > .sky-list-item__row {
+  width: auto;
+  flex: 1 1 auto;
+}
+
+.sky-list-item__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sky-space-1, 4px);
+  padding: 0 var(--sky-space-2, 8px);
+  color: var(--sky-muted, rgba(0, 0, 0, 0.55));
+}
+
+.sky-list-item__actions > .sky-button--clear {
+  color: inherit;
+}
+
 button.sky-list-item__row,
 a.sky-list-item__row,
 label.sky-list-item__row {
