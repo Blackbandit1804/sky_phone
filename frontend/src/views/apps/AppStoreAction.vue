@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { CloudDownload } from 'lucide-vue-next'
-
 import { usePhoneStore } from '@/stores/phone'
 
 defineProps<{
@@ -13,15 +11,12 @@ const phone = usePhoneStore()
 <template>
   <span
     class="app-store-action"
-    :class="{ 'app-store-action--icon': action !== 'open' }"
+    :class="{ 'app-store-action--icon': action === 'installing' }"
     aria-hidden="true"
   >
-    <CloudDownload
-      v-if="action === 'get'"
-      class="app-store-action__download"
-      :size="24"
-      :stroke-width="1.9"
-    />
+    <template v-if="action === 'get'">
+      {{ phone.t('Apps.appStore.get') }}
+    </template>
     <span
       v-else-if="action === 'installing'"
       class="app-store-action__progress"
@@ -47,10 +42,6 @@ const phone = usePhoneStore()
   width: 28px;
   height: 28px;
   color: var(--sky-app-accent);
-}
-
-.app-store-action__download {
-  filter: drop-shadow(0 2px 5px var(--sky-app-accent-soft));
 }
 
 .app-store-action__progress {

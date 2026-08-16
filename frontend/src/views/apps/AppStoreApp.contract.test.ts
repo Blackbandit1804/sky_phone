@@ -19,7 +19,6 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toContain('<SkyNavbar')
     expect(source).toContain('<SkyPillNavigation')
     expect(source).toContain('<SkySearchbar')
-    expect(source).toContain('<SkySpinner')
     expect(source.match(/<SkyScrollArea/g)).toHaveLength(1)
   })
 
@@ -46,7 +45,19 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toContain('const searchRecommendations = computed')
     expect(source).toContain('const searchDiscoverCards = computed')
     expect(source).toContain('v-if="!hasSearchQuery"')
+    expect(source).toContain(
+      ":class=\"{ 'app-store-navbar--search': tab === 'search' }\"",
+    )
+    expect(source).toMatch(
+      /\.app-store-navbar--search\s*\{[^}]*margin-bottom:\s*-24px;/s,
+    )
+    expect(source).toMatch(
+      /\.app-store-navbar--search :deep\(\.sky-navbar__subnavbar\)\s*\{[^}]*- 24px/s,
+    )
     expect(source).toContain('class="store-search__recommendations"')
+    expect(source).toMatch(
+      /\.store-search__recommendations article\.store-search__recommendation--promoted\s*\{[^}]*margin:\s*0 calc\(0px - var\(--sky-space-2\)\);[^}]*border-radius:\s*var\(--sky-radius-control\);[^}]*padding:\s*var\(--sky-space-3\) var\(--sky-space-2\);[^}]*rgba\(10, 132, 255, 0\.18\)/s,
+    )
     expect(source).toContain('class="store-search__discover-grid"')
     expect(source).toContain(
       'class="store-list store-list--browse store-list--search-results"',
@@ -58,16 +69,34 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toMatch(
       /\.store-search__discover-grid > button\s*\{[^}]*min-height:\s*124px/s,
     )
+    expect(source).toContain('<SkyEmptyState')
+    expect(source).toContain("phone.t('Apps.appStore.search.noResultsBody')")
+    expect(source).toContain('<Search :size="38"')
+    expect(source).toMatch(
+      /\.store-search__empty\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s,
+    )
   })
 
-  it('opens profile app management with update and uninstall actions', () => {
+  it('opens profile app management with open and uninstall actions', () => {
     expect(source).toContain('@click="profileOpened = true"')
     expect(source).toContain('const installedApps = computed')
     expect(source).toContain('return !appStore.isInstalled(app.id)')
     expect(source).toContain(
       'class="store-account__apps phone-effect--expensive-shadow"',
     )
-    expect(source).toContain('appStore.updateApp(app.id, currentRelease)')
+    expect(source).toContain('@click="handleManagedApp(app)"')
+    expect(source).toContain("phone.t('Apps.appStore.open')")
+    expect(source).toContain("phone.t('Apps.appStore.account.downloadedOn'")
+    expect(source).toContain('<small>{{ downloadDateDescription }}</small>')
+    expect(source).toMatch(
+      /\.store-account__primary-action\s*\{[^}]*min-width:\s*60px;[^}]*height:\s*30px;/s,
+    )
+    expect(source).toMatch(
+      /\.store-account__summary > div\s*\{[^}]*border:\s*1px solid var\(--sky-hairline\);[^}]*border-radius:\s*var\(--sky-radius-card\);[^}]*background:\s*var\(--sky-surface-muted\);/s,
+    )
+    expect(source).not.toContain('appStore.updateApp(')
+    expect(source).not.toContain('appStore.updatedAppReleases')
+    expect(source).not.toContain('appStore.updatingApps')
     expect(source).toContain(
       'appStore.uninstallApp(uninstallCandidate.value.id)',
     )
@@ -136,10 +165,16 @@ describe('AppStoreApp Sky navigation contract', () => {
     )
   })
 
-  it('gives interactive download, update and remove buttons subtle pointer feedback', () => {
+  it('gives App Store actions calm pointer feedback without moving app rows', () => {
     expect(source).toContain('@media (hover: hover) and (pointer: fine)')
     expect(source).toMatch(
-      /button:not\(\.store-ranking__detail-link\):not\(:disabled\):hover\)\s*\{[^}]*brightness\(1\.08\)[^}]*translateY\(-1px\)/s,
+      /button:not\(\.store-ranking__detail-link\):not\([\s\S]*?\.store-list__detail-link[\s\S]*?:hover[\s\S]*?brightness\(1\.08\)[\s\S]*?translateY\(-1px\)/,
+    )
+    expect(source).toContain(
+      '.store-list--browse article:hover',
+    )
+    expect(source).toMatch(
+      /button\.store-action-button--get:not\(\.store-list__detail-link\):hover\s*\{[^}]*background:\s*var\(--sky-app-accent-soft\);[^}]*filter:\s*none;[^}]*transform:\s*none;/s,
     )
     expect(source).toContain('.app-store-page .store-action-button--icon:hover')
     expect(source).toContain(
@@ -162,7 +197,10 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toContain(
       'class="store-highlight store-highlight--compact phone-effect--expensive-shadow"',
     )
-    expect(source).toContain('class="store-today__edition"')
+    expect(source).not.toContain('store-today__edition')
+    expect(source).not.toContain('todayDate')
+    expect(source).not.toContain("phone.t('Apps.appStore.today.freshDaily')")
+    expect(source).not.toContain('store-highlight__story-number')
     expect(source).toContain(
       'class="store-ranking phone-effect--expensive-shadow"',
     )
@@ -184,38 +222,95 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toContain('@click.stop="handleApp(dailyHighlights[0])"')
     expect(source).toContain('@click.stop="handleApp(finalHighlight)"')
     expect(source).toContain('.store-highlight:hover')
+    expect(source).toMatch(
+      /\.store-highlight__orbit\s*\{[^}]*border:\s*0;[^}]*radial-gradient[^}]*box-shadow:\s*none;[^}]*filter:\s*blur\(14px\) saturate\(125%\);/s,
+    )
+    expect(source).toMatch(
+      /\.store-highlight__orbit::before\s*\{[^}]*radial-gradient[^}]*filter:\s*blur\(12px\);/s,
+    )
+    expect(source).toMatch(
+      /\.store-browse-feature__art > span\s*\{[^}]*radial-gradient[^}]*box-shadow:\s*none;[^}]*filter:\s*blur\(11px\) saturate\(125%\);/s,
+    )
+    expect(source).not.toContain('0 0 0 28px')
+    expect(source).not.toContain('0 0 0 22px')
+    expect(source).toMatch(
+      /\.store-highlight__footer\s*\{[^}]*border-radius:\s*0 0 var\(--sky-radius-card\) var\(--sky-radius-card\);[^}]*linear-gradient/s,
+    )
+    expect(source).toMatch(
+      /\.store-highlight__footer::before\s*\{[^}]*top:\s*-28px;[^}]*linear-gradient/s,
+    )
   })
 
   it('opens Top Today apps while keeping their direct app actions separate', () => {
     expect(source).toContain('class="store-ranking__detail-link"')
+    expect(source).toContain('v-for="app in topToday"')
+    expect(source).not.toContain('store-ranking__position')
     expect(source).toContain('@click="openAppDetail(app)"')
     expect(source).toContain('@click.stop="handleApp(app)"')
     expect(source).toContain(
       '.store-ranking li > button:not(.store-ranking__detail-link)',
     )
+    expect(source).toMatch(
+      /\.store-ranking li > button:not\(\.store-ranking__detail-link\),[\s\S]*?min-width:\s*68px;/,
+    )
     expect(source).not.toContain('.store-ranking__detail-link:hover')
     expect(source).toContain(
-      'button:not(.store-ranking__detail-link):not(:disabled):hover',
+      'button:not(.store-ranking__detail-link):not(',
     )
   })
 
   it('keeps App Store actions compatible with the FiveM CEF target', () => {
     expect(source.match(/class="store-action-button"/g)).toHaveLength(8)
+    expect(source).not.toContain("appAction(app) !== 'open'")
+    expect(source).toContain("appAction(app) === 'installing'")
+    expect(source).toContain("'store-action-button--get': appAction(app) === 'get'")
+    expect(source).toContain(
+      '> button.store-action-button--get:not(.store-browse-feature__details),',
+    )
+    expect(source).toMatch(
+      /\.store-ranking li > button\.store-action-button--get:not\(\.store-ranking__detail-link\),[\s\S]*?\.store-list article > button\.store-action-button--get:not\(\.store-list__detail-link\)\s*\{[^}]*width:\s*56px;[^}]*min-width:\s*56px;[^}]*min-height:\s*32px;[^}]*height:\s*32px;[^}]*font-size:\s*11px;[^}]*font-weight:\s*850;/s,
+    )
     expect(source).not.toContain(':has(')
     expect(source).not.toContain('color-mix(')
   })
 
-  it('builds clean Apps and Games pages with rotating features', () => {
+  it('builds shorter horizontally snapping Apps and Games features', () => {
     expect(source).not.toContain('class="store-browse__filters"')
     expect(source).not.toContain('browseFilter')
     expect(source).toContain(
       'class="store-browse-feature phone-effect--expensive-shadow"',
     )
     expect(source).toContain('class="store-list store-list--browse"')
+    expect(source).not.toContain('class="store-list__tags"')
+    expect(source).toContain('class="store-list__tagline"')
+    expect(source).toContain('<small>{{ appStoreTagline(app) }}</small>')
+    expect(source).toContain('function appStoreTagline(')
+    expect(source).toContain('app.description.trim() || app.developer')
+    expect(source).toMatch(
+      /\.store-list__tagline\s*\{[^}]*color:\s*var\(--sky-muted\);[^}]*font-size:\s*11px;[^}]*font-weight:\s*500;/s,
+    )
     expect(source).toContain('featuredCandidates')
-    expect(source).toContain('globalThis.setInterval')
-    expect(source).toContain('}, 6500)')
-    expect(source).toContain('globalThis.clearInterval')
+    expect(source).toContain('ref="featuredScroller"')
+    expect(source).toContain('@scroll.passive="updateFeaturedSlide"')
+    expect(source).toContain('@wheel="handleFeaturedWheel"')
+    expect(source).toContain('function handleFeaturedWheel(event: WheelEvent)')
+    expect(source).toContain('event.preventDefault()')
+    expect(source).toContain('v-for="(app, index) in featuredCandidates"')
+    expect(source).toContain(":class=\"{ 'is-active': featuredSlide === index }\"")
+    expect(source).toContain('@click="scrollToFeatured(index)"')
+    expect(source).not.toContain('globalThis.setInterval')
+    expect(source).toMatch(
+      /\.store-browse__featured-scroll\s*\{[^}]*overflow-x:\s*auto;[^}]*scroll-behavior:\s*smooth;[^}]*scroll-snap-type:\s*x mandatory;/s,
+    )
+    expect(source).toMatch(
+      /\.store-browse-feature\s*\{[^}]*min-height:\s*246px;[^}]*opacity:\s*0\.72;[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;[^}]*transform:\s*scale\(0\.97\);[^}]*transition:/s,
+    )
+    expect(source).toMatch(
+      /\.store-browse-feature\.is-active\s*\{[^}]*opacity:\s*1;[^}]*transform:\s*scale\(1\);/s,
+    )
+    expect(source).toMatch(
+      /\.store-browse-feature footer::before\s*\{[^}]*top:\s*-28px;[^}]*linear-gradient\(180deg, transparent, rgba\(5, 8, 16, 0\.3\)\);[^}]*backdrop-filter:\s*blur\(7px\) saturate\(110%\);/s,
+    )
     expect(source).toMatch(
       /\.store-browse__pages button\s*\{[^}]*width:\s*var\(--sky-touch-target\)[^}]*height:\s*var\(--sky-touch-target\)/s,
     )

@@ -132,7 +132,10 @@ function updateActivePreview(): void {
         <button
           type="button"
           class="store-detail__action"
-          :class="{ 'store-detail__action--icon': action !== 'open' }"
+          :class="{
+            'store-detail__action--icon': action === 'installing',
+            'store-detail__action--get': action === 'get',
+          }"
           :disabled="action === 'installing'"
           @click="emit('action')"
         >
@@ -387,6 +390,14 @@ function updateActivePreview(): void {
   padding: 0;
   color: var(--sky-app-accent);
   background: transparent;
+}
+
+.store-detail__hero .store-detail__action--get {
+  min-width: 54px;
+  min-height: 30px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 10px;
 }
 
 .store-detail__facts {

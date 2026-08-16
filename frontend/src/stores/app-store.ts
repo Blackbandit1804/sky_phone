@@ -31,7 +31,6 @@ import {
 import { nuiCall } from '@/utils/nui'
 
 const INSTALL_DURATION_MS = 3000
-const UPDATE_DURATION_MS = 1800
 
 type PendingInstallation = {
   deviceImei: string
@@ -39,18 +38,9 @@ type PendingInstallation = {
   token: symbol
 }
 
-type PendingUpdate = {
-  deviceImei: string
-  timer: ReturnType<typeof globalThis.setTimeout>
-}
-
 const pendingInstallations = new WeakMap<
   object,
   Map<LaunchablePhoneAppId, PendingInstallation>
->()
-const pendingUpdates = new WeakMap<
-  object,
-  Map<LaunchablePhoneAppId, PendingUpdate>
 >()
 
 function getDefaultGridIds(): LaunchablePhoneAppId[] {
@@ -112,7 +102,6 @@ export const useAppStoreStore = defineStore('app-store', {
   state: () => ({
     claimedApps: [] as LaunchablePhoneAppId[],
     uninstalledApps: [] as LaunchablePhoneAppId[],
-    updatedAppReleases: {} as Partial<Record<LaunchablePhoneAppId, string>>,
     homeLayout: createDefaultHomeLayout(
       getDefaultInstalledIds(),
       getDefaultGridIds(),
@@ -120,7 +109,6 @@ export const useAppStoreStore = defineStore('app-store', {
     ),
     hydrated: false,
     installingApps: {} as Partial<Record<LaunchablePhoneAppId, boolean>>,
-    updatingApps: {} as Partial<Record<LaunchablePhoneAppId, boolean>>,
     launchCounts: {} as Partial<Record<LaunchablePhoneAppId, number>>,
   }),
   actions: {
@@ -157,14 +145,6 @@ export const useAppStoreStore = defineStore('app-store', {
         pendingInstallations.delete(this)
       }
       this.installingApps = {}
-      const updates = pendingUpdates.get(this)
-      if (updates) {
-        for (const update of updates.values()) {
-          globalThis.clearTimeout(update.timer)
-        }
-        pendingUpdates.delete(this)
-      }
-      this.updatingApps = {}
     },
     installApp(id: LaunchablePhoneAppId): void {
       const installed = this.isInstalled(id)
@@ -244,7 +224,6 @@ export const useAppStoreStore = defineStore('app-store', {
         homeLayout?: unknown
         launchCounts?: unknown
         uninstalledApps?: unknown
-        updatedAppReleases?: unknown
       } | null
       const layoutVersion =
         data?.homeLayout && typeof data.homeLayout === 'object'
@@ -268,29 +247,9 @@ export const useAppStoreStore = defineStore('app-store', {
             return !!app && isPhoneAppRemovable(app)
           })
         : []
-      this.updatedAppReleases = {}
-      if (
-        data?.updatedAppReleases &&
-        typeof data.updatedAppReleases === 'object'
-      ) {
-        for (const [id, release] of Object.entries(data.updatedAppReleases)) {
-          if (
-            isPhoneAppId(id) &&
-            typeof release === 'string' &&
-            release.length <= 32
-          ) {
-            this.updatedAppReleases[id] = release
-          }
-        }
-      }
       const installedIds = [
         ...new Set([...getDefaultInstalledIds(), ...this.claimedApps]),
       ].filter((id) => !this.uninstalledApps.includes(id))
-      for (const appId of Object.keys(this.updatedAppReleases)) {
-        if (!isPhoneAppId(appId) || !installedIds.includes(appId)) {
-          delete this.updatedAppReleases[appId as LaunchablePhoneAppId]
-        }
-      }
       const removedLegacyDefaults = hasUninstalledBuiltinApp(
         data?.homeLayout,
         installedIds,
@@ -512,51 +471,10 @@ export const useAppStoreStore = defineStore('app-store', {
       if (!this.uninstalledApps.includes(appId)) {
         this.uninstalledApps.push(appId)
       }
-      delete this.updatedAppReleases[appId]
       this.homeLayout = removeHomeApp(this.homeLayout, appId)
       this.persist()
 
       return true
-    },
-    updateApp(appId: LaunchablePhoneAppId, release: string): void {
-      if (
-        !this.isInstalled(appId) ||
-        this.updatingApps[appId] ||
-        !release.trim()
-      ) {
-        return
-      }
-
-      const phone = usePhoneStore()
-      const deviceImei = phone.device?.imei
-      if (!phone.isOpen || !deviceImei) {
-        console.error(
-          `[App store] Update cancelled because no phone device is open for ${appId}.`,
-        )
-        return
-      }
-
-      const updates =
-        pendingUpdates.get(this) ??
-        new Map<LaunchablePhoneAppId, PendingUpdate>()
-      this.updatingApps[appId] = true
-      const timer = globalThis.setTimeout(() => {
-        updates.delete(appId)
-        if (!updates.size) pendingUpdates.delete(this)
-        delete this.updatingApps[appId]
-        const activePhone = usePhoneStore()
-        if (!activePhone.isOpen || activePhone.device?.imei !== deviceImei) {
-          console.error(
-            `[App store] Update cancelled because the active phone changed for ${appId}.`,
-          )
-          return
-        }
-        if (!this.isInstalled(appId)) return
-        this.updatedAppReleases[appId] = release
-        this.persist()
-      }, UPDATE_DURATION_MS)
-      updates.set(appId, { deviceImei, timer })
-      pendingUpdates.set(this, updates)
     },
     persist(): void {
       usePhoneStore().saveDeviceNamespace('apps', {
@@ -565,9 +483,6 @@ export const useAppStoreStore = defineStore('app-store', {
         launchCounts: this.launchCounts,
         ...(this.uninstalledApps.length
           ? { uninstalledApps: this.uninstalledApps }
-          : {}),
-        ...(Object.keys(this.updatedAppReleases).length
-          ? { updatedAppReleases: this.updatedAppReleases }
           : {}),
       })
     },
