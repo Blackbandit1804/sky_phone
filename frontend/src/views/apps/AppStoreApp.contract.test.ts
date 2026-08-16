@@ -270,6 +270,9 @@ describe('AppStoreApp Sky navigation contract', () => {
     expect(source).toMatch(
       /\.store-ranking li > button\.store-action-button--get:not\(\.store-ranking__detail-link\),[\s\S]*?\.store-list article > button\.store-action-button--get:not\(\.store-list__detail-link\)\s*\{[^}]*width:\s*56px;[^}]*min-width:\s*56px;[^}]*min-height:\s*32px;[^}]*height:\s*32px;[^}]*font-size:\s*11px;[^}]*font-weight:\s*850;/s,
     )
+    expect(source).toMatch(
+      /\.store-ranking li > button\.store-action-button--icon:not\(\.store-ranking__detail-link\),[\s\S]*?\.store-list article > button\.store-action-button--icon:not\(\.store-list__detail-link\)\s*\{[^}]*width:\s*56px;[^}]*min-width:\s*56px;[^}]*min-height:\s*32px;[^}]*height:\s*32px;/s,
+    )
     expect(source).not.toContain(':has(')
     expect(source).not.toContain('color-mix(')
   })

@@ -2759,8 +2759,10 @@ watch(
 .store-browse-feature footer > .store-action-button--icon,
 .store-search__recommendations article > .store-action-button--icon,
 .store-list article > .store-action-button--icon {
-  width: var(--sky-touch-target);
-  min-width: var(--sky-touch-target);
+  width: 54px;
+  min-width: 54px;
+  min-height: 30px;
+  height: 30px;
   padding: 0;
   border-color: transparent;
   color: var(--sky-app-accent);
@@ -2797,6 +2799,20 @@ watch(
   font-size: 11px;
   font-weight: 850;
   letter-spacing: 0.04em;
+}
+
+.store-ranking li > button.store-action-button--icon:not(.store-ranking__detail-link),
+.store-browse-feature
+  footer
+  > button.store-action-button--icon:not(.store-browse-feature__details),
+.store-search__recommendations
+  article
+  > button.store-action-button--icon:not(.store-search__detail-link),
+.store-list article > button.store-action-button--icon:not(.store-list__detail-link) {
+  width: 56px;
+  min-width: 56px;
+  min-height: 32px;
+  height: 32px;
 }
 
 .store-installing {

@@ -385,8 +385,10 @@ function updateActivePreview(): void {
 }
 
 .store-detail__hero .store-detail__action--icon {
-  width: var(--sky-touch-target);
-  min-width: var(--sky-touch-target);
+  width: 54px;
+  min-width: 54px;
+  min-height: 30px;
+  height: 30px;
   padding: 0;
   color: var(--sky-app-accent);
   background: transparent;

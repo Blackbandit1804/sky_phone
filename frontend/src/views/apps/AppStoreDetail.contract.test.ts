@@ -25,6 +25,9 @@ describe('AppStoreDetail contract', () => {
     expect(source).toMatch(
       /\.store-detail__hero \.store-detail__action--get\s*\{[^}]*min-width:\s*54px;[^}]*min-height:\s*30px;[^}]*height:\s*30px;/s,
     )
+    expect(source).toMatch(
+      /\.store-detail__hero \.store-detail__action--icon\s*\{[^}]*width:\s*54px;[^}]*min-width:\s*54px;[^}]*min-height:\s*30px;[^}]*height:\s*30px;/s,
+    )
     expect(source).not.toContain(':has(')
     expect(source).toMatch(
       /\.store-detail\s*\{[^}]*padding:\s*var\(--sky-space-3\) 0 var\(--sky-space-6\)/s,
