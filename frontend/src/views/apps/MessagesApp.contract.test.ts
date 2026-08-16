@@ -205,8 +205,12 @@ describe('MessagesApp Sky UI contract', () => {
   })
 
   it('renders contact details read-only with icon actions and contact routing', () => {
-    const contactProfileStart = source.indexOf(
-      '<SkyAppPage\n      v-if="contactDetailsOpen"',
+    const contactOverlayClass = source.indexOf(
+      'class="messages-contact-overlay"',
+    )
+    const contactProfileStart = source.lastIndexOf(
+      '<SkyAppPage',
+      contactOverlayClass,
     )
     const threadScrollStart = source.indexOf(
       'class="messages-sky-thread-scroll"',
@@ -261,16 +265,22 @@ describe('MessagesApp Sky UI contract', () => {
   })
 
   it('confirms contact blocking in a dismissible dialog', () => {
-    const contactProfileStart = source.indexOf(
-      '<SkyAppPage\n      v-if="contactDetailsOpen"',
+    const contactOverlayClass = source.indexOf(
+      'class="messages-contact-overlay"',
+    )
+    const contactProfileStart = source.lastIndexOf(
+      '<SkyAppPage',
+      contactOverlayClass,
     )
     const threadScrollStart = source.indexOf(
       'class="messages-sky-thread-scroll"',
       contactProfileStart,
     )
     const contactProfile = source.slice(contactProfileStart, threadScrollStart)
-    const blockDialogStart = source.indexOf(
-      '<SkyDialog\n    :opened="blockDialogOpened"',
+    const blockDialogOpened = source.indexOf(':opened="blockDialogOpened"')
+    const blockDialogStart = source.lastIndexOf(
+      '<SkyDialog',
+      blockDialogOpened,
     )
     const toastStart = source.indexOf('<SkyToast', blockDialogStart)
     const blockDialog = source.slice(blockDialogStart, toastStart)
