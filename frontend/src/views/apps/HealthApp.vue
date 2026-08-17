@@ -143,10 +143,11 @@ function formatMinutes(seconds: number): string {
   })
 }
 
-function weekday(date: string, narrow = true): string {
-  return new Intl.DateTimeFormat(phone.lang, {
-    weekday: narrow ? 'narrow' : 'short',
-  }).format(new Date(`${date}T12:00:00`))
+function weekday(date: string): string {
+  const value = new Intl.DateTimeFormat(phone.lang, { weekday: 'short' })
+    .format(new Date(`${date}T12:00:00`))
+    .replace(/\.$/, '')
+  return Array.from(value).slice(0, 2).join('')
 }
 
 function fullDate(date: string): string {
@@ -760,6 +761,7 @@ onBeforeUnmount(() => {
   border: calc(var(--sky-hairline-scale) * 1px) solid var(--health-panel-border);
   border-radius: var(--sky-radius-card);
   background: var(--health-panel);
+  flex: none;
   grid-template-columns: repeat(3, 1fr);
 }
 
@@ -797,8 +799,9 @@ onBeforeUnmount(() => {
 }
 
 .health-metrics span {
-  color: var(--sky-muted);
-  font-size: 12px;
+  color: var(--sky-text);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .health-section {
