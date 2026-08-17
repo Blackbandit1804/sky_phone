@@ -2,6 +2,7 @@ import type { AlarmSoundId } from '@/utils/alarms'
 import type { NotificationSoundId } from '@/utils/preferences'
 
 export type PhoneToneId = AlarmSoundId | NotificationSoundId
+export type PhoneVibrationKind = 'call' | 'notification'
 
 type ToneVoice = {
   detune?: number
@@ -401,6 +402,11 @@ const TONE_PATTERNS: Record<PhoneToneId, TonePattern> = {
   },
 }
 
+const VIBRATION_SOUND_PATHS: Record<PhoneVibrationKind, string> = {
+  call: 'sounds/vibration-call.mp3',
+  notification: 'sounds/vibration-notification.mp3',
+}
+
 export function phoneToneDuration(tone: PhoneToneId): number {
   return Math.max(
     ...TONE_PATTERNS[tone].steps.map((step) => step.offsetMs + step.durationMs),
@@ -482,5 +488,29 @@ export function playPhoneTone(
       }
     }
     void context.close()
+  }
+}
+
+export function playPhoneVibration(
+  kind: PhoneVibrationKind,
+  loop: boolean,
+): () => void {
+  const player = new Audio(
+    `${import.meta.env.BASE_URL}${VIBRATION_SOUND_PATHS[kind]}`,
+  )
+  let stopped = false
+  player.loop = loop
+  player.preload = 'auto'
+  player.volume = 1
+  void player.play().catch((error: unknown) => {
+    if (!stopped) {
+      console.error('[Phone audio] Failed to start vibration sound', error)
+    }
+  })
+
+  return () => {
+    stopped = true
+    player.pause()
+    player.currentTime = 0
   }
 }

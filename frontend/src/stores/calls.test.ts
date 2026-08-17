@@ -2,14 +2,16 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useCallsStore } from '@/stores/calls'
+import { usePhoneStore } from '@/stores/phone'
 import { nuiCall } from '@/utils/nui'
-import { playPhoneTone } from '@/utils/tones'
+import { playPhoneTone, playPhoneVibration } from '@/utils/tones'
 
 vi.mock('@/utils/nui', () => ({
   nuiCall: vi.fn(async () => ({ success: true, data: [] })),
 }))
 vi.mock('@/utils/tones', () => ({
   playPhoneTone: vi.fn(() => vi.fn()),
+  playPhoneVibration: vi.fn(() => vi.fn()),
 }))
 
 describe('calls store', () => {
@@ -51,6 +53,23 @@ describe('calls store', () => {
       state: 'connected',
     })
     expect(stop).toHaveBeenCalledOnce()
+  })
+
+  it('loops the vibration alert for incoming calls while globally muted', () => {
+    const phone = usePhoneStore()
+    phone.preferences.settings.notificationVolume = 0
+    phone.preferences.settings.ringtoneVolume = 0
+    const calls = useCallsStore()
+
+    calls.applyCallState({
+      direction: 'incoming',
+      id: 'call-muted',
+      otherNumber: '1234567890',
+      startedAt: 1,
+      state: 'ringing',
+    })
+
+    expect(playPhoneVibration).toHaveBeenCalledWith('call', true)
   })
 
   it('clears terminal states and refreshes recents', async () => {

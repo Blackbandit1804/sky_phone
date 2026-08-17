@@ -12,9 +12,11 @@ import {
   DEFAULT_PHONE_PREFERENCES,
   type PhonePreferencesV1,
 } from '@/utils/preferences'
+import { playPhoneVibration } from '@/utils/tones'
 
 vi.mock('@/utils/tones', () => ({
   playPhoneTone: vi.fn(() => vi.fn()),
+  playPhoneVibration: vi.fn(() => vi.fn()),
 }))
 vi.mock('@/utils/nui', () => ({
   nuiCall: vi.fn(async () => ({ success: true, data: { revision: 1 } })),
@@ -118,6 +120,23 @@ describe('notifications store', () => {
 
     expect(id).toBeNull()
     expect(notifications.devicePreviews).toEqual([])
+  })
+
+  it('plays a vibration alert for push notifications while globally muted', () => {
+    const notifications = useNotificationsStore()
+    const muted = device('111', (preferences) => {
+      preferences.settings.notificationVolume = 0
+      preferences.settings.ringtoneVolume = 0
+    })
+
+    notifications.show({
+      appId: 'messages',
+      device: muted,
+      text: 'Muted message',
+      title: 'Messages',
+    })
+
+    expect(playPhoneVibration).toHaveBeenCalledWith('notification', false)
   })
 
   it('suppresses normal notifications during Focus but keeps critical alerts', () => {

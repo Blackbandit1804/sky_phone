@@ -9,7 +9,11 @@ import {
   DEFAULT_APP_NOTIFICATION_PREFERENCES,
   type PhonePreferencesV1,
 } from '@/utils/preferences'
-import { playPhoneTone, type PhoneToneId } from '@/utils/tones'
+import {
+  playPhoneTone,
+  playPhoneVibration,
+  type PhoneToneId,
+} from '@/utils/tones'
 
 export type PhoneNotificationDevice = {
   imei: string
@@ -183,13 +187,21 @@ export const useNotificationsStore = defineStore('notifications', () => {
       preferences.settings.notifications[notification.appId] ??
       DEFAULT_APP_NOTIFICATION_PREFERENCES
     if (appPreferences.sounds || notification.critical) {
+      const alertsMuted =
+        preferences.settings.notificationVolume === 0 &&
+        preferences.settings.ringtoneVolume === 0
       const sound = notification.sound ?? preferences.settings.notificationSound
       const volume = notification.critical
         ? preferences.settings.ringtoneVolume
         : preferences.settings.notificationVolume
       stopToneHandles.set(
         notification.id,
-        playPhoneTone(sound, volume, !!notification.persistent),
+        alertsMuted
+          ? playPhoneVibration(
+              'notification',
+              !!notification.persistent,
+            )
+          : playPhoneTone(sound, volume, !!notification.persistent),
       )
     }
 

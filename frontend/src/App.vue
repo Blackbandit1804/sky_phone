@@ -1381,7 +1381,7 @@ onMounted(() => {
     }
   }, 1000)
   if (isDevelopment) {
-    void hydrateDevelopmentPhone()
+    const developmentHydration = hydrateDevelopmentPhone()
     if (developmentParameters.has('simPickerPreview')) {
       simPicker.value = {
         choices: [
@@ -1403,16 +1403,26 @@ onMounted(() => {
     if (developmentParameters.has('payphonePreview')) {
       openDevelopmentPayphonePreview()
     }
-    if (developmentParameters.has('notificationPreview')) {
-      window.setTimeout(() => {
-        notifications.show({
-          appId: 'messages',
-          persistent: true,
-          route: '/apps/messages',
-          text: 'You still got that spare alternator?',
-          title: 'Tommy V',
-        })
-      }, 250)
+    if (
+      developmentParameters.has('notificationPreview') ||
+      developmentParameters.has('mutedNotificationPreview')
+    ) {
+      void developmentHydration.then(() => {
+        if (developmentParameters.has('mutedNotificationPreview')) {
+          phone.setAlertVolumes(0)
+        }
+        window.setTimeout(() => {
+          notifications.show({
+            appId: 'messages',
+            persistent: !developmentParameters.has(
+              'mutedNotificationPreview',
+            ),
+            route: '/apps/messages',
+            text: 'You still got that spare alternator?',
+            title: 'Tommy V',
+          })
+        }, 250)
+      })
     }
   }
 })

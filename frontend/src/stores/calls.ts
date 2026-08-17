@@ -5,7 +5,11 @@ import { usePhoneStore } from '@/stores/phone'
 import type { PhoneCall, PhoneContact, RecentCall } from '@/types/phone'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
 import type { RingtoneId } from '@/utils/preferences'
-import { playPhoneTone, type PhoneToneId } from '@/utils/tones'
+import {
+  playPhoneTone,
+  playPhoneVibration,
+  type PhoneToneId,
+} from '@/utils/tones'
 
 const RINGTONE_TONES: Record<RingtoneId, PhoneToneId> = {
   horizon: 'aurora',
@@ -140,11 +144,16 @@ export const useCallsStore = defineStore('calls', () => {
     stopRingtone = null
     activeCall.value = call
     if (call.direction === 'incoming' && call.state === 'ringing') {
-      stopRingtone = playPhoneTone(
-        RINGTONE_TONES[phone.preferences.settings.ringtone],
-        phone.preferences.settings.ringtoneVolume,
-        true,
-      )
+      const alertsMuted =
+        phone.preferences.settings.notificationVolume === 0 &&
+        phone.preferences.settings.ringtoneVolume === 0
+      stopRingtone = alertsMuted
+        ? playPhoneVibration('call', true)
+        : playPhoneTone(
+            RINGTONE_TONES[phone.preferences.settings.ringtone],
+            phone.preferences.settings.ringtoneVolume,
+            true,
+          )
     }
     if (!['ringing', 'connected'].includes(call.state)) {
       window.setTimeout(() => {
