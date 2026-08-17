@@ -45,10 +45,8 @@ local vehicle_mods = {
     modLivery = 48,
 }
 
-local function garage_locale()
-    local locale = Locales[Config.Bridge.Locale] or Locales["en"]
-    return locale.Nui.Apps.garage
-end
+local phone_locale = SkyPhoneLocales.Resolve(Config.Bridge.Locale)
+local garage_locale = phone_locale.Nui.Apps.garage
 
 local function normalized_plate(value)
     return tostring(value or ""):match("^%s*(.-)%s*$")
@@ -233,7 +231,7 @@ local function fail_valet(error_code, server_cancel)
     current_valet.can_cancel = false
     current_valet.error = error_code
     send_valet_state()
-    local locale = garage_locale()
+    local locale = garage_locale
     Bridge.Framework.Notify(locale.name, locale.errors[error_code] or locale.errors.default, "error", 5000)
     SetTimeout(8000, function()
         if current_valet and current_valet.order_id == order_id then
@@ -429,7 +427,7 @@ local function run_valet_delivery(order)
     current_valet.status = "delivered"
     current_valet.can_cancel = false
     send_valet_state()
-    local locale = garage_locale()
+    local locale = garage_locale
     Bridge.Framework.Notify(locale.name, locale.valetDelivered, "success", 5000)
     local completed_order_id = current_valet.order_id
     SetTimeout(12000, function()

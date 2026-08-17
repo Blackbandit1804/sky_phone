@@ -32,12 +32,12 @@ const videoStyles: Record<string, string> = {
   'ocean-loop': 'linear-gradient(145deg, #0b132b, #26648e 55%, #67d5b5)',
   'sunset-loop': 'linear-gradient(145deg, #141e30, #5f2c82 55%, #ff9a62)',
 }
-const gifContent: Record<string, { emoji: string; label: string }> = {
-  celebrate: { emoji: '🎉', label: 'Celebrate!' },
-  hearts: { emoji: '💖', label: 'Love it' },
-  party: { emoji: '🥳', label: 'Party time' },
-  thumbs_up: { emoji: '👍', label: 'Perfect' },
-  wow: { emoji: '🤯', label: 'WOW' },
+const gifContent: Record<string, { emoji: string; key: string }> = {
+  celebrate: { emoji: '🎉', key: 'celebrate' },
+  hearts: { emoji: '💖', key: 'hearts' },
+  party: { emoji: '🥳', key: 'party' },
+  thumbs_up: { emoji: '👍', key: 'thumbsUp' },
+  wow: { emoji: '🤯', key: 'wow' },
 }
 
 const background = computed(() =>
@@ -139,13 +139,13 @@ function durationLabel(milliseconds: number | null): string {
     <img
       v-if="mediaUrl"
       :src="mediaUrl"
-      alt="GIF"
+      :alt="phone.t('Apps.messages.gif')"
       loading="lazy"
       referrerpolicy="no-referrer"
     />
     <template v-else>
       <span>{{ gif.emoji }}</span>
-      <strong>{{ gif.label }}</strong>
+      <strong>{{ phone.t(`Apps.messages.gifLabels.${gif.key}`) }}</strong>
     </template>
   </div>
   <p v-if="message.body?.trim()" class="messages-attachment-caption">

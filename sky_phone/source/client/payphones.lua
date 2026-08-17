@@ -83,9 +83,7 @@ RegisterNetEvent("sky_phone:payphone:visual:stop", function(data)
     restore_remote_visual(data.id)
 end)
 
-local function get_locale()
-    return Locales[Config.Bridge.Locale] or Locales["en"]
-end
+local locale = SkyPhoneLocales.Resolve(Config.Bridge.Locale)
 
 local function load_model(model_hash)
     if HasModelLoaded(model_hash) then
@@ -366,7 +364,7 @@ local function payphone_open_payload()
         currency = Config.Payphones.Currency,
         maxNumberLength = Config.Sim.NumberLength,
         pricePerSecond = Config.Payphones.PricePerSecond,
-        locales = get_locale().Nui.Payphone,
+        locales = locale.Nui.Payphone,
     }
 end
 
@@ -400,16 +398,16 @@ local function current_call_elapsed_seconds()
 end
 
 local function call_help_message()
-    local locale = get_locale().Payphone
+    local payphone_locale = locale.Payphone
     local message
     if active_call_state == "connected" then
         local elapsed_seconds = current_call_elapsed_seconds()
-        message = locale.ConnectedHelp
+        message = payphone_locale.ConnectedHelp
         message = replace_placeholder(message, "duration", format_duration(elapsed_seconds))
         message = replace_placeholder(message, "currency", Config.Payphones.Currency)
         message = replace_placeholder(message, "cost", elapsed_seconds * (tonumber(Config.Payphones.PricePerSecond) or 0))
     else
-        message = locale.RingingHelp
+        message = payphone_locale.RingingHelp
     end
     return replace_placeholder(message, "number", active_call_number or "")
 end
@@ -577,7 +575,7 @@ end)
 CreateThread(function()
     while true do
         if nearest_payphone and nearest_payphone.distance <= Config.Payphones.InteractionDistance and not IsNuiFocused() then
-            Bridge.Framework.ShowHelpNotification(get_locale().Payphone.Interact, "E")
+            Bridge.Framework.ShowHelpNotification(locale.Payphone.Interact, "E")
             if IsControlJustReleased(0, 38) then
                 open_payphone(nearest_payphone)
             end

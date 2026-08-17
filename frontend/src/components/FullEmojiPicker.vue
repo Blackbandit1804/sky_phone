@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import emojiData from 'emoji-picker-element-data/en/emojibase/data.json'
+import deEmojiData from 'emoji-picker-element-data/de/cldr/data.json'
+import enEmojiData from 'emoji-picker-element-data/en/cldr/data.json'
 import { Search, X } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
@@ -25,10 +26,13 @@ const activeGroup = ref(0)
 const skinTone = ref(0)
 const groups = ['😀', '👋', '🧑', '🐻', '🍔', '⚽', '🚗', '💡', '❤️', '🏳️']
 const skinTones = ['✋', '✋🏻', '✋🏼', '✋🏽', '✋🏾', '✋🏿']
+const localizedEmojiData = computed(() =>
+  phone.lang.toLocaleLowerCase().startsWith('de') ? deEmojiData : enEmojiData,
+)
 
 const emojis = computed(() => {
   const needle = query.value.trim().toLocaleLowerCase(phone.lang)
-  return (emojiData as EmojiEntry[])
+  return (localizedEmojiData.value as EmojiEntry[])
     .filter((entry) => {
       if (!needle) return entry.group === activeGroup.value
       return `${entry.annotation} ${entry.shortcodes?.join(' ') ?? ''} ${entry.tags?.join(' ') ?? ''}`
@@ -40,17 +44,24 @@ const emojis = computed(() => {
       emoji:
         skinTone.value === 0
           ? entry.emoji
-          : entry.skins?.find((skin) => skin.tone === skinTone.value)?.emoji ??
-            entry.emoji,
+          : (entry.skins?.find((skin) => skin.tone === skinTone.value)?.emoji ??
+            entry.emoji),
     }))
 })
 </script>
 
 <template>
-  <section class="messages-full-emoji-picker" aria-label="Emoji picker">
+  <section
+    class="messages-full-emoji-picker"
+    :aria-label="phone.t('Apps.messages.emojiPicker')"
+  >
     <header>
       <strong>{{ phone.t('Apps.messages.emoji') }}</strong>
-      <button type="button" :aria-label="phone.t('Common.done')" @click="emit('close')">
+      <button
+        type="button"
+        :aria-label="phone.t('Common.done')"
+        @click="emit('close')"
+      >
         <X :size="18" />
       </button>
     </header>
@@ -63,7 +74,7 @@ const emojis = computed(() => {
         autocomplete="off"
       />
     </label>
-    <nav v-if="!query" aria-label="Emoji categories">
+    <nav v-if="!query" :aria-label="phone.t('Apps.messages.emojiCategories')">
       <button
         v-for="(group, index) in groups"
         :key="group"
@@ -79,7 +90,7 @@ const emojis = computed(() => {
         :key="tone"
         type="button"
         :class="{ active: skinTone === index }"
-        :title="`Skin tone ${index}`"
+        :title="phone.t('Apps.messages.skinTone', { number: String(index) })"
         @click="skinTone = index"
       >
         {{ tone }}

@@ -1435,7 +1435,7 @@ Bridge.Callbacks.Register("sky_phone:picstagram:admin-resolve-report", function(
 end)
 
 RegisterCommand(Config.Picstagram.VerifyCommand, function(source, args)
-    local command_locale = (Locales[Config.Bridge.Locale] or Locales["en"]).PicstagramCommand
+    local command_locale = SkyPhoneLocales.Resolve(Config.Bridge.Locale).PicstagramCommand
     local function command_message(template, values)
         return template:gsub("{(%w+)}", function(key)
             return values[key] or ""

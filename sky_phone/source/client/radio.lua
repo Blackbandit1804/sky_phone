@@ -295,7 +295,7 @@ RegisterNetEvent("sky_phone:radio:notification", function(data)
     if not radio_settings.notifications or current_primary <= 0 then
         return
     end
-    local locale = (Locales[Config.Bridge.Locale] or Locales.en).Nui.Apps.radio
+    local locale = SkyPhoneLocales.Resolve(Config.Bridge.Locale).Nui.Apps.radio
     local template = data.joined and locale.memberJoined or locale.memberLeft
     SendNUIMessage({
         type = "notification:show",

@@ -51,9 +51,7 @@ describe('phone locale fallback', () => {
     expect(phone.t('Apps.radio.providerFeatureUnavailable')).toBe(
       'Not supported by this voice service',
     )
-    expect(phone.t('Apps.radio.displayNamePlaceholder')).toBe(
-      'Character name',
-    )
+    expect(phone.t('Apps.radio.displayNamePlaceholder')).toBe('Character name')
   })
 
   it('keeps Messages media controls translated with a partial server locale', () => {
@@ -70,5 +68,22 @@ describe('phone locale fallback', () => {
       'Remove attachment 2',
     )
     expect(phone.t('Apps.messages.seekAudio')).toBe('Seek Audio')
+  })
+
+  it('uses the English Lua payload before the bundled emergency fallback', () => {
+    const phone = usePhoneStore()
+    phone.open({
+      fallbackLocales: {
+        Common: {
+          cancel: 'Cancel from en.lua',
+          save: 'Save from en.lua',
+        },
+      },
+      locales: { Common: { save: 'Speichern' } },
+    })
+
+    expect(phone.t('Common.save')).toBe('Speichern')
+    expect(phone.t('Common.cancel')).toBe('Cancel from en.lua')
+    expect(phone.t('Common.close')).toBe('Close')
   })
 })

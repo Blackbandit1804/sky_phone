@@ -33,6 +33,7 @@ export type PasscodeResponseData = {
 export type PhoneOpenPayload = {
   account?: DeviceBootstrap['account']
   device?: PhoneDevice
+  fallbackLocales?: LocaleTree
   lang?: string
   locales?: LocaleTree
   memos?: DeviceBootstrap['memos']
@@ -1887,6 +1888,16 @@ const defaultLocales: LocaleTree = {
       contactDeleteFailed: 'The contact could not be deleted.',
       callFailed: 'The call could not be started.',
       emoji: 'Emoji',
+      emojiPicker: 'Emoji picker',
+      emojiCategories: 'Emoji categories',
+      skinTone: 'Skin tone {number}',
+      gifLabels: {
+        celebrate: 'Celebrate!',
+        hearts: 'Love it',
+        party: 'Party time',
+        thumbsUp: 'Perfect',
+        wow: 'WOW',
+      },
       voiceMessage: 'Audio Message',
       recordVoice: 'Record Audio',
       playAudio: 'Play Audio',
@@ -2127,6 +2138,7 @@ const defaultLocales: LocaleTree = {
       takePhoto: 'Camera',
       removePhoto: 'Remove Photo',
       call: 'Call',
+      callFailed: 'The call could not be started.',
       message: 'Message',
       video: 'Video',
       mail: 'Mail',
@@ -4671,6 +4683,7 @@ export const usePhoneStore = defineStore('phone', {
     isOpen: false,
     lang: 'en',
     launchOrigin: null as AppLaunchOrigin | null,
+    fallbackLocales: defaultLocales,
     locales: defaultLocales,
     preferences: cloneJsonData(DEFAULT_PHONE_PREFERENCES),
     persistenceGeneration: 0,
@@ -4709,7 +4722,8 @@ export const usePhoneStore = defineStore('phone', {
       }
       this.deviceSessionToken = nextToken
       this.lang = payload.lang ?? 'en'
-      this.locales = payload.locales ?? defaultLocales
+      this.fallbackLocales = payload.fallbackLocales ?? defaultLocales
+      this.locales = payload.locales ?? this.fallbackLocales
       if (payload.device) this.hydrateDevice(payload.device)
       if (payload.player) this.player = payload.player
       this.security = payload.security ?? {
@@ -4941,13 +4955,16 @@ export const usePhoneStore = defineStore('phone', {
     },
     t(path: string, replacements: Record<string, string> = {}): string {
       const translated = getByPath(this.locales, path)
-      const fallback = getByPath(defaultLocales, path)
+      const english = getByPath(this.fallbackLocales, path)
+      const emergencyFallback = getByPath(defaultLocales, path)
       const value =
         typeof translated === 'string'
           ? translated
-          : typeof fallback === 'string'
-            ? fallback
-            : path
+          : typeof english === 'string'
+            ? english
+            : typeof emergencyFallback === 'string'
+              ? emergencyFallback
+              : path
       return Object.entries(replacements).reduce(
         (result, [key, replacement]) =>
           result.split(`{${key}}`).join(replacement),

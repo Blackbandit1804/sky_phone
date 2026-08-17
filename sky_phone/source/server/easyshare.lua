@@ -263,7 +263,7 @@ local function canonical_crewlink_invite(device, invite_code)
     if not group then
         return nil
     end
-    local locale = (Locales[Config.Bridge.Locale] or Locales["en"]).Phone.Apps.crewlink
+    local locale = SkyPhoneLocales.Resolve(Config.Bridge.Locale).Nui.Apps.crewlink
     local title = locale.shareInviteTitle:gsub("{group}", function() return group.name end)
     local copy_text = locale.shareInviteBody
         :gsub("{code}", function() return group.invite_code end)

@@ -297,9 +297,7 @@ local server_callbacks = {
     "media:import:url",
 }
 
-local function get_locale()
-    return Locales[Config.Bridge.Locale] or Locales["en"]
-end
+local locale, locale_name = SkyPhoneLocales.Resolve(Config.Bridge.Locale)
 
 local function update_nui_focus()
     local focus = SkyPhoneFocus.Resolve({
@@ -375,8 +373,9 @@ local function send_open_message()
     end
 
     local payload = device_payload
-    payload.lang = Config.Bridge.Locale
-    payload.locales = get_locale().Nui
+    payload.lang = locale_name
+    payload.locales = locale.Nui
+    payload.fallbackLocales = Locales.en.Nui
     SkyPhoneApps.SendCatalog()
     SendNUIMessage({
         type = "app:open",
@@ -445,8 +444,8 @@ if Config.Phone.DevelopmentCommand then
 end
 
 RegisterNetEvent("sky_phone:testdata:feedback", function(success, detail)
-    local locale = get_locale().TestData
-    local message = success and locale.Success or locale.Failed
+    local test_data_locale = locale.TestData
+    local message = success and test_data_locale.Success or test_data_locale.Failed
     if success and type(detail) == "string" and detail ~= "" then
         message = message:gsub("{email}", detail)
     end
@@ -750,7 +749,7 @@ RegisterNetEvent("sky_phone:device:error", function(error_code)
         tostring(error_code),
         { always = true }
     )
-    local message = get_locale().DeviceErrors[error_code] or get_locale().DeviceErrors.default
+    local message = locale.DeviceErrors[error_code] or locale.DeviceErrors.default
     Bridge.Framework.Notify("iFruit", message, "error", 5000)
 end)
 
@@ -767,7 +766,7 @@ RegisterNetEvent("sky_phone:gallery:changed", function()
 end)
 
 RegisterNetEvent("sky_phone:mail:new", function(data)
-    local mail_locale = get_locale().Nui.Apps.mail
+    local mail_locale = locale.Nui.Apps.mail
     data.title = mail_locale.name
     data.text = mail_locale.newMessage:gsub("{sender}", tostring(data.sender))
     SendNUIMessage({ type = "mail:new", data = data })
@@ -782,7 +781,7 @@ RegisterNetEvent("sky_phone:companies:changed", function(data)
 end)
 
 RegisterNetEvent("sky_phone:companies:notification", function(data)
-    local companies_locale = get_locale().Nui.Apps.companies
+    local companies_locale = locale.Nui.Apps.companies
     data.title = companies_locale.name
     data.text = companies_locale.notifications[data.kind]
         or companies_locale.notifications.requestUpdated
@@ -798,7 +797,7 @@ RegisterNetEvent("sky_phone:fliptok:verification-changed", function(data)
 end)
 
 RegisterNetEvent("sky_phone:fliptok:new", function(data)
-    local fliptok_locale = get_locale().Nui.Apps.fliptok
+    local fliptok_locale = locale.Nui.Apps.fliptok
     local notification_text = fliptok_locale.notifications[data.kind] or fliptok_locale.notifications.default
     data.title = fliptok_locale.name
     data.text = notification_text:gsub("{actor}", tostring(data.actor or ""))
@@ -814,7 +813,7 @@ RegisterNetEvent("sky_phone:picstagram:verification-changed", function(data)
 end)
 
 RegisterNetEvent("sky_phone:picstagram:new", function(data)
-    local picstagram_locale = get_locale().Nui.Apps.picstagram
+    local picstagram_locale = locale.Nui.Apps.picstagram
     local notification_text = picstagram_locale.notifications[data.kind] or picstagram_locale.notifications.default
     data.title = picstagram_locale.name
     data.text = notification_text:gsub("{actor}", tostring(data.actor or ""))
@@ -822,7 +821,7 @@ RegisterNetEvent("sky_phone:picstagram:new", function(data)
 end)
 
 RegisterNetEvent("sky_phone:feather:new", function(data)
-    local feather_locale = get_locale().Nui.Apps.feather
+    local feather_locale = locale.Nui.Apps.feather
     local notification_text = feather_locale.notifications[data.kind] or feather_locale.notifications.default
     data.title = feather_locale.name
     data.text = notification_text:gsub("{actor}", tostring(data.actor or ""))
@@ -830,7 +829,7 @@ RegisterNetEvent("sky_phone:feather:new", function(data)
 end)
 
 RegisterNetEvent("sky_phone:marketplace:new-message", function(data)
-    local marketplace_locale = get_locale().Nui.Apps.citymarkt
+    local marketplace_locale = locale.Nui.Apps.citymarkt
     data.title = marketplace_locale.name
     if data.kind == "offer" then
         data.text = marketplace_locale.newOffer
@@ -851,21 +850,21 @@ RegisterNetEvent("sky_phone:marketplace:new-message", function(data)
 end)
 
 RegisterNetEvent("sky_phone:calendar:reminder", function(data)
-    local calendar_locale = get_locale().Nui.Apps.calendar
+    local calendar_locale = locale.Nui.Apps.calendar
     data.title = calendar_locale.name
     data.text = calendar_locale.reminder:gsub("{title}", tostring(data.eventTitle))
     SendNUIMessage({ type = "calendar:reminder", data = data })
 end)
 
 RegisterNetEvent("sky_phone:flare:match", function(data)
-    local flare_locale = get_locale().Nui.Apps.flare
+    local flare_locale = locale.Nui.Apps.flare
     data.title = flare_locale.name
     data.text = flare_locale.newMatchNotification:gsub("{sender}", tostring(data.sender))
     SendNUIMessage({ type = "flare:new-match", data = data })
 end)
 
 RegisterNetEvent("sky_phone:flare:message", function(data)
-    local flare_locale = get_locale().Nui.Apps.flare
+    local flare_locale = locale.Nui.Apps.flare
     data.title = flare_locale.name
     data.text = flare_locale.newMessageNotification:gsub("{sender}", tostring(data.sender))
     SendNUIMessage({ type = "flare:new-message", data = data })
@@ -906,7 +905,7 @@ RegisterNetEvent("sky_phone:billing:changed", function()
 end)
 
 RegisterNetEvent("sky_phone:billing:new", function(data)
-    local billing_locale = get_locale().Nui.Apps.billing
+    local billing_locale = locale.Nui.Apps.billing
     data.title = billing_locale.name
     data.text = billing_locale.notifications.newInvoice
         :gsub("{issuer}", tostring(data.issuer))
@@ -919,7 +918,7 @@ RegisterNetEvent("sky_phone:crewlink:changed", function(data)
 end)
 
 RegisterNetEvent("sky_phone:crewlink:notification", function(data)
-    local crewlink_locale = get_locale().Nui.Apps.crewlink
+    local crewlink_locale = locale.Nui.Apps.crewlink
     local notification_text = crewlink_locale.notifications[data.kind]
         or crewlink_locale.notifications.default
     data.title = crewlink_locale.name
@@ -935,7 +934,7 @@ RegisterNetEvent("sky_phone:messages:changed", function(data)
 end)
 
 RegisterNetEvent("sky_phone:messages:new", function(data)
-    local messages_locale = get_locale().Nui.Apps.messages
+    local messages_locale = locale.Nui.Apps.messages
     data.title = messages_locale.name
     data.text = messages_locale.newMessage:gsub("{sender}", tostring(data.sender))
     SendNUIMessage({ type = "messages:new", data = data })
@@ -946,7 +945,7 @@ RegisterNetEvent("sky_phone:darkchat:changed", function(data)
 end)
 
 RegisterNetEvent("sky_phone:darkchat:new", function(data)
-    local darkchat_locale = get_locale().Nui.Apps.darkchat
+    local darkchat_locale = locale.Nui.Apps.darkchat
     data.title = darkchat_locale.name
     if data.notificationMode == "private" then
         data.sender = nil
@@ -1003,10 +1002,10 @@ end)
 
 CreateThread(function()
     if Config.Phone.DevelopmentCommand then
-        TriggerEvent("chat:addSuggestion", "/" .. Config.Command, get_locale().CommandDescription)
+        TriggerEvent("chat:addSuggestion", "/" .. Config.Command, locale.CommandDescription)
     end
     if Config.TestData.Enabled then
-        TriggerEvent("chat:addSuggestion", "/" .. Config.TestData.Command, get_locale().TestData.CommandDescription)
+        TriggerEvent("chat:addSuggestion", "/" .. Config.TestData.Command, locale.TestData.CommandDescription)
     end
 end)
 

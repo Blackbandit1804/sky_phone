@@ -914,7 +914,7 @@ Bridge.Callbacks.Register("sky_phone:fliptok:delete", function(source, data)
 end)
 
 RegisterCommand(Config.FlipTok.VerifyCommand, function(source, arguments)
-    local command_locale = (Locales[Config.Bridge.Locale] or Locales["en"]).FlipTokCommand
+    local command_locale = SkyPhoneLocales.Resolve(Config.Bridge.Locale).FlipTokCommand
     local function command_message(template, values)
         return template:gsub("{(%w+)}", function(key) return values[key] or "" end)
     end
