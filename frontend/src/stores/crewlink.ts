@@ -15,6 +15,7 @@ import { nuiCall, type NuiResponse } from '@/utils/nui'
 export const useCrewLinkStore = defineStore('crewlink', {
   state: () => ({
     activeGroup: null as CrewLinkGroup | null,
+    authenticated: false,
     error: '',
     groups: [] as CrewLinkBootstrap['groups'],
     invitations: [] as CrewLinkBootstrap['invitations'],
@@ -24,6 +25,7 @@ export const useCrewLinkStore = defineStore('crewlink', {
   }),
   actions: {
     applyBootstrap(data: CrewLinkBootstrap): void {
+      this.authenticated = data.authenticated ?? Boolean(data.profile)
       this.profile = data.profile
       this.groups = data.groups ?? []
       this.activeGroup = data.activeGroup ?? null
@@ -62,14 +64,27 @@ export const useCrewLinkStore = defineStore('crewlink', {
       }
       return response
     },
-    createProfile(
+    login(password: string): Promise<NuiResponse<CrewLinkBootstrap>> {
+      return this.request('crewlink:login', { password })
+    },
+    register(
       username: string,
+      password: string,
       avatarMediaId = 0,
     ): Promise<NuiResponse<CrewLinkBootstrap>> {
-      return this.request('crewlink:create-profile', {
+      return this.request('crewlink:register', {
         avatarMediaId,
+        password,
         username,
       })
+    },
+    logout(): Promise<NuiResponse> {
+      this.authenticated = false
+      this.profile = null
+      this.groups = []
+      this.activeGroup = null
+      this.invitations = []
+      return nuiCall('crewlink:logout')
     },
     updateProfile(
       username: string,

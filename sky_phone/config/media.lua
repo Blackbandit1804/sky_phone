@@ -1,15 +1,24 @@
+--[[
+    Sky Phone media configuration
+
+    This file is loaded on the server only. Keep API keys private and restart
+    sky_phone after changing providers, upload limits, or import sources.
+]]
+
 Config.Media = {
-    GiphyApiKey = "", -- Server-only: paste the GIPHY API key here.
+    GiphyApiKey = "", -- Paste the GIPHY API key here.
     GifPageSize = 24,
     GifRating = "pg-13",
     UrlMaxLength = 2048,
     AllowedGifHosts = { "giphy.com" },
+
     FiveManage = {
-        ApiKey = "", -- Server-only: paste a newly generated FiveManage V3 Media API token here.
+        ApiKey = "", -- Paste a newly generated FiveManage V3 Media API token here.
         BaseUrl = "https://api.fivemanage.com/api/v3/file",
         RequestTimeoutMs = 10000,
         UploadTimeoutMs = 25000,
     },
+
     Import = {
         Enabled = true,
         PageSize = 30,
@@ -23,6 +32,7 @@ Config.Media = {
         ManifestCacheSeconds = 30,
         ManifestMaxBytes = 2 * 1024 * 1024,
         ManifestMaxItems = 5000,
+
         Websites = {
             {
                 Id = "fivemanage",
@@ -31,9 +41,10 @@ Config.Media = {
                 Adapter = "fivemanage",
                 Path = "sky_phone/imports",
                 MediaTypes = { "photo", "video" },
-                -- Direct links entered in Gallery must use one of these hosts or a subdomain.
+                -- Direct Gallery links must use one of these hosts or a subdomain.
                 AllowedMediaHosts = { "fivemanage.com" },
             },
+
             --[[
             {
                 Id = "city_media",
@@ -52,13 +63,22 @@ Config.Media = {
             ]]
         },
     },
+
+    Wallpaper = {
+        -- Shows the verified HTTPS media import directly in the wallpaper picker.
+        -- Camera and Photos wallpaper sources are not affected by this setting.
+        CustomUploadEnabled = true,
+    },
+
     Photo = {
         Encoding = "jpg",
         Quality = 0.95,
     },
+
     Video = {
         BitrateKbps = 1500,
     },
+
     UploadSessionTimeoutMs = 60000,
     PageSize = 30,
 }

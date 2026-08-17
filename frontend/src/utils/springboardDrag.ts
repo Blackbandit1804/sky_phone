@@ -16,6 +16,40 @@ export type SpringboardLocalPoint = {
   y: number
 }
 
+export type SpringboardViewportRect = {
+  height: number
+  left: number
+  top: number
+  width: number
+}
+
+export type SpringboardDragMetrics = {
+  layoutHeight: number
+  layoutWidth: number
+  viewportHeight: number
+  viewportLeft: number
+  viewportTop: number
+  viewportWidth: number
+}
+
+export function readSpringboardDragMetrics(
+  element: Element | null,
+): SpringboardDragMetrics | null {
+  const surface = element?.closest<HTMLElement>(
+    '.springboard-page, .home-folder-panel',
+  )
+  if (!surface) return null
+  const bounds = surface.getBoundingClientRect()
+  return {
+    layoutHeight: surface.offsetHeight,
+    layoutWidth: surface.offsetWidth,
+    viewportHeight: bounds.height,
+    viewportLeft: bounds.left,
+    viewportTop: bounds.top,
+    viewportWidth: bounds.width,
+  }
+}
+
 export function springboardViewportToLocal(
   clientX: number,
   clientY: number,
@@ -55,6 +89,27 @@ export function springboardPageDragCompensation(
   return (currentPage - startPage) * Math.max(0, pageWidth)
 }
 
+export function nearestSpringboardRectIndex(
+  clientX: number,
+  clientY: number,
+  rects: readonly SpringboardViewportRect[],
+): number | null {
+  if (!rects.length) return null
+
+  let nearestIndex = 0
+  let nearestDistance = Number.POSITIVE_INFINITY
+  for (const [index, rect] of rects.entries()) {
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    const distance = Math.hypot(clientX - centerX, clientY - centerY)
+    if (distance < nearestDistance) {
+      nearestDistance = distance
+      nearestIndex = index
+    }
+  }
+  return nearestIndex
+}
+
 export function springboardSwipeIntent(
   deltaX: number,
   deltaY: number,
@@ -70,7 +125,8 @@ export function springboardEdgeDirection(
   right: number,
 ): PageTurnDirection {
   const width = Math.max(0, right - left)
-  const edgeSize = Math.min(42, width * 0.12)
+  if (width === 0) return 0
+  const edgeSize = Math.min(48, Math.max(28, width * 0.12))
   if (clientX <= left + edgeSize) return -1
   if (clientX >= right - edgeSize) return 1
   return 0

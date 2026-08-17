@@ -163,6 +163,8 @@ const threadDraft = ref('')
 const workActionsOpened = ref(false)
 const assignmentSheetOpened = ref(false)
 const selectedMemberId = ref('')
+const serviceLineSheetOpened = ref(false)
+const serviceLineTarget = ref('')
 const cancelDialogOpened = ref(false)
 const conflictDialogOpened = ref(false)
 const toastOpened = ref(false)
@@ -180,6 +182,7 @@ const announcementDraft = reactive({ body: '', expiresAt: '' })
 const profileCoords = ref<CompanyCoordinates | null>(null)
 const selectedLogoMedia = ref<PhoneMedia | null>(null)
 const selectedCoverMedia = ref<PhoneMedia | null>(null)
+const requestThreadBottom = ref<HTMLElement | null>(null)
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let toastTimer: ReturnType<typeof setTimeout> | undefined
@@ -224,6 +227,15 @@ const canSendThreadMessage = computed(
     Boolean(threadDraft.value.trim()) &&
     !companies.mutating,
 )
+const canDialServiceLine = computed(
+  () => Boolean(serviceLineTarget.value.trim()) && !companies.mutating,
+)
+const requestDockVisible = computed(() => {
+  const actions = companies.request?.actions
+  return Boolean(
+    actions && (actions.canCall || actions.canCancel || actions.canReply),
+  )
+})
 const navbarTitle = computed(() => {
   if (screen.value === 'company') return activeCompany.value?.name ?? ''
   if (screen.value === 'request') {
@@ -731,6 +743,30 @@ async function toggleCallAvailability(): Promise<void> {
   )
 }
 
+function openServiceLineDialer(): void {
+  if (!companies.workContext?.permissions.canTakeCalls) return
+  serviceLineTarget.value = ''
+  serviceLineSheetOpened.value = true
+}
+
+function closeServiceLineDialer(): void {
+  serviceLineSheetOpened.value = false
+}
+
+async function dialServiceLine(): Promise<void> {
+  if (!canDialServiceLine.value) return
+  const response = await companies.dialServiceLine(
+    serviceLineTarget.value.trim(),
+  )
+  if (!response.success || !response.data) {
+    showToast(errorText(response.error))
+    return
+  }
+  calls.applyCallState(response.data)
+  closeServiceLineDialer()
+  await router.push('/apps/phone')
+}
+
 function syncManagerDraft(company: Company): void {
   profileDraft.acceptsRequests = company.acceptsRequests
   profileDraft.address = company.location?.address ?? ''
@@ -929,6 +965,21 @@ async function reloadConflict(): Promise<void> {
   if (companies.request) await companies.loadRequest(companies.request.id)
 }
 
+async function scrollRequestThreadToBottom(animate: boolean): Promise<void> {
+  await nextTick()
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve())
+  })
+  if (screen.value !== 'request') return
+  const reduceMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  ).matches
+  requestThreadBottom.value?.scrollIntoView({
+    behavior: animate && !reduceMotion ? 'smooth' : 'auto',
+    block: 'end',
+  })
+}
+
 watch([search, selectedCategory], ([, category], [, previousCategory]) => {
   if (category === previousCategory) {
     queueDirectoryLoad()
@@ -949,6 +1000,21 @@ watch(requestSheetOpened, async (opened) => {
   await nextTick()
   requestSheetContent.value?.scrollTo({ top: 0 })
 })
+watch(
+  [
+    () => companies.request?.id ?? '',
+    () => companies.request?.messages.length ?? 0,
+    () => {
+      const messages = companies.request?.messages ?? []
+      return messages.length ? messages[messages.length - 1]!.id : ''
+    },
+  ],
+  ([requestId], [previousRequestId]) => {
+    if (!requestId || screen.value !== 'request') return
+    void scrollRequestThreadToBottom(requestId === previousRequestId)
+  },
+  { flush: 'post' },
+)
 
 watch(
   () => route.query.requestId,
@@ -1201,6 +1267,7 @@ onBeforeUnmount(() => {
           compact
           navigation
           rounded
+          strong
         >
           <SkySegmentedButton
             :active="requestList === 'open'"
@@ -1366,6 +1433,7 @@ onBeforeUnmount(() => {
             compact
             navigation
             rounded
+            strong
           >
             <SkySegmentedButton
               v-for="availability in availabilityValues"
@@ -1396,6 +1464,23 @@ onBeforeUnmount(() => {
                   @change="toggleCallAvailability"
                 />
               </template>
+            </SkyListItem>
+            <SkyListItem
+              v-if="companies.workContext.permissions.canTakeCalls"
+              link
+              link-component="button"
+              :link-props="{ type: 'button' }"
+              :title="phone.t('Apps.companies.work.dialServiceLine')"
+              :subtitle="
+                phone.t('Apps.companies.work.dialServiceLineBody', {
+                  number:
+                    workCompany.phoneNumber ??
+                    phone.t('Apps.companies.manager.noPhoneNumber'),
+                })
+              "
+              @click="openServiceLineDialer"
+            >
+              <template #media><Phone :size="20" /></template>
             </SkyListItem>
             <SkyListItem
               v-if="companies.workContext.role === 'manager'"
@@ -1623,119 +1708,136 @@ onBeforeUnmount(() => {
       </template>
     </SkyScrollArea>
 
-    <SkyScrollArea
-      v-else-if="screen === 'request'"
-      padded
-      class="companies-content request-thread"
-    >
-      <SkyEmptyState
-        v-if="companies.requestLoading"
-        :title="phone.t('Apps.companies.loading.request')"
-      >
-        <template #icon><SkySpinner /></template>
-      </SkyEmptyState>
-      <SkyEmptyState
-        v-else-if="companies.requestError || !companies.request"
-        tone="danger"
-        :title="phone.t('Apps.companies.states.requestError')"
-        :body="errorText(companies.requestError)"
-      >
-        <template #icon><CircleAlert :size="34" /></template>
-        <template #actions>
-          <SkyButton rounded @click="goBack">
-            {{ phone.t('Apps.companies.back') }}
-          </SkyButton>
-        </template>
-      </SkyEmptyState>
-      <template v-else>
-        <div class="request-thread-scroll">
-          <SkyCard class="request-summary-card">
-            <span>
-              <small>{{ companies.request.companyName }}</small>
-              <strong>{{ companies.request.subject }}</strong>
-            </span>
-            <SkyBadge :class="statusClass(companies.request.status)">
-              {{
-                phone.t(
-                  `Apps.companies.requestStatuses.${companies.request.status}`,
-                )
-              }}
-            </SkyBadge>
-            <p>{{ companies.request.description }}</p>
-            <span class="request-summary-card__meta">
-              {{
-                companies.request.serviceName ??
-                phone.t('Apps.companies.requests.generalService')
-              }}
-              · {{ formatDate(companies.request.createdAt) }}
-            </span>
-          </SkyCard>
+    <template v-else-if="screen === 'request'">
+      <SkyScrollArea padded class="companies-content request-thread">
+        <SkyEmptyState
+          v-if="companies.requestLoading"
+          :title="phone.t('Apps.companies.loading.request')"
+        >
+          <template #icon><SkySpinner /></template>
+        </SkyEmptyState>
+        <SkyEmptyState
+          v-else-if="companies.requestError || !companies.request"
+          tone="danger"
+          :title="phone.t('Apps.companies.states.requestError')"
+          :body="errorText(companies.requestError)"
+        >
+          <template #icon><CircleAlert :size="34" /></template>
+          <template #actions>
+            <SkyButton rounded @click="goBack">
+              {{ phone.t('Apps.companies.back') }}
+            </SkyButton>
+          </template>
+        </SkyEmptyState>
+        <template v-else>
+          <div class="request-thread-content">
+            <SkyCard class="request-summary-card">
+              <span>
+                <small>{{ companies.request.companyName }}</small>
+                <strong>{{ companies.request.subject }}</strong>
+              </span>
+              <SkyBadge :class="statusClass(companies.request.status)">
+                {{
+                  phone.t(
+                    `Apps.companies.requestStatuses.${companies.request.status}`,
+                  )
+                }}
+              </SkyBadge>
+              <p>{{ companies.request.description }}</p>
+              <span class="request-summary-card__meta">
+                {{
+                  companies.request.serviceName ??
+                  phone.t('Apps.companies.requests.generalService')
+                }}
+                · {{ formatDate(companies.request.createdAt) }}
+              </span>
+            </SkyCard>
 
-          <div
-            v-if="companies.request.media.length"
-            class="request-media-strip"
-            :aria-label="phone.t('Apps.companies.requests.attachments')"
-          >
-            <img
-              v-for="media in companies.request.media"
-              :key="media.id"
-              :src="media.url"
-              :alt="phone.t('Apps.companies.requests.attachedPhoto')"
-              draggable="false"
-              loading="lazy"
-              referrerpolicy="no-referrer"
-            />
-          </div>
-
-          <SkyBlockTitle>{{
-            phone.t('Apps.companies.requests.timeline')
-          }}</SkyBlockTitle>
-          <div class="request-timeline">
-            <div v-for="event in companies.request.events" :key="event.id">
-              <span><Check :size="12" /></span>
-              <p>
-                <strong>{{ eventLabel(event) }}</strong>
-                <small>{{ formatDate(event.createdAt) }}</small>
-              </p>
+            <div
+              v-if="companies.request.media.length"
+              class="request-media-strip"
+              :aria-label="phone.t('Apps.companies.requests.attachments')"
+            >
+              <img
+                v-for="media in companies.request.media"
+                :key="media.id"
+                :src="media.url"
+                :alt="phone.t('Apps.companies.requests.attachedPhoto')"
+                draggable="false"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+              />
             </div>
-          </div>
 
-          <SkyBlockTitle>{{
-            phone.t('Apps.companies.requests.conversation')
-          }}</SkyBlockTitle>
-          <SkyMessages class="company-messages">
-            <SkyMessagesTitle v-if="!companies.request.messages.length">
-              {{ phone.t('Apps.companies.requests.noMessages') }}
-            </SkyMessagesTitle>
-            <SkyMessage
-              v-for="message in companies.request.messages"
-              :key="message.id"
-              :type="message.isMine ? 'sent' : 'received'"
-              :name="messageAuthorLabel(message.authorLabel)"
-              :text="message.body"
-              :text-footer="formatDate(message.createdAt)"
+            <SkyBlockTitle>{{
+              phone.t('Apps.companies.requests.timeline')
+            }}</SkyBlockTitle>
+            <div class="request-timeline">
+              <div v-for="event in companies.request.events" :key="event.id">
+                <span><Check :size="12" /></span>
+                <p>
+                  <strong>{{ eventLabel(event) }}</strong>
+                  <small>{{ formatDate(event.createdAt) }}</small>
+                </p>
+              </div>
+            </div>
+
+            <SkyBlockTitle>{{
+              phone.t('Apps.companies.requests.conversation')
+            }}</SkyBlockTitle>
+            <SkyMessages class="company-messages">
+              <SkyMessagesTitle v-if="!companies.request.messages.length">
+                {{ phone.t('Apps.companies.requests.noMessages') }}
+              </SkyMessagesTitle>
+              <SkyMessage
+                v-for="message in companies.request.messages"
+                :key="message.id"
+                :type="message.isMine ? 'sent' : 'received'"
+                :name="messageAuthorLabel(message.authorLabel)"
+                :text="message.body"
+                :text-footer="formatDate(message.createdAt)"
+              />
+            </SkyMessages>
+            <span
+              ref="requestThreadBottom"
+              class="request-thread-bottom"
+              aria-hidden="true"
             />
-          </SkyMessages>
-
-          <div class="request-thread-actions">
-            <SkyButton
-              v-if="companies.request.actions.canCall"
-              outline
-              rounded
-              @click="callRequestParty"
-            >
-              <Phone :size="16" />{{ phone.t('Apps.companies.requests.call') }}
-            </SkyButton>
-            <SkyButton
-              v-if="companies.request.actions.canCancel"
-              outline
-              rounded
-              class="is-danger"
-              @click="cancelDialogOpened = true"
-            >
-              <X :size="16" />{{ phone.t('Apps.companies.requests.cancel') }}
-            </SkyButton>
           </div>
+        </template>
+      </SkyScrollArea>
+      <footer
+        v-if="requestDockVisible && companies.request"
+        class="request-thread-dock"
+        :class="{
+          'request-thread-dock--actions-only':
+            !companies.request.actions.canReply,
+        }"
+      >
+        <div
+          v-if="
+            companies.request.actions.canCall ||
+            companies.request.actions.canCancel
+          "
+          class="request-thread-actions"
+        >
+          <SkyButton
+            v-if="companies.request.actions.canCall"
+            outline
+            rounded
+            @click="callRequestParty"
+          >
+            <Phone :size="16" />{{ phone.t('Apps.companies.requests.call') }}
+          </SkyButton>
+          <SkyButton
+            v-if="companies.request.actions.canCancel"
+            outline
+            rounded
+            class="is-danger"
+            @click="cancelDialogOpened = true"
+          >
+            <X :size="16" />{{ phone.t('Apps.companies.requests.cancel') }}
+          </SkyButton>
         </div>
         <SkyMessagebar
           v-if="companies.request.actions.canReply"
@@ -1761,8 +1863,8 @@ onBeforeUnmount(() => {
             </SkyToolbarPane>
           </template>
         </SkyMessagebar>
-      </template>
-    </SkyScrollArea>
+      </footer>
+    </template>
 
     <SkyScrollArea
       v-else-if="screen === 'manager' && workCompany"
@@ -1792,6 +1894,7 @@ onBeforeUnmount(() => {
         compact
         navigation
         rounded
+        strong
       >
         <SkySegmentedButton
           v-for="availability in availabilityValues"
@@ -2335,6 +2438,64 @@ onBeforeUnmount(() => {
       </SkyActionGroup>
     </SkyActionSheet>
 
+    <div class="companies-sheet companies-service-line-sheet">
+      <SkySheet
+        :opened="serviceLineSheetOpened"
+        :aria-label="phone.t('Apps.companies.work.dialServiceLine')"
+        @backdropclick="closeServiceLineDialer"
+        @escape="closeServiceLineDialer"
+      >
+        <section
+          v-if="serviceLineSheetOpened && workCompany"
+          class="companies-sheet__content service-line-sheet__content"
+        >
+          <header>
+            <span><PhoneCall :size="23" /></span>
+            <div>
+              <small>{{ workCompany.name }}</small>
+              <h2>{{ phone.t('Apps.companies.work.dialServiceLine') }}</h2>
+            </div>
+            <SkyLink
+              component="button"
+              icon-only
+              :aria-label="phone.t('Apps.companies.close')"
+              type="button"
+              @click="closeServiceLineDialer"
+            >
+              <X :size="19" />
+            </SkyLink>
+          </header>
+          <p class="service-line-sheet__body">
+            {{
+              phone.t('Apps.companies.work.dialServiceLineHint', {
+                number:
+                  workCompany.phoneNumber ??
+                  phone.t('Apps.companies.manager.noPhoneNumber'),
+              })
+            }}
+          </p>
+          <SkyList inset strong class="service-line-sheet__form">
+            <SkyField
+              type="tel"
+              :label="phone.t('Apps.companies.work.targetNumber')"
+              :placeholder="phone.t('Apps.companies.work.targetNumberHint')"
+              :value="serviceLineTarget"
+              @input="serviceLineTarget = eventValue($event)"
+              @keydown.enter.exact="handleEnterAction($event, dialServiceLine)"
+            />
+          </SkyList>
+          <SkyButton
+            large
+            rounded
+            :disabled="!canDialServiceLine"
+            @click="dialServiceLine"
+          >
+            <Phone :size="18" />{{ phone.t('Apps.companies.work.callNow') }}
+          </SkyButton>
+        </section>
+      </SkySheet>
+    </div>
+
     <div class="companies-sheet companies-assignment-sheet">
       <SkySheet
         :opened="assignmentSheetOpened"
@@ -2494,9 +2655,24 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
-.company-list,
+.company-list {
+  margin: 0 !important;
+}
+
 .company-request-list {
   margin: 0 !important;
+  display: grid;
+  gap: var(--sky-space-2);
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+}
+
+.company-request-list :deep(.sky-list-item) {
+  overflow: hidden;
+  border: 1px solid var(--company-border);
+  border-radius: var(--sky-radius-card);
+  background: var(--company-surface);
 }
 
 .company-list :deep(.sky-list-item__row),
@@ -2831,16 +3007,8 @@ onBeforeUnmount(() => {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
-.request-thread {
-  padding: 8px 0 0;
-  overflow: hidden;
-}
-
-.request-thread-scroll {
-  height: 100%;
-  padding: 4px 10px 88px;
-  overflow-y: auto;
-  scrollbar-width: none;
+.request-thread-content {
+  min-height: 100%;
 }
 
 .request-summary-card :deep(> *) {
@@ -2947,11 +3115,30 @@ onBeforeUnmount(() => {
   min-height: 100px;
 }
 
+.request-thread-bottom {
+  width: 100%;
+  height: 1px;
+  display: block;
+}
+
+.request-thread-dock {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
+  background: var(--sky-bg);
+}
+
 .request-thread-actions {
-  margin: 14px 5px;
+  margin: var(--sky-space-2)
+    calc(var(--sky-page-gutter) + var(--sky-safe-area-right)) var(--sky-space-1)
+    calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sky-space-2);
+}
+
+.request-thread-actions > :only-child {
+  grid-column: 1 / -1;
 }
 
 .request-thread-actions .is-danger,
@@ -2959,17 +3146,16 @@ onBeforeUnmount(() => {
   color: var(--company-red);
 }
 
-.company-messagebar {
-  position: absolute;
-  z-index: 4;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  background: transparent;
+.request-thread-dock--actions-only {
+  padding-bottom: calc(var(--sky-safe-area-bottom) + var(--sky-space-2));
 }
 
-.companies-app.sky-app-page--dark .company-messagebar {
-  background: transparent;
+.company-messagebar {
+  position: relative;
+  z-index: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
 }
 
 .manager-screen {
@@ -3125,6 +3311,21 @@ onBeforeUnmount(() => {
 .companies-sheet__content header small {
   color: #64748b;
   font-size: 9px;
+}
+
+.service-line-sheet__body {
+  margin: 0 0 var(--sky-space-4);
+  color: var(--company-muted);
+  font-size: var(--sky-font-body);
+  line-height: 1.45;
+}
+
+.service-line-sheet__form {
+  margin: 0 0 var(--sky-space-4) !important;
+}
+
+.service-line-sheet__content > :deep(.sky-button) {
+  width: 100%;
 }
 
 .composer-service-title {

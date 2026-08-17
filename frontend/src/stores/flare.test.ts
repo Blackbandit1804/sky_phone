@@ -121,6 +121,34 @@ describe('flare store', () => {
     ])
   })
 
+  it.each([
+    { label: 'no photos', photoMediaIds: [] },
+    { label: 'more than six photos', photoMediaIds: [1, 2, 3, 4, 5, 6, 7] },
+    { label: 'duplicate photos', photoMediaIds: [42, 42] },
+  ])(
+    'rejects a profile with $label before calling NUI',
+    async ({ photoMediaIds }) => {
+      const draft: FlareProfileDraft = {
+        age: bootstrap.profile!.age,
+        avatar: bootstrap.profile!.avatar,
+        bio: bootstrap.profile!.bio,
+        gender: bootstrap.profile!.gender,
+        interestedIn: bootstrap.profile!.interestedIn,
+        interests: [...bootstrap.profile!.interests],
+        lookingFor: bootstrap.profile!.lookingFor,
+        maxAge: bootstrap.profile!.maxAge,
+        minAge: bootstrap.profile!.minAge,
+        name: bootstrap.profile!.name,
+        photoMediaIds,
+      }
+      const flare = useFlareStore()
+
+      expect(await flare.saveProfile(draft)).toBe(false)
+      expect(flare.error).toBe('invalid_profile_photos')
+      expect(mockNuiCall).not.toHaveBeenCalled()
+    },
+  )
+
   it('uses a real Super Like and removes the target from both decks', async () => {
     const match: FlareMatch = {
       id: 'match-1',

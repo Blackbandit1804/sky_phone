@@ -643,9 +643,12 @@ Bridge.Callbacks.Register("sky_phone:media:config", function(source)
     if not owner then
         return error_response
     end
+    local wallpaper_config = type(Config.Media.Wallpaper) == "table" and Config.Media.Wallpaper or {}
     return {
         success = true,
         data = {
+            customWallpaperUploadEnabled = wallpaper_config.CustomUploadEnabled == true
+                and Config.Media.Import.Enabled == true,
             videoBitrateKbps = tonumber(Config.Media.Video.BitrateKbps) or 1500,
         },
     }
@@ -796,6 +799,28 @@ RegisterNetEvent("sky_phone:media:fail-upload", function(data)
     upload_result(src, state.correlation_id, false, error_code)
 end)
 
+local function is_required_flare_profile_photo(media_id)
+    local rows = Bridge.Database.Query([[
+        SELECT photo.`profile_id`
+        FROM `sky_phone_flare_profile_photos` photo
+        JOIN `sky_phone_flare_profiles` profile ON profile.`id` = photo.`profile_id`
+        WHERE photo.`media_id` = ?
+            AND NOT EXISTS (
+                SELECT 1
+                FROM `sky_phone_flare_profile_photos` other_photo
+                JOIN `sky_phone_media` other_media
+                    ON other_media.`id` = other_photo.`media_id`
+                    AND other_media.`account_id` = profile.`account_id`
+                    AND other_media.`media_type` = 'photo'
+                WHERE other_photo.`profile_id` = photo.`profile_id`
+                    AND other_photo.`media_id` <> photo.`media_id`
+                    AND other_media.`url` LIKE 'https://%'
+            )
+        LIMIT 1
+    ]], { media_id })
+    return rows[1] ~= nil
+end
+
 local function delete_owned_media(src, owner, media_id)
     local condition, params = owner_condition(owner)
     local query_params = { media_id }
@@ -803,12 +828,15 @@ local function delete_owned_media(src, owner, media_id)
         query_params[#query_params + 1] = value
     end
     local rows = Bridge.Database.Query(([[
-        SELECT `id`, `remote_id`, `origin` FROM `sky_phone_media`
+        SELECT `id`, `remote_id`, `origin`, `media_type` FROM `sky_phone_media`
         WHERE `id` = ? AND %s AND `media_type` IN ('photo', 'video') LIMIT 1
     ]]):format(condition), query_params)
     local row = rows[1]
     if not row then
         return false, "not_found"
+    end
+    if row.media_type == "photo" and is_required_flare_profile_photo(media_id) then
+        return false, "profile_photo_required"
     end
     local delete_key = row.origin == "phone_upload" and row.remote_id or ("import:%s"):format(media_id)
     if pending_deletes[delete_key] then
@@ -945,6 +973,10 @@ AddEventHandler("playerDropped", function()
 end)
 
 if not api_configured() then
-    print("^3[sky_phone] Camera uploads and FiveManage imports are disabled until Config.Media.FiveManage.ApiKey is set in config/media.lua.^7")
+    Bridge.Debug(
+        "warn",
+        "[sky_phone] FiveManage media integration is disabled because Config.Media.FiveManage.ApiKey is empty in config/media.lua. Camera photo and video uploads, Voice Memo uploads, remote Gallery deletion, and FiveManage imports are unavailable. Add a FiveManage V3 token with Media access and restart sky_phone.",
+        { always = true }
+    )
 end
 end)

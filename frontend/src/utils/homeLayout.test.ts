@@ -12,6 +12,7 @@ import {
   HOME_GRID_COLUMNS,
   HOME_GRID_PAGE_SIZE,
   HOME_GRID_ROWS,
+  HOME_LAYOUT_VERSION,
   homeKeyboardTarget,
   isHomeFolder,
   MAX_HOME_GRID_PAGES,
@@ -19,6 +20,7 @@ import {
   moveHomeAppToGridPage,
   moveHomeFolderApp,
   parseHomeLayout,
+  reflowHomeGridForWidgetChange,
   removeHomeApp,
   renameHomeFolder,
   restoreHomeApp,
@@ -52,7 +54,8 @@ function pageLayout(pageCounts: readonly number[]): HomeLayout {
     dock: [generatedApp(999), null, null, null],
     grid,
     hidden: [],
-    version: 5,
+    pageCount: pageCounts.length,
+    version: HOME_LAYOUT_VERSION,
   }
 }
 
@@ -72,7 +75,7 @@ describe('home layout', () => {
       null,
     ])
     expect(layout.dock).toEqual(['phone', 'messages', 'clock', null])
-    expect(layout.version).toBe(5)
+    expect(layout.version).toBe(HOME_LAYOUT_VERSION)
   })
 
   it('migrates compact persisted arrays and appends newly installed apps', () => {
@@ -89,7 +92,7 @@ describe('home layout', () => {
     expect(layout.dock).toEqual(['messages', null, null, null])
     expect(layout.grid.slice(0, 4)).toEqual(['mail', 'clock', 'notes', null])
     expect(layout.hidden).toEqual(['phone'])
-    expect(layout.version).toBe(5)
+    expect(layout.version).toBe(HOME_LAYOUT_VERSION)
   })
 
   it('closes gaps within a versioned page without moving apps between pages', () => {
@@ -127,7 +130,7 @@ describe('home layout', () => {
       .slice(0, HOME_GRID_PAGE_SIZE)
       .filter((item) => item !== null).length
     expect(layout.grid.slice(0, pageItemCount)).not.toContain(null)
-    expect(layout.version).toBe(5)
+    expect(layout.version).toBe(HOME_LAYOUT_VERSION)
   })
 
   it('preserves page membership while expanding version 3 pages', () => {
@@ -147,7 +150,7 @@ describe('home layout', () => {
     expect(layout.grid.slice(0, 3)).toEqual(['phone', 'messages', 'notes'])
     expect(layout.grid[HOME_GRID_PAGE_SIZE]).toBe('mail')
     expect(layout.grid[HOME_GRID_PAGE_SIZE + 1]).toBe('clock')
-    expect(layout.version).toBe(5)
+    expect(layout.version).toBe(HOME_LAYOUT_VERSION)
   })
 
   it('reads version 4 pages directly before migrating the schema', () => {
@@ -167,7 +170,7 @@ describe('home layout', () => {
     expect(layout.grid).toHaveLength(HOME_GRID_PAGE_SIZE * 2)
     expect(layout.grid[0]).toBe('phone')
     expect(layout.grid[HOME_GRID_PAGE_SIZE]).toBe('messages')
-    expect(layout.version).toBe(5)
+    expect(layout.version).toBe(HOME_LAYOUT_VERSION)
   })
 
   it('preserves folders and page membership in version 5 layouts', () => {
@@ -194,7 +197,7 @@ describe('home layout', () => {
       'notes',
     ])
     expect(layout.grid[HOME_GRID_PAGE_SIZE]).toBe('clock')
-    expect(layout.version).toBe(5)
+    expect(layout.version).toBe(HOME_LAYOUT_VERSION)
   })
 
   it('preserves independently positioned shortcuts for the same app', () => {
@@ -323,6 +326,61 @@ describe('home layout', () => {
     )
   })
 
+  it('materializes the visible pages before moving a widget forward', () => {
+    const layout = pageLayout([0, HOME_GRID_PAGE_SIZE, 7])
+    const pageTwoApps = layout.grid
+      .slice(HOME_GRID_PAGE_SIZE, HOME_GRID_PAGE_SIZE * 2)
+      .filter((item) => item !== null)
+    const pageThreeApps = layout.grid
+      .slice(HOME_GRID_PAGE_SIZE * 2, HOME_GRID_PAGE_SIZE * 3)
+      .filter((item) => item !== null)
+    const reflowed = reflowHomeGridForWidgetChange(
+      layout,
+      [HOME_GRID_PAGE_SIZE, 20, HOME_GRID_PAGE_SIZE],
+      [HOME_GRID_PAGE_SIZE, HOME_GRID_PAGE_SIZE, 20],
+    )
+
+    expect(reflowed).not.toBeNull()
+    expect(
+      reflowed?.grid
+        .slice(HOME_GRID_PAGE_SIZE, HOME_GRID_PAGE_SIZE * 2)
+        .filter(Boolean),
+    ).toEqual(pageTwoApps.slice(0, 20))
+    expect(
+      reflowed?.grid
+        .slice(HOME_GRID_PAGE_SIZE * 2, HOME_GRID_PAGE_SIZE * 3)
+        .filter(Boolean),
+    ).toEqual([...pageTwoApps.slice(20), ...pageThreeApps])
+  })
+
+  it('moves widget overflow only to later pages', () => {
+    const layout = pageLayout([0, HOME_GRID_PAGE_SIZE, 20])
+    const allApps = layout.grid.filter(Boolean).sort()
+    const reflowed = reflowHomeGridForWidgetChange(
+      layout,
+      [HOME_GRID_PAGE_SIZE, 20, HOME_GRID_PAGE_SIZE],
+      [HOME_GRID_PAGE_SIZE, HOME_GRID_PAGE_SIZE, 20],
+    )
+
+    expect(reflowed).not.toBeNull()
+    expect(
+      reflowed?.grid
+        .slice(HOME_GRID_PAGE_SIZE, HOME_GRID_PAGE_SIZE * 2)
+        .filter(Boolean),
+    ).toHaveLength(20)
+    expect(
+      reflowed?.grid
+        .slice(HOME_GRID_PAGE_SIZE * 2, HOME_GRID_PAGE_SIZE * 3)
+        .filter(Boolean),
+    ).toHaveLength(20)
+    expect(
+      reflowed?.grid
+        .slice(HOME_GRID_PAGE_SIZE * 3, HOME_GRID_PAGE_SIZE * 4)
+        .filter(Boolean),
+    ).toHaveLength(4)
+    expect(reflowed?.grid.filter(Boolean).sort()).toEqual(allApps)
+  })
+
   it('provides bounded keyboard reorder targets without wrapping rows', () => {
     expect(homeKeyboardTarget(defaults, 'grid', 1, 'right')).toBe(2)
     expect(homeKeyboardTarget(defaults, 'grid', 3, 'right')).toBeNull()
@@ -423,7 +481,28 @@ describe('home layout', () => {
     }
 
     expect(layout.grid).toHaveLength(HOME_GRID_PAGE_SIZE * MAX_HOME_GRID_PAGES)
+    expect(layout.pageCount).toBe(MAX_HOME_GRID_PAGES)
     expect(addHomePage(layout)).toBe(layout)
+  })
+
+  it('restores an explicitly persisted empty trailing page', () => {
+    const layout = parseHomeLayout(
+      {
+        dock: defaults.dock,
+        grid: defaults.grid.slice(0, 5),
+        hidden: [],
+        pageCount: 2,
+        version: HOME_LAYOUT_VERSION,
+      },
+      defaults,
+      [...installed],
+    )
+
+    expect(layout.pageCount).toBe(2)
+    expect(layout.grid).toHaveLength(HOME_GRID_PAGE_SIZE * 2)
+    expect(
+      layout.grid.slice(HOME_GRID_PAGE_SIZE).every((item) => item === null),
+    ).toBe(true)
   })
 
   it('deletes a page and moves its items into remaining empty slots', () => {
@@ -432,6 +511,7 @@ describe('home layout', () => {
     const deleted = deleteHomePage(layout, 2)
 
     expect(deleted.grid).toHaveLength(HOME_GRID_PAGE_SIZE)
+    expect(deleted.pageCount).toBe(1)
     expect(deleted.grid).toContain('phone')
     expect(deleteHomePage(deleted, 1)).toBe(deleted)
   })
@@ -462,7 +542,7 @@ describe('home layout', () => {
       '  Dienstprogramme  ',
     )
     const parsed = parseHomeLayout(renamed, defaults, [...installed])
-    expect(parsed.version).toBe(5)
+    expect(parsed.version).toBe(HOME_LAYOUT_VERSION)
     expect(getHomeFolder(parsed, 'folder-work-123456')).toEqual({
       apps: ['notes', 'mail'],
       id: 'folder-work-123456',

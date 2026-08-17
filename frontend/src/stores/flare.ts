@@ -10,6 +10,18 @@ import type {
 } from '@/types/flare'
 import { nuiCall } from '@/utils/nui'
 
+function hasValidProfilePhotos(
+  photoMediaIds: unknown,
+): photoMediaIds is number[] {
+  return (
+    Array.isArray(photoMediaIds) &&
+    photoMediaIds.length >= 1 &&
+    photoMediaIds.length <= 6 &&
+    new Set(photoMediaIds).size === photoMediaIds.length &&
+    photoMediaIds.every((mediaId) => Number.isInteger(mediaId) && mediaId > 0)
+  )
+}
+
 export const useFlareStore = defineStore('flare', {
   state: () => ({
     activeMatchId: '' as string,
@@ -54,6 +66,10 @@ export const useFlareStore = defineStore('flare', {
       return response.success
     },
     async saveProfile(draft: FlareProfileDraft): Promise<boolean> {
+      if (!hasValidProfilePhotos(draft.photoMediaIds)) {
+        this.error = 'invalid_profile_photos'
+        return false
+      }
       const response = await nuiCall<FlareBootstrap>(
         'flare:save-profile',
         draft,

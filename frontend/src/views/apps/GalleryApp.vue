@@ -47,6 +47,7 @@ import type {
   GallerySortOrder,
   MediaImportSource,
   MediaImportSources,
+  MediaType,
   PhoneMedia,
 } from '@/types/media'
 import {
@@ -77,7 +78,7 @@ const easyShare = useEasyShareStore()
 const messageMedia = useMessageMediaStore()
 const route = useRoute()
 const router = useRouter()
-const requestedMessageMedia = computed<GalleryFilter | null>(() => {
+const requestedMessageMedia = computed<MediaType | null>(() => {
   const value = route.query.mediaAttachment ?? route.query.messageAttachment
   return value === 'photo' || value === 'video' ? value : null
 })
@@ -144,22 +145,30 @@ const orderedMedia = computed(() => orderMedia(media.value, sortOrder.value))
 const sortMenuItems = computed(() => [
   {
     checked: sortOrder.value === 'newest',
+    group: 'sort',
+    groupLabel: phone.t('Apps.photos.sorting.title'),
     id: 'sort-newest',
     label: phone.t('Apps.photos.sorting.newestFirst'),
   },
   {
     checked: sortOrder.value === 'oldest',
+    group: 'sort',
+    groupLabel: phone.t('Apps.photos.sorting.title'),
     id: 'sort-oldest',
     label: phone.t('Apps.photos.sorting.oldestFirst'),
   },
   {
     checked: !favoritesOnly.value,
+    group: 'show',
+    groupLabel: phone.t('Apps.photos.sorting.show'),
     id: 'show-all',
     label: phone.t('Apps.photos.sorting.allItems'),
     separatorBefore: true,
   },
   {
     checked: favoritesOnly.value,
+    group: 'show',
+    groupLabel: phone.t('Apps.photos.sorting.show'),
     id: 'show-favorites',
     label: phone.t('Apps.photos.sorting.favorites'),
   },
@@ -406,7 +415,19 @@ async function loadImportSources(): Promise<void> {
   if (isDevelopment && !developmentApiEnabled) return
   const response = await nuiCall<MediaImportSources>('media:import:sources')
   if (!response.success || !response.data) return
-  importSources.value = response.data.sources
+  const requestedType = requestedMessageMedia.value
+  importSources.value = requestedType
+    ? response.data.sources.filter((source) =>
+        source.mediaTypes.includes(requestedType),
+      )
+    : response.data.sources
+  if (
+    route.query.wallpaperUpload === '1' &&
+    requestedType === 'photo' &&
+    importSources.value.length > 0
+  ) {
+    openImport()
+  }
 }
 
 function selectImportSource(source: MediaImportSource): void {
@@ -465,6 +486,16 @@ async function commitUrlImport(): Promise<void> {
   }
   media.value = mergeMedia(media.value, [response.data])
   await fetchCounts()
+  if (
+    route.query.wallpaperUpload === '1' &&
+    requestedMessageMedia.value === 'photo'
+  ) {
+    const returnPath = messageMedia.complete(response.data)
+    if (returnPath) {
+      await router.push(returnPath)
+      return
+    }
+  }
   closeImport()
   showToast(phone.t('Apps.photos.import.linkCompleted'))
 }
@@ -959,12 +990,13 @@ async function initializeVideo(event: Event): Promise<void> {
 
 async function deleteSelected(): Promise<void> {
   if (!selected.value || deleting.value) return
+  const selectedId = selected.value.id
   deleting.value = true
   deleteDialogOpened.value = false
   pendingDeleteCorrelation = `${Date.now()}-${crypto.randomUUID()}`
-  if (isDevelopment) {
+  if (isDevelopment && !developmentApiEnabled) {
     const developmentIndex = developmentMedia.findIndex(
-      (entry) => entry.id === selected.value?.id,
+      (entry) => entry.id === selectedId,
     )
     if (developmentIndex >= 0) developmentMedia.splice(developmentIndex, 1)
     window.setTimeout(() => {
@@ -973,7 +1005,7 @@ async function deleteSelected(): Promise<void> {
           data: {
             data: {
               correlationId: pendingDeleteCorrelation,
-              id: selected.value?.id,
+              id: selectedId,
               success: true,
             },
             type: 'media:deleteResult',
@@ -983,10 +1015,25 @@ async function deleteSelected(): Promise<void> {
     }, 500)
     return
   }
-  await nuiCall('gallery:delete', {
+  const response = await nuiCall('gallery:delete', {
     correlationId: pendingDeleteCorrelation,
-    id: selected.value.id,
+    id: selectedId,
   })
+  if (isDevelopment && developmentApiEnabled) {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          data: {
+            correlationId: pendingDeleteCorrelation,
+            error: response.error,
+            id: selectedId,
+            success: response.success,
+          },
+          type: 'media:deleteResult',
+        },
+      }),
+    )
+  }
 }
 
 function onMessage(event: MessageEvent): void {
@@ -1846,13 +1893,11 @@ onBeforeUnmount(() => {
   transition: transform var(--sky-transition-fast, 100ms) ease;
 }
 @media (hover: hover) {
-  .gallery-detail-navbar
-    :deep(.gallery-detail-back:hover:not(:disabled)) {
+  .gallery-detail-navbar :deep(.gallery-detail-back:hover:not(:disabled)) {
     background: rgba(255, 255, 255, 0.16);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   }
-  .gallery-detail-navbar
-    :deep(.gallery-detail-back:hover:not(:disabled) svg) {
+  .gallery-detail-navbar :deep(.gallery-detail-back:hover:not(:disabled) svg) {
     transform: translateX(-2px);
   }
 }

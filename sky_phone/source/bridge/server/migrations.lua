@@ -26,7 +26,16 @@ local function build_create_query(table_definition)
     end
 
     if table_definition.primaryKey then
-        definitions[#definitions + 1] = ("PRIMARY KEY (`%s`)"):format(table_definition.primaryKey)
+        local primary_key = table_definition.primaryKey
+        if type(primary_key) == "table" then
+            local quoted_columns = {}
+            for index = 1, #primary_key do
+                quoted_columns[index] = ("`%s`"):format(primary_key[index])
+            end
+            definitions[#definitions + 1] = ("PRIMARY KEY (%s)"):format(table.concat(quoted_columns, ", "))
+        else
+            definitions[#definitions + 1] = ("PRIMARY KEY (`%s`)"):format(primary_key)
+        end
     end
     for _, unique_key in ipairs(table_definition.uniqueKeys or {}) do
         definitions[#definitions + 1] = ("UNIQUE KEY `%s` %s"):format(unique_key.name, unique_key.columns)

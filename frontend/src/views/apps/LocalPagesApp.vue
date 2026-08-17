@@ -21,16 +21,17 @@ import {
   X,
 } from 'lucide-vue-next'
 import {
+  SkyButton,
   SkyGlass,
-  SkyIcon,
   SkyNavbar,
   SkyAppPage,
+  SkyPillNavigation,
   SkySearchbar,
-  SkyTabBar,
-  SkyTabButton,
-  SkyToolbarPane,
+  SkyScrollArea,
+  SkySegmented,
+  SkySegmentedButton,
 } from '@/ui'
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import CityMarktSelect from '@/components/citymarkt/CityMarktSelect.vue'
@@ -85,6 +86,7 @@ const search = ref('')
 const category = ref<string>('all')
 const feedback = ref('')
 const reactionPending = ref(false)
+const reactionPulse = ref('')
 const onboardingReady = ref(false)
 const authMode = ref<'login' | 'register'>('login')
 const authUsername = ref('')
@@ -179,6 +181,25 @@ const canSaveProfile = computed(() => {
     /^[a-z0-9][a-z0-9._]*[a-z0-9]$/.test(handle) &&
     profileDraft.value.bio.trim().length <= 160
   )
+})
+const tabIndex = computed(() => (tab.value === 'feed' ? 0 : 2))
+
+let reactionPulseTimer: ReturnType<typeof setTimeout> | undefined
+
+function triggerReactionPulse(id: string, kind: 'like' | 'save'): void {
+  reactionPulse.value = ''
+  void nextTick(() => {
+    reactionPulse.value = `${id}:${kind}`
+    if (reactionPulseTimer) clearTimeout(reactionPulseTimer)
+    reactionPulseTimer = setTimeout(() => {
+      reactionPulse.value = ''
+      reactionPulseTimer = undefined
+    }, 520)
+  })
+}
+
+onBeforeUnmount(() => {
+  if (reactionPulseTimer) clearTimeout(reactionPulseTimer)
 })
 const profileAvatarUrl = computed(
   () =>
@@ -565,6 +586,7 @@ async function react(kind: 'like' | 'save'): Promise<void> {
       )
       selected.value.is_liked = active
     } else selected.value.is_saved = active
+    if (active) triggerReactionPulse(selected.value.id, kind)
   }
 }
 
@@ -581,7 +603,8 @@ async function reactToPost(
     kind === 'like' ? !Boolean(post.is_liked) : !Boolean(post.is_saved)
   reactionPending.value = true
   try {
-    await pages.react(post.id, kind, active)
+    const success = await pages.react(post.id, kind, active)
+    if (success && active) triggerReactionPulse(post.id, kind)
   } finally {
     reactionPending.value = false
   }
@@ -753,11 +776,26 @@ onMounted(async () => {
             tab === 'feed' ? 'Apps.localPages.name' : 'Apps.localPages.profile',
           )
         "
-      />
+      >
+        <template v-if="tab === 'profile' && !profileEditing" #right>
+          <SkyButton
+            clear
+            icon-only
+            rounded
+            small
+            class="pages__navbar-logout"
+            :aria-label="phone.t('Common.signOut')"
+            @click="logoutDialogOpen = true"
+          >
+            <LogOut :size="16" />
+          </SkyButton>
+        </template>
+      </sky-navbar>
 
-      <section
+      <SkyScrollArea
         v-if="onboardingReady"
         class="pages__content"
+        :with-tabbar="isAuthenticated && Boolean(pages.profile?.exists)"
         :class="{
           'pages__content--gate': !isAuthenticated || !pages.profile?.exists,
         }"
@@ -985,35 +1023,28 @@ onMounted(async () => {
                   </button>
                 </div>
               </sky-glass>
-              <sky-glass class="pages-segmented-glass">
-                <div class="pages__segmented">
-                  <button
-                    :class="{ active: profileMode === 'own' }"
-                    @click="profileMode = 'own'"
-                  >
-                    {{ phone.t('Apps.localPages.myPosts') }}</button
-                  ><button
-                    :class="{ active: profileMode === 'saved' }"
-                    @click="profileMode = 'saved'"
-                  >
-                    {{ phone.t('Apps.localPages.saved') }}
-                  </button>
-                </div>
-              </sky-glass>
-            </template>
-            <sky-glass
-              v-if="!profileEditing && pages.profile?.exists"
-              class="pages__logout-glass"
-            >
-              <button
-                type="button"
-                class="pages__logout"
-                @click="logoutDialogOpen = true"
+              <SkySegmented
+                class="pages__segmented"
+                :active-index="profileMode === 'own' ? 0 : 1"
+                :aria-label="phone.t('Apps.localPages.profile')"
+                :item-count="2"
+                rounded
+                strong
               >
-                <LogOut :size="16" />
-                {{ phone.t('Common.signOut') }}
-              </button>
-            </sky-glass>
+                <SkySegmentedButton
+                  :active="profileMode === 'own'"
+                  @click="profileMode = 'own'"
+                >
+                  {{ phone.t('Apps.localPages.myPosts') }}
+                </SkySegmentedButton>
+                <SkySegmentedButton
+                  :active="profileMode === 'saved'"
+                  @click="profileMode = 'saved'"
+                >
+                  {{ phone.t('Apps.localPages.saved') }}
+                </SkySegmentedButton>
+              </SkySegmented>
+            </template>
           </template>
         </template>
 
@@ -1077,7 +1108,11 @@ onMounted(async () => {
               <div class="pages__post-foot">
                 <button
                   type="button"
-                  :class="{ active: post.is_liked }"
+                  class="pages__reaction"
+                  :class="{
+                    active: post.is_liked,
+                    'is-pulsing': reactionPulse === `${post.id}:like`,
+                  }"
                   :disabled="reactionPending"
                   :aria-label="phone.t('Apps.localPages.likes')"
                   @click="reactToPost(post, 'like')"
@@ -1100,7 +1135,11 @@ onMounted(async () => {
                 </button>
                 <button
                   type="button"
-                  :class="{ active: post.is_saved }"
+                  class="pages__reaction"
+                  :class="{
+                    active: post.is_saved,
+                    'is-pulsing': reactionPulse === `${post.id}:save`,
+                  }"
                   :disabled="reactionPending"
                   :aria-label="phone.t('Apps.localPages.save')"
                   @click="reactToPost(post, 'save')"
@@ -1121,65 +1160,47 @@ onMounted(async () => {
             ><span>{{ phone.t('Apps.localPages.noPostsBody') }}</span>
           </div>
         </div>
-      </section>
+      </SkyScrollArea>
 
-      <sky-tab-bar
+      <SkyPillNavigation
         v-if="isAuthenticated && pages.profile?.exists"
-        component="nav"
-        icons
-        labels
-        class="bottom-0 left-0 fixed"
-        inner-class="!w-full !max-w-none !gap-0 !px-1"
-        :aria-label="phone.t('Apps.localPages.name')"
+        class="pages-navigation"
+        :label="phone.t('Apps.localPages.name')"
+        layout="full"
       >
-        <sky-toolbar-pane class="pages__tab-pane">
-          <sky-tab-button
-            component="button"
+        <SkySegmented
+          class="pages-navigation__segments"
+          :active-index="tabIndex"
+          :aria-label="phone.t('Apps.localPages.name')"
+          :item-count="3"
+          navigation
+          strong
+        >
+          <SkySegmentedButton
             :active="tab === 'feed'"
-            :link-props="{ class: 'pages-tab-button', type: 'button' }"
+            class="pages-navigation__button"
             @click="selectTab('feed')"
           >
-            <template #label
-              ><span class="pages__tab-label">{{
-                phone.t('Apps.localPages.discover')
-              }}</span></template
-            >
-            <template #icon
-              ><sky-icon><Compass :size="20" /></sky-icon
-            ></template>
-          </sky-tab-button>
-          <sky-tab-button
-            component="button"
-            :link-props="{ class: 'pages-tab-button', type: 'button' }"
+            <Compass :size="19" />
+            <small>{{ phone.t('Apps.localPages.discover') }}</small>
+          </SkySegmentedButton>
+          <SkySegmentedButton
+            class="pages-navigation__button"
             @click="selectTab('create')"
           >
-            <template #label
-              ><span class="pages__tab-label">{{
-                phone.t('Apps.localPages.create')
-              }}</span></template
-            >
-            <template #icon
-              ><span class="pages__tab-icon pages__tab-icon--create"
-                ><sky-icon><Plus :size="21" /></sky-icon></span
-            ></template>
-          </sky-tab-button>
-          <sky-tab-button
-            component="button"
+            <span class="pages-navigation__create"><Plus :size="19" /></span>
+            <small>{{ phone.t('Apps.localPages.create') }}</small>
+          </SkySegmentedButton>
+          <SkySegmentedButton
             :active="tab === 'profile'"
-            :link-props="{ class: 'pages-tab-button', type: 'button' }"
+            class="pages-navigation__button"
             @click="selectTab('profile')"
           >
-            <template #label
-              ><span class="pages__tab-label">{{
-                phone.t('Apps.localPages.profile')
-              }}</span></template
-            >
-            <template #icon
-              ><sky-icon><UserRound :size="20" /></sky-icon
-            ></template>
-          </sky-tab-button>
-        </sky-toolbar-pane>
-      </sky-tab-bar>
+            <UserRound :size="19" />
+            <small>{{ phone.t('Apps.localPages.profile') }}</small>
+          </SkySegmentedButton>
+        </SkySegmented>
+      </SkyPillNavigation>
     </template>
 
     <section v-else-if="screen === 'detail' && selected" class="pages__detail">
@@ -1206,7 +1227,11 @@ onMounted(async () => {
           v-else
           component="button"
           type="button"
-          class="pages__detail-control"
+          class="pages__detail-control pages__reaction"
+          :class="{
+            active: selected.is_saved,
+            'is-pulsing': reactionPulse === `${selected.id}:save`,
+          }"
           @click="react('save')"
         >
           <Bookmark
@@ -1215,7 +1240,7 @@ onMounted(async () => {
           />
         </sky-glass>
       </header>
-      <div class="pages__detail-scroll">
+      <SkyScrollArea as="div" class="pages__detail-scroll">
         <div
           v-if="selected.images.length"
           class="pages__gallery"
@@ -1272,11 +1297,15 @@ onMounted(async () => {
             >
           </button>
         </article>
-      </div>
+      </SkyScrollArea>
       <sky-glass class="pages__detail-actions">
         <button
           type="button"
-          :class="{ active: selected.is_liked }"
+          class="pages__reaction"
+          :class="{
+            active: selected.is_liked,
+            'is-pulsing': reactionPulse === `${selected.id}:like`,
+          }"
           @click="react('like')"
         >
           <Heart
@@ -1287,7 +1316,15 @@ onMounted(async () => {
         <button type="button" @click="sharePost(selected)">
           <Share2 :size="19" />{{ phone.t('Apps.easyShare.share') }}
         </button>
-        <button type="button" @click="react('save')">
+        <button
+          type="button"
+          class="pages__reaction"
+          :class="{
+            active: selected.is_saved,
+            'is-pulsing': reactionPulse === `${selected.id}:save`,
+          }"
+          @click="react('save')"
+        >
           <Bookmark
             :size="19"
             :fill="selected.is_saved ? 'currentColor' : 'none'"
@@ -1304,8 +1341,6 @@ onMounted(async () => {
       <sky-navbar
         class="pages-create-navbar"
         center-title
-        left-class="pages-create-action pages-create-action--close !min-w-[58px] !h-11 !p-0 !rounded-full"
-        right-class="pages-create-action pages-create-action--publish !min-w-[58px] !h-11 !p-0 !rounded-full"
         :title="
           phone.t(
             cityMarktListing
@@ -1322,27 +1357,32 @@ onMounted(async () => {
         "
       >
         <template #left>
-          <button
+          <SkyButton
+            clear
+            icon-only
+            rounded
+            small
             class="pages-create-close"
-            type="button"
             :aria-label="phone.t('Common.close')"
             @click="closeCompose"
           >
-            {{ phone.t('Common.close') }}
-          </button>
+            <X :size="17" />
+          </SkyButton>
         </template>
         <template #right>
-          <button
+          <SkyButton
+            clear
+            rounded
+            small
             class="pages-create-publish"
-            type="button"
             :disabled="!canPublish"
             @click="publish"
           >
             {{ phone.t('Apps.localPages.publish') }}
-          </button>
+          </SkyButton>
         </template>
       </sky-navbar>
-      <div class="pages__compose-scroll">
+      <SkyScrollArea as="div" class="pages__compose-scroll">
         <sky-glass v-if="cityMarktListing" class="pages__citymarkt-source">
           <Store :size="19" />
           <span
@@ -1459,7 +1499,7 @@ onMounted(async () => {
             </button>
           </div>
         </section>
-      </div>
+      </SkyScrollArea>
     </section>
     <AccountLogoutDialog
       v-model:opened="logoutDialogOpen"
@@ -1481,6 +1521,8 @@ onMounted(async () => {
   --ink: #15191d;
   --panel: #20262c;
   --muted: #9ba4aa;
+  --sky-app-accent: var(--yellow);
+  --sky-app-accent-soft: rgb(255 214 62 / 16%);
   position: absolute;
   inset: 0;
   padding: 47px 0 24px;
@@ -1553,7 +1595,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   background: linear-gradient(125deg, #514005, #d99a00);
-  color: #fff7d2;
+  color: #fff;
   box-shadow: 0 8px 22px #0003;
 }
 .pages__hero div {
@@ -1579,7 +1621,7 @@ onMounted(async () => {
   line-height: 1.35;
 }
 .pages__hero > svg {
-  color: var(--yellow);
+  color: #fff;
   filter: drop-shadow(0 4px 6px #0005);
 }
 .pages__search {
@@ -1783,22 +1825,18 @@ onMounted(async () => {
   font-size: 9px;
 }
 .pages__segmented {
+  --sky-segmented-strong-highlight: #fff;
+  width: 100%;
+  margin: 3px 0 10px;
+  border: 1px solid color-mix(in srgb, currentColor 13%, transparent);
   padding: 4px;
-  border-radius: 11px;
-  display: flex;
-  background: var(--panel);
+  border-radius: var(--sky-radius-pill);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
 }
 .pages__segmented button {
-  flex: 1;
-  padding: 8px;
-  border-radius: 8px;
-  background: none;
-  font-size: 10px;
-}
-.pages__segmented button.active {
-  background: var(--yellow);
-  color: #17191a;
-  font-weight: 800;
+  min-height: 34px;
+  font-size: 11px;
+  font-weight: 750;
 }
 .pages__tabbar {
   position: absolute;
@@ -2175,29 +2213,6 @@ onMounted(async () => {
   transform: translateY(8px);
   opacity: 0;
 }
-.pages__tabbar {
-  height: 58px;
-  padding: 7px 7px 0;
-  justify-content: space-around;
-  backdrop-filter: blur(18px);
-}
-.pages--light .pages__tabbar {
-  border-color: #00000012;
-}
-.pages__tabbar button {
-  width: 54px;
-  gap: 2px;
-}
-.pages__tabbar button > span {
-  position: relative;
-}
-.pages__tabbar .create span {
-  width: 37px;
-  height: 30px;
-  margin-top: -4px;
-  border-radius: 10px;
-  box-shadow: none;
-}
 .pages__header {
   height: 64px;
   padding: 6px 16px 8px;
@@ -2266,6 +2281,41 @@ onMounted(async () => {
 }
 .pages__post-foot button:disabled {
   opacity: 0.55;
+}
+.pages__reaction svg {
+  transform-origin: center;
+}
+.pages__reaction.is-pulsing svg {
+  animation: pages-reaction-pop 480ms cubic-bezier(0.2, 0.9, 0.25, 1.35);
+}
+.pages__reaction.is-pulsing {
+  animation: pages-reaction-glow 480ms ease-out;
+}
+@keyframes pages-reaction-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  38% {
+    transform: scale(1.48) rotate(-8deg);
+  }
+  68% {
+    transform: scale(0.9) rotate(3deg);
+  }
+}
+@keyframes pages-reaction-glow {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 34%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pages__reaction.is-pulsing,
+  .pages__reaction.is-pulsing svg {
+    animation: none;
+  }
 }
 .pages__post-foot button svg:last-child {
   margin-left: 0;
@@ -2736,6 +2786,10 @@ onMounted(async () => {
 }
 .pages-hero-glass {
   margin-bottom: 10px;
+  border-color: rgb(255 255 255 / 16%);
+  background: linear-gradient(125deg, #514005, #d99a00);
+  color: #fff;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 22%);
 }
 .pages__hero {
   height: 105px;
@@ -2749,33 +2803,12 @@ onMounted(async () => {
 .pages-profile-glass {
   margin: 3px 0 10px;
 }
-.pages__logout-glass {
-  margin: 10px 0;
-  border-radius: 12px;
-}
-.pages__logout {
-  width: 100%;
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  background: transparent;
-  color: #ff6b70;
-  font-size: 11px;
-  font-weight: 800;
-}
 .pages__profile {
   margin: 0;
   background: transparent;
 }
-.pages-segmented-glass {
-  padding: 4px;
-  border-radius: 13px;
-}
 .pages__segmented {
-  padding: 0;
-  background: transparent;
+  color: inherit;
 }
 .pages-post-glass {
   overflow: hidden;
@@ -2784,82 +2817,88 @@ onMounted(async () => {
   background: transparent;
   box-shadow: none;
 }
-.pages__tab-pane {
-  width: 100% !important;
-  max-width: none;
-  margin-right: auto;
-  margin-left: auto;
-  flex: none;
-  justify-content: space-around;
-  gap: 2px;
-  padding: 0 4px;
+.pages-navigation {
+  --sky-app-accent: var(--yellow);
 }
-.pages__tab-label {
+.pages-navigation__segments {
+  width: 100%;
+}
+.pages-navigation__button {
+  min-width: 0;
+  gap: 2px;
+  padding-inline: 2px;
+}
+.pages-navigation__button small {
   display: block;
-  max-width: 52px;
+  max-width: 76px;
   overflow: hidden;
-  font-size: 9.5px;
-  line-height: 12px;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-:global(.pages__tab-pane) {
-  width: 100% !important;
-  max-width: none;
-  margin-right: auto;
-  margin-left: auto;
-  flex: none;
-  justify-content: space-around;
+.pages-navigation__create {
+  display: grid;
+  place-items: center;
 }
-:global(.pages-tab-button) {
-  width: 20% !important;
-  min-width: 0 !important;
-  max-width: 58px !important;
-  flex: 0 0 20% !important;
-  padding-right: 3px !important;
-  padding-left: 3px !important;
+.pages__navbar-logout {
+  --sky-app-accent: #ff6b70;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .pages-create-navbar {
-  --sky-safe-area-top: 46px;
+  --sky-safe-area-top: 112px;
   position: absolute;
   z-index: 5;
   top: 0;
   right: 0;
   left: 0;
+  background: transparent;
 }
-.pages-create-action {
-  height: 44px;
-  border-radius: 9999px;
-}
-.pages-create-action--close,
-.pages-create-action--publish {
-  min-width: 58px;
-}
-.pages-create-close,
-.pages-create-publish {
-  width: 100%;
-  height: 44px;
+.pages-create-navbar :deep(.sky-navbar__left),
+.pages-create-navbar :deep(.sky-navbar__right) {
   padding: 0;
   border: 0;
-  appearance: none;
   background: transparent;
-  color: inherit;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .pages-create-close,
 .pages-create-publish {
-  min-width: 58px;
-  padding: 0 13px;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
+  width: auto;
+  min-width: 44px;
+  height: 30px;
+  min-height: 30px;
+  border: 0;
+  padding: 0 8px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 10px;
   font-weight: 800;
+}
+.pages-create-close {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
+  color: inherit;
+}
+.pages-create-publish {
+  --sky-app-accent: var(--yellow);
+  color: var(--yellow);
 }
 .pages-create-publish:disabled {
   opacity: 0.38;
 }
 .pages__compose-scroll {
   position: absolute;
-  top: 104px;
+  top: 170px;
   right: 0;
   bottom: 0;
   left: 0;

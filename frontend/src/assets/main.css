@@ -248,10 +248,6 @@ button {
   padding: 0 var(--phone-edge-gap, 24px) var(--phone-edge-gap, 24px) 0;
   pointer-events: none;
 }
-.phone-stage--dev {
-  place-items: center;
-  padding: 0;
-}
 .phone-stage--peek .phone-resolution-wrapper--primary .phone-device {
   transform: translateY(calc(100% - 190px));
   transform-origin: right bottom;
@@ -273,11 +269,21 @@ button {
   transform: translateY(calc(100% + var(--phone-edge-gap, 24px)));
 }
 .phone-resolution-wrapper {
+  position: relative;
+  width: var(--phone-rendered-width, 390px);
+  height: var(--phone-rendered-height, 844px);
+}
+
+.phone-resolution-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 390px;
   height: 844px;
   zoom: var(--phone-zoom, 1);
 }
-.phone-stage--landscape .phone-resolution-wrapper--primary {
+
+.phone-stage--landscape .phone-resolution-canvas--primary {
   width: 844px;
   height: 390px;
 }
@@ -321,6 +327,100 @@ button {
   height: 100%;
   object-fit: fill;
   pointer-events: none;
+}
+.phone-hardware-button {
+  position: absolute;
+  z-index: 101;
+  width: 26px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.phone-hardware-button:disabled {
+  cursor: default;
+}
+.phone-hardware-button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -6px;
+}
+.phone-hardware-button--action {
+  top: 176px;
+  left: -7px;
+  height: 44px;
+}
+.phone-hardware-button--volume-up {
+  top: 238px;
+  left: -7px;
+  height: 74px;
+}
+.phone-hardware-button--volume-down {
+  top: 315px;
+  left: -7px;
+  height: 74px;
+}
+.phone-hardware-button--power {
+  top: 252px;
+  right: -7px;
+  height: 62px;
+}
+.phone-volume-hud {
+  position: absolute;
+  z-index: 220;
+  top: 188px;
+  left: 6px;
+  width: 30px;
+  height: 108px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 15px;
+  color: #0a84ff;
+  background: rgb(47 47 51 / 98%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+  pointer-events: none;
+}
+.phone-volume-hud__icon {
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: translateX(-50%);
+}
+.phone-volume-hud__level {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--phone-hardware-volume-fill);
+  background: #fff;
+  transition: height 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.phone-volume-hud-enter-active,
+.phone-volume-hud-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.phone-volume-hud-enter-from,
+.phone-volume-hud-leave-to {
+  opacity: 0;
+  transform: translateX(-10px) scale(0.92);
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-volume-hud,
+  .phone-volume-hud__level {
+    transition: none;
+  }
 }
 .phone-screen {
   position: relative;
@@ -2866,25 +2966,8 @@ button {
 .springboard--widget-dragging .springboard-widget-page-scroll {
   overflow: visible;
 }
-.home-drag-layer {
-  position: absolute;
-  z-index: 70;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.home-drag-layer * {
-  pointer-events: none !important;
-}
-.home-drag-ghost {
-  position: absolute;
-  top: 0;
-  left: 0;
-  margin: 0;
-  opacity: 1;
-  transition: none !important;
-  animation: none !important;
-  will-change: transform;
+.springboard--home-dragging .springboard-page--apps {
+  overflow: visible;
 }
 .app-grid {
   display: grid;
@@ -2919,9 +3002,6 @@ button {
   transition: transform var(--springboard-page-duration)
     var(--springboard-page-easing);
 }
-.app-icon-item--drag-source {
-  opacity: 0;
-}
 .app-icon-remove {
   position: absolute;
   z-index: 4;
@@ -2933,22 +3013,30 @@ button {
   border: 0;
   border-radius: 50%;
   background: none;
-  color: black;
+  color: #111;
   display: grid;
   place-items: center;
   cursor: pointer;
   text-shadow: none;
 }
 .app-icon-remove__badge {
+  box-sizing: border-box;
   width: 22px;
   height: 22px;
   min-width: 22px;
   min-height: 22px;
   padding: 0;
-  border: 1px solid #ffffff73;
-  box-shadow: 0 1px 4px #0009;
-  background: #8e8e93;
-  color: #000;
+  border: 1px solid rgb(255 255 255 / 46%);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 46%);
+  background: rgb(174 174 178 / 88%);
+  color: #111;
+}
+.app-icon-remove__badge svg {
+  display: block;
+  stroke: currentcolor;
 }
 .app-icon-item--editing:not(.app-icon-item--dragging) .app-icon-button {
   animation: app-icon-wobble 0.15s ease-in-out infinite alternate;
@@ -3099,11 +3187,13 @@ button {
 .springboard-edit-done {
   position: absolute;
   z-index: 12;
-  top: 45px;
-  right: 18px;
-  min-width: 51px;
-  min-height: 30px;
-  padding: 0 13px;
+  top: 14px;
+  right: 28px;
+  display: grid;
+  width: 58px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
   border: 1px solid #ffffff38;
   border-radius: 999px;
   color: white;
@@ -3790,6 +3880,9 @@ button {
   --bank-blue: #2d76ff;
   --bank-cyan: #57d5ff;
   --bank-green: #4ee6a4;
+  --banking-card-radius: 22px;
+  --banking-page-gutter: 16px;
+  --banking-section-gap: 16px;
   position: relative;
   height: 100%;
   overflow: hidden;
@@ -3842,8 +3935,16 @@ button {
   inset: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 108px 17px 112px;
+  overscroll-behavior-y: contain;
+  padding: 108px var(--banking-page-gutter) 112px;
   scrollbar-width: none;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.banking-scroll.is-locked {
+  overflow-y: hidden;
+  touch-action: none;
 }
 
 .banking-scroll::-webkit-scrollbar {
@@ -3898,8 +3999,8 @@ button {
 .banking-balance {
   position: relative;
   overflow: hidden;
-  padding: 22px 20px 20px;
-  border-radius: 27px;
+  padding: 20px;
+  border-radius: var(--banking-card-radius);
 }
 
 .banking-balance__label {
@@ -3941,8 +4042,8 @@ button {
 .banking-actions {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 9px;
-  margin: 13px 0 18px;
+  gap: 10px;
+  margin: 12px 0 var(--banking-section-gap);
 }
 
 .banking-action {
@@ -3954,7 +4055,7 @@ button {
   min-height: 64px;
   overflow: hidden;
   padding: 11px 12px;
-  border-radius: 19px;
+  border-radius: var(--banking-card-radius);
   color: rgb(237 243 255 / 82%);
   font-size: 10px;
 }
@@ -4003,7 +4104,8 @@ button {
 }
 
 .banking-card {
-  margin: 0 0 18px !important;
+  margin: 0 0 var(--banking-section-gap) !important;
+  border-radius: var(--banking-card-radius) !important;
 }
 
 .banking-transaction-card {
@@ -4014,7 +4116,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 11px;
+  margin-bottom: 10px;
 }
 
 .banking-section-title h2 {
@@ -4039,10 +4141,10 @@ button {
 }
 
 .banking-transactions {
-  padding: 0 3px;
+  padding: 0;
 }
 .banking-transactions--all {
-  margin-top: 18px;
+  margin-top: var(--banking-section-gap);
 }
 
 .banking-transaction-list b {
@@ -4059,7 +4161,7 @@ button {
 .banking-no-transactions {
   padding: 24px 12px;
   border: 1px solid rgb(255 255 255 / 8%);
-  border-radius: 22px;
+  border-radius: var(--banking-card-radius);
   background: rgb(255 255 255 / 3%);
   color: rgb(213 225 248 / 47%);
   font-size: 11px;
@@ -4070,7 +4172,7 @@ button {
   display: flex;
   align-items: center;
   flex-direction: column;
-  padding: 16px 0 20px;
+  padding: 12px 0 var(--banking-section-gap);
   text-align: center;
 }
 
@@ -4168,20 +4270,7 @@ button {
 .banking-sheet__content {
   position: relative;
   width: 100%;
-  padding: 22px 18px 18px;
-}
-
-.banking-modal__close {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 50%;
-  background: rgb(255 255 255 / 8%);
-  color: rgb(226 235 255 / 65%);
+  padding: 8px 18px calc(var(--sky-safe-area-bottom) + 18px);
 }
 
 .banking-modal__icon {
@@ -4210,11 +4299,11 @@ button {
 }
 
 .banking-form-list {
-  margin: 12px 0 0 !important;
+  margin: var(--banking-section-gap) 0 0 !important;
 }
 
 .banking-contact-picker {
-  margin-top: 12px;
+  margin-top: var(--banking-section-gap);
 }
 
 .banking-contact-picker > span {
@@ -4244,7 +4333,58 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 15px;
+  margin-top: var(--banking-section-gap);
+}
+
+.banking-transaction-detail {
+  text-align: center;
+}
+
+.banking-transaction-detail__icon {
+  margin: 0 auto;
+  background: linear-gradient(145deg, #d95867, #972937);
+}
+
+.banking-transaction-detail__icon.is-incoming {
+  background: linear-gradient(145deg, #38c58d, #147454);
+  box-shadow:
+    0 12px 28px rgb(20 116 84 / 32%),
+    inset 0 1px rgb(255 255 255 / 28%);
+}
+
+.banking-transaction-detail > .banking-transaction-detail__eyebrow {
+  margin: 12px 0 0;
+  color: rgb(213 225 248 / 52%);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.banking-transaction-detail h2 {
+  margin-top: 4px;
+}
+
+.banking-transaction-detail__amount {
+  display: block;
+  margin: 8px 0 18px;
+  color: #f2a0a8;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+
+.banking-transaction-detail__amount.is-incoming {
+  color: var(--bank-green);
+}
+
+.banking-transaction-detail__list {
+  margin: 0 !important;
+  text-align: left;
+}
+
+.banking-transaction-detail__list .sky-list-item__subtitle {
+  overflow-wrap: anywhere;
 }
 
 .phone-app--light .banking-app {
@@ -4279,7 +4419,6 @@ button {
 .phone-app--light .banking-activity-hero small,
 .phone-app--light .banking-chart-legend,
 .phone-app--light .banking-chart__day span,
-.phone-app--light .banking-modal__close,
 .phone-app--light .banking-sheet__content > p,
 .phone-app--light .banking-contact-picker > span,
 .phone-app--light .banking-contact-picker > p {
@@ -4287,8 +4426,7 @@ button {
 }
 
 .phone-app--light .banking-balance__label small,
-.phone-app--light .banking-no-transactions,
-.phone-app--light .banking-modal__close {
+.phone-app--light .banking-no-transactions {
   border-color: var(--sky-hairline);
   background: rgb(255 255 255 / 52%);
 }
@@ -4560,17 +4698,49 @@ button {
   color: #a0a0a7;
 }
 .clock-content {
+  --sky-block-gutter-left: 0px;
+  --sky-block-gutter-right: 0px;
   min-height: 0;
   flex: 1;
   overflow-y: auto;
   padding: 0 0
     calc(var(--sky-tabbar-height) + var(--sky-safe-area-bottom) + 16px);
 }
-.clock-navbar.sky-navbar--no-navigation {
-  min-height: calc(
-    var(--sky-navbar-safe-area-top) + var(--sky-navbar-large-title-height)
-  );
-  padding-top: var(--sky-navbar-safe-area-top);
+.clock-navbar.sky-navbar {
+  --sky-navbar-safe-area-top: var(--sky-space-2);
+  --sky-page-gutter: 12px;
+}
+.clock-navbar--alarm .sky-navbar__inner {
+  margin-bottom: 0;
+}
+.clock-navbar--alarm .sky-navbar__left.sky-glass-surface,
+.clock-navbar--alarm .sky-navbar__right.sky-glass-surface {
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.clock-navbar-action.sky-link {
+  min-height: var(--sky-touch-target);
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--sky-radius-pill);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+}
+.clock-navbar-action--icon.sky-link {
+  width: var(--sky-touch-target);
+  padding: 0;
+}
+.clock-navbar-action--icon svg {
+  width: 21px;
+  height: 21px;
 }
 .phone-call-content {
   min-height: 0;
@@ -4591,16 +4761,17 @@ button {
 }
 .clock-world-now {
   margin: 0;
-  padding: 76px 16px 0;
+  padding: 84px 16px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
 }
 .clock-world-location {
-  color: #8e8e93;
+  color: var(--sky-muted);
   font-size: 19px;
   font-weight: 500;
+  line-height: 24px;
 }
 .clock-world-time {
   margin-top: 8px;
@@ -4608,63 +4779,169 @@ button {
   font-size: 74px;
   font-weight: 200;
   letter-spacing: -4px;
+  line-height: 1;
 }
 .clock-world-zone {
-  margin-top: 2px;
-  color: #8e8e93;
+  margin-top: 4px;
+  color: var(--sky-muted);
   font-size: 14px;
+  line-height: 20px;
 }
 .clock-alarm-list {
-  margin-top: 8px;
+  margin: 4px 12px 0;
 }
 .clock-alarm-item {
-  min-height: 86px;
+  min-height: 104px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--sky-hairline);
 }
-.clock-alarm-remove {
+.clock-alarm-copy {
+  min-width: 0;
+  min-height: 104px;
+  grid-column: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: var(--sky-text);
+  text-align: left;
+}
+.clock-alarm-remove + .clock-alarm-copy {
+  grid-column: 2;
+}
+.clock-alarm-copy:focus-visible {
+  border-radius: 10px;
+  outline: 2px solid var(--sky-app-accent);
+  outline-offset: -2px;
+}
+.clock-alarm-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 50px;
+  font-weight: 200;
+  letter-spacing: -2px;
+  line-height: 54px;
+}
+.clock-alarm-subtitle {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clock-alarm-item--disabled .clock-alarm-copy {
+  color: var(--sky-muted);
+}
+.clock-alarm-chevron {
+  width: 18px;
+  height: 18px;
+  grid-column: 3;
+  justify-self: end;
+  color: var(--sky-subtle);
+}
+.clock-alarm-item > .sky-toggle {
+  grid-column: 3;
+  justify-self: end;
+}
+.clock-alarm-remove.sky-button--icon-only {
   width: 28px;
   min-width: 28px;
   height: 28px;
+  min-height: 28px;
+  flex: none;
   padding: 0;
+  border-radius: 50%;
 }
 .clock-alarm-remove svg {
   width: 17px;
   height: 17px;
   stroke-width: 3;
 }
-.clock-alarm-editor {
+.clock-alarm-sheet {
+  --sky-overlay-layer: 90;
+  --sky-sheet-background: #1c1c1d;
+}
+.clock-alarm-sheet .sky-sheet__panel {
+  height: calc(100% - var(--sky-safe-area-top) - var(--sky-space-2));
+  max-height: calc(100% - var(--sky-safe-area-top) - var(--sky-space-2));
+  overflow: hidden;
+  border-radius: var(--sky-radius-sheet) var(--sky-radius-sheet) 0 0;
+  background: var(--sky-sheet-background);
+}
+.clock-alarm-sheet .sky-sheet__grabber {
+  display: none;
+}
+.clock-alarm-sheet-surface {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--sky-radius-sheet) var(--sky-radius-sheet) 0 0;
+  background: var(--sky-sheet-background);
+  color: var(--sky-text);
+}
+.clock-alarm-sheet-navbar.sky-navbar,
+.clock-alarm-sheet-surface > .sky-navbar {
+  --sky-navbar-safe-area-top: var(--sky-space-3);
+  --sky-page-gutter: 12px;
+  --sky-navbar-glass: transparent;
+  flex: none;
+  background: transparent;
+}
+.clock-alarm-sheet-navbar .sky-navbar__blur,
+.clock-alarm-sheet-navbar .sky-navbar__background {
+  background: transparent;
+}
+.clock-alarm-editor.sky-scroll-area--padded {
+  --sky-page-gutter: 12px;
   min-height: 0;
   flex: 1;
   margin: 0;
-  padding: 8px 0 32px;
+  padding-top: 8px;
   overflow-y: auto;
+}
+.clock-alarm-editor .time-wheel-picker {
+  width: 100%;
+  margin-right: 0;
+  margin-left: 0;
+}
+.clock-alarm-editor .sky-list--strong,
+.clock-alarm-editor .sky-list--inset {
+  background: #2c2c2e;
 }
 .time-wheel-picker {
   position: relative;
   width: calc(100% - 32px);
-  height: 200px;
-  margin: 0 16px 16px;
+  height: 240px;
+  margin: 8px 16px 12px;
   display: grid;
-  grid-template-columns: 64px 64px;
+  grid-template-columns: repeat(2, minmax(0, 88px));
   justify-content: center;
-  gap: 8px;
+  gap: 4px;
   overflow: hidden;
 }
 .time-wheel-picker--duration {
-  grid-template-columns: repeat(3, 64px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
 }
 .time-wheel-picker__field {
   position: relative;
-  width: 64px;
-  height: 200px;
+  width: 100%;
+  height: 240px;
 }
 .time-wheel-picker--duration .time-wheel-picker__field {
-  width: 64px;
+  width: 100%;
 }
 .time-wheel-picker__selection {
   position: absolute;
   z-index: 0;
-  top: 80px;
+  top: 100px;
   right: 0;
   left: 0;
   height: 40px;
@@ -4675,8 +4952,8 @@ button {
 .time-wheel-picker__column {
   position: relative;
   z-index: 1;
-  height: 200px;
-  padding: 80px 0;
+  height: 240px;
+  padding: 100px 0;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
@@ -4694,16 +4971,17 @@ button {
   );
 }
 .time-wheel-picker--unit-labels .time-wheel-picker__column {
-  width: 36px;
+  width: 54%;
 }
 .time-wheel-picker__unit {
   position: absolute;
   z-index: 2;
-  top: 80px;
-  left: 34px;
+  top: 100px;
+  left: 53%;
   height: 40px;
-  color: #8e8e93;
-  font-size: 9px;
+  color: var(--sky-text);
+  font-size: 15px;
+  font-weight: 600;
   line-height: 40px;
   pointer-events: none;
 }
@@ -4723,7 +5001,7 @@ button {
   scroll-snap-align: center;
   background: transparent;
   color: #8e8e93;
-  font-size: 27px;
+  font-size: 28px;
   font-weight: 300;
   line-height: 40px;
   opacity: 0.62;
@@ -4738,25 +5016,40 @@ button {
 }
 .time-wheel-picker__value--selected {
   color: #fff;
+  font-size: 32px;
   opacity: 1;
 }
 .clock-alarm-delete {
-  width: calc(100% - 32px);
-  margin: 18px 16px 0;
+  width: 100%;
+  margin: 18px 0 0;
 }
 .clock-alarm-save.sky-link {
-  color: #ff9f0a;
+  background: #ff9f0a;
+  color: #fff;
 }
 .clock-tool {
   margin: 0;
   padding: 0 16px;
   text-align: center;
 }
+.clock-stopwatch {
+  --sky-block-gutter-left: calc(
+    var(--sky-page-gutter) + var(--sky-safe-area-left)
+  );
+  --sky-block-gutter-right: calc(
+    var(--sky-page-gutter) + var(--sky-safe-area-right)
+  );
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 .clock-digits {
-  margin: 70px 0 54px;
+  margin: 118px 0 96px;
   font-variant-numeric: tabular-nums;
-  font-size: 52px;
+  font-size: 68px;
   font-weight: 200;
+  letter-spacing: -4px;
+  line-height: 1;
 }
 .clock-sound-menu {
   min-height: 0;
@@ -4778,18 +5071,52 @@ button {
   height: 17px;
 }
 .clock-actions {
-  display: flex;
-  justify-content: space-between;
-  margin: 12px 0;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr) 82px;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
 }
-.clock-action-button {
-  width: 66px;
-  height: 66px;
-  min-width: 66px;
+.clock-action-button.sky-button {
+  width: 82px;
+  height: 82px;
+  min-width: 82px;
   padding: 0;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 500;
+}
+.clock-action-button.clock-action-button--secondary.sky-button--secondary {
+  background: #1c1c1e;
+  color: #8e8e93;
+}
+.clock-action-button.clock-action-button--start.sky-button--secondary {
+  grid-column: 3;
+  background: #032d13;
+  color: #30d158;
+}
+.clock-action-button.clock-action-button--stop.sky-button--secondary {
+  grid-column: 3;
+  background: #330c0a;
+  color: #ff453a;
+}
+.clock-action-button.sky-button:disabled {
+  opacity: 0.42;
+}
+.clock-action-button--icon svg {
+  width: 34px;
+  height: 34px;
+  stroke-width: 2;
+}
+.clock-action-button--icon.clock-action-button--start svg {
+  fill: currentColor;
+}
+.clock-tool-divider {
+  height: 1px;
+  background: var(--sky-hairline);
 }
 .clock-lap-list {
-  margin-top: 24px;
+  margin-top: 0;
 }
 .timer-ring {
   position: relative;
@@ -4827,17 +5154,24 @@ button {
   font-variant-numeric: tabular-nums;
 }
 .clock-timer-settings {
+  width: 100%;
+  overflow: hidden;
   margin-right: 0;
+  margin-top: 24px;
   margin-left: 0;
 }
-.clock-timer-note {
-  margin-top: 16px;
-}
-.clock-timer-sound {
-  margin-top: 12px;
-}
 .clock-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding-bottom: 28px;
+  justify-content: center;
+  height: 100%;
+}
+.clock-timer-actions {
+  width: 100%;
+  margin-top: 8px;
+  margin-bottom: 24px;
 }
 .store-app {
   background: #000;
@@ -4961,6 +5295,21 @@ button {
 .phone-app--light .clock-app {
   background: #f2f2f7;
   color: #000;
+}
+.phone-app--light
+  .clock-action-button.clock-action-button--secondary.sky-button--secondary {
+  background: #e5e5ea;
+  color: #8e8e93;
+}
+.phone-app--light
+  .clock-action-button.clock-action-button--start.sky-button--secondary {
+  background: #d9f5df;
+  color: #248a3d;
+}
+.phone-app--light
+  .clock-action-button.clock-action-button--stop.sky-button--secondary {
+  background: #ffe5e5;
+  color: #d70015;
 }
 .phone-app--light .time-wheel-picker__selection {
   background: #e5e5ea;
@@ -6431,6 +6780,62 @@ button {
   backdrop-filter: blur(32px) saturate(180%);
   -webkit-backdrop-filter: blur(32px) saturate(180%);
 }
+.messages-media-picker-sheet {
+  z-index: 90;
+  --sky-overlay-backdrop: rgb(0 0 0 / 34%);
+  --sky-sheet-background: rgb(247 247 251 / 96%);
+}
+.messages-media-picker-sheet .sky-sheet__panel {
+  height: min(62%, 480px);
+  max-height: 78%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgb(255 255 255 / 76%);
+  border-bottom: 0;
+  border-radius: 30px 30px 0 0;
+  background: var(--sky-sheet-background);
+  box-shadow: 0 -14px 38px rgb(20 26 43 / 18%);
+  backdrop-filter: blur(34px) saturate(180%);
+  -webkit-backdrop-filter: blur(34px) saturate(180%);
+}
+.messages-media-picker-sheet .sky-sheet__grabber {
+  flex: none;
+  height: 27px;
+}
+.messages-media-picker-sheet .messages-media-picker {
+  position: relative;
+  z-index: auto;
+  inset: auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.messages-media-picker-sheet .messages-media-picker > header {
+  height: 44px;
+  padding: 0 18px 0 20px;
+  border-color: rgb(60 60 67 / 14%);
+}
+.messages-media-picker-sheet .messages-media-picker > header strong {
+  font-size: 16px;
+  line-height: 20px;
+}
+.messages-media-picker-sheet .messages-media-picker__contacts,
+.messages-media-picker-sheet .messages-media-picker__gifs {
+  height: calc(100% - 44px);
+  padding-bottom: calc(var(--sky-safe-area-bottom) + 10px);
+  overscroll-behavior: contain;
+}
+.messages-media-picker-sheet .messages-media-picker__contacts {
+  padding-top: 6px;
+}
 .messages-media-picker__photos,
 .messages-media-picker__gifs,
 .messages-media-picker__videos {
@@ -6471,7 +6876,8 @@ button {
   font-size: 12px;
 }
 .messages-media-picker__gifs button {
-  min-height: 92px;
+  min-height: 0;
+  align-self: start;
   overflow: hidden;
   padding: 0;
   background: #e9e9ed;
@@ -6479,7 +6885,8 @@ button {
 .messages-media-picker__gifs button img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  display: block;
+  object-fit: contain;
 }
 .messages-media-picker__gifs .messages-gif-more {
   min-height: 36px;
@@ -6667,6 +7074,23 @@ button {
 .messages-attachment--gif {
   background: #e9e9ed;
 }
+.messages-attachment--gif.messages-attachment--remote {
+  width: fit-content;
+  max-width: 205px;
+  height: auto;
+  max-height: 240px;
+  background: transparent;
+}
+.messages-attachment--gif.messages-attachment--remote img {
+  position: static;
+  inset: auto;
+  width: auto;
+  max-width: 205px;
+  height: auto;
+  max-height: 240px;
+  display: block;
+  object-fit: contain;
+}
 
 /* Konsta's k-app dark state drives the complete iOS Messages palette. */
 .phone-app.dark .messages-page {
@@ -6770,6 +7194,14 @@ button {
   background: rgb(28 28 30 / 91%);
   box-shadow: 0 -10px 34px rgb(0 0 0 / 38%);
   color: #f5f5f7;
+}
+.phone-app.dark .messages-media-picker-sheet {
+  --sky-overlay-backdrop: rgb(0 0 0 / 52%);
+  --sky-sheet-background: rgb(28 28 30 / 96%);
+}
+.phone-app.dark .messages-media-picker-sheet .sky-sheet__panel {
+  border-color: rgb(255 255 255 / 11%);
+  box-shadow: 0 -16px 42px rgb(0 0 0 / 46%);
 }
 .phone-app.dark .messages-gif-search,
 .phone-app.dark .messages-full-emoji-picker__search,
@@ -7411,15 +7843,15 @@ button {
 .springboard-edit-add {
   position: absolute;
   z-index: 12;
-  top: 45px;
-  left: 18px;
+  top: 14px;
+  left: 28px;
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 58px;
+  height: 30px;
   padding: 0;
   place-items: center;
   border: 1px solid #ffffff38;
-  border-radius: 50%;
+  border-radius: 999px;
   color: white;
   text-shadow: 0 1px 3px #000a;
   cursor: pointer;

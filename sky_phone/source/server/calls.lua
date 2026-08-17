@@ -25,6 +25,27 @@ local function trim(value)
     return value:match("^%s*(.-)%s*$")
 end
 
+local function normalize_contact_email(value)
+    local email = trim(value)
+    if not email or email == "" then
+        return ""
+    end
+    email = email:lower()
+    local local_part = email
+    if email:find("@", 1, true) then
+        local_part = email:match("^([^@]+)@" .. Config.Mail.Domain:gsub("%.", "%%.") .. "$")
+    end
+    if not local_part
+        or #local_part < Config.Mail.LocalPartMinLength
+        or #local_part > Config.Mail.LocalPartMaxLength
+        or not local_part:match("^[a-z0-9][a-z0-9._-]*[a-z0-9]$")
+        or local_part:find("..", 1, true)
+    then
+        return nil
+    end
+    return local_part .. "@" .. Config.Mail.Domain
+end
+
 local function scope_for_device(device)
     if device.account_id then
         return tonumber(device.account_id), nil
@@ -350,8 +371,8 @@ function SkyPhoneCalls.CopyCloudToDevice(account_id, imei)
         {
             query = [[
                 INSERT INTO `sky_phone_contacts`
-                    (`id`, `contact_id`, `device_imei`, `name`, `notes`, `organization`, `phone_number`, `avatar_media_id`, `favorite`, `created_at`, `updated_at`)
-                SELECT UUID(), `contact_id`, ?, `name`, `notes`, `organization`, `phone_number`, NULL, `favorite`, `created_at`, `updated_at`
+                    (`id`, `contact_id`, `device_imei`, `name`, `notes`, `organization`, `email`, `phone_number`, `avatar_media_id`, `favorite`, `created_at`, `updated_at`)
+                SELECT UUID(), `contact_id`, ?, `name`, `notes`, `organization`, `email`, `phone_number`, NULL, `favorite`, `created_at`, `updated_at`
                 FROM `sky_phone_contacts` WHERE `account_id` = ?
             ]],
             params = { imei, account_id },
@@ -375,7 +396,7 @@ Bridge.Callbacks.Register("sky_phone:contacts:list", function(source)
     end
     local condition, params = scope_condition(scope)
     local rows = Bridge.Database.Query(([[
-        SELECT `contact_id` AS `id`, `name`, `notes`, `organization`, `phone_number`, `avatar_media_id`, `favorite`,
+        SELECT `contact_id` AS `id`, `name`, `notes`, `organization`, `email`, `phone_number`, `avatar_media_id`, `favorite`,
             (SELECT media.`url` FROM `sky_phone_media` media WHERE media.`id` = `avatar_media_id`) AS `avatar_url`,
             `created_at`, `updated_at`
         FROM `sky_phone_contacts` WHERE %s ORDER BY LOWER(`name`), `phone_number`
@@ -414,9 +435,14 @@ Bridge.Callbacks.Register("sky_phone:contacts:save", function(source, data)
     local name = trim(data.name)
     local notes = trim(data.notes) or ""
     local organization = trim(data.organization) or ""
+    local email = normalize_contact_email(data.email)
     local number = SkyPhoneSimNumber.Normalize(data.phoneNumber, Config.Sim.NumberLength, Config.Sim.NumberPrefix)
     local avatar_media_id = tonumber(data.avatarMediaId) or 0
-    if not name or name == "" or #name > Config.Calls.ContactNameMaxLength or #notes > Config.Calls.ContactNotesMaxLength or #organization > Config.Calls.ContactNameMaxLength or not number then
+    if not name or name == "" or #name > Config.Calls.ContactNameMaxLength
+        or #notes > Config.Calls.ContactNotesMaxLength
+        or #organization > Config.Calls.ContactNameMaxLength
+        or email == nil or not number
+    then
         return { success = false, error = "invalid_contact" }
     end
     if (type(data.id) == "string" and data.id:sub(1, 8) == "company:")
@@ -451,19 +477,19 @@ Bridge.Callbacks.Register("sky_phone:contacts:save", function(source, data)
         if not owned[1] then
             return { success = false, error = "contact_not_found" }
         end
-        local params = { name, notes, organization, number, avatar_media_id, id }
+        local params = { name, notes, organization, email, number, avatar_media_id, id }
         for _, value in ipairs(condition_params) do
             params[#params + 1] = value
         end
         Bridge.Database.Query(([[
-            UPDATE `sky_phone_contacts` SET `name` = ?, `notes` = NULLIF(?, ''), `organization` = NULLIF(?, ''), `phone_number` = ?, `avatar_media_id` = NULLIF(?, 0)
+            UPDATE `sky_phone_contacts` SET `name` = ?, `notes` = NULLIF(?, ''), `organization` = NULLIF(?, ''), `email` = NULLIF(?, ''), `phone_number` = ?, `avatar_media_id` = NULLIF(?, 0)
             WHERE `contact_id` = ? AND %s
         ]]):format(condition), params)
     else
         Bridge.Database.Query([[
-            INSERT INTO `sky_phone_contacts` (`id`, `contact_id`, `account_id`, `device_imei`, `name`, `notes`, `organization`, `phone_number`, `avatar_media_id`)
-            VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, NULLIF(?, 0))
-        ]], { uuid(), id, scope.account_id, scope.device_imei, name, notes, organization, number, avatar_media_id })
+            INSERT INTO `sky_phone_contacts` (`id`, `contact_id`, `account_id`, `device_imei`, `name`, `notes`, `organization`, `email`, `phone_number`, `avatar_media_id`)
+            VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?, NULLIF(?, 0))
+        ]], { uuid(), id, scope.account_id, scope.device_imei, name, notes, organization, email, number, avatar_media_id })
     end
     if scope.account_id then
         SkyPhone.NotifyAccount(scope.account_id, "sky_phone:contacts:changed", {})
@@ -475,6 +501,7 @@ Bridge.Callbacks.Register("sky_phone:contacts:save", function(source, data)
             name = name,
             notes = notes ~= "" and notes or nil,
             organization = organization ~= "" and organization or nil,
+            email = email ~= "" and email or nil,
             phone_number = number,
             avatar_media_id = avatar_media_id > 0 and avatar_media_id or nil,
             avatar_url = avatar_url,

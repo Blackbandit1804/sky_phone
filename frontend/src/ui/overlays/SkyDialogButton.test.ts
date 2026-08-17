@@ -19,6 +19,10 @@ async function renderDialogButton(
 describe('SkyDialogButton', () => {
   it('uses the Konsta iOS tonal button for a regular action', async () => {
     const html = await renderDialogButton()
+    const overlays = readFileSync(
+      new URL('../overlays.css', import.meta.url),
+      'utf8',
+    )
 
     expect(html).toContain('<button')
     expect(html).toContain('type="button"')
@@ -28,6 +32,9 @@ describe('SkyDialogButton', () => {
     expect(html).toContain('sky-button--rounded')
     expect(html).toContain('sky-button--tonal')
     expect(html).not.toContain('sky-dialog-button--strong')
+    expect(overlays).toMatch(
+      /\.sky-dialog-button\.sky-button\s*\{\s*color:\s*#fff;/,
+    )
   })
 
   it('uses the Konsta iOS filled button for a strong action', async () => {

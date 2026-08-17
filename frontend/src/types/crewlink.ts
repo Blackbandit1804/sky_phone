@@ -88,6 +88,7 @@ export type CrewLinkLimits = {
 
 export type CrewLinkBootstrap = {
   activeGroup?: CrewLinkGroup | null
+  authenticated?: boolean
   groups: CrewLinkGroupSummary[]
   invitations: CrewLinkInvitation[]
   limits?: CrewLinkLimits

@@ -186,7 +186,9 @@ local server_callbacks = {
     "map:create-marker",
     "map:delete-marker",
     "crewlink:bootstrap",
-    "crewlink:create-profile",
+    "crewlink:login",
+    "crewlink:register",
+    "crewlink:logout",
     "crewlink:update-profile",
     "crewlink:create-group",
     "crewlink:update-group",
@@ -223,6 +225,7 @@ local server_callbacks = {
     "companies:publish-announcement",
     "companies:set-call-availability",
     "companies:call-customer",
+    "companies:dial-service-line",
     "sim:insert",
     "sim:eject",
     "contacts:list",
@@ -894,8 +897,8 @@ RegisterNetEvent("sky_phone:calls:changed", function()
     SendNUIMessage({ type = "calls:changed" })
 end)
 
-RegisterNetEvent("sky_phone:banking:changed", function()
-    SendNUIMessage({ type = "banking:changed" })
+RegisterNetEvent("sky_phone:banking:changed", function(data)
+    SendNUIMessage({ type = "banking:changed", data = data })
 end)
 
 RegisterNetEvent("sky_phone:billing:changed", function()

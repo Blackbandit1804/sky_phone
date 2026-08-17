@@ -23,6 +23,9 @@ describe('SkyDropdown', () => {
   it('supports checked, submenu, destructive, disabled, and divided items', () => {
     expect(component).toContain("'menuitemradio'")
     expect(component).toContain(':aria-checked=')
+    expect(component).toContain("section.group ? 'group' : 'presentation'")
+    expect(component).toContain('section.group ? section.label : undefined')
+    expect(component).toContain('groupLabel?: string')
     expect(component).toContain(':aria-haspopup=')
     expect(component).toContain('item.destructive')
     expect(component).toContain('item.disabled')
@@ -35,9 +38,7 @@ describe('SkyDropdown', () => {
     expect(overlays).toMatch(
       /\.sky-dropdown__item\s*\{[^}]*min-height:\s*var\(--sky-touch-target, 44px\)/s,
     )
-    expect(overlays).toMatch(
-      /\.sky-dropdown__menu\s*\{[^}]*padding:\s*6px;/s,
-    )
+    expect(overlays).toMatch(/\.sky-dropdown__menu\s*\{[^}]*padding:\s*6px;/s)
     expect(overlays).toMatch(
       /\.sky-dropdown__item\s*\{[^}]*border-radius:\s*12px;/s,
     )

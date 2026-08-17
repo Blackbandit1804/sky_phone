@@ -32,7 +32,9 @@ const frameImage = computed(
 )
 const wrapperStyle = computed<CSSProperties>(() => ({
   ...getHairlinePixelStyle(props.zoom, props.devicePixelRatio),
-  zoom: props.zoom,
+  '--phone-rendered-height': `${844 * props.zoom}px`,
+  '--phone-rendered-width': `${390 * props.zoom}px`,
+  '--phone-zoom': props.zoom,
 }))
 </script>
 
@@ -41,52 +43,54 @@ const wrapperStyle = computed<CSSProperties>(() => ({
     class="phone-resolution-wrapper phone-resolution-wrapper--notification"
     :style="wrapperStyle"
   >
-    <section
-      class="phone-device phone-device--notification"
-      :class="{
-        'phone-app--light': !isDarkMode,
-        [`phone-app--${preferences.settings.graphicsMode}`]: true,
-      }"
-      :aria-label="device.name"
-    >
-      <div
-        class="phone-screen"
+    <div class="phone-resolution-canvas">
+      <section
+        class="phone-device phone-device--notification"
         :class="{
           'phone-app--light': !isDarkMode,
           [`phone-app--${preferences.settings.graphicsMode}`]: true,
         }"
+        :aria-label="device.name"
       >
-        <k-app
-          theme="ios"
-          :dark="isDarkMode"
-          safe-areas
-          class="phone-app"
+        <div
+          class="phone-screen"
           :class="{
-            dark: isDarkMode,
             'phone-app--light': !isDarkMode,
             [`phone-app--${preferences.settings.graphicsMode}`]: true,
           }"
         >
-          <PhoneLockScreen
-            :notifications="[]"
-            :preferences="preferences"
-            preview
-          />
-          <PhoneNotifications
+          <k-app
+            theme="ios"
             :dark="isDarkMode"
-            :notification="notification"
-            @close="emit('close')"
-            @open="emit('open', $event)"
-          />
-        </k-app>
-      </div>
-      <img
-        class="phone-device__frame"
-        :src="frameImage"
-        alt=""
-        aria-hidden="true"
-        draggable="false"
-      />
-    </section>
+            safe-areas
+            class="phone-app"
+            :class="{
+              dark: isDarkMode,
+              'phone-app--light': !isDarkMode,
+              [`phone-app--${preferences.settings.graphicsMode}`]: true,
+            }"
+          >
+            <PhoneLockScreen
+              :notifications="[]"
+              :preferences="preferences"
+              preview
+            />
+            <PhoneNotifications
+              :dark="isDarkMode"
+              :notification="notification"
+              @close="emit('close')"
+              @open="emit('open', $event)"
+            />
+          </k-app>
+        </div>
+        <img
+          class="phone-device__frame"
+          :src="frameImage"
+          alt=""
+          aria-hidden="true"
+          draggable="false"
+        />
+      </section>
+    </div>
   </div>
 </template>

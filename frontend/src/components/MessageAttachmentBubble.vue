@@ -6,6 +6,7 @@ import { usePhoneStore } from '@/stores/phone'
 import type { SmsMessageType } from '@/types/messages'
 
 type MessageAttachment = {
+  body?: string
   media_asset_id: string | null
   media_duration_ms: number | null
   message_type: SmsMessageType
@@ -82,6 +83,8 @@ function durationLabel(milliseconds: number | null): string {
   <div
     v-if="message.message_type === 'image'"
     class="messages-attachment messages-attachment--image"
+    role="img"
+    :aria-label="phone.t('Apps.photos.photoAlt')"
     :style="{ background }"
   >
     <img
@@ -121,18 +124,18 @@ function durationLabel(milliseconds: number | null): string {
       ><TriangleAlert v-if="playbackFailed" :size="22" /><Pause
         v-else-if="playing"
         :size="22"
-        fill="currentColor"
-      /><Play
-        v-else
-        :size="22"
-        fill="currentColor"
+        fill="currentColor" /><Play v-else :size="22" fill="currentColor"
     /></span>
     <small v-if="playbackFailed">{{
       phone.t('Apps.photos.errors.unsupported')
     }}</small>
     <small v-else>{{ durationLabel(message.media_duration_ms) }}</small>
   </button>
-  <div v-else class="messages-attachment messages-attachment--gif">
+  <div
+    v-else
+    class="messages-attachment messages-attachment--gif"
+    :class="{ 'messages-attachment--remote': mediaUrl }"
+  >
     <img
       v-if="mediaUrl"
       :src="mediaUrl"
@@ -145,4 +148,16 @@ function durationLabel(milliseconds: number | null): string {
       <strong>{{ gif.label }}</strong>
     </template>
   </div>
+  <p v-if="message.body?.trim()" class="messages-attachment-caption">
+    {{ message.body }}
+  </p>
 </template>
+
+<style scoped>
+.messages-attachment-caption {
+  max-width: 205px;
+  margin: 7px 1px 1px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+</style>

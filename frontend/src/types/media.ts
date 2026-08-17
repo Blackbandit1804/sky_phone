@@ -1,6 +1,11 @@
 export type MediaType = 'photo' | 'video'
 export type GalleryFilter = 'all' | MediaType
 
+export type MediaConfig = {
+  customWallpaperUploadEnabled: boolean
+  videoBitrateKbps: number
+}
+
 export type PhoneMedia = {
   createdAt: number
   favorite: boolean

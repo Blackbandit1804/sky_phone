@@ -382,9 +382,13 @@ local function normalize_external_definition(owner_resource, adapter_resource, d
         if definition.compatibility == nil then
             return nil, icon_error
         end
-        print((
-            "[sky_phone] Custom app '%s' from '%s' uses an unavailable icon (%s); using the default icon."
-        ):format(definition.id, owner_resource, icon_error))
+        Bridge.Debug(
+            "warn",
+            "[sky_phone] Custom app '%s' from '%s' uses an unavailable icon (%s); using the default icon.",
+            definition.id,
+            owner_resource,
+            icon_error
+        )
     end
 
     local permissions, permissions_error = SkyPhoneApps.ValidatePermissions(definition.permissions)
@@ -574,9 +578,13 @@ local function register_app(app)
     local app_id = app.catalog.id
     local existing = apps_by_id[app_id]
     if existing then
-        print((
-            "[sky_phone] Rejected duplicate custom app '%s' from '%s'; it is already owned by '%s'."
-        ):format(app_id, app.ownerResource, existing.ownerResource))
+        Bridge.Debug(
+            "warn",
+            "[sky_phone] Rejected duplicate custom app '%s' from '%s'; it is already owned by '%s'.",
+            app_id,
+            app.ownerResource,
+            existing.ownerResource
+        )
         return false, "duplicate_app_id"
     end
 
@@ -602,11 +610,11 @@ local function invoke_hook(app, hook_name, payload)
         return true
     end
 
-    print(("[sky_phone] Custom app '%s' hook '%s' failed: %s"):format(
+    Bridge.Debug("error", "[sky_phone] Custom app '%s' hook '%s' failed: %s",
         app.catalog.id,
         hook_name,
         tostring(hook_error)
-    ))
+    )
     return false
 end
 

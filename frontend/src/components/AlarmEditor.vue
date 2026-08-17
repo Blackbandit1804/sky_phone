@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-  SkyBlock as kBlock,
   SkyBlockTitle as kBlockTitle,
   SkyButton as kButton,
   SkyField as kListInput,
@@ -8,6 +7,8 @@ import {
   SkyList as kList,
   SkyListItem as kListItem,
   SkyNavbar as kNavbar,
+  SkyScrollArea as kScrollArea,
+  SkySheet as kSheet,
 } from '@/ui'
 import { ChevronRight, Check, X } from 'lucide-vue-next'
 import { reactive, ref } from 'vue'
@@ -61,106 +62,123 @@ function toggleWeekday(weekday: number): void {
 </script>
 
 <template>
-  <AlarmSoundMenu
-    v-if="soundMenuOpen"
-    :back-label="phone.t('Apps.clock.tabs.alarm')"
-    :selected-sound="draft.sound"
-    @close="soundMenuOpen = false"
-    @select="draft.sound = $event"
-  />
-
-  <k-navbar v-show="!soundMenuOpen" :title="phone.t('Apps.clock.tabs.alarm')">
-    <template #left>
-      <k-link
-        component="button"
-        icon-only
-        :link-props="{ type: 'button' }"
-        :aria-label="phone.t('Common.cancel')"
-        @click="emit('cancel')"
-      >
-        <X aria-hidden="true" />
-      </k-link>
-    </template>
-    <template #right>
-      <k-link
-        component="button"
-        icon-only
-        class="clock-alarm-save"
-        :link-props="{ type: 'button' }"
-        :aria-label="phone.t('Common.save')"
-        @click="save"
-      >
-        <Check aria-hidden="true" />
-      </k-link>
-    </template>
-  </k-navbar>
-
-  <k-block
-    v-show="!soundMenuOpen"
-    component="section"
-    class="clock-alarm-editor"
+  <k-sheet
+    opened
+    class="clock-alarm-sheet"
+    :aria-label="phone.t('Apps.clock.tabs.alarm')"
+    :show-grabber="false"
+    swipe-to-close
+    @backdropclick="emit('cancel')"
+    @escape="emit('cancel')"
+    @swipeclose="emit('cancel')"
   >
-    <TimeWheelPicker
-      v-model="draft.time"
-      :hours-label="phone.t('Apps.clock.alarm.hours')"
-      :label="phone.t('Apps.clock.alarm.time')"
-      :minutes-label="phone.t('Apps.clock.minutes')"
-    />
-
-    <k-block-title>{{ phone.t('Apps.clock.alarm.repeat') }}</k-block-title>
-    <k-list strong inset>
-      <k-list-item
-        v-for="weekday in WEEKDAY_IDS"
-        :key="weekday"
-        link
-        :chevron="false"
-        :title="phone.t(`Apps.clock.alarm.days.${weekdayKeys[weekday]}`)"
-        @click="toggleWeekday(weekday)"
-      >
-        <template #after>
-          <Check
-            v-if="draft.weekdays.includes(weekday)"
-            class="w-5 h-5 text-primary"
-          />
-        </template>
-      </k-list-item>
-    </k-list>
-
-    <k-list strong inset>
-      <k-list-input
-        :label="phone.t('Apps.clock.alarm.note')"
-        :placeholder="phone.t('Apps.clock.alarm.notePlaceholder')"
-        :value="draft.note"
-        maxlength="80"
-        @input="setNote"
+    <section class="clock-alarm-sheet-surface">
+      <AlarmSoundMenu
+        v-if="soundMenuOpen"
+        :back-label="phone.t('Apps.clock.tabs.alarm')"
+        :selected-sound="draft.sound"
+        @close="soundMenuOpen = false"
+        @select="draft.sound = $event"
       />
-    </k-list>
 
-    <k-list strong inset>
-      <k-list-item
-        link
-        :chevron="false"
-        :title="phone.t('Apps.clock.alarm.sound')"
-        @click="soundMenuOpen = true"
-      >
-        <template #after>
-          <span class="clock-sound-selection">
-            {{ phone.t(`Apps.clock.alarm.sounds.${draft.sound}`) }}
-            <ChevronRight aria-hidden="true" />
-          </span>
-        </template>
-      </k-list-item>
-    </k-list>
+      <template v-else>
+        <k-navbar
+          class="clock-alarm-sheet-navbar"
+          data-sky-sheet-drag-handle
+          :title="phone.t('Apps.clock.tabs.alarm')"
+        >
+          <template #left>
+            <k-link
+              component="button"
+              icon-only
+              :link-props="{ type: 'button' }"
+              :aria-label="phone.t('Common.cancel')"
+              @click="emit('cancel')"
+            >
+              <X aria-hidden="true" />
+            </k-link>
+          </template>
+          <template #right>
+            <k-link
+              component="button"
+              icon-only
+              class="clock-alarm-save"
+              :link-props="{ type: 'button' }"
+              :aria-label="phone.t('Common.save')"
+              @click="save"
+            >
+              <Check aria-hidden="true" />
+            </k-link>
+          </template>
+        </k-navbar>
 
-    <k-button
-      v-if="alarm"
-      large
-      rounded
-      variant="danger"
-      class="clock-alarm-delete"
-      @click="emit('delete')"
-    >
-      {{ phone.t('Apps.clock.alarm.delete') }}
-    </k-button>
-  </k-block>
+        <k-scroll-area padded class="clock-alarm-editor">
+          <TimeWheelPicker
+            v-model="draft.time"
+            :hours-label="phone.t('Apps.clock.alarm.hours')"
+            :label="phone.t('Apps.clock.alarm.time')"
+            :minutes-label="phone.t('Apps.clock.minutes')"
+          />
+
+          <k-block-title>{{
+            phone.t('Apps.clock.alarm.repeat')
+          }}</k-block-title>
+          <k-list strong inset>
+            <k-list-item
+              v-for="weekday in WEEKDAY_IDS"
+              :key="weekday"
+              link
+              :chevron="false"
+              :title="phone.t(`Apps.clock.alarm.days.${weekdayKeys[weekday]}`)"
+              @click="toggleWeekday(weekday)"
+            >
+              <template #after>
+                <Check
+                  v-if="draft.weekdays.includes(weekday)"
+                  class="w-5 h-5 text-primary"
+                />
+              </template>
+            </k-list-item>
+          </k-list>
+
+          <k-list strong inset>
+            <k-list-input
+              :label="phone.t('Apps.clock.alarm.note')"
+              :placeholder="phone.t('Apps.clock.alarm.notePlaceholder')"
+              :value="draft.note"
+              maxlength="80"
+              @input="setNote"
+            />
+          </k-list>
+
+          <k-list strong inset>
+            <k-list-item
+              link
+              :chevron="false"
+              :title="phone.t('Apps.clock.alarm.sound')"
+              @click="soundMenuOpen = true"
+            >
+              <template #after>
+                <span class="clock-sound-selection">
+                  {{ phone.t(`Apps.clock.alarm.sounds.${draft.sound}`) }}
+                  <ChevronRight aria-hidden="true" />
+                </span>
+              </template>
+            </k-list-item>
+          </k-list>
+
+          <k-button
+            v-if="alarm"
+            large
+            rounded
+            variant="danger"
+            class="clock-alarm-delete"
+            @click="emit('delete')"
+          >
+            {{ phone.t('Apps.clock.alarm.delete') }}
+          </k-button>
+        </k-scroll-area>
+      </template>
+    </section>
+  </k-sheet>
 </template>

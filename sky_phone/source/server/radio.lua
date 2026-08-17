@@ -176,7 +176,14 @@ end
 
 local function get_radio_member_name(source)
     local display_name = get_effective_display_name(source)
-    return display_name ~= "" and display_name or GetPlayerName(source) or "Unknown"
+    if display_name ~= "" then
+        return display_name
+    end
+
+    local first_name, last_name = Bridge.Framework.GetCharacterName(source)
+    local character_name = ("%s %s"):format(first_name or "", last_name or "")
+    character_name = character_name:gsub("%c", ""):gsub("%s+", " "):match("^%s*(.-)%s*$") or ""
+    return character_name ~= "" and character_name or GetPlayerName(source) or "Unknown"
 end
 
 local function frequency_set(channel)

@@ -251,12 +251,23 @@ local function build_registry()
             end
             websites[website.Id] = website
         else
-            Bridge.Debug(
-                "warn",
-                "[sky_phone] Media import website at index %s was disabled: %s.",
-                tostring(index),
-                tostring(website_error)
-            )
+            local source_name = type(definition) == "table" and definition.Id or nil
+            if website_error == "missing_api_key" then
+                Bridge.Debug(
+                    "warn",
+                    "[sky_phone] Media import source '%s' at index %s is disabled because Config.Media.FiveManage.ApiKey is empty in server-only config/media.lua. Add a FiveManage V3 token with Media access and restart sky_phone.",
+                    tostring(source_name or "unknown"),
+                    tostring(index)
+                )
+            else
+                Bridge.Debug(
+                    "warn",
+                    "[sky_phone] Media import source '%s' at index %s is disabled because its configuration is invalid: %s.",
+                    tostring(source_name or "unknown"),
+                    tostring(index),
+                    tostring(website_error)
+                )
+            end
         end
     end
 end

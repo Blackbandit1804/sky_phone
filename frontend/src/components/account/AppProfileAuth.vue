@@ -32,17 +32,27 @@ const props = withDefaults(
     maxUsernameLength?: number
     minUsernameLength?: number
     mode: 'login' | 'register'
+    password?: string
+    passwordLabel?: string
+    passwordPlaceholder?: string
     pending: boolean
     registerLabel: string
+    requirePassword?: boolean
     title: string
     username: string
     usernameLabel: string
     usernamePlaceholder?: string
+    variant?: 'default' | 'centered'
   }>(),
   {
     maxUsernameLength: 40,
     minUsernameLength: 2,
+    password: '',
+    passwordLabel: 'Password',
+    passwordPlaceholder: '',
+    requirePassword: false,
     usernamePlaceholder: '',
+    variant: 'default',
   },
 )
 const emit = defineEmits<{
@@ -50,21 +60,30 @@ const emit = defineEmits<{
   gallery: []
   submit: []
   'update:mode': [value: 'login' | 'register']
+  'update:password': [value: string]
   'update:username': [value: string]
 }>()
 
 const canSubmit = computed(() => {
   const length = props.username.trim().length
+  const validUsername =
+    length >= props.minUsernameLength && length <= props.maxUsernameLength
   return Boolean(
     props.email &&
-      length >= props.minUsernameLength &&
-      length <= props.maxUsernameLength,
+      (props.mode === 'login' && props.requirePassword
+        ? true
+        : validUsername) &&
+      (!props.requirePassword ||
+        (props.password.length >= 8 && props.password.length <= 72)),
   )
 })
 </script>
 
 <template>
-  <section class="app-profile-auth">
+  <section
+    class="app-profile-auth"
+    :class="{ 'app-profile-auth--centered': variant === 'centered' }"
+  >
     <header class="app-profile-auth__hero">
       <span class="app-profile-auth__mark"><UserRound :size="23" /></span>
       <div>
@@ -75,7 +94,39 @@ const canSubmit = computed(() => {
     </header>
 
     <k-glass class="app-profile-auth__card">
-      <k-segmented raised class="app-profile-auth__mode">
+      <div
+        v-if="variant === 'centered'"
+        class="app-profile-auth__mode app-profile-auth__mode--centered"
+        role="tablist"
+        :aria-label="`${loginLabel} / ${registerLabel}`"
+      >
+        <button
+          type="button"
+          class="app-profile-auth__mode-choice"
+          :class="{
+            'app-profile-auth__mode-choice--active': mode === 'login',
+          }"
+          role="tab"
+          :aria-selected="mode === 'login'"
+          @click="emit('update:mode', 'login')"
+        >
+          {{ loginLabel }}
+        </button>
+        <button
+          type="button"
+          class="app-profile-auth__mode-choice"
+          :class="{
+            'app-profile-auth__mode-choice--active': mode === 'register',
+          }"
+          role="tab"
+          :aria-selected="mode === 'register'"
+          @click="emit('update:mode', 'register')"
+        >
+          {{ registerLabel }}
+        </button>
+      </div>
+
+      <k-segmented v-else raised class="app-profile-auth__mode">
         <k-segmented-button
           class="app-profile-auth__mode-button app-profile-auth__mode-button--login"
           :class="{
@@ -123,7 +174,64 @@ const canSubmit = computed(() => {
         <LockKeyhole :size="15" />
       </div>
 
-      <k-list inset strong class="app-profile-auth__fields">
+      <label
+        v-if="
+          variant === 'centered' && (mode === 'register' || !requirePassword)
+        "
+        class="app-profile-auth__username-field"
+        for="app-profile-auth-username"
+      >
+        <span><UserRound :size="17" /></span>
+        <div>
+          <small>{{ usernameLabel }}</small>
+          <input
+            id="app-profile-auth-username"
+            :value="username"
+            :maxlength="maxUsernameLength"
+            :placeholder="usernamePlaceholder"
+            autocomplete="username"
+            autocapitalize="none"
+            autocorrect="off"
+            spellcheck="false"
+            @input="
+              emit('update:username', ($event.target as HTMLInputElement).value)
+            "
+            @keydown.enter="emit('submit')"
+          />
+        </div>
+      </label>
+
+      <label
+        v-if="variant === 'centered' && requirePassword"
+        class="app-profile-auth__password-field"
+        for="app-profile-auth-password"
+      >
+        <span><LockKeyhole :size="17" /></span>
+        <div>
+          <small>{{ passwordLabel }}</small>
+          <input
+            id="app-profile-auth-password"
+            :value="password"
+            maxlength="72"
+            :placeholder="passwordPlaceholder"
+            :autocomplete="
+              mode === 'login' ? 'current-password' : 'new-password'
+            "
+            type="password"
+            @input="
+              emit('update:password', ($event.target as HTMLInputElement).value)
+            "
+            @keydown.enter="emit('submit')"
+          />
+        </div>
+      </label>
+
+      <k-list
+        v-else-if="variant !== 'centered'"
+        inset
+        strong
+        class="app-profile-auth__fields"
+      >
         <k-list-input
           input-id="app-profile-auth-username"
           :label="usernameLabel"
@@ -380,6 +488,102 @@ const canSubmit = computed(() => {
 .app-profile-auth__identity > svg {
   color: var(--muted, #9ba4aa);
 }
+.app-profile-auth__username-field {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 11px;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.045);
+  text-align: left;
+}
+.app-profile-auth__password-field {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 11px;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.045);
+  text-align: left;
+}
+.app-profile-auth__password-field > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--auth-accent, #ffd63e);
+  background: color-mix(in srgb, var(--auth-accent, #ffd63e) 13%, transparent);
+}
+.app-profile-auth__password-field div {
+  min-width: 0;
+}
+.app-profile-auth__password-field small {
+  display: block;
+  margin-bottom: 1px;
+  color: var(--muted, #9ba4aa);
+  font-size: 9px;
+}
+.app-profile-auth__password-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+.app-profile-auth__password-field input::placeholder {
+  color: var(--muted, #9ba4aa);
+  opacity: 0.72;
+}
+.app-profile-auth__username-field > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--auth-accent, #ffd63e);
+  background: color-mix(in srgb, var(--auth-accent, #ffd63e) 13%, transparent);
+}
+.app-profile-auth__username-field div {
+  min-width: 0;
+}
+.app-profile-auth__username-field small {
+  display: block;
+  margin-bottom: 1px;
+  color: var(--muted, #9ba4aa);
+  font-size: 9px;
+}
+.app-profile-auth__username-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+.app-profile-auth__username-field input::placeholder {
+  color: var(--muted, #9ba4aa);
+  opacity: 0.72;
+}
 .app-profile-auth__fields {
   margin-top: 0;
   margin-right: 0;
@@ -426,5 +630,111 @@ const canSubmit = computed(() => {
 }
 .app-profile-auth__submit:disabled {
   opacity: 0.46;
+}
+.app-profile-auth--centered {
+  max-width: 340px;
+  padding: 0;
+}
+.app-profile-auth--centered .app-profile-auth__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin: 0 18px 18px;
+  text-align: center;
+}
+.app-profile-auth--centered .app-profile-auth__mark {
+  width: 54px;
+  height: 54px;
+  margin-bottom: 3px;
+  border-radius: 18px;
+}
+.app-profile-auth--centered .app-profile-auth__hero h2 {
+  margin: 0;
+  font-size: 24px;
+}
+.app-profile-auth--centered .app-profile-auth__hero p {
+  max-width: 285px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.app-profile-auth--centered .app-profile-auth__card {
+  box-sizing: border-box;
+  width: 100%;
+  margin-inline: auto;
+  padding: 14px;
+  border-radius: 28px;
+}
+.app-profile-auth--centered .app-profile-auth__mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 15px;
+}
+.app-profile-auth__mode-choice {
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  color: #b8c5ce;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+.app-profile-auth__mode-choice--active {
+  color: #fff;
+  background: var(--auth-accent, #ffd63e);
+  box-shadow: 0 6px 16px
+    color-mix(in srgb, var(--auth-accent, #ffd63e) 28%, transparent);
+  font-weight: 750;
+}
+.app-profile-auth--centered .app-profile-auth__identity,
+.app-profile-auth--centered .app-profile-auth__username-field,
+.app-profile-auth--centered .app-profile-auth__password-field {
+  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  min-height: 58px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 17px;
+}
+.app-profile-auth--centered .app-profile-auth__username-field {
+  grid-template-columns: 38px minmax(0, 1fr);
+}
+.app-profile-auth--centered .app-profile-auth__password-field {
+  grid-template-columns: 38px minmax(0, 1fr);
+}
+.app-profile-auth--centered .app-profile-auth__identity > span,
+.app-profile-auth--centered .app-profile-auth__username-field > span,
+.app-profile-auth--centered .app-profile-auth__password-field > span {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+.app-profile-auth--centered .app-profile-auth__identity small,
+.app-profile-auth--centered .app-profile-auth__username-field small,
+.app-profile-auth--centered .app-profile-auth__password-field small {
+  font-size: 10px;
+}
+.app-profile-auth--centered .app-profile-auth__identity strong,
+.app-profile-auth--centered .app-profile-auth__username-field input,
+.app-profile-auth--centered .app-profile-auth__password-field input {
+  font-size: 14px;
+  line-height: 20px;
+}
+.app-profile-auth--centered .app-profile-auth__submit {
+  min-height: 48px;
+  border-radius: 16px;
 }
 </style>

@@ -190,19 +190,81 @@ label.sky-settings-row__title {
 }
 
 .sky-settings-range-row__frame {
-  padding-top: var(--sky-space-1);
-  padding-bottom: var(--sky-space-1);
+  min-height: 88px;
+  padding-top: 12px;
+  padding-bottom: 14px;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .sky-settings-group--compact .sky-settings-row__frame,
 .sky-settings-group--compact .sky-settings-range-row__frame {
-  min-height: 48px;
+  min-height: 76px;
   padding-top: 6px;
   padding-bottom: 6px;
 }
 
-.sky-settings-range-row .sky-range {
+.sky-settings-range-row__header,
+.sky-settings-range-row__control {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.sky-settings-range-row__header {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sky-settings-range-row__title,
+.sky-settings-range-row__value {
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.sky-settings-range-row__title {
+  min-width: 0;
+  color: var(--sky-text);
+  overflow-wrap: anywhere;
+}
+
+.sky-settings-range-row__value {
+  flex: none;
+  color: var(--sky-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sky-settings-range-row__control {
+  min-height: 28px;
+  gap: 12px;
+}
+
+.sky-settings-range-row__control .sky-range {
   width: 100%;
+  flex: 1 1 auto;
+}
+
+.sky-settings-range-row__endpoint {
+  width: 24px;
+  height: 28px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--sky-muted);
+}
+
+.sky-settings-range-row__endpoint > svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.sky-settings-range-row__endpoint--leading > svg {
+  width: 17px;
+  height: 17px;
 }
 
 .sky-settings-icon {

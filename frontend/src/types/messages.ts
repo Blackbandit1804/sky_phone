@@ -61,6 +61,7 @@ export type SmsOutgoingMessage =
       messageType: 'voice'
     }
   | {
+      body?: string
       mediaAssetId: string
       mediaDurationMs?: number
       messageType: SmsAttachmentType

@@ -6,6 +6,7 @@ const viewSource = readFileSync(
   new URL('./SpringboardView.vue', import.meta.url),
   'utf8',
 )
+const appSource = readFileSync(new URL('../App.vue', import.meta.url), 'utf8')
 const appIconSource = readFileSync(
   new URL('../components/AppIcon.vue', import.meta.url),
   'utf8',
@@ -19,6 +20,26 @@ const mainCss = readFileSync(
   'utf8',
 )
 describe('Springboard page swipe contract', () => {
+  it('replaces the home status row with the edit controls', () => {
+    expect(viewSource).toContain("emit('editModeChange', editing)")
+    expect(viewSource).toContain("emit('editModeChange', false)")
+    expect(appSource).toContain(
+      '@edit-mode-change="springboardEditing = $event"',
+    )
+    expect(appSource).toMatch(
+      /v-if="\s*!isLocked && !\(isHomeRoute && springboardEditing\)\s*"/,
+    )
+    expect(mainCss).toMatch(
+      /\.springboard-edit-add\s*\{[^}]*top:\s*14px;[^}]*left:\s*28px;[^}]*width:\s*58px;[^}]*height:\s*30px;/s,
+    )
+    expect(mainCss).toMatch(
+      /\.springboard-edit-done\s*\{[^}]*top:\s*14px;[^}]*right:\s*28px;[^}]*width:\s*58px;[^}]*height:\s*30px;/s,
+    )
+    expect(viewSource).toContain(
+      '<Check :size="20" :stroke-width="3" aria-hidden="true" />',
+    )
+  })
+
   it('allows page swipes to start on home apps and widget surfaces', () => {
     expect(viewSource).toContain(
       '.springboard-page--apps .app-icon-button, .home-widget',
@@ -29,6 +50,15 @@ describe('Springboard page swipe contract', () => {
     )
   })
 
+  it('keeps blank-surface page swipes available while editing', () => {
+    expect(viewSource).not.toMatch(
+      /if \(editMode\.value\) return\s+dragging\.value/,
+    )
+    expect(viewSource).toContain(
+      'if (editMode.value || pageSwipeSurface) return',
+    )
+  })
+
   it('suppresses app and folder activation after pointer movement', () => {
     expect(appIconSource).toContain('springboardSwipeIntent')
     expect(folderIconSource).toContain('springboardSwipeIntent')
@@ -36,42 +66,40 @@ describe('Springboard page swipe contract', () => {
     expect(folderIconSource).toContain('suppressClick.value = true')
   })
 
-  it('separates animated page compensation from immediate pointer movement', () => {
+  it('keeps app and folder drags alive independently of element capture', () => {
+    expect(appIconSource).toContain('bindPointerDragSession(window, pointerId')
+    expect(folderIconSource).toContain(
+      'bindPointerDragSession(window, pointerId',
+    )
+    expect(appIconSource).not.toContain('@lostpointercapture')
+    expect(folderIconSource).not.toContain('@lostpointercapture')
+  })
+
+  it('converts pointer movement from viewport pixels using measured page geometry', () => {
     expect(appIconSource).toContain('springboardPageDragCompensation')
     expect(folderIconSource).toContain('springboardPageDragCompensation')
+    expect(appIconSource).toContain('readSpringboardDragMetrics')
+    expect(folderIconSource).toContain('readSpringboardDragMetrics')
     expect(appIconSource).toContain(':style="dragPointerStyle"')
     expect(folderIconSource).toContain(':style="dragPointerStyle"')
   })
 
-  it('keeps a phone-wide drag ghost outside the moving page track', () => {
-    const trackStart = viewSource.indexOf('class="springboard-track"')
-    const dragLayerStart = viewSource.indexOf('ref="homeDragLayer"')
-
-    expect(trackStart).toBeGreaterThan(-1)
-    expect(dragLayerStart).toBeGreaterThan(trackStart)
-    expect(viewSource.slice(trackStart, dragLayerStart)).toContain('</div>')
-    expect(viewSource).toContain('source.cloneNode(true)')
-    expect(viewSource).toContain("ghost.classList.add('home-drag-ghost')")
-    expect(viewSource).toContain('springboardViewportToLocal')
-    expect(viewSource).toContain('springboardViewportDeltaToLocal')
-    expect(viewSource).toContain('event.target instanceof Element')
-    expect(viewSource).toContain('dropGhost?.getBoundingClientRect()')
-    expect(viewSource.match(/:external-drag-visual/g)).toHaveLength(4)
-    expect(viewSource.match(/startHomeDrag\([^\n]+\$event\)/g)).toHaveLength(4)
-    expect(appIconSource).toContain('externalDragVisual?: boolean')
-    expect(folderIconSource).toContain('externalDragVisual?: boolean')
-    expect(appIconSource).toContain("'app-icon-item--drag-source'")
-    expect(folderIconSource).toContain("'app-icon-item--drag-source'")
-    expect(mainCss).toMatch(
-      /\.home-drag-layer\s*\{[^}]*z-index:\s*70;[^}]*pointer-events:\s*none;/s,
+  it('uses the same scale-aware in-phone drag path as widgets', () => {
+    expect(viewSource).not.toContain('source.cloneNode(true)')
+    expect(viewSource).not.toContain('<Teleport to="body">')
+    expect(viewSource).not.toContain(':external-drag-visual')
+    expect(viewSource).toContain(
+      "'springboard--home-dragging': draggingHomeApp !== null",
     )
+    expect(viewSource).toContain('draggedElement?.getBoundingClientRect()')
+    expect(appIconSource).not.toContain('externalDragVisual')
+    expect(folderIconSource).not.toContain('externalDragVisual')
+    expect(mainCss).not.toContain('.home-drag-layer')
+    expect(mainCss).not.toContain('.home-drag-ghost')
+    expect(mainCss).not.toContain('.app-icon-item--drag-source')
     expect(mainCss).toMatch(
-      /\.home-drag-ghost\s*\{[^}]*position:\s*absolute;[^}]*will-change:\s*transform;/s,
+      /\.springboard--home-dragging \.springboard-page--apps\s*\{[^}]*overflow:\s*visible;/s,
     )
-    expect(mainCss).toMatch(
-      /\.app-icon-item--drag-source\s*\{[^}]*opacity:\s*0;/s,
-    )
-    expect(mainCss).not.toContain('.springboard--home-dragging')
     expect(mainCss).toMatch(/\.springboard\s*\{[\s\S]*?overflow:\s*hidden;/)
     expect(mainCss).toMatch(
       /\.springboard-page--apps\s*\{[^}]*overflow:\s*hidden;/s,
@@ -84,8 +112,11 @@ describe('Springboard page swipe contract', () => {
     expect(viewSource).toContain('nearestGridDropTarget')
     expect(viewSource).toContain('moveHomeAppToGridPage')
     expect(viewSource).not.toContain("draggingHomeApp.value?.area === 'grid'")
-    expect(viewSource).toContain('event.clientX < springboardBounds.left')
-    expect(viewSource).toContain('event.clientY > springboardBounds.bottom')
+    expect(viewSource).toContain('event.clientX < pageBounds.left')
+    expect(viewSource).toContain('event.clientY > pageBounds.bottom')
+    expect(viewSource).toContain('nearestSpringboardRectIndex')
+    expect(viewSource).toContain("queueEdgePageTurn(lastHomePointer, 'app')")
+    expect(viewSource).toContain("edgePageLocked = dragType === 'widget'")
   })
 
   it('resolves occupied dock slots from the dock bounds rather than the event target', () => {
@@ -101,5 +132,16 @@ describe('Springboard page swipe contract', () => {
     expect(viewSource).toContain('clearTemporaryHomePage')
     expect(viewSource).toContain('resolveSpringboardHomeEdgeTurn')
     expect(viewSource).toContain('onBeforeUnmount')
+  })
+
+  it('materializes page-local app positions before widget layout changes', () => {
+    expect(viewSource).toContain('function applyWidgetLayout')
+    expect(viewSource).toContain('appStore.applyWidgetGridCapacities')
+    expect(viewSource).toContain('homeGridCapacitiesFor(widgets.layout)')
+    expect(viewSource).toContain('homeGridCapacitiesFor(nextLayout)')
+    expect(viewSource).toContain('previewWidgetAdd')
+    expect(viewSource).toContain('previewWidgetMove')
+    expect(viewSource).toContain('previewWidgetRemove')
+    expect(viewSource).toContain('previewWidgetResize')
   })
 })

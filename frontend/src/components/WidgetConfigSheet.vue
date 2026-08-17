@@ -1,16 +1,4 @@
 <script setup lang="ts">
-import { Check } from 'lucide-vue-next'
-import {
-  kLink,
-  kList,
-  kListItem,
-  kNavbar,
-  kPage,
-  kSegmented,
-  kSegmentedButton,
-  kSheet,
-  kToggle,
-} from 'konsta/vue'
 import { computed, ref, watch } from 'vue'
 
 import SpringboardWidget from '@/components/SpringboardWidget.vue'
@@ -22,6 +10,16 @@ import type {
   WidgetSettings,
   WidgetSize,
 } from '@/types/widgets'
+import {
+  SkyButton,
+  SkyProvider,
+  SkyScrollArea,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySettingsGroup,
+  SkySettingsRow,
+  SkySheet,
+} from '@/ui'
 
 const props = defineProps<{
   instance: WidgetInstance | null
@@ -39,9 +37,15 @@ const size = ref<WidgetSize>('small')
 const showDate = ref(true)
 const balanceSource = ref<'bank' | 'cash'>('bank')
 const contactIds = ref<string[]>([])
-const sheetColors = {
-  bgIos: 'bg-[#f2f2f7] dark:bg-black',
-}
+const supportedSizes = computed(
+  () =>
+    (props.instance &&
+      WIDGET_REGISTRY_BY_KIND.get(props.instance.kind)?.supportedSizes) ||
+    [],
+)
+const activeSizeIndex = computed(() =>
+  Math.max(0, supportedSizes.value.indexOf(size.value)),
+)
 
 function toggleContact(id: string): void {
   const index = contactIds.value.indexOf(id)
@@ -71,191 +75,260 @@ watch(
 </script>
 
 <template>
-  <div class="widget-config-sheet">
-    <k-sheet
+  <SkyProvider
+    class="widget-config-provider"
+    :dark="phone.isDarkMode"
+    safe-areas
+  >
+    <SkySheet
+      class="widget-config-sheet"
       :opened="opened"
-      :colors="sheetColors"
+      :aria-label="phone.t('Home.widgetSystem.configure')"
+      grabber-clickable
+      :grabber-label="phone.t('Common.cancel')"
+      swipe-to-close
       @backdropclick="emit('close')"
+      @escape="emit('close')"
+      @grabberclick="emit('close')"
+      @swipeclose="emit('close')"
     >
-    <k-page
-      v-if="instance"
-      class="widget-config-page"
-      :class="{ 'widget-config-page--dark': phone.isDarkMode }"
-    >
-      <k-navbar :title="phone.t('Home.widgetSystem.configure')">
-        <template #left>
-          <k-link component="button" type="button" @click="emit('close')">
+      <section v-if="instance" class="widget-config-surface">
+        <header class="widget-config-navbar">
+          <SkyButton
+            class="widget-config-nav-button"
+            inline
+            rounded
+            type="button"
+            variant="secondary"
+            @click="emit('close')"
+          >
             {{ phone.t('Common.cancel') }}
-          </k-link>
-        </template>
-        <template #right>
-          <k-link component="button" type="button" @click="save">
+          </SkyButton>
+          <h2>{{ phone.t('Home.widgetSystem.configure') }}</h2>
+          <SkyButton
+            class="widget-config-nav-button"
+            inline
+            rounded
+            type="button"
+            variant="secondary"
+            @click="save"
+          >
             {{ phone.t('Common.done') }}
-          </k-link>
-        </template>
-      </k-navbar>
+          </SkyButton>
+        </header>
 
-      <div class="widget-config-scroll">
-        <div class="widget-config-preview">
-          <SpringboardWidget
-            :instance="{ ...instance, size }"
-            preview
-            :interactive="false"
-          />
-        </div>
+        <SkyScrollArea class="widget-config-scroll">
+          <div class="widget-config-preview">
+            <SpringboardWidget
+              :instance="{ ...instance, size }"
+              preview
+              :interactive="false"
+            />
+          </div>
 
-        <section class="widget-config-size">
-          <span>{{ phone.t('Home.widgetSystem.size') }}</span>
-          <k-segmented raised>
-            <k-segmented-button
-              v-for="supportedSize in WIDGET_REGISTRY_BY_KIND.get(instance.kind)
-                ?.supportedSizes"
-              :key="supportedSize"
-              :active="size === supportedSize"
-              @click="size = supportedSize"
+          <section class="widget-config-size">
+            <h3>{{ phone.t('Home.widgetSystem.size') }}</h3>
+            <SkySegmented
+              :active-index="activeSizeIndex"
+              :aria-label="phone.t('Home.widgetSystem.size')"
+              :item-count="supportedSizes.length"
+              rounded
+              strong
             >
-              {{ phone.t(`Home.widgetSystem.sizes.${supportedSize}`) }}
-            </k-segmented-button>
-          </k-segmented>
-        </section>
+              <SkySegmentedButton
+                v-for="supportedSize in supportedSizes"
+                :key="supportedSize"
+                :active="size === supportedSize"
+                @click="size = supportedSize"
+              >
+                {{ phone.t(`Home.widgetSystem.sizes.${supportedSize}`) }}
+              </SkySegmentedButton>
+            </SkySegmented>
+          </section>
 
-        <k-list
-          v-if="instance.kind === 'clock'"
-          inset
-          strong
-          class="widget-config-list"
-        >
-          <k-list-item :title="phone.t('Home.widgetSystem.clock.showDate')">
-            <template #after>
-              <k-toggle :checked="showDate" @change="showDate = !showDate" />
-            </template>
-          </k-list-item>
-        </k-list>
+          <SkySettingsGroup
+            v-if="instance.kind === 'clock'"
+            class="widget-config-group"
+            :aria-label="phone.t('Home.widgetSystem.clock.name')"
+          >
+            <SkySettingsRow
+              v-model="showDate"
+              kind="toggle"
+              :title="phone.t('Home.widgetSystem.clock.showDate')"
+            />
+          </SkySettingsGroup>
 
-        <k-list
-          v-if="instance.kind === 'wallet'"
-          inset
-          strong
-          class="widget-config-list"
-        >
-          <k-list-item :title="phone.t('Home.widgetSystem.wallet.balance')">
-            <template #after>
-              <k-segmented class="widget-config-balance">
-                <k-segmented-button
-                  :active="balanceSource === 'bank'"
-                  @click="balanceSource = 'bank'"
+          <SkySettingsGroup
+            v-if="instance.kind === 'wallet'"
+            class="widget-config-group"
+            :aria-label="phone.t('Home.widgetSystem.wallet.balance')"
+          >
+            <SkySettingsRow
+              kind="custom"
+              :title="phone.t('Home.widgetSystem.wallet.balance')"
+            >
+              <template #trailing>
+                <SkySegmented
+                  :active-index="balanceSource === 'bank' ? 0 : 1"
+                  :aria-label="phone.t('Home.widgetSystem.wallet.balance')"
+                  class="widget-config-balance"
+                  :item-count="2"
+                  rounded
+                  strong
                 >
-                  {{ phone.t('Home.widgetSystem.wallet.bank') }}
-                </k-segmented-button>
-                <k-segmented-button
-                  :active="balanceSource === 'cash'"
-                  @click="balanceSource = 'cash'"
-                >
-                  {{ phone.t('Home.widgetSystem.wallet.cash') }}
-                </k-segmented-button>
-              </k-segmented>
-            </template>
-          </k-list-item>
-        </k-list>
+                  <SkySegmentedButton
+                    :active="balanceSource === 'bank'"
+                    @click="balanceSource = 'bank'"
+                  >
+                    {{ phone.t('Home.widgetSystem.wallet.bank') }}
+                  </SkySegmentedButton>
+                  <SkySegmentedButton
+                    :active="balanceSource === 'cash'"
+                    @click="balanceSource = 'cash'"
+                  >
+                    {{ phone.t('Home.widgetSystem.wallet.cash') }}
+                  </SkySegmentedButton>
+                </SkySegmented>
+              </template>
+            </SkySettingsRow>
+          </SkySettingsGroup>
 
-        <section v-if="instance.kind === 'contacts'">
-          <h3>{{ phone.t('Home.widgetSystem.contacts.choose') }}</h3>
-          <k-list inset strong class="widget-config-list">
-            <k-list-item
+          <SkySettingsGroup
+            v-if="instance.kind === 'contacts'"
+            class="widget-config-group"
+            :title="phone.t('Home.widgetSystem.contacts.choose')"
+          >
+            <SkySettingsRow
               v-for="contact in contactsService.contacts.value"
               :key="contact.id"
-              link
-              link-component="button"
-              content-class="w-full"
-              :chevron="false"
+              kind="choice"
+              :description="contact.phone_number"
+              :selected="contactIds.includes(contact.id)"
               :title="contact.name"
-              :subtitle="contact.phone_number"
-              @click="toggleContact(contact.id)"
+              @activate="toggleContact(contact.id)"
             >
-              <template #media>
+              <template #leading>
                 <span class="widget-config-avatar">{{
                   contact.name.charAt(0).toUpperCase()
                 }}</span>
               </template>
-              <template v-if="contactIds.includes(contact.id)" #after>
-                <Check :size="20" class="widget-config-check" />
-              </template>
-            </k-list-item>
-          </k-list>
-        </section>
-      </div>
-    </k-page>
-    </k-sheet>
-  </div>
+            </SkySettingsRow>
+          </SkySettingsGroup>
+        </SkyScrollArea>
+      </section>
+    </SkySheet>
+  </SkyProvider>
 </template>
 
 <style scoped>
-.widget-config-sheet :deep(.k-sheet) {
+.widget-config-provider {
+  position: absolute;
   z-index: 115;
-  height: calc(100% - 22px);
+  inset: 0;
+  pointer-events: none;
+}
+
+.widget-config-sheet {
+  --sky-overlay-layer: 115;
+}
+
+.widget-config-sheet :deep(.sky-overlay-backdrop) {
+  background: rgb(0 0 0 / 58%);
+}
+
+.widget-config-sheet :deep(.sky-sheet__panel) {
+  height: calc(100% - var(--sky-space-3));
+  max-height: calc(100% - var(--sky-space-3));
   overflow: hidden;
-  border-radius: 28px 28px 0 0;
+  background: var(--sky-bg);
 }
 
-.widget-config-page {
-  height: 100%;
-  color: #111;
-  background: #f2f2f7;
+.widget-config-surface {
+  height: calc(100% - 32px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sky-bg);
+  color: var(--sky-text);
 }
 
-.widget-config-page--dark {
+.widget-config-navbar {
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) minmax(0, 2fr) minmax(72px, 1fr);
+  align-items: center;
+  gap: var(--sky-space-2);
+  padding: 0 var(--sky-space-3);
+  border-bottom: 1px solid var(--sky-hairline);
+}
+
+.widget-config-navbar h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--sky-text);
+  font-size: var(--sky-font-title);
+  font-weight: 650;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.widget-config-navbar > :first-child {
+  justify-self: start;
+}
+
+.widget-config-navbar > :last-child {
+  justify-self: end;
+}
+
+.widget-config-navbar :deep(.widget-config-nav-button.sky-button) {
+  min-height: var(--sky-touch-target);
+  padding: 0 var(--sky-space-4);
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: var(--sky-surface-variant);
   color: #fff;
-  background: #000;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .widget-config-scroll {
-  height: calc(100% - 54px);
-  padding: 8px 12px 42px;
+  min-height: 0;
+  flex: 1;
   overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.widget-config-scroll::-webkit-scrollbar {
-  display: none;
+  padding: var(--sky-space-3) var(--sky-page-gutter)
+    calc(var(--sky-space-6) + var(--sky-safe-area-bottom));
 }
 
 .widget-config-preview {
   display: flex;
-  min-height: 215px;
-  padding: 20px 12px;
+  min-height: 250px;
+  padding: var(--sky-space-4) 0;
   align-items: center;
   justify-content: center;
 }
 
-.widget-config-preview :deep(.home-widget-shell) {
-  max-height: 188px;
-}
-
 .widget-config-size {
-  display: grid;
-  margin: 0 4px 16px;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 12px;
+  margin-bottom: var(--sky-space-5);
 }
 
-.widget-config-size > span,
-.widget-config-scroll h3 {
-  color: #6e6e73;
-  font-size: 13px;
+.widget-config-size h3 {
+  margin: 0 0 var(--sky-space-2) var(--sky-space-3);
+  color: var(--sky-muted);
+  font-size: var(--sky-font-caption);
   font-weight: 600;
+  text-transform: uppercase;
 }
 
-.widget-config-scroll h3 {
-  margin: 18px 14px 7px;
+.widget-config-size :deep(.sky-segmented) {
+  width: 100%;
 }
 
-.widget-config-list :deep([class*='title']) {
-  color: inherit;
+.widget-config-group {
+  margin: 0 0 var(--sky-space-5);
 }
 
 .widget-config-balance {
-  width: 138px;
+  width: 146px;
 }
 
 .widget-config-avatar {
@@ -269,7 +342,9 @@ watch(
   font-weight: 650;
 }
 
-.widget-config-check {
-  color: #0a84ff;
+@media (max-height: 700px) {
+  .widget-config-preview {
+    min-height: 205px;
+  }
 }
 </style>

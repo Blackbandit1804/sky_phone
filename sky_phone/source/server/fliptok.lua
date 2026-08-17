@@ -14,13 +14,12 @@ local custom_music_extensions = {
     wav = true,
     webm = true,
 }
-local password_pepper = GetConvar(Config.FlipTok.PasswordPepperConvar, "")
+local password_pepper = tostring(Config.Server.FlipTokPasswordPepper or "")
 
 if password_pepper == "" then
     Bridge.Debug(
         "warn",
-        "[sky_phone] FlipTok password pepper convar '%s' is empty; configure it before production use.",
-        Config.FlipTok.PasswordPepperConvar,
+        "[sky_phone] Config.Server.FlipTokPasswordPepper is empty. FlipTok passwords still work, but their hashes lack the required server-side secret. Set a stable random value in config/config.lua before production; changing it later invalidates existing FlipTok passwords.",
         { always = true }
     )
 end
@@ -921,7 +920,7 @@ RegisterCommand(Config.FlipTok.VerifyCommand, function(source, arguments)
     end
     local function send_command_feedback(message, notification_type)
         if source == 0 then
-            print(message)
+            Bridge.Debug(notification_type == "error" and "error" or "info", message)
             return
         end
 
@@ -932,7 +931,11 @@ RegisterCommand(Config.FlipTok.VerifyCommand, function(source, arguments)
     end
     if source ~= 0 and not Bridge.Framework.HasAdminGroup(source, Config.FlipTok.AdminGroups) then
         send_command_feedback(command_locale.noPermission, "error")
-        print(("[sky_phone] Player %d attempted to use the FlipTok verification command without an admin group."):format(source))
+        Bridge.Debug(
+            "warn",
+            "[sky_phone] Player %d attempted to use the FlipTok verification command without an admin group.",
+            source
+        )
         return
     end
     local handle = type(arguments[1]) == "string" and arguments[1]:lower():gsub("^@", "") or ""

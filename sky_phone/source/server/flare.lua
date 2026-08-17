@@ -155,7 +155,11 @@ local function load_profile(account_id)
 end
 
 local function list_suggestions(account_id, profile)
-    if not profile or not is_enabled(profile.discoverable) then
+    if not profile
+        or not is_enabled(profile.discoverable)
+        or type(profile.photo_urls) ~= "table"
+        or #profile.photo_urls < 1
+    then
         return {}
     end
     local rows = Bridge.Database.Query([[
@@ -178,6 +182,16 @@ local function list_suggestions(account_id, profile)
             AND mine.`age` BETWEEN target.`min_age` AND target.`max_age`
             AND (mine.`interested_in` = 'everyone' OR mine.`interested_in` = target.`gender`)
             AND (target.`interested_in` = 'everyone' OR target.`interested_in` = mine.`gender`)
+            AND EXISTS (
+                SELECT 1
+                FROM `sky_phone_flare_profile_photos` target_photo
+                JOIN `sky_phone_media` target_media
+                    ON target_media.`id` = target_photo.`media_id`
+                    AND target_media.`account_id` = target.`account_id`
+                    AND target_media.`media_type` = 'photo'
+                WHERE target_photo.`profile_id` = target.`id`
+                    AND target_media.`url` LIKE 'https://%'
+            )
         ORDER BY target.`updated_at` DESC, target.`id`
         LIMIT 30
     ]], { account_id })
@@ -313,32 +327,31 @@ local function validate_profile(source, data)
             end
         end
     end
-    local photo_media_ids = nil
-    local replace_photos = data.photoMediaIds ~= nil
-    if replace_photos then
-        if type(data.photoMediaIds) ~= "table" or #data.photoMediaIds > 6 then
+    if type(data.photoMediaIds) ~= "table"
+        or #data.photoMediaIds < 1
+        or #data.photoMediaIds > 6
+    then
+        return nil, "invalid_profile_photos"
+    end
+    local photo_media_ids = {}
+    local seen_media = {}
+    for key in pairs(data.photoMediaIds) do
+        if type(key) ~= "number" or key < 1 or key > #data.photoMediaIds
+            or key ~= math.floor(key)
+        then
             return nil, "invalid_profile_photos"
         end
-        photo_media_ids = {}
-        local seen_media = {}
-        for key in pairs(data.photoMediaIds) do
-            if type(key) ~= "number" or key < 1 or key > #data.photoMediaIds
-                or key ~= math.floor(key)
-            then
-                return nil, "invalid_profile_photos"
-            end
+    end
+    for _, value in ipairs(data.photoMediaIds) do
+        local media_id = tonumber(value)
+        if not media_id or media_id < 1 or media_id ~= math.floor(media_id)
+            or seen_media[media_id]
+            or not SkyPhoneMedia.ResolveOwnedMedia(source, media_id, "photo")
+        then
+            return nil, "invalid_profile_photos"
         end
-        for _, value in ipairs(data.photoMediaIds) do
-            local media_id = tonumber(value)
-            if not media_id or media_id < 1 or media_id ~= math.floor(media_id)
-                or seen_media[media_id]
-                or not SkyPhoneMedia.ResolveOwnedMedia(source, media_id, "photo")
-            then
-                return nil, "invalid_profile_photos"
-            end
-            seen_media[media_id] = true
-            photo_media_ids[#photo_media_ids + 1] = media_id
-        end
+        seen_media[media_id] = true
+        photo_media_ids[#photo_media_ids + 1] = media_id
     end
     return {
         name = name,
@@ -352,7 +365,7 @@ local function validate_profile(source, data)
         interests = json.encode(clean_interests),
         looking_for = data.lookingFor,
         photo_media_ids = photo_media_ids,
-        replace_photos = replace_photos,
+        replace_photos = true,
     }, nil
 end
 

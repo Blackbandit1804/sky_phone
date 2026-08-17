@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   maximumRenderedWidgetPage,
+  nearestSpringboardRectIndex,
   resolveSpringboardEdgeTurn,
   resolveSpringboardHomeEdgeTurn,
   springboardEdgeDirection,
@@ -18,6 +19,17 @@ describe('springboard widget drag', () => {
     expect(springboardEdgeDirection(284, 100, 468)).toBe(0)
   })
 
+  it('keeps both phone edges reachable at normal and reduced FiveM scales', () => {
+    expect(springboardEdgeDirection(125, 100, 468)).toBe(-1)
+    expect(springboardEdgeDirection(150, 100, 468)).toBe(0)
+    expect(springboardEdgeDirection(420, 100, 468)).toBe(0)
+    expect(springboardEdgeDirection(443, 100, 468)).toBe(1)
+    expect(springboardEdgeDirection(117, 100, 247)).toBe(-1)
+    expect(springboardEdgeDirection(200, 100, 247)).toBe(0)
+    expect(springboardEdgeDirection(230, 100, 247)).toBe(1)
+    expect(springboardEdgeDirection(100, 100, 100)).toBe(0)
+  })
+
   it('resolves reachable page destinations without crossing page bounds', () => {
     expect(resolveSpringboardEdgeTurn(455, 100, 468, 1, 0, 3)).toEqual({
       destination: 2,
@@ -29,6 +41,34 @@ describe('springboard widget drag', () => {
     })
     expect(resolveSpringboardEdgeTurn(113, 100, 468, 0, 0, 3)).toBeNull()
     expect(resolveSpringboardEdgeTurn(455, 100, 468, 3, 0, 3)).toBeNull()
+  })
+
+  it('resolves consecutive edge turns while an app remains at the same edge', () => {
+    const firstTurn = resolveSpringboardHomeEdgeTurn(
+      113,
+      100,
+      468,
+      4,
+      4,
+      5,
+      false,
+    )
+    expect(firstTurn).toEqual({
+      destination: 3,
+      direction: -1,
+      previewsPage: false,
+    })
+    expect(
+      resolveSpringboardHomeEdgeTurn(
+        113,
+        100,
+        468,
+        firstTurn?.destination ?? 4,
+        4,
+        5,
+        false,
+      ),
+    ).toEqual({ destination: 2, direction: -1, previewsPage: false })
   })
 
   it('previews one new trailing page without crossing the home-page limit', () => {
@@ -60,15 +100,44 @@ describe('springboard widget drag', () => {
     expect(springboardPageDragCompensation(2, 2, 368)).toBe(0)
   })
 
+  it('selects drop slots directly in viewport order', () => {
+    const slots = [
+      { height: 80, left: 100, top: 150, width: 70 },
+      { height: 80, left: 180, top: 150, width: 70 },
+      { height: 80, left: 260, top: 150, width: 70 },
+    ]
+
+    expect(nearestSpringboardRectIndex(115, 190, slots)).toBe(0)
+    expect(nearestSpringboardRectIndex(300, 190, slots)).toBe(2)
+    expect(nearestSpringboardRectIndex(220, 190, slots)).toBe(1)
+    expect(nearestSpringboardRectIndex(220, 190, [])).toBeNull()
+  })
+
   it('converts viewport coordinates into local phone coordinates under zoom', () => {
-    expect(
-      springboardViewportToLocal(169, 238, 100, 100, 253.92, 582.36, 368, 844),
-    ).toEqual({ x: 100, y: 200 })
+    const point = springboardViewportToLocal(
+      169,
+      238,
+      100,
+      100,
+      253.92,
+      582.36,
+      368,
+      844,
+    )
+    expect(point.x).toBeCloseTo(100)
+    expect(point.y).toBeCloseTo(200)
     expect(
       springboardViewportToLocal(200, 250, 100, 50, 0, 0, 368, 844),
     ).toEqual({ x: 100, y: 200 })
-    expect(
-      springboardViewportDeltaToLocal(69, 138, 253.92, 582.36, 368, 844),
-    ).toEqual({ x: 100, y: 200 })
+    const delta = springboardViewportDeltaToLocal(
+      69,
+      138,
+      253.92,
+      582.36,
+      368,
+      844,
+    )
+    expect(delta.x).toBeCloseTo(100)
+    expect(delta.y).toBeCloseTo(200)
   })
 })

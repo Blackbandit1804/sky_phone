@@ -17,6 +17,10 @@ const requestFilterSource = source.slice(
     source.indexOf('<div class="companies-segment-wrap">'),
   ) + '</div>'.length,
 )
+const availabilitySources =
+  source.match(
+    /<SkySegmented\s+class=\x22availability-segmented\x22[\s\S]*?<\/SkySegmented>/g,
+  ) ?? []
 
 describe('CompaniesApp Sky pill navigation contract', () => {
   it('uses the full-width sliding glass navigation on the root screen', () => {
@@ -53,6 +57,7 @@ describe('CompaniesApp Sky pill navigation contract', () => {
     expect(requestFilterSource).toContain('<SkySegmented')
     expect(requestFilterSource).toContain('compact')
     expect(requestFilterSource).toContain('navigation')
+    expect(requestFilterSource).toContain('strong')
     expect(requestFilterSource).toContain(':item-count="2"')
     expect(requestFilterSource).toContain(
       ':active-index="requestList === \'open\' ? 0 : 1"',
@@ -64,6 +69,12 @@ describe('CompaniesApp Sky pill navigation contract', () => {
   })
 
   it('uses compact sliding Glass for both availability controls', () => {
+    expect(availabilitySources).toHaveLength(2)
+    for (const availabilitySource of availabilitySources) {
+      expect(availabilitySource).toContain('compact')
+      expect(availabilitySource).toContain('navigation')
+      expect(availabilitySource).toContain('strong')
+    }
     expect(source.match(/class="availability-segmented"/g)).toHaveLength(2)
     expect(
       source.match(

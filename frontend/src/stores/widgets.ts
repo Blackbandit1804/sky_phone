@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
 
 import { usePhoneStore } from '@/stores/phone'
-import type { WidgetKind, WidgetSettings, WidgetSize } from '@/types/widgets'
+import type {
+  WidgetKind,
+  WidgetLayout,
+  WidgetSettings,
+  WidgetSize,
+} from '@/types/widgets'
 import {
   addWidget,
   createDefaultWidgetLayout,
@@ -18,6 +23,12 @@ export const useWidgetsStore = defineStore('widgets', {
     layout: createDefaultWidgetLayout(),
   }),
   actions: {
+    applyLayout(layout: WidgetLayout): boolean {
+      if (layout === this.layout) return false
+      this.layout = layout
+      this.persist()
+      return true
+    },
     add(kind: WidgetKind, size: WidgetSize, page: number): string | null {
       const previousIds = new Set(
         this.layout.instances.map((instance) => instance.id),

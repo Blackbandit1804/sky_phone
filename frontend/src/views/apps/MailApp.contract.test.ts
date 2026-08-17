@@ -12,7 +12,10 @@ const mailServerSource = readFileSync(
   'utf8',
 )
 const migrationSource = readFileSync(
-  new URL('../../../../sky_phone/source/server/db_migrate.lua', import.meta.url),
+  new URL(
+    '../../../../sky_phone/source/server/db_migrate.lua',
+    import.meta.url,
+  ),
   'utf8',
 )
 const clientSource = readFileSync(
@@ -52,9 +55,7 @@ describe('MailApp Sky UI contract', () => {
   })
 
   it('provides a Sky UI modal to create and open custom mailboxes', () => {
-    const mailboxStart = source.indexOf(
-      'class="mail-modal mail-mailbox-modal"',
-    )
+    const mailboxStart = source.indexOf('class="mail-modal mail-mailbox-modal"')
     const mailboxEnd = source.indexOf('</sky-sheet>', mailboxStart)
     const mailboxModal = source.slice(mailboxStart, mailboxEnd)
 
@@ -67,19 +68,19 @@ describe('MailApp Sky UI contract', () => {
     expect(source).toContain('v-model="mailboxName"')
     expect(source).toContain("phone.t('Apps.mail.mailboxLocation')")
     expect(source).toContain('@click="createMailbox"')
-    expect(source).toContain('@click="openFolder(mailboxFolderKey(mailbox.id))"')
+    expect(source).toContain(
+      '@click="openFolder(mailboxFolderKey(mailbox.id))"',
+    )
     expect(source).toContain('@click="moveMessageToMailbox(mailbox)"')
     expect(source).toContain('@click="moveMessageToDefaultMailbox"')
     expect(mailboxModal).toContain('class="mail-modal__nav-button"')
-    expect(mailboxModal).toContain(":aria-label=\"phone.t('Common.cancel')\"")
-    expect(mailboxModal).toContain(":aria-label=\"phone.t('Common.save')\"")
+    expect(mailboxModal).toContain(':aria-label="phone.t(\'Common.cancel\')"')
+    expect(mailboxModal).toContain(':aria-label="phone.t(\'Common.save\')"')
     expect(mailboxModal).toContain('<X :size="20" />')
     expect(mailboxModal).toContain('<Check :size="20" />')
     expect(mailboxModal).not.toContain('<sky-spinner')
     expect(mailboxModal).toContain('class="mail-mailbox-create__name"')
-    expect(mailboxModal).toContain(
-      'class="mail-mailbox-create__location-row"',
-    )
+    expect(mailboxModal).toContain('class="mail-mailbox-create__location-row"')
     expect(mailboxModal).not.toContain(' outline')
     expect(source).toMatch(
       /\.mail-mailbox-create__form\s*\{[^}]*overflow-y:\s*auto/s,
@@ -121,9 +122,7 @@ describe('MailApp Sky UI contract', () => {
   })
 
   it('offers multiple filter criteria in one scrolling Sky UI modal', () => {
-    const filterStart = source.indexOf(
-      'class="mail-modal mail-filter-modal"',
-    )
+    const filterStart = source.indexOf('class="mail-modal mail-filter-modal"')
     const filterEnd = source.indexOf('</sky-sheet>', filterStart)
     const filterScreen = source.slice(filterStart, filterEnd)
 
@@ -132,7 +131,9 @@ describe('MailApp Sky UI contract', () => {
     expect(filterScreen).toContain('@backdropclick="closeMailFilters"')
     expect(filterScreen).toContain('@escape="closeMailFilters"')
     expect(filterScreen).toContain('@swipeclose="closeMailFilters"')
-    expect(filterScreen).toContain('class="mail-modal__navbar mail-filters__navbar"')
+    expect(filterScreen).toContain(
+      'class="mail-modal__navbar mail-filters__navbar"',
+    )
     expect(filterScreen).toContain('@click="applyMailFilters"')
     expect(filterScreen).toContain("toggleDraftReadFilter('unread')")
     expect(filterScreen).toContain("toggleDraftReadFilter('read')")
@@ -157,9 +158,11 @@ describe('MailApp Sky UI contract', () => {
   it('sends active filters through the paginated mail list contract', () => {
     expect(source).toContain('mail.setListFilters(mailFilters.value)')
     expect(mailServerSource).toContain('local function normalize_list_filters')
-    expect(mailServerSource).toContain('local filters = normalize_list_filters(data.filters)')
-    expect(mailServerSource).toContain("filters.read == \"unread\"")
-    expect(mailServerSource).toContain("filters.address == \"to-me\"")
+    expect(mailServerSource).toContain(
+      'local filters = normalize_list_filters(data.filters)',
+    )
+    expect(mailServerSource).toContain('filters.read == "unread"')
+    expect(mailServerSource).toContain('filters.address == "to-me"')
     expect(mailServerSource).toContain('m.`created_at` >= CURRENT_DATE()')
   })
 
@@ -241,9 +244,7 @@ describe('MailMarkdownEditor Sky toolbar contract', () => {
     expect(editorSource).toMatch(
       /\.mail-editor__tools\s*\{[^}]*padding-right:\s*var\(--sky-space-3\)[^}]*padding-left:\s*var\(--sky-space-3\)/s,
     )
-    expect(editorSource).toMatch(
-      /:deep\(\.tiptap p\)\s*\{[^}]*margin:\s*0;/s,
-    )
+    expect(editorSource).toMatch(/:deep\(\.tiptap p\)\s*\{[^}]*margin:\s*0;/s)
     expect(editorSource).not.toContain(':deep(.tiptap p:last-child)')
   })
 })
@@ -262,16 +263,16 @@ describe('Mail list toolbar styling contract', () => {
     expect(source).toMatch(
       /\.mail-folders-toolbar\s+:deep\(\.sky-fab\)\s*\{[^}]*border:\s*1px solid var\(--sky-hairline\)/s,
     )
-    expect(source).toMatch(
-      /\.mail-folder-row\s*\{[^}]*min-height:\s*52px/s,
-    )
+    expect(source).toMatch(/\.mail-folder-row\s*\{[^}]*min-height:\s*52px/s)
   })
 })
 
 describe('Mail custom mailbox server contract', () => {
   it('persists account-owned mailboxes and custom entry placement', () => {
     expect(migrationSource).toContain('name = "sky_phone_mailboxes"')
-    expect(migrationSource).toContain('{ name = "mailbox_id", type = "BIGINT UNSIGNED NULL" }')
+    expect(migrationSource).toContain(
+      '{ name = "mailbox_id", type = "BIGINT UNSIGNED NULL" }',
+    )
     expect(mailServerSource).toContain(
       'Bridge.Callbacks.Register("sky_phone:mail:create-mailbox"',
     )
@@ -281,9 +282,7 @@ describe('Mail custom mailbox server contract', () => {
     expect(mailServerSource).toContain(
       'Bridge.Callbacks.Register("sky_phone:mail:move"',
     )
-    expect(mailServerSource).toContain(
-      'WHERE `id` = ? AND `account_id` = ?',
-    )
+    expect(mailServerSource).toContain('WHERE `id` = ? AND `account_id` = ?')
     expect(mailServerSource).toContain(
       'WHERE `id` = ? AND `account_id` = ? AND `trashed_at` IS NULL',
     )
@@ -298,5 +297,60 @@ describe('Mail custom mailbox server contract', () => {
     ]) {
       expect(clientSource).toContain(`"${endpoint}"`)
     }
+  })
+})
+
+function functionSource(name: string, nextName: string): string {
+  const start = source.indexOf(`async function ${name}`)
+  const end = source.indexOf(`async function ${nextName}`, start + 1)
+  return source.slice(start, end)
+}
+
+describe('MailApp contact compose deep-link contract', () => {
+  it('normalizes a compose=1 recipient only after mail authentication', () => {
+    const consumeRequest = functionSource(
+      'consumeContactComposeRequest',
+      'closeCompose',
+    )
+
+    expect(source).toContain('const route = useRoute()')
+    expect(source).toContain('const router = useRouter()')
+    expect(consumeRequest).toContain(
+      "if (!authenticated.value || route.query.compose !== '1') return",
+    )
+    expect(consumeRequest).toContain("typeof route.query.to === 'string'")
+    expect(consumeRequest).toContain('normalizeMailAddress(route.query.to)')
+    expect(consumeRequest).toContain(
+      "beginCompose({ body: '', recipients: [requestedRecipient], subject: '' })",
+    )
+  })
+
+  it('consumes the route after handling the request', () => {
+    const consumeRequest = functionSource(
+      'consumeContactComposeRequest',
+      'closeCompose',
+    )
+    const composeIndex = consumeRequest.indexOf('beginCompose(')
+    const replaceIndex = consumeRequest.indexOf(
+      "await router.replace('/apps/mail')",
+    )
+
+    expect(replaceIndex).toBeGreaterThan(composeIndex)
+  })
+
+  it('retries the pending compose request after auth and on authenticated mount', () => {
+    const submitAuth = functionSource('submitAuth', 'signOut')
+    const mounted = source.slice(
+      source.indexOf('onMounted(() => {'),
+      source.indexOf('onBeforeUnmount(() => {'),
+    )
+
+    expect(submitAuth).toMatch(
+      /if \(!response\.success\)[\s\S]*await consumeContactComposeRequest\(\)/,
+    )
+    expect(mounted).toContain('void consumeContactComposeRequest()')
+    expect(source).toMatch(
+      /watch\(authenticated,[\s\S]*isAuthenticated && !wasAuthenticated && !submitting\.value[\s\S]*consumeContactComposeRequest\(\)/,
+    )
   })
 })

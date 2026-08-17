@@ -85,9 +85,7 @@ function memoWaveform(phase = 0) {
 
 let authenticated = true
 let draft = null
-let mockMailboxes = [
-  { count: 0, id: 7, name: 'Projects', sort_order: 0 },
-]
+let mockMailboxes = [{ count: 0, id: 7, name: 'Projects', sort_order: 0 }]
 let nextMockMailboxId = 8
 const radioData = {
   badge: '231',
@@ -218,6 +216,8 @@ let crewLinkProfile = {
   overheadVisible: false,
   username: 'Skyline',
 }
+const crewLinkTestPassword = 'CrewLink123!'
+let crewLinkAuthenticated = false
 let crewLinkGroups = [
   {
     allowMemberPings: true,
@@ -420,14 +420,18 @@ const crewLinkLimits = {
 }
 
 function crewLinkBootstrap(testScenario = '') {
+  if (!crewLinkAuthenticated) {
+    return { authenticated: false, groups: [], invitations: [], profile: null }
+  }
   if (
     testScenario === 'crewlink-onboarding' ||
     (testScenario === 'crewlink-register' && !crewLinkProfile)
   ) {
-    return { groups: [], invitations: [], profile: null }
+    return { authenticated: true, groups: [], invitations: [], profile: null }
   }
   if (testScenario === 'crewlink-empty') {
     return {
+      authenticated: true,
       activeGroup: null,
       groups: [],
       invitations: crewLinkInvitations,
@@ -439,6 +443,7 @@ function crewLinkBootstrap(testScenario = '') {
     (group) => group.id === crewLinkProfile.activeGroupId,
   )
   return {
+    authenticated: true,
     activeGroup: activeSummary
       ? {
           ...activeSummary,
@@ -1435,12 +1440,14 @@ const mockHousingCandidates = [
 ]
 
 let contactSequence = 40
+let smsSequence = 1
 const contacts = [
   {
     avatar_media_id: 1,
     avatar_url: 'https://picsum.photos/seed/sky-phone-1/600/800',
     created_at: isoTime(-42 * 86_400_000),
     favorite: true,
+    email: 'alex.rivera@ifruit.com',
     id: 'contact-alex',
     name: 'Alex Rivera',
     notes: 'Meeting on Friday at 18:00 near the bank.',
@@ -2876,6 +2883,19 @@ mockMedia.push(
     url: mockGalleryImage(title, sky, landscape, accent),
   })),
 )
+
+function mockPhotoUrls(ids) {
+  return ids.map((id) => {
+    const photo = mockMedia.find(
+      (item) => item.id === id && item.mediaType === 'photo',
+    )
+    if (!photo) {
+      throw new Error(`Missing mock gallery photo ${id}`)
+    }
+    return photo.url
+  })
+}
+
 const weazelNewsCategoryIds = ['official', 'events', 'jobs', 'news', 'business']
 const weazelNewsMaxImages = 6
 let weazelNewsSequence = 8
@@ -3410,8 +3430,7 @@ function counts() {
   return {
     drafts: draft ? 1 : 0,
     inbox: messages.filter(
-      (item) =>
-        item.folder === 'inbox' && !item.mailbox_id && !item.trashed_at,
+      (item) => item.folder === 'inbox' && !item.mailbox_id && !item.trashed_at,
     ).length,
     sent: messages.filter(
       (item) => item.folder === 'sent' && !item.mailbox_id && !item.trashed_at,
@@ -3431,8 +3450,7 @@ function mailboxViews() {
   return mockMailboxes.map((mailbox) => ({
     ...mailbox,
     count: messages.filter(
-      (message) =>
-        message.mailbox_id === mailbox.id && !message.trashed_at,
+      (message) => message.mailbox_id === mailbox.id && !message.trashed_at,
     ).length,
   }))
 }
@@ -3450,8 +3468,8 @@ let flareProfile = {
   interests: ['Night drives', 'Music', 'Coffee'],
   lookingFor: 'dates',
   discoverable: true,
-  photoMediaIds: [],
-  photoUrls: [],
+  photoMediaIds: [1, 3],
+  photoUrls: mockPhotoUrls([1, 3]),
 }
 let flareSuggestions = [
   {
@@ -3463,7 +3481,7 @@ let flareSuggestions = [
     avatar: 0,
     interests: ['Beach days', 'Food spots', 'Art'],
     lookingFor: 'longTerm',
-    photoUrls: [],
+    photoUrls: mockPhotoUrls([3, 7]),
   },
   {
     id: 12,
@@ -3474,7 +3492,7 @@ let flareSuggestions = [
     avatar: 1,
     interests: ['Architecture', 'Karaoke', 'Travel'],
     lookingFor: 'dates',
-    photoUrls: [],
+    photoUrls: mockPhotoUrls([4, 11]),
   },
   {
     id: 13,
@@ -3485,7 +3503,7 @@ let flareSuggestions = [
     avatar: 2,
     interests: ['Coffee', 'Photography', 'Dogs'],
     lookingFor: 'friends',
-    photoUrls: [],
+    photoUrls: mockPhotoUrls([5, 9]),
   },
   {
     id: 14,
@@ -3496,7 +3514,7 @@ let flareSuggestions = [
     avatar: 3,
     interests: ['Cars', 'Road trips', 'Vinyl'],
     lookingFor: 'longTerm',
-    photoUrls: [],
+    photoUrls: mockPhotoUrls([8, 13]),
   },
   {
     id: 15,
@@ -3507,7 +3525,7 @@ let flareSuggestions = [
     avatar: 4,
     interests: ['Sailing', 'Fitness', 'Brunch'],
     lookingFor: 'dates',
-    photoUrls: [],
+    photoUrls: mockPhotoUrls([12, 14]),
   },
 ]
 const flareSuggestionFixtures = flareSuggestions.map((profile) => ({
@@ -3527,7 +3545,7 @@ const flareMatches = [
       avatar: 5,
       interests: ['Live music', 'Cooking'],
       lookingFor: 'dates',
-      photoUrls: [],
+      photoUrls: mockPhotoUrls([15, 16]),
     },
     lastMessage: 'Friday night jazz',
     lastMessageAt: isoTime(-18 * 60 * 1000),
@@ -3596,6 +3614,36 @@ function freshFlareSuggestions() {
     interests: [...profile.interests],
     photoUrls: [...profile.photoUrls],
   }))
+}
+
+function flarePhotoRemovalWouldEmptyProfile(mediaIds) {
+  if (!flareProfile || !Array.isArray(flareProfile.photoMediaIds)) {
+    return false
+  }
+  const currentIds = flareProfile.photoMediaIds
+  const removedIds = new Set(mediaIds)
+  return (
+    currentIds.length > 0 &&
+    currentIds.some((id) => removedIds.has(id)) &&
+    currentIds.every((id) => removedIds.has(id))
+  )
+}
+
+function removeFlareProfilePhotos(mediaIds) {
+  if (!flareProfile || !Array.isArray(flareProfile.photoMediaIds)) return
+  const removedIds = new Set(mediaIds)
+  const photoMediaIds = []
+  const photoUrls = []
+  flareProfile.photoMediaIds.forEach((id, index) => {
+    if (removedIds.has(id)) return
+    photoMediaIds.push(id)
+    photoUrls.push(flareProfile.photoUrls[index])
+  })
+  flareProfile = {
+    ...flareProfile,
+    photoMediaIds,
+    photoUrls,
+  }
 }
 
 const companyCategories = [
@@ -4082,15 +4130,13 @@ function companyWorkContext(testScenario = '') {
 
 app.post('/api/:endpoint', async (request, response, next) => {
   const endpoint = request.params.endpoint
-  console.log(
-    `[NUI] ${endpoint}`,
-    endpoint === 'memos:devCapture'
-      ? {
-          ...request.body,
-          audioDataUrl: `<${String(request.body.audioDataUrl ?? '').length} characters>`,
-        }
-      : request.body,
-  )
+  const loggedBody = { ...request.body }
+  if (typeof loggedBody.password === 'string')
+    loggedBody.password = '<redacted>'
+  if (endpoint === 'memos:devCapture') {
+    loggedBody.audioDataUrl = `<${String(request.body.audioDataUrl ?? '').length} characters>`
+  }
+  console.log(`[NUI] ${endpoint}`, loggedBody)
   if (endpoint === 'music:bootstrap') {
     response.json({ success: true, data: musicBootstrap() })
     return
@@ -5525,14 +5571,74 @@ app.post('/api/:endpoint', (request, response) => {
     )
     return
   }
+  if (endpoint === 'companies:dial-service-line') {
+    const context = companyWorkContext(testScenario)
+    if (!context.authorized || !context.permissions.canTakeCalls) {
+      response.json({ success: false, error: 'not_authorized' })
+      return
+    }
+    const phoneNumber = String(request.body.phoneNumber ?? '').replace(
+      /\D/g,
+      '',
+    )
+    if (
+      phoneNumber.length !== 10 ||
+      companyProfiles.some((company) => company.phoneNumber === phoneNumber)
+    ) {
+      response.json({ success: false, error: 'invalid_number' })
+      return
+    }
+    const id = `company-call-${Date.now()}`
+    const startedAt = Date.now()
+    recentCalls.unshift({
+      call_id: id,
+      created_at: new Date(startedAt).toISOString(),
+      direction: 'outgoing',
+      duration_seconds: 0,
+      id: recentCalls.length + 1,
+      other_number: phoneNumber,
+      status: 'ringing',
+    })
+    response.json({
+      success: true,
+      data: {
+        direction: 'outgoing',
+        id,
+        otherNumber: phoneNumber,
+        speakerEnabled: false,
+        speakerSupported: true,
+        startedAt,
+        state: 'ringing',
+      },
+    })
+    return
+  }
   if (endpoint === 'crewlink:bootstrap') {
     response.json({ success: true, data: crewLinkBootstrap(testScenario) })
     return
   }
-  if (endpoint === 'crewlink:create-profile') {
+  if (endpoint === 'crewlink:login') {
+    if (!crewLinkProfile || request.body.password !== crewLinkTestPassword) {
+      response.json({ success: false, error: 'invalid_credentials' })
+      return
+    }
+    crewLinkAuthenticated = true
+    response.json({ success: true, data: crewLinkBootstrap(testScenario) })
+    return
+  }
+  if (endpoint === 'crewlink:register') {
     const username = String(request.body.username ?? '').trim()
     if (!/^[A-Za-z0-9][A-Za-z0-9._]{1,18}[A-Za-z0-9]$/.test(username)) {
       response.json({ success: false, error: 'invalid_username' })
+      return
+    }
+    const password = String(request.body.password ?? '')
+    if (password.length < 8 || password.length > 72) {
+      response.json({ success: false, error: 'invalid_password' })
+      return
+    }
+    if (crewLinkProfile) {
+      response.json({ success: false, error: 'profile_exists' })
       return
     }
     crewLinkProfile = {
@@ -5546,7 +5652,13 @@ app.post('/api/:endpoint', (request, response) => {
       overheadVisible: false,
       username,
     }
-    response.json({ success: true, data: crewLinkBootstrap() })
+    crewLinkAuthenticated = true
+    response.json({ success: true, data: crewLinkBootstrap(testScenario) })
+    return
+  }
+  if (endpoint === 'crewlink:logout') {
+    crewLinkAuthenticated = false
+    response.json({ success: true })
     return
   }
   if (endpoint === 'crewlink:update-profile') {
@@ -6393,28 +6505,26 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'flare:save-profile') {
     const requestedPhotoIds = request.body.photoMediaIds
-    let photoUpdate = {}
-    if (requestedPhotoIds !== undefined) {
-      const validIds =
-        Array.isArray(requestedPhotoIds) &&
-        requestedPhotoIds.length <= 6 &&
-        new Set(requestedPhotoIds).size === requestedPhotoIds.length &&
-        requestedPhotoIds.every((id) => Number.isInteger(id) && id > 0)
-      const photos = validIds
-        ? requestedPhotoIds.map((id) =>
-            mockMedia.find(
-              (item) => item.id === id && item.mediaType === 'photo',
-            ),
-          )
-        : []
-      if (!validIds || photos.some((photo) => !photo)) {
-        response.json({ success: false, error: 'invalid_profile_photos' })
-        return
-      }
-      photoUpdate = {
-        photoMediaIds: [...requestedPhotoIds],
-        photoUrls: photos.map((photo) => photo.url),
-      }
+    const validIds =
+      Array.isArray(requestedPhotoIds) &&
+      requestedPhotoIds.length >= 1 &&
+      requestedPhotoIds.length <= 6 &&
+      new Set(requestedPhotoIds).size === requestedPhotoIds.length &&
+      requestedPhotoIds.every((id) => Number.isInteger(id) && id > 0)
+    const photos = validIds
+      ? requestedPhotoIds.map((id) =>
+          mockMedia.find(
+            (item) => item.id === id && item.mediaType === 'photo',
+          ),
+        )
+      : []
+    if (!validIds || photos.some((photo) => !photo)) {
+      response.json({ success: false, error: 'invalid_profile_photos' })
+      return
+    }
+    const photoUpdate = {
+      photoMediaIds: [...requestedPhotoIds],
+      photoUrls: photos.map((photo) => photo.url),
     }
     flareProfile = {
       ...flareProfile,
@@ -8500,6 +8610,7 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'development:bootstrap') {
+    crewLinkAuthenticated = false
     authenticated = testScenario !== 'setup-account-unlinked'
     linkedAccount = authenticated
       ? {
@@ -8728,6 +8839,7 @@ app.post('/api/:endpoint', (request, response) => {
       (messageType === 'voice' && !request.body.mediaPayload) ||
       (messageType === 'contact' && !selectedContact) ||
       (messageType === 'share' && !request.body.sharePayload) ||
+      (isAttachment && body.length > 2000) ||
       (isAttachment &&
         !attachmentAssets[messageType].has(attachmentId) &&
         !attachmentId.startsWith('https://') &&
@@ -8752,7 +8864,7 @@ app.post('/api/:endpoint', (request, response) => {
         : null,
       created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
       direction: 'sent',
-      id: `sms-${Date.now()}`,
+      id: `sms-${Date.now()}-${smsSequence++}`,
       media_duration_ms: ['voice', 'video'].includes(messageType)
         ? (request.body.mediaDurationMs ?? null)
         : null,
@@ -8818,6 +8930,19 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'contacts:save') {
     const name = String(request.body.name ?? '').trim()
+    let email = String(request.body.email ?? '')
+      .trim()
+      .toLowerCase()
+    if (email && !email.includes('@')) email = `${email}@ifruit.com`
+    const emailLocalPart = email.match(
+      /^([a-z0-9][a-z0-9._-]*[a-z0-9])@ifruit\.com$/,
+    )?.[1]
+    const emailValid =
+      !email ||
+      (Boolean(emailLocalPart) &&
+        emailLocalPart.length >= 3 &&
+        emailLocalPart.length <= 32 &&
+        !emailLocalPart.includes('..'))
     const notes = String(request.body.notes ?? '')
       .trim()
       .slice(0, 500)
@@ -8831,7 +8956,12 @@ app.post('/api/:endpoint', (request, response) => {
           (item) => item.id === avatarMediaId && item.mediaType === 'photo',
         )
       : null
-    if (!name || !phoneNumber || (avatarMediaId && !avatarMedia)) {
+    if (
+      !name ||
+      !phoneNumber ||
+      !emailValid ||
+      (avatarMediaId && !avatarMedia)
+    ) {
       response.json({ success: false, error: 'invalid_contact' })
       return
     }
@@ -8842,6 +8972,7 @@ app.post('/api/:endpoint', (request, response) => {
     }
     if (contact) {
       contact.name = name
+      contact.email = email || null
       contact.notes = notes || null
       contact.organization = organization || null
       contact.phone_number = phoneNumber
@@ -8856,6 +8987,7 @@ app.post('/api/:endpoint', (request, response) => {
       contact = {
         created_at: now,
         favorite: false,
+        email: email || null,
         id: `contact-${contactSequence++}`,
         name,
         notes: notes || null,
@@ -9044,7 +9176,13 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'gallery:delete') {
-    mockMedia = mockMedia.filter((item) => item.id !== Number(request.body.id))
+    const mediaId = Number(request.body.id)
+    if (flarePhotoRemovalWouldEmptyProfile([mediaId])) {
+      response.json({ success: false, error: 'profile_photo_required' })
+      return
+    }
+    mockMedia = mockMedia.filter((item) => item.id !== mediaId)
+    removeFlareProfilePhotos([mediaId])
     response.json({ success: true })
     return
   }
@@ -9068,7 +9206,12 @@ app.post('/api/:endpoint', (request, response) => {
     const deletedIds = mockMedia
       .filter((item) => ids.includes(item.id))
       .map((item) => item.id)
+    if (flarePhotoRemovalWouldEmptyProfile(deletedIds)) {
+      response.json({ success: false, error: 'profile_photo_required' })
+      return
+    }
     mockMedia = mockMedia.filter((item) => !deletedIds.includes(item.id))
+    removeFlareProfilePhotos(deletedIds)
     response.json({
       success: true,
       data: {
@@ -10247,13 +10390,13 @@ app.post('/api/:endpoint', (request, response) => {
           ? messages.filter(
               (item) => item.mailbox_id === mailboxId && !item.trashed_at,
             )
-        : messages.filter((item) =>
-            folder === 'trash'
-              ? item.trashed_at
-              : item.folder === folder &&
-                !item.mailbox_id &&
-                !item.trashed_at,
-          )
+          : messages.filter((item) =>
+              folder === 'trash'
+                ? item.trashed_at
+                : item.folder === folder &&
+                  !item.mailbox_id &&
+                  !item.trashed_at,
+            )
     const query = String(search).toLowerCase()
     if (query) {
       items = items.filter((item) =>

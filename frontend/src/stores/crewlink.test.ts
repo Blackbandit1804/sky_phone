@@ -58,6 +58,29 @@ describe('CrewLink store', () => {
     expect(store.error).toBe('invalid_code')
   })
 
+  it('sends only the password when logging in', async () => {
+    vi.mocked(nuiCall).mockResolvedValue({
+      success: false,
+      error: 'invalid_credentials',
+    })
+    const store = useCrewLinkStore()
+    await store.login('CrewLink123!')
+    expect(nuiCall).toHaveBeenCalledWith('crewlink:login', {
+      password: 'CrewLink123!',
+    })
+  })
+
+  it('sends username, password, and avatar when registering', async () => {
+    vi.mocked(nuiCall).mockResolvedValue({ success: true })
+    const store = useCrewLinkStore()
+    await store.register('Skyline', 'CrewLink123!', 42)
+    expect(nuiCall).toHaveBeenCalledWith('crewlink:register', {
+      avatarMediaId: 42,
+      password: 'CrewLink123!',
+      username: 'Skyline',
+    })
+  })
+
   it('applies live members without replacing group metadata', async () => {
     const store = useCrewLinkStore()
     store.activeGroup = {

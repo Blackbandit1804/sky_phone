@@ -61,7 +61,7 @@ describe('banking store', () => {
     expect(banking.error).toBe('insufficient_funds')
   })
 
-  it('does not let an older response overwrite the newest overview', async () => {
+  it('does not let an older overview response overwrite a newer transfer', async () => {
     let resolveOlder!: (response: NuiResponse<BankingOverview>) => void
     const olderResponse = new Promise<NuiResponse<BankingOverview>>(
       (resolve) => {
@@ -75,7 +75,7 @@ describe('banking store', () => {
     const banking = useBankingStore()
 
     const olderRequest = banking.load()
-    await banking.load()
+    await banking.perform('transfer', 1787, '5551234567')
     resolveOlder({ data: { ...overview, bank: 1 }, success: true })
     await olderRequest
 
@@ -83,15 +83,62 @@ describe('banking store', () => {
     expect(banking.isLoading).toBe(false)
   })
 
-  it('blocks every banking request while a reload cooldown is active', async () => {
+  it('coalesces concurrent overview reloads into one NUI request', async () => {
+    let resolveLoad!: (response: NuiResponse<BankingOverview>) => void
+    mockNuiCall.mockReturnValueOnce(
+      new Promise<NuiResponse<BankingOverview>>((resolve) => {
+        resolveLoad = resolve
+      }),
+    )
+    const banking = useBankingStore()
+
+    const firstLoad = banking.load()
+    const secondLoad = banking.load()
+    resolveLoad({ data: overview, success: true })
+
+    expect(await firstLoad).toBe(true)
+    expect(await secondLoad).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledTimes(1)
+  })
+
+  it('queues one fresh overview after a server-side balance change', async () => {
+    let resolveActive!: (response: NuiResponse<BankingOverview>) => void
+    mockNuiCall
+      .mockReturnValueOnce(
+        new Promise<NuiResponse<BankingOverview>>((resolve) => {
+          resolveActive = resolve
+        }),
+      )
+      .mockResolvedValueOnce({
+        data: { ...overview, bank: overview.bank + 500 },
+        success: true,
+      })
+    const banking = useBankingStore()
+
+    const activeLoad = banking.load()
+    const changedLoad = banking.load(false, true)
+    const duplicateChangedLoad = banking.load(false, true)
+    resolveActive({ data: overview, success: true })
+
+    await activeLoad
+    expect(await changedLoad).toBe(true)
+    expect(await duplicateChangedLoad).toBe(true)
+    expect(banking.overview?.bank).toBe(overview.bank + 500)
+    expect(mockNuiCall).toHaveBeenCalledTimes(2)
+  })
+
+  it('limits manual refreshes without blocking automatic loads or transfers', async () => {
     const banking = useBankingStore()
     banking.cooldownUntil = Date.now() + 10_000
+    mockNuiCall
+      .mockResolvedValueOnce({ data: overview, success: true })
+      .mockResolvedValueOnce({ data: overview, success: true })
 
-    expect(await banking.load()).toBe(false)
-    expect(await banking.perform('transfer', 100, '5551234567')).toEqual({
-      error: 'reload_cooldown',
-      success: false,
-    })
-    expect(mockNuiCall).not.toHaveBeenCalled()
+    expect(await banking.load(true)).toBe(false)
+    expect(await banking.load()).toBe(true)
+    expect((await banking.perform('transfer', 100, '5551234567')).success).toBe(
+      true,
+    )
+    expect(mockNuiCall).toHaveBeenCalledTimes(2)
   })
 })

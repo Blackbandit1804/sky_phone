@@ -17,6 +17,7 @@ const browserDataRequests = [
   ['companies:work-context', {}],
   ['companies:work-queue', { limit: 20, offset: 0 }],
   ['contacts:list', {}],
+  ['crewlink:login', { password: 'CrewLink123!' }],
   ['crewlink:bootstrap', {}],
   ['crewlink:live', {}],
   ['crewlink:nearby', {}],
@@ -189,6 +190,16 @@ function verifyBrowserTestData(dataByEndpoint) {
 }
 
 async function verifyStatefulActions(baseUrl) {
+  const companyCall = await expectSuccess(
+    baseUrl,
+    'companies:dial-service-line',
+    { phoneNumber: '5551110001' },
+    true,
+  )
+  assert.equal(companyCall.direction, 'outgoing')
+  assert.equal(companyCall.otherNumber, '5551110001')
+  assert.equal(companyCall.state, 'ringing')
+
   let gallery = await expectSuccess(baseUrl, 'gallery:list', {}, true)
   assert(gallery.length >= 10, 'gallery:list did not include enough test media')
   assert(
@@ -360,6 +371,40 @@ async function verifyStatefulActions(baseUrl) {
   })
   assert.equal(tooManyImages.success, false)
   assert.equal(tooManyImages.error, 'invalid_attachment')
+
+  const firstSmsPhoto = await expectSuccess(
+    baseUrl,
+    'messages:send',
+    {
+      body: '',
+      mediaAssetId: String(articlePhotos[0].id),
+      messageType: 'image',
+      phoneNumber: '5558675309',
+    },
+    true,
+  )
+  const captionedSmsPhoto = await expectSuccess(
+    baseUrl,
+    'messages:send',
+    {
+      body: 'Two photos from one composer draft.',
+      mediaAssetId: String(articlePhotos[1].id),
+      messageType: 'image',
+      phoneNumber: '5558675309',
+    },
+    true,
+  )
+  assert.notEqual(firstSmsPhoto.id, captionedSmsPhoto.id)
+  assert.equal(captionedSmsPhoto.body, 'Two photos from one composer draft.')
+  const smsPhotoThread = await expectSuccess(
+    baseUrl,
+    'messages:thread',
+    { phoneNumber: '5558675309' },
+    true,
+  )
+  assert(smsPhotoThread.some((message) => message.id === firstSmsPhoto.id))
+  assert(smsPhotoThread.some((message) => message.id === captionedSmsPhoto.id))
+
   await expectSuccess(baseUrl, 'weazel-news:delete', {
     id: updatedArticle.id,
     revision: updatedArticle.revision,
@@ -486,9 +531,14 @@ async function verifyStatefulActions(baseUrl) {
   const contact = await expectSuccess(
     baseUrl,
     'contacts:save',
-    { name: 'Browser Tester', phoneNumber: '5552223333' },
+    {
+      email: 'browser.tester',
+      name: 'Browser Tester',
+      phoneNumber: '5552223333',
+    },
     true,
   )
+  assert.equal(contact.email, 'browser.tester@ifruit.com')
   await expectSuccess(
     baseUrl,
     'contacts:favorite',
@@ -496,7 +546,9 @@ async function verifyStatefulActions(baseUrl) {
     true,
   )
   let contacts = await expectSuccess(baseUrl, 'contacts:list', {}, true)
-  assert.equal(contacts.find((item) => item.id === contact.id)?.favorite, true)
+  const savedContact = contacts.find((item) => item.id === contact.id)
+  assert.equal(savedContact?.favorite, true)
+  assert.equal(savedContact?.email, 'browser.tester@ifruit.com')
   await expectSuccess(baseUrl, 'contacts:delete', { id: contact.id })
   contacts = await expectSuccess(baseUrl, 'contacts:list', {}, true)
   assert(
@@ -682,12 +734,7 @@ async function verifyStatefulActions(baseUrl) {
     { name: 'Browser Test' },
     true,
   )
-  const mailboxes = await expectSuccess(
-    baseUrl,
-    'mail:mailboxes',
-    {},
-    true,
-  )
+  const mailboxes = await expectSuccess(baseUrl, 'mail:mailboxes', {}, true)
   assert(
     mailboxes.mailboxes.some((item) => item.id === mailbox.id),
     'mail:create-mailbox did not update the mock mailbox list',
@@ -802,9 +849,91 @@ async function verifyStatefulActions(baseUrl) {
   )
   assert(flareBeforeDelete.profile, 'flare:bootstrap did not include a profile')
   assert(
+    flareBeforeDelete.profile.photoMediaIds.length >= 1 &&
+      flareBeforeDelete.profile.photoMediaIds.length <= 6,
+    'flare:bootstrap profile did not include one to six gallery photos',
+  )
+  assert.equal(
+    flareBeforeDelete.profile.photoMediaIds.length,
+    flareBeforeDelete.profile.photoUrls.length,
+    'flare:bootstrap profile photo IDs and URLs were out of sync',
+  )
+  const galleryPhotoUrls = new Set(
+    gallery
+      .filter((item) => item.mediaType === 'photo')
+      .map((item) => item.url),
+  )
+  assert(
+    flareBeforeDelete.profile.photoUrls.every((url) =>
+      galleryPhotoUrls.has(url),
+    ),
+    'flare:bootstrap profile used photos outside the phone gallery',
+  )
+  assert(
+    flareBeforeDelete.suggestions.every(
+      (profile) =>
+        profile.photoUrls.length >= 1 &&
+        profile.photoUrls.every((url) => galleryPhotoUrls.has(url)),
+    ),
+    'Flare suggestions used photos outside the phone gallery',
+  )
+  assert(
     flareBeforeDelete.matches.length > 0,
     'flare:bootstrap did not include a deletable match',
   )
+  assert(
+    flareBeforeDelete.matches.every(
+      (match) =>
+        match.profile.photoUrls.length >= 1 &&
+        match.profile.photoUrls.every((url) => galleryPhotoUrls.has(url)),
+    ),
+    'Flare matches used photos outside the phone gallery',
+  )
+  const [removedProfilePhotoId, retainedProfilePhotoId] =
+    flareBeforeDelete.profile.photoMediaIds
+  await expectSuccess(baseUrl, 'gallery:delete', {
+    id: removedProfilePhotoId,
+  })
+  const flareAfterGalleryDelete = await expectSuccess(
+    baseUrl,
+    'flare:bootstrap',
+    {},
+    true,
+  )
+  assert.deepEqual(
+    flareAfterGalleryDelete.profile.photoMediaIds,
+    [retainedProfilePhotoId],
+    'gallery:delete did not remove the deleted photo from the Flare profile',
+  )
+  assert.deepEqual(
+    flareAfterGalleryDelete.profile.photoUrls,
+    [gallery.find((item) => item.id === retainedProfilePhotoId)?.url],
+    'gallery:delete left Flare photo IDs and URLs out of sync',
+  )
+  const rejectedLastPhotoDelete = await post(baseUrl, 'gallery:delete', {
+    id: retainedProfilePhotoId,
+  })
+  assert.deepEqual(rejectedLastPhotoDelete, {
+    error: 'profile_photo_required',
+    success: false,
+  })
+  const nonProfilePhotoId = gallery.find(
+    (item) =>
+      item.mediaType === 'photo' &&
+      !flareBeforeDelete.profile.photoMediaIds.includes(item.id),
+  )?.id
+  const rejectedBulkLastPhotoDelete = await post(
+    baseUrl,
+    'gallery:delete-many',
+    {
+      correlationId: 'flare-last-photo-protection',
+      ids: [retainedProfilePhotoId, nonProfilePhotoId],
+    },
+  )
+  assert.deepEqual(rejectedBulkLastPhotoDelete, {
+    error: 'profile_photo_required',
+    success: false,
+  })
   const swipedProfile = flareBeforeDelete.suggestions[0]
   await expectSuccess(baseUrl, 'flare:swipe', {
     choice: 'pass',
@@ -838,12 +967,32 @@ async function verifyStatefulActions(baseUrl) {
     error: 'profile_not_found',
     success: false,
   })
+  const rejectedEmptyFlare = await post(baseUrl, 'flare:save-profile', {
+    ...flareBeforeDelete.profile,
+    photoMediaIds: [],
+    photoUrls: undefined,
+  })
+  assert.deepEqual(rejectedEmptyFlare, {
+    error: 'invalid_profile_photos',
+    success: false,
+  })
+  const flareStillDeleted = await expectSuccess(
+    baseUrl,
+    'flare:bootstrap',
+    {},
+    true,
+  )
+  assert.equal(
+    flareStillDeleted.profile,
+    null,
+    'an invalid empty Flare profile was persisted',
+  )
   const recreatedFlare = await expectSuccess(
     baseUrl,
     'flare:save-profile',
     {
       ...flareBeforeDelete.profile,
-      photoMediaIds: [],
+      photoMediaIds: [retainedProfilePhotoId],
       photoUrls: undefined,
     },
     true,
@@ -853,6 +1002,11 @@ async function verifyStatefulActions(baseUrl) {
       (profile) => profile.id === swipedProfile.id,
     ),
     'recreated Flare profile retained a deleted swipe filter',
+  )
+  assert.deepEqual(
+    recreatedFlare.profile.photoMediaIds,
+    [retainedProfilePhotoId],
+    'recreated Flare profile did not retain its valid gallery photo',
   )
 
   await expectSuccess(baseUrl, 'account:logout')

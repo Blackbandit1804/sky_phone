@@ -41,6 +41,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import mailIcon from '@/assets/img/app-icons/mail.webp'
 import MailMarkdownEditor, {
@@ -70,6 +71,7 @@ import {
   MAIL_ADDRESS_INPUT_MAX_LENGTH,
   MAIL_RECIPIENT_INPUT_MAX_LENGTH,
   mailPlainText,
+  normalizeMailAddress,
   parseMailRecipients,
 } from '@/utils/mail'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
@@ -106,6 +108,8 @@ const MAIL_DELETE_BATCH_SIZE = 50
 const phone = usePhoneStore()
 const mail = useMailStore()
 const easyShare = useEasyShareStore()
+const route = useRoute()
+const router = useRouter()
 const authMode = ref<AuthMode>('login')
 const authEmail = ref('')
 const authPassword = ref('')
@@ -613,6 +617,7 @@ async function submitAuth(): Promise<void> {
   authPassword.value = ''
   authConfirm.value = ''
   screen.value = 'folders'
+  await consumeContactComposeRequest()
 }
 
 async function signOut(): Promise<void> {
@@ -795,6 +800,18 @@ function beginCompose(draft?: MailComposeDraft): void {
   screen.value = 'compose'
 }
 
+async function consumeContactComposeRequest(): Promise<void> {
+  if (!authenticated.value || route.query.compose !== '1') return
+  const requestedRecipient =
+    typeof route.query.to === 'string'
+      ? normalizeMailAddress(route.query.to)
+      : null
+  if (requestedRecipient) {
+    beginCompose({ body: '', recipients: [requestedRecipient], subject: '' })
+  }
+  await router.replace('/apps/mail')
+}
+
 async function closeCompose(): Promise<void> {
   await saveDraftNow()
   screen.value = composeReturn.value
@@ -964,7 +981,16 @@ watch(
   },
 )
 
-onMounted(() => window.addEventListener('message', onMailEvent))
+watch(authenticated, (isAuthenticated, wasAuthenticated) => {
+  if (isAuthenticated && !wasAuthenticated && !submitting.value) {
+    void consumeContactComposeRequest()
+  }
+})
+
+onMounted(() => {
+  window.addEventListener('message', onMailEvent)
+  void consumeContactComposeRequest()
+})
 
 onBeforeUnmount(() => {
   window.removeEventListener('message', onMailEvent)

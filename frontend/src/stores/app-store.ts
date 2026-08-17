@@ -23,6 +23,7 @@ import {
   moveHomeApp,
   moveHomeAppToGridPage,
   parseHomeLayout,
+  reflowHomeGridForWidgetChange,
   renameHomeFolder,
   removeHomeApp,
   restoreHomeApp,
@@ -230,7 +231,10 @@ export const useAppStoreStore = defineStore('app-store', {
           ? (data.homeLayout as { version?: unknown }).version
           : undefined
       const supportsPersistedExternalApps =
-        layoutVersion === 3 || layoutVersion === 4 || layoutVersion === 5
+        layoutVersion === 3 ||
+        layoutVersion === 4 ||
+        layoutVersion === 5 ||
+        layoutVersion === 6
       this.claimedApps = Array.isArray(data?.claimedApps)
         ? data.claimedApps.filter(
             (id): id is LaunchablePhoneAppId =>
@@ -291,7 +295,8 @@ export const useAppStoreStore = defineStore('app-store', {
         removedLegacyDefaults ||
         layoutVersion === 2 ||
         layoutVersion === 3 ||
-        layoutVersion === 4
+        layoutVersion === 4 ||
+        layoutVersion === 5
       ) {
         this.persist()
       }
@@ -372,6 +377,22 @@ export const useAppStoreStore = defineStore('app-store', {
       if (next === this.homeLayout) return false
       this.homeLayout = next
       this.persist()
+      return true
+    },
+    applyWidgetGridCapacities(
+      previousCapacities: readonly number[],
+      nextCapacities: readonly number[],
+    ): boolean {
+      const next = reflowHomeGridForWidgetChange(
+        this.homeLayout,
+        previousCapacities,
+        nextCapacities,
+      )
+      if (!next) return false
+      if (next !== this.homeLayout) {
+        this.homeLayout = next
+        this.persist()
+      }
       return true
     },
     createHomeFolder(

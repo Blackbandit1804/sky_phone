@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(
-  new URL('./weazel-news-app.vue', import.meta.url),
+  new URL('./WeazelNewsApp.vue', import.meta.url),
   'utf8',
 )
 

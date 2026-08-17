@@ -244,6 +244,10 @@
   background: rgba(120, 120, 128, 0.38);
 }
 
+.sky-sheet [data-sky-sheet-drag-handle] {
+  touch-action: none;
+}
+
 .sky-action-sheet__panel {
   max-width: 448px;
   margin: 0 auto;
@@ -376,6 +380,10 @@
 .sky-dialog-button {
   min-width: 0;
   flex: 1 1 0;
+}
+
+.sky-dialog-button.sky-button {
+  color: #fff;
 }
 
 .sky-dialog-button:disabled {

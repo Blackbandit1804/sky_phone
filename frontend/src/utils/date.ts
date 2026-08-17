@@ -6,5 +6,6 @@ export function parseDatabaseDate(value: DatabaseDateValue): Date {
     return new Date(timestamp)
   }
 
-  return new Date(value.replace(' ', 'T'))
+  const normalized = value.replace(' ', 'T').replace(/(\.\d{3})\d+$/, '$1')
+  return new Date(normalized)
 }

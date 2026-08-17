@@ -113,4 +113,23 @@ describe('springboard app page layout', () => {
       targetPage: 2,
     })
   })
+
+  it('does not reserve a visible slot for an unavailable shortcut', () => {
+    const grid = new Array<HomeSlot>(HOME_GRID_PAGE_SIZE).fill(null)
+    grid[0] = app('available-one')
+    grid[1] = app('unavailable')
+    grid[2] = app('available-two')
+
+    const pages = layoutSpringboardHomePages(
+      grid,
+      new Map(),
+      1,
+      (item) => typeof item !== 'string' || item !== 'unavailable',
+    )
+
+    expect(
+      pages[0]?.cells.slice(0, 3).map((cell) => cell?.item ?? null),
+    ).toEqual(['available-one', 'available-two', null])
+    expect(pages[0]?.cells[1]).toMatchObject({ sourceIndex: 2 })
+  })
 })

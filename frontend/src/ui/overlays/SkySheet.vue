@@ -16,6 +16,7 @@ const props = withDefaults(
     grabberLabel?: string
     opened: boolean
     role?: 'alertdialog' | 'dialog' | 'none' | 'presentation'
+    showGrabber?: boolean
     swipeToClose?: boolean
     tabindex?: number | string
   }>(),
@@ -25,6 +26,7 @@ const props = withDefaults(
     component: 'div',
     grabberClickable: false,
     grabberLabel: '',
+    showGrabber: true,
     tabindex: -1,
   },
 )
@@ -76,9 +78,26 @@ function settleDrag(): void {
 }
 
 function startDrag(event: PointerEvent): void {
+  const target = event.target
+  const grabber =
+    target instanceof Element
+      ? target.closest('.sky-sheet__grabber')
+      : undefined
+  const extendedHandle =
+    target instanceof Element
+      ? target.closest('[data-sky-sheet-drag-handle]')
+      : undefined
+  const interactiveTarget =
+    target instanceof Element
+      ? target.closest(
+          'button, a, input, select, textarea, [role="button"], [contenteditable="true"]',
+        )
+      : undefined
+
   if (
     !props.swipeToClose ||
     !event.isPrimary ||
+    (!grabber && (!extendedHandle || interactiveTarget)) ||
     (event.pointerType === 'mouse' && event.button !== 0)
   ) {
     return
@@ -204,20 +223,20 @@ useOverlayFocusTrap({
         "
         :aria-describedby="effectiveRole ? ariaDescribedby : undefined"
         :tabindex="tabindex"
+        @lostpointercapture="finishDrag($event, true)"
+        @pointercancel="finishDrag($event, true)"
+        @pointerdown="startDrag"
+        @pointermove="moveDrag"
+        @pointerup="finishDrag($event)"
       >
         <component
           :is="grabberClickable ? 'button' : 'div'"
-          v-if="swipeToClose"
+          v-if="swipeToClose && showGrabber"
           class="sky-sheet__grabber"
           :type="grabberClickable ? 'button' : undefined"
           :aria-hidden="grabberClickable ? undefined : true"
           :aria-label="grabberClickable ? grabberLabel : undefined"
           @click="grabberClickable && emit('grabberclick', $event)"
-          @lostpointercapture="finishDrag($event, true)"
-          @pointercancel="finishDrag($event, true)"
-          @pointerdown="startDrag"
-          @pointermove="moveDrag"
-          @pointerup="finishDrag($event)"
         ></component>
         <slot />
       </component>

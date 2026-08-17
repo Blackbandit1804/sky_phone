@@ -17,7 +17,9 @@ import {
   Signal,
   Smartphone,
   Sun,
+  Upload,
   UserRound,
+  Volume1,
   Volume2,
   Wifi,
 } from 'lucide-vue-next'
@@ -47,6 +49,7 @@ import type {
   LaunchablePhoneAppDefinition,
   LaunchablePhoneAppId,
 } from '@/types/apps'
+import type { MediaConfig, MediaImportSources } from '@/types/media'
 import {
   filterMailAddressInput,
   MAIL_ADDRESS_INPUT_MAX_LENGTH,
@@ -159,6 +162,8 @@ const simEjectOpened = ref(false)
 const factoryResetting = ref(false)
 const factoryResetProgress = ref(0)
 const wallpaperTarget = ref<WallpaperTarget>('home')
+const customWallpaperUploadAvailable = ref(false)
+let wallpaperMediaConfigLoaded = false
 const selectedFrameColor = computed(
   () => PHONE_FRAME_COLORS[phone.preferences.settings.frame],
 )
@@ -299,6 +304,44 @@ function openWallpaperMedia(app: 'photos' | 'camera'): void {
   })
 }
 
+async function loadWallpaperMediaConfig(): Promise<void> {
+  if (wallpaperMediaConfigLoaded) return
+  wallpaperMediaConfigLoaded = true
+
+  const configResponse = await nuiCall<MediaConfig>('media:config')
+  if (
+    !configResponse.success ||
+    configResponse.data?.customWallpaperUploadEnabled !== true
+  ) {
+    return
+  }
+
+  const sourcesResponse = await nuiCall<MediaImportSources>(
+    'media:import:sources',
+  )
+  customWallpaperUploadAvailable.value =
+    sourcesResponse.success &&
+    Boolean(
+      sourcesResponse.data?.sources.some((source) =>
+        source.mediaTypes.includes('photo'),
+      ),
+    )
+}
+
+function openWallpaperCustomUpload(): void {
+  const target = wallpaperTarget.value
+  mediaPicker.begin(
+    `settings:wallpaper:${target}`,
+    'photo',
+    `/apps/settings?wallpaper=1&wallpaperTarget=${target}`,
+    1,
+  )
+  void router.push({
+    path: '/apps/photos',
+    query: { mediaAttachment: 'photo', wallpaperUpload: '1' },
+  })
+}
+
 function wallpaperPreviewStyle(
   entry: WallpaperHistoryEntry,
 ): Record<string, string> | undefined {
@@ -404,6 +447,7 @@ function openView(view: SubmenuView): void {
   if (view === 'security') {
     passcodeLength.value = phone.security.length ?? 6
   }
+  if (view === 'wallpaper') void loadWallpaperMediaConfig()
   activeView.value = view
   scrollPageToTop()
 }
@@ -700,6 +744,7 @@ onMounted(() => {
     activeView.value = 'wallpaper'
     wallpaperTarget.value =
       route.query.wallpaperTarget === 'lock' ? 'lock' : 'home'
+    void loadWallpaperMediaConfig()
   }
 
   const selectedPhoto = mediaPicker.consume(
@@ -1198,7 +1243,10 @@ onBeforeUnmount(() => {
             @update:model-value="
               updateNumberPreference('ringtoneVolume', $event)
             "
-          />
+          >
+            <template #leading><Volume1 /></template>
+            <template #trailing><Volume2 /></template>
+          </SkySettingsRangeRow>
           <SkySettingsRangeRow
             :model-value="phone.preferences.settings.notificationVolume"
             :title="phone.t('Apps.settings.notificationVolume')"
@@ -1211,7 +1259,10 @@ onBeforeUnmount(() => {
             @update:model-value="
               updateNumberPreference('notificationVolume', $event)
             "
-          />
+          >
+            <template #leading><Volume1 /></template>
+            <template #trailing><Volume2 /></template>
+          </SkySettingsRangeRow>
         </SkySettingsGroup>
 
         <SkySettingsGroup :title="phone.t('Apps.settings.ringtone')">
@@ -1458,7 +1509,10 @@ onBeforeUnmount(() => {
             @update:model-value="
               updateNumberPreference('screenBrightness', $event)
             "
-          />
+          >
+            <template #leading><Sun /></template>
+            <template #trailing><Sun /></template>
+          </SkySettingsRangeRow>
         </SkySettingsGroup>
 
         <SkySettingsGroup :aria-label="phone.t('Apps.settings.phoneScale')">
@@ -1471,7 +1525,10 @@ onBeforeUnmount(() => {
             :max="PHONE_SCALE_MAX"
             :step="PHONE_SCALE_STEP"
             @update:model-value="updateNumberPreference('phoneScale', $event)"
-          />
+          >
+            <template #leading><Smartphone /></template>
+            <template #trailing><Smartphone /></template>
+          </SkySettingsRangeRow>
         </SkySettingsGroup>
 
         <SkySettingsGroup :title="phone.t('Apps.settings.phoneFrame')">
@@ -1538,6 +1595,24 @@ onBeforeUnmount(() => {
               }}</strong>
               <small>{{
                 phone.t('Apps.settings.wallpaperFromCameraDescription')
+              }}</small>
+            </span>
+          </button>
+          <button
+            v-if="customWallpaperUploadAvailable"
+            type="button"
+            class="settings-wallpaper-actions__custom"
+            @click="openWallpaperCustomUpload"
+          >
+            <span class="settings-wallpaper-actions__icon" aria-hidden="true">
+              <Upload />
+            </span>
+            <span>
+              <strong>{{
+                phone.t('Apps.settings.wallpaperCustomUpload')
+              }}</strong>
+              <small>{{
+                phone.t('Apps.settings.wallpaperCustomUploadDescription')
               }}</small>
             </span>
           </button>
@@ -1938,6 +2013,11 @@ onBeforeUnmount(() => {
   transform: scale(0.97);
 }
 
+.settings-wallpaper-actions > .settings-wallpaper-actions__custom {
+  grid-column: 1 / -1;
+  min-height: 92px;
+}
+
 .settings-wallpaper-actions > button:focus-visible,
 .settings-wallpaper-history > button:focus-visible,
 .settings-wallpaper-choice:focus-visible {
@@ -1951,8 +2031,8 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border-radius: 12px;
-  background: var(--sky-app-accent-soft);
-  color: var(--sky-app-accent);
+  background: var(--sky-surface-muted);
+  color: #fff;
 }
 
 .settings-wallpaper-actions__icon > svg {

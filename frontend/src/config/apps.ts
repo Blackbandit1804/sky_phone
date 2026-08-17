@@ -106,7 +106,7 @@ export const PHONE_APPS = shallowReactive<PhoneAppDefinition[]>([
   {
     category: 'social',
     component: markRaw(
-      defineAsyncComponent(() => import('@/views/apps/weazel-news-app.vue')),
+      defineAsyncComponent(() => import('@/views/apps/WeazelNewsApp.vue')),
     ),
     dockOrder: null,
     gridOrder: 29,

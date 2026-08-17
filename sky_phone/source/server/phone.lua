@@ -1,3 +1,47 @@
+local development_open_handler
+local pending_development_opens = {}
+local server_started = false
+
+Bridge.Callbacks.Register("sky_phone:device:development-open", function(source)
+    if not Config.Phone.DevelopmentCommand then
+        return { success = false, error = "disabled" }
+    end
+    if not server_started or not development_open_handler then
+        pending_development_opens[source] = true
+        return { success = true, data = { queued = true } }
+    end
+    return { success = development_open_handler(source, nil) }
+end)
+
+AddEventHandler("playerDropped", function()
+    pending_development_opens[source] = nil
+end)
+
+AddEventHandler("onServerResourceStart", function(resource_name)
+    if resource_name ~= GetCurrentResourceName() then
+        return
+    end
+
+    server_started = true
+    if not development_open_handler then
+        Bridge.Debug("error", "[sky_phone] Server initialization did not register the development phone handler.")
+        return
+    end
+
+    for player_source in pairs(pending_development_opens) do
+        pending_development_opens[player_source] = nil
+        local success, opened = pcall(development_open_handler, player_source, nil)
+        if not success then
+            Bridge.Debug(
+                "error",
+                "[sky_phone] Queued development phone open failed for source %s: %s",
+                tostring(player_source),
+                tostring(opened)
+            )
+        end
+    end
+end)
+
 Bridge.Database.AfterMigration("sky_phone", function()
 Bridge.Debug("debug", "[sky_phone] Server initialization started after database migration.", { always = true })
 
@@ -10,12 +54,11 @@ local auth_attempts = {}
 local operation_attempts = {}
 local character_device_cache = {}
 local max_device_data_bytes = 100000
-local passcode_pepper = GetConvar(Config.Security.PasscodePepperConvar, "")
+local passcode_pepper = tostring(Config.Server.PasscodePepper or "")
 if passcode_pepper == "" then
     Bridge.Debug(
         "warn",
-        "[sky_phone] Passcode pepper convar '%s' is empty; configure it before production use.",
-        Config.Security.PasscodePepperConvar,
+        "[sky_phone] Config.Server.PasscodePepper is empty. Device passcodes still work, but their hashes lack the required server-side secret. Set a stable random value in config/config.lua before production; changing it later invalidates existing device passcodes.",
         { always = true }
     )
 end
@@ -84,6 +127,36 @@ local function character_identifier(source)
         return nil
     end
     return identifier
+end
+
+local function migrated_device_for_character(source)
+    local identifier = character_identifier(source)
+    if not identifier then
+        return nil
+    end
+
+    local rows = Bridge.Database.Query([[
+        SELECT mapping.`device_imei`
+        FROM `sky_phone_migration_owners` mapping
+        JOIN `sky_phone_character_devices` character_device
+            ON character_device.`owner_identifier` = mapping.`owner_identifier`
+            AND character_device.`device_imei` = mapping.`device_imei`
+        JOIN `sky_phone_devices` device ON device.`imei` = mapping.`device_imei`
+        WHERE mapping.`source` = 'lb-phone' AND mapping.`owner_identifier` = ?
+        ORDER BY mapping.`created_at` DESC
+        LIMIT 1
+    ]], { identifier })
+    local imei = rows[1] and rows[1].device_imei or nil
+    if imei and not SkyPhoneImei.IsValid(imei) then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] LB Phone migration mapping contains invalid IMEI '%s' for '%s'.",
+            tostring(imei),
+            identifier
+        )
+        return nil
+    end
+    return imei
 end
 
 local function load_character_device(source, identifier)
@@ -304,6 +377,30 @@ local function ensure_device(source, slot)
     end
 
     if not imei then
+        imei = migrated_device_for_character(source)
+        if imei then
+            metadata.imei = imei
+            local metadata_written = Bridge.Inventory.SetSlotMetadata(source, slot.slot, metadata)
+            if not metadata_written then
+                Bridge.Debug(
+                    "error",
+                    "[sky_phone] Inventory '%s' could not adopt migrated phone metadata for source %s slot %s.",
+                    Bridge.Inventory.GetResourceName(),
+                    tostring(source),
+                    tostring(slot.slot)
+                )
+                return nil, "metadata_unsupported"
+            end
+            Bridge.Debug(
+                "info",
+                "[sky_phone] Adopted LB Phone migrated device %s for source %s.",
+                imei,
+                tostring(source),
+                { always = true }
+            )
+            return imei
+        end
+
         imei = reserve_imei()
         metadata.imei = imei
         Bridge.Debug(
@@ -913,6 +1010,8 @@ local function open_phone(source, used_item)
     return true
 end
 
+development_open_handler = open_phone
+
 function SkyPhone.OpenDeviceForCall(source, imei)
     local matches = find_device_slots(source, imei)
     if not matches[1] then
@@ -1069,13 +1168,6 @@ Bridge.Callbacks.Register("sky_phone:security:disable-passcode", function(source
     end
     session.unlocked = true
     return { success = true, data = { security = security_status(session.imei) } }
-end)
-
-Bridge.Callbacks.Register("sky_phone:device:development-open", function(source)
-    if not Config.Phone.DevelopmentCommand then
-        return { success = false, error = "disabled" }
-    end
-    return { success = open_phone(source, nil) }
 end)
 
 Bridge.Callbacks.Register("sky_phone:device:save", function(source, data)

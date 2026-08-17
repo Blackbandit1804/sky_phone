@@ -11,6 +11,10 @@ import type {
 import { sortConversationsByRecency } from '@/utils/messages'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
 
+type SendOptions = {
+  discardFailedOptimistic?: boolean
+}
+
 export const useMessagesStore = defineStore('messages', () => {
   const conversations = ref<SmsConversation[]>([])
   const messages = ref<SmsMessage[]>([])
@@ -30,8 +34,7 @@ export const useMessagesStore = defineStore('messages', () => {
           phoneNumber: String(conversation.phoneNumber),
         })),
       )
-    }
-    else if (!response.success) conversations.value = []
+    } else if (!response.success) conversations.value = []
     return response.success
   }
 
@@ -45,8 +48,7 @@ export const useMessagesStore = defineStore('messages', () => {
     activeNumber.value = phoneNumber
     messages.value = response.data.map((message) => ({
       ...message,
-      delivery_status:
-        message.direction === 'sent' ? 'delivered' : undefined,
+      delivery_status: message.direction === 'sent' ? 'delivered' : undefined,
       recipient_number: String(message.recipient_number),
       sender_number: String(message.sender_number),
     }))
@@ -56,13 +58,18 @@ export const useMessagesStore = defineStore('messages', () => {
 
   async function send(
     outgoing: SmsOutgoingMessage,
+    options: SendOptions = {},
   ): Promise<NuiResponse<SmsMessage>> {
     if (!activeNumber.value) return { success: false, error: 'invalid_number' }
     const clientId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const optimistic: SmsMessage = {
       body:
-        outgoing.messageType === 'text' || outgoing.messageType === 'share'
-          ? outgoing.body?.trim() ?? ''
+        outgoing.messageType === 'text' ||
+        outgoing.messageType === 'share' ||
+        outgoing.messageType === 'image' ||
+        outgoing.messageType === 'gif' ||
+        outgoing.messageType === 'video'
+          ? (outgoing.body?.trim() ?? '')
           : '',
       client_id: clientId,
       contact: outgoing.messageType === 'contact' ? outgoing.contact : null,
@@ -78,10 +85,9 @@ export const useMessagesStore = defineStore('messages', () => {
           : null,
       media_duration_ms:
         outgoing.messageType === 'voice' || outgoing.messageType === 'video'
-          ? outgoing.mediaDurationMs ?? null
+          ? (outgoing.mediaDurationMs ?? null)
           : null,
-      media_mime:
-        outgoing.messageType === 'voice' ? outgoing.mediaMime : null,
+      media_mime: outgoing.messageType === 'voice' ? outgoing.mediaMime : null,
       media_waveform:
         outgoing.messageType === 'voice' ? outgoing.mediaWaveform : null,
       message_type: outgoing.messageType,
@@ -113,7 +119,14 @@ export const useMessagesStore = defineStore('messages', () => {
       (message) => message.client_id === clientId,
     )
     if (!response.success || !response.data) {
-      if (index >= 0) messages.value[index].delivery_status = 'failed'
+      if (index >= 0) {
+        if (options.discardFailedOptimistic) {
+          messages.value.splice(index, 1)
+          delete mediaSources.value[clientId]
+        } else {
+          messages.value[index].delivery_status = 'failed'
+        }
+      }
       return response
     }
 
