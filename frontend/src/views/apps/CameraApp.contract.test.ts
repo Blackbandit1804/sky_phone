@@ -14,6 +14,10 @@ const cameraClient = readFileSync(
   new URL('../../../../sky_phone/source/client/camera.lua', import.meta.url),
   'utf8',
 )
+const focusClient = readFileSync(
+  new URL('../../../../sky_phone/source/client/focus.lua', import.meta.url),
+  'utf8',
+)
 const cameraConfig = readFileSync(
   new URL('../../../../sky_phone/config/config.lua', import.meta.url),
   'utf8',
@@ -39,7 +43,9 @@ describe('Camera app controls', () => {
     expect(cameraView).not.toContain('camera-zoom-slider')
     expect(cameraView).not.toContain('type="range"')
     expect(cameraView).toContain('@wheel.prevent.stop="zoomWithWheel"')
-    expect(cameraView).toContain('Math.min(120, event.deltaY * deltaMultiplier)')
+    expect(cameraView).toContain(
+      'Math.min(120, event.deltaY * deltaMultiplier)',
+    )
     expect(cameraView).toContain('wheelDelta * 0.00075')
     expect(cameraView).toContain("message.type === 'camera:zoom'")
     expect(cameraClient).toContain('mouse_wheel_zoom_step = 0.08')
@@ -69,11 +75,13 @@ describe('Camera app controls', () => {
     expect(cameraClient).toContain('INPUT_LOOK_UD')
     expect(cameraClient).toContain('first_person_view_mode = 4')
     expect(cameraClient).toContain(
-      'SetFollowPedCamViewMode(first_person_view_mode)',
+      'local view_mode = camera_state.front_camera and front_camera_view_mode or first_person_view_mode',
     )
     expect(cameraClient).toContain('SetFollowVehicleCamViewMode(view_mode)')
     expect(cameraClient).toContain('SetFollowPedCamViewMode(view_mode)')
-    expect(cameraClient).toMatch(/while camera_state\.active do[\s\S]*apply_camera_view\(\)/)
+    expect(cameraClient).toMatch(
+      /while camera_state\.active do[\s\S]*apply_camera_view\(\)/,
+    )
     expect(cameraClient).not.toContain('next_view_apply')
     expect(cameraClient).not.toContain('ultrawide_camera_handle')
     expect(cameraClient).not.toContain('ensure_ultrawide_camera')
@@ -91,9 +99,11 @@ describe('Camera app controls', () => {
     expect(cameraClient).toContain('local front_camera_fov = 32.0')
     expect(cameraClient).toContain('local front_camera_distance = 1.05')
     expect(cameraClient).toContain('local head_position = GetPedBoneCoords')
-    expect(cameraClient).toContain('local dot = (to_camera.x * forward_vector.x)')
-    expect(cameraClient).toContain('front_camera_target_height')
     expect(cameraClient).toContain(
+      'local dot = (to_camera.x * forward_vector.x)',
+    )
+    expect(cameraClient).toContain('front_camera_target_height')
+    expect(focusClient).toContain(
       'return { block_game = false, block_look = false, cursor = false, focused = true, game_input = true, keep_input = true }',
     )
     expect(cameraClient).toContain('SetCamCoord(')

@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('./NotesApp.vue', import.meta.url), 'utf8')
+const source = readFileSync(
+  new URL('./NotesApp.vue', import.meta.url),
+  'utf8',
+).replace(/\r\n/g, '\n')
 const menuSource = source.slice(
   source.indexOf('<SkyActionSheet'),
   source.indexOf('</SkyActionSheet>') + '</SkyActionSheet>'.length,
