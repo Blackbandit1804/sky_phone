@@ -47,6 +47,7 @@ import type {
   GallerySortOrder,
   MediaImportSource,
   MediaImportSources,
+  MediaType,
   PhoneMedia,
 } from '@/types/media'
 import {
@@ -77,7 +78,7 @@ const easyShare = useEasyShareStore()
 const messageMedia = useMessageMediaStore()
 const route = useRoute()
 const router = useRouter()
-const requestedMessageMedia = computed<GalleryFilter | null>(() => {
+const requestedMessageMedia = computed<MediaType | null>(() => {
   const value = route.query.mediaAttachment ?? route.query.messageAttachment
   return value === 'photo' || value === 'video' ? value : null
 })
@@ -414,7 +415,19 @@ async function loadImportSources(): Promise<void> {
   if (isDevelopment && !developmentApiEnabled) return
   const response = await nuiCall<MediaImportSources>('media:import:sources')
   if (!response.success || !response.data) return
-  importSources.value = response.data.sources
+  const requestedType = requestedMessageMedia.value
+  importSources.value = requestedType
+    ? response.data.sources.filter((source) =>
+        source.mediaTypes.includes(requestedType),
+      )
+    : response.data.sources
+  if (
+    route.query.wallpaperUpload === '1' &&
+    requestedType === 'photo' &&
+    importSources.value.length > 0
+  ) {
+    openImport()
+  }
 }
 
 function selectImportSource(source: MediaImportSource): void {
@@ -473,6 +486,16 @@ async function commitUrlImport(): Promise<void> {
   }
   media.value = mergeMedia(media.value, [response.data])
   await fetchCounts()
+  if (
+    route.query.wallpaperUpload === '1' &&
+    requestedMessageMedia.value === 'photo'
+  ) {
+    const returnPath = messageMedia.complete(response.data)
+    if (returnPath) {
+      await router.push(returnPath)
+      return
+    }
+  }
   closeImport()
   showToast(phone.t('Apps.photos.import.linkCompleted'))
 }

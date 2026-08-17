@@ -18,7 +18,12 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePhoneStore } from '@/stores/phone'
-import type { MediaType, PhoneMedia, UploadResult } from '@/types/media'
+import type {
+  MediaConfig,
+  MediaType,
+  PhoneMedia,
+  UploadResult,
+} from '@/types/media'
 import { SkySegmented, SkySegmentedButton } from '@/ui'
 import { createGameView, type GameView } from '@/utils/gameView'
 import { formatRecordingDuration, mediaErrorKey } from '@/utils/media'
@@ -416,7 +421,7 @@ onMounted(() => {
   window.addEventListener('keyup', onKeyup)
   window.addEventListener('message', onMessage)
   void nuiCall('camera:setActive', { active: true })
-  void nuiCall<{ videoBitrateKbps?: number }>('media:config').then(
+  void nuiCall<MediaConfig>('media:config').then(
     (response) => {
       if (response.success && response.data?.videoBitrateKbps) {
         videoBitrateKbps.value = response.data.videoBitrateKbps

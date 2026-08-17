@@ -53,21 +53,38 @@ const accessibleValue = computed(
     :class="{ 'sky-settings-range-row--disabled': disabled }"
   >
     <div class="sky-settings-range-row__frame">
-      <SkyRange
-        :aria-label="title"
-        :aria-value-text="accessibleValue"
-        :caption="title"
-        :disabled="disabled"
-        :max="max"
-        :min="min"
-        :model-value="effectiveValue"
-        :step="step"
-        @change="emit('change', $event)"
-        @input="emit('input', $event)"
-        @update:model-value="emit('update:modelValue', $event)"
-      >
-        {{ visibleValue }}
-      </SkyRange>
+      <div class="sky-settings-range-row__header">
+        <span class="sky-settings-range-row__title">{{ title }}</span>
+        <span class="sky-settings-range-row__value">{{ visibleValue }}</span>
+      </div>
+      <div class="sky-settings-range-row__control">
+        <span
+          v-if="$slots.leading"
+          class="sky-settings-range-row__endpoint sky-settings-range-row__endpoint--leading"
+          aria-hidden="true"
+        >
+          <slot name="leading" />
+        </span>
+        <SkyRange
+          :aria-label="title"
+          :aria-value-text="accessibleValue"
+          :disabled="disabled"
+          :max="max"
+          :min="min"
+          :model-value="effectiveValue"
+          :step="step"
+          @change="emit('change', $event)"
+          @input="emit('input', $event)"
+          @update:model-value="emit('update:modelValue', $event)"
+        />
+        <span
+          v-if="$slots.trailing"
+          class="sky-settings-range-row__endpoint sky-settings-range-row__endpoint--trailing"
+          aria-hidden="true"
+        >
+          <slot name="trailing" />
+        </span>
+      </div>
     </div>
   </li>
 </template>

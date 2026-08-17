@@ -19,6 +19,9 @@ describe('SettingsApp Sky UI contract', () => {
     expect(source).toContain('<SkyScrollArea')
     expect(source).toContain('<SkySettingsGroup')
     expect(source).toContain('<SkySettingsRow')
+    expect(source).toContain('<SkySettingsRangeRow')
+    expect(source).toContain('<template #leading><Volume1 /></template>')
+    expect(source).toContain('<template #trailing><Volume2 /></template>')
     expect(source).toContain(
       `<template v-if="activeView === 'account' && !account.email" #right>`,
     )
@@ -36,9 +39,14 @@ describe('SettingsApp Sky UI contract', () => {
     )
   })
 
-  it('offers photo, camera, recent, and two-column built-in wallpaper choices', () => {
+  it('offers photo, camera, configured custom upload, recent, and built-in wallpaper choices', () => {
     expect(source).toContain("openWallpaperMedia('photos')")
     expect(source).toContain("openWallpaperMedia('camera')")
+    expect(source).toContain('customWallpaperUploadAvailable')
+    expect(source).toContain('openWallpaperCustomUpload')
+    expect(source).toContain("nuiCall<MediaConfig>('media:config')")
+    expect(source).toContain('nuiCall<MediaImportSources>')
+    expect(source).toContain("'media:import:sources'")
     expect(source).toContain('`settings:wallpaper:${wallpaperTarget.value}`')
     expect(source).toContain("wallpaperTarget === 'home'")
     expect(source).toContain("wallpaperTarget === 'lock'")

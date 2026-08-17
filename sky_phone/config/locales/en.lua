@@ -1930,6 +1930,7 @@ Locales["en"] = {
                 back = "Settings", wallpaperPicker = "Sky Wallpapers", deviceInformation = "Device Information",
                 wallpaperFromPhotos = "Choose from Photos", wallpaperFromPhotosDescription = "Use one of your photos",
                 wallpaperFromCamera = "Take Photo", wallpaperFromCameraDescription = "Create a new wallpaper",
+                wallpaperCustomUpload = "Upload Custom Image", wallpaperCustomUploadDescription = "Use a verified HTTPS image link",
                 wallpaperHistory = "Recent", wallpaperCustom = "Photo wallpaper",
                 wallpaperTarget = "Wallpaper destination", wallpaperHomeScreen = "Home Screen", wallpaperLockScreen = "Lock Screen",
                 imei = "IMEI", linkedDevices = "Linked Devices", thisDevice = "This Phone", removeDevice = "Remove Device",

@@ -64,6 +64,12 @@ Config.Media = {
         },
     },
 
+    Wallpaper = {
+        -- Shows the verified HTTPS media import directly in the wallpaper picker.
+        -- Camera and Photos wallpaper sources are not affected by this setting.
+        CustomUploadEnabled = true,
+    },
+
     Photo = {
         Encoding = "jpg",
         Quality = 0.95,

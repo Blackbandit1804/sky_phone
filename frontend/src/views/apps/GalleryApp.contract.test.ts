@@ -12,6 +12,14 @@ const headerActions = source.slice(
 )
 
 describe('GalleryApp import action', () => {
+  it('opens a configured wallpaper upload and returns the imported photo directly', () => {
+    expect(source).toContain("route.query.wallpaperUpload === '1'")
+    expect(source).toContain("requestedMessageMedia.value === 'photo'")
+    expect(source).toContain('openImport()')
+    expect(source).toContain('messageMedia.complete(response.data)')
+    expect(source).toContain('await router.push(returnPath)')
+  })
+
   it('keeps import available as a header button', () => {
     expect(headerActions).toContain('<SkyToolbarPane')
     expect(headerActions).toContain('gallery-header-tool--icon')

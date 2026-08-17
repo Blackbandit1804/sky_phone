@@ -643,9 +643,12 @@ Bridge.Callbacks.Register("sky_phone:media:config", function(source)
     if not owner then
         return error_response
     end
+    local wallpaper_config = type(Config.Media.Wallpaper) == "table" and Config.Media.Wallpaper or {}
     return {
         success = true,
         data = {
+            customWallpaperUploadEnabled = wallpaper_config.CustomUploadEnabled == true
+                and Config.Media.Import.Enabled == true,
             videoBitrateKbps = tonumber(Config.Media.Video.BitrateKbps) or 1500,
         },
     }

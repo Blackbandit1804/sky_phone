@@ -1,4 +1,4 @@
-import { createSSRApp } from 'vue'
+import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { describe, expect, it } from 'vitest'
 
@@ -26,7 +26,9 @@ describe('SkySettingsRangeRow', () => {
     expect(html).toContain('min="25"')
     expect(html).toContain('max="100"')
     expect(html).toContain('step="5"')
-    expect(html).toContain('75%')
+    expect(html).toContain('class="sky-settings-range-row__title">Brightness')
+    expect(html).toContain('class="sky-settings-range-row__value">75%')
+    expect(html).not.toContain('sky-range__caption')
   })
 
   it('uses the effective numeric value as its default visible label', async () => {
@@ -37,7 +39,9 @@ describe('SkySettingsRangeRow', () => {
 
     const html = await renderToString(app)
 
-    expect(html).toMatch(/class="sky-range__label">.*1\.25.*<\/span>/)
+    expect(html).toMatch(
+      /class="sky-settings-range-row__value">.*1\.25.*<\/span>/,
+    )
     expect(html).not.toContain('aria-valuetext=')
   })
 
@@ -51,7 +55,31 @@ describe('SkySettingsRangeRow', () => {
     const html = await renderToString(app)
 
     expect(html).toContain('aria-valuetext="75%"')
-    expect(html).toMatch(/class="sky-range__label">.*75%.*<\/span>/)
+    expect(html).toMatch(
+      /class="sky-settings-range-row__value">.*75%.*<\/span>/,
+    )
+  })
+
+  it('supports decorative range endpoint icons without changing the label', async () => {
+    const app = createSSRApp({
+      render: () =>
+        h(
+          SkySettingsRangeRow,
+          { modelValue: 50, title: 'Volume', valueLabel: '50%' },
+          {
+            leading: () => h('svg', { 'data-endpoint': 'low' }),
+            trailing: () => h('svg', { 'data-endpoint': 'high' }),
+          },
+        ),
+    })
+
+    const html = await renderToString(app)
+
+    expect(html).toContain('sky-settings-range-row__endpoint--leading')
+    expect(html).toContain('sky-settings-range-row__endpoint--trailing')
+    expect(html).toContain('data-endpoint="low"')
+    expect(html).toContain('data-endpoint="high"')
+    expect(html).toContain('aria-label="Volume"')
   })
 
   it('exposes input, change, and numeric model update events', () => {

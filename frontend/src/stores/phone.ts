@@ -4247,6 +4247,8 @@ const defaultLocales: LocaleTree = {
       wallpaperFromPhotosDescription: 'Use one of your photos',
       wallpaperFromCamera: 'Take Photo',
       wallpaperFromCameraDescription: 'Create a new wallpaper',
+      wallpaperCustomUpload: 'Upload Custom Image',
+      wallpaperCustomUploadDescription: 'Use a verified HTTPS image link',
       wallpaperHistory: 'Recent',
       wallpaperCustom: 'Photo wallpaper',
       wallpaperTarget: 'Wallpaper destination',
