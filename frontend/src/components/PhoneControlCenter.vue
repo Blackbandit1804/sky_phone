@@ -34,6 +34,7 @@ import { useMusicStore } from '@/stores/music'
 import { useEasyShareStore } from '@/stores/easyshare'
 import type { EasySharePayload } from '@/types/easyshare'
 import { nuiCall } from '@/utils/nui'
+import { bindPointerDragSession } from '@/utils/pointerDragSession'
 
 const props = defineProps<{ opened: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -62,6 +63,21 @@ const flashlightActive = ref(false)
 const flashlightPending = ref(false)
 const easySharePending = ref(false)
 const previousAlertVolume = ref(volume.value || 75)
+const sliderDragActive = ref(false)
+type SliderKind = 'brightness' | 'volume'
+type SliderDrag = {
+  animationFrame: number | null
+  currentValue: number
+  kind: SliderKind
+  lastClientY: number
+  pendingClientY: number
+  pointerId: number
+  pointerType: string
+  stopMouse: () => void
+  stopPointer: () => void
+  target: HTMLElement
+}
+let sliderDrag: SliderDrag | null = null
 
 const inactiveGlassColors = {
   bgIos: 'bg-[rgba(72,72,74,0.58)]',
@@ -142,59 +158,172 @@ function toggleAlertMute(): void {
   phone.setAlertVolumes(volume.value)
 }
 
-function pointerRangeValue(
-  event: PointerEvent,
-  minimum: number,
-  maximum: number,
-): number {
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const ratio =
-    1 - Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
-  return Math.round(minimum + ratio * (maximum - minimum))
+function sliderRange(kind: SliderKind): { maximum: number; minimum: number } {
+  return kind === 'brightness'
+    ? { maximum: 100, minimum: 10 }
+    : { maximum: 100, minimum: 0 }
 }
 
-function startBrightnessDrag(event: PointerEvent): void {
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-  const nextValue = pointerRangeValue(event, 10, 100)
-  brightness.value = nextValue
-  phone.preferences.settings.screenBrightness = nextValue
-}
-
-function dragBrightness(event: PointerEvent): void {
-  if (!(event.currentTarget as HTMLElement).hasPointerCapture(event.pointerId))
+function applySliderValue(drag: SliderDrag, value: number): void {
+  drag.currentValue = value
+  if (drag.kind === 'brightness') {
+    brightness.value = value
+    phone.preferences.settings.screenBrightness = value
     return
-  const nextValue = pointerRangeValue(event, 10, 100)
-  brightness.value = nextValue
-  phone.preferences.settings.screenBrightness = nextValue
+  }
+  volume.value = value
 }
 
-function finishBrightnessDrag(event: PointerEvent): void {
-  const target = event.currentTarget as HTMLElement
-  if (!target.hasPointerCapture(event.pointerId)) return
-  const nextValue = pointerRangeValue(event, 10, 100)
-  brightness.value = nextValue
-  phone.setPreference('screenBrightness', nextValue)
-  target.releasePointerCapture(event.pointerId)
+function updateSliderDrag(clientY: number, drag: SliderDrag): void {
+  const rect = drag.target.getBoundingClientRect()
+  const { maximum, minimum } = sliderRange(drag.kind)
+  const deltaY = clientY - drag.lastClientY
+  drag.lastClientY = clientY
+  const nextValue =
+    Math.round(
+      Math.min(
+        maximum,
+        Math.max(
+          minimum,
+          drag.currentValue - (deltaY / rect.height) * (maximum - minimum),
+        ),
+      ) * 100,
+    ) / 100
+  applySliderValue(drag, nextValue)
 }
 
-function startVolumeDrag(event: PointerEvent): void {
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-  volume.value = pointerRangeValue(event, 0, 100)
+function queueSliderDrag(clientY: number, drag: SliderDrag): void {
+  drag.pendingClientY = clientY
+  if (drag.animationFrame !== null) return
+  drag.animationFrame = window.requestAnimationFrame(() => {
+    drag.animationFrame = null
+    if (sliderDrag !== drag) return
+    updateSliderDrag(drag.pendingClientY, drag)
+  })
 }
 
-function dragVolume(event: PointerEvent): void {
-  if (!(event.currentTarget as HTMLElement).hasPointerCapture(event.pointerId))
+function flushSliderDrag(clientY: number, drag: SliderDrag): void {
+  drag.pendingClientY = clientY
+  if (drag.animationFrame !== null) {
+    window.cancelAnimationFrame(drag.animationFrame)
+    drag.animationFrame = null
+  }
+  updateSliderDrag(drag.pendingClientY, drag)
+}
+
+function cancelSliderAnimation(drag: SliderDrag): void {
+  if (drag.animationFrame === null) return
+  window.cancelAnimationFrame(drag.animationFrame)
+  drag.animationFrame = null
+}
+
+function bindSliderMouseFallback(drag: SliderDrag): () => void {
+  let active = true
+  const cleanup = (): void => {
+    if (!active) return
+    active = false
+    window.removeEventListener('mousemove', onMouseMove, true)
+    window.removeEventListener('mouseup', onMouseUp, true)
+    window.removeEventListener('blur', onBlur, true)
+  }
+  const onMouseMove = (event: MouseEvent): void => {
+    if (!active || sliderDrag !== drag) return
+    queueSliderDrag(event.clientY, drag)
+  }
+  const onMouseUp = (event: MouseEvent): void => {
+    if (!active || sliderDrag !== drag) return
+    flushSliderDrag(event.clientY, drag)
+    cleanup()
+    finishSliderDrag(true)
+  }
+  const onBlur = (): void => {
+    if (!active || sliderDrag !== drag) return
+    cleanup()
+    finishSliderDrag(true)
+  }
+
+  window.addEventListener('mousemove', onMouseMove, true)
+  window.addEventListener('mouseup', onMouseUp, true)
+  window.addEventListener('blur', onBlur, true)
+  return cleanup
+}
+
+function continueSliderSurfaceDrag(event: MouseEvent | PointerEvent): void {
+  const drag = sliderDrag
+  if (!drag) return
+  event.preventDefault()
+  queueSliderDrag(event.clientY, drag)
+}
+
+function finishSliderSurfaceDrag(event: MouseEvent | PointerEvent): void {
+  const drag = sliderDrag
+  if (!drag) return
+  event.preventDefault()
+  flushSliderDrag(event.clientY, drag)
+  finishSliderDrag(true)
+}
+
+function finishSliderDrag(save: boolean): void {
+  const drag = sliderDrag
+  if (!drag) return
+  sliderDrag = null
+  sliderDragActive.value = false
+  cancelSliderAnimation(drag)
+  drag.stopPointer()
+  drag.stopMouse()
+  if (!save) return
+  if (drag.kind === 'brightness') {
+    const nextValue = Math.round(brightness.value)
+    brightness.value = nextValue
+    phone.preferences.settings.screenBrightness = nextValue
+    phone.setPreference('screenBrightness', nextValue)
     return
-  volume.value = pointerRangeValue(event, 0, 100)
+  }
+  const nextValue = Math.round(volume.value)
+  volume.value = nextValue
+  if (nextValue > 0) previousAlertVolume.value = nextValue
+  phone.setAlertVolumes(nextValue)
 }
 
-function finishVolumeDrag(event: PointerEvent): void {
+function startSliderDrag(kind: SliderKind, event: PointerEvent): void {
+  if (event.button !== 0) return
+  finishSliderDrag(true)
   const target = event.currentTarget as HTMLElement
-  if (!target.hasPointerCapture(event.pointerId)) return
-  volume.value = pointerRangeValue(event, 0, 100)
-  if (volume.value > 0) previousAlertVolume.value = volume.value
-  phone.setAlertVolumes(volume.value)
-  target.releasePointerCapture(event.pointerId)
+  const pointerId = event.pointerId
+  const initialValue = kind === 'brightness' ? brightness.value : volume.value
+  const drag: SliderDrag = {
+    animationFrame: null,
+    currentValue: initialValue,
+    kind,
+    lastClientY: event.clientY,
+    pendingClientY: event.clientY,
+    pointerId,
+    pointerType: event.pointerType,
+    stopMouse: () => {},
+    stopPointer: () => {},
+    target,
+  }
+  sliderDrag = drag
+  sliderDragActive.value = true
+  applySliderValue(drag, initialValue)
+  drag.stopPointer = bindPointerDragSession(window, pointerId, {
+    cancel: () => {
+      if (drag.pointerType === 'touch') {
+        finishSliderDrag(true)
+        return
+      }
+      drag.stopPointer()
+      drag.stopPointer = () => {}
+    },
+    move: (moveEvent) => queueSliderDrag(moveEvent.clientY, drag),
+    up: (upEvent) => {
+      flushSliderDrag(upEvent.clientY, drag)
+      finishSliderDrag(true)
+    },
+  })
+  if (event.pointerType !== 'touch') {
+    drag.stopMouse = bindSliderMouseFallback(drag)
+  }
 }
 
 async function toggleFlashlight(): Promise<void> {
@@ -237,7 +366,10 @@ function openTimer(): void {
 watch(
   () => props.opened,
   (opened) => {
-    if (!opened) return
+    if (!opened) {
+      finishSliderDrag(true)
+      return
+    }
     brightness.value = phone.preferences.settings.screenBrightness
     volume.value = Math.round(
       (phone.preferences.settings.notificationVolume +
@@ -250,6 +382,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  finishSliderDrag(true)
   if (flashlightActive.value)
     void nuiCall('camera:setFlash', { enabled: false })
 })
@@ -260,6 +393,7 @@ onBeforeUnmount(() => {
     <section
       v-if="opened"
       class="control-center"
+      :class="{ 'control-center--slider-dragging': sliderDragActive }"
       role="dialog"
       aria-modal="true"
       :aria-label="phone.t('ControlCenter.label')"
@@ -424,10 +558,7 @@ onBeforeUnmount(() => {
             :colors="inactiveGlassColors"
             :highlight="false"
             :style="brightnessStyle"
-            @pointerdown="startBrightnessDrag"
-            @pointermove="dragBrightness"
-            @pointerup="finishBrightnessDrag"
-            @pointercancel="finishBrightnessDrag"
+            @pointerdown="startSliderDrag('brightness', $event)"
           >
             <span
               class="control-center__slider-level"
@@ -454,10 +585,7 @@ onBeforeUnmount(() => {
             :colors="inactiveGlassColors"
             :highlight="false"
             :style="volumeStyle"
-            @pointerdown="startVolumeDrag"
-            @pointermove="dragVolume"
-            @pointerup="finishVolumeDrag"
-            @pointercancel="finishVolumeDrag"
+            @pointerdown="startSliderDrag('volume', $event)"
           >
             <span
               class="control-center__slider-level"
@@ -557,6 +685,16 @@ onBeforeUnmount(() => {
           </div>
         </nav>
       </div>
+
+      <div
+        v-if="sliderDragActive"
+        class="control-center__slider-drag-surface"
+        aria-hidden="true"
+        @mousemove="continueSliderSurfaceDrag"
+        @mouseup="finishSliderSurfaceDrag"
+        @pointermove="continueSliderSurfaceDrag"
+        @pointerup="finishSliderSurfaceDrag"
+      ></div>
     </section>
   </Transition>
 </template>
@@ -583,7 +721,9 @@ onBeforeUnmount(() => {
     linear-gradient(180deg, #191b23 0%, #11131a 100%);
 }
 
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+@supports (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
   .control-center__backdrop {
     background:
       radial-gradient(circle at 16% 12%, rgb(77 96 135 / 14%), transparent 46%),
@@ -605,6 +745,15 @@ onBeforeUnmount(() => {
   outline: none;
   pointer-events: none;
   transform-origin: calc(100% - 38px) 18px;
+}
+
+.control-center__slider-drag-surface {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  cursor: ns-resize;
+  pointer-events: auto;
+  touch-action: none;
 }
 
 .control-center__top-grid {
@@ -847,7 +996,12 @@ onBeforeUnmount(() => {
   left: 0;
   height: var(--control-level);
   background: rgba(255, 255, 255, 0.96);
-  transition: height 80ms linear;
+  transition: height 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: height;
+}
+
+.control-center--slider-dragging .control-center__slider-level {
+  transition: none;
 }
 
 .control-center__range {

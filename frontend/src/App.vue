@@ -358,7 +358,7 @@ const hardwareAlertVolume = computed(() =>
 const hardwareVolumeHudStyle = computed<CSSProperties>(
   () =>
     ({
-      '--phone-hardware-volume-fill': `${32 + hardwareAlertVolume.value * 0.76}px`,
+      '--phone-hardware-volume-fill': `${hardwareAlertVolume.value}%`,
     }) as CSSProperties,
 )
 const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)')
