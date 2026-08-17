@@ -382,6 +382,10 @@
   flex: 1 1 0;
 }
 
+.sky-dialog-button.sky-button {
+  color: #fff;
+}
+
 .sky-dialog-button:disabled {
   background: var(--sky-pressed);
   color: var(--sky-subtle);
