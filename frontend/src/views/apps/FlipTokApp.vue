@@ -361,9 +361,7 @@ function beginPhotoSlideDrag(videoId: string, event: PointerEvent): void {
   element.setPointerCapture(event.pointerId)
 }
 
-function renderPhotoSlideDrag(
-  drag: NonNullable<typeof photoSlideDrag>,
-): void {
+function renderPhotoSlideDrag(drag: NonNullable<typeof photoSlideDrag>): void {
   drag.frame = null
   if (photoSlideDrag !== drag) return
   const translateX = drag.startTranslateX + (drag.currentX - drag.startX)
@@ -409,7 +407,8 @@ function endPhotoSlideDrag(video: FlipTokVideo, event: PointerEvent): void {
       shouldAdvance ? drag.startIndex + direction : drag.startIndex,
     ),
   )
-  if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId)
+  if (element.hasPointerCapture(pointerId))
+    element.releasePointerCapture(pointerId)
   element.classList.remove('photo-slideshow--dragging')
   photoSlideDrag = null
   settlePhotoSlide(video.id, element, nextIndex)
@@ -437,7 +436,10 @@ function settlePhotoSlide(
   element.classList.add('photo-slideshow--settling')
   const animation = track.animate(
     [
-      { transform: startTransform === 'none' ? track.style.transform : startTransform },
+      {
+        transform:
+          startTransform === 'none' ? track.style.transform : startTransform,
+      },
       { transform: animationTarget },
     ],
     {
@@ -1401,8 +1403,16 @@ async function openConnectionProfile(profile: FlipTokProfile): Promise<void> {
 }
 
 async function followConnection(profile: FlipTokProfile): Promise<void> {
-  if (profile.is_owner || profile.is_following) return
+  if (profile.is_owner || connectionIsFollowing(profile)) return
   if (!(await store.followProfile(profile))) notify(t('errors.default'))
+}
+
+function connectionIsFollowing(profile: FlipTokProfile): boolean {
+  return (
+    profile.is_following ||
+    (connectionsMode.value === 'following' &&
+      currentProfile.value?.is_owner === true)
+  )
 }
 
 function openActions(video: FlipTokVideo): void {
@@ -1767,7 +1777,7 @@ onBeforeUnmount(() => {
     >
       <SkyNavbar
         class="fliptok-auth__navbar"
-        :title="t('name')"
+        :title="t(authMode === 'login' ? 'login' : 'register')"
         :scroll-el="null"
         variant="medium"
       />
@@ -2037,13 +2047,15 @@ onBeforeUnmount(() => {
                   !video.is_owner &&
                   (!video.is_following || followFeedbackIds.has(video.id))
                 "
+                type="button"
                 class="follow-dot"
                 :class="{
                   'follow-dot--confirmed': video.is_following,
                   'follow-dot--pending': followPendingIds.has(video.id),
                 }"
-                :disabled="followPendingIds.has(video.id)"
-                @click="followFromFeed(video)"
+                :aria-label="video.is_following ? t('unfollow') : t('follow')"
+                :disabled="video.is_following || followPendingIds.has(video.id)"
+                @click.stop="followFromFeed(video)"
               >
                 <Check v-if="video.is_following" /><Plus v-else />
               </button>
@@ -3277,9 +3289,9 @@ onBeforeUnmount(() => {
                     :src="profile.avatar_url"
                     alt=""
                   />
-                  <template v-else>{{
-                    initials(profile.display_name)
-                  }}</template>
+                  <span v-else class="connection-avatar__fallback">
+                    {{ initials(profile.display_name) }}
+                  </span>
                 </span>
               </button>
             </template>
@@ -3288,11 +3300,11 @@ onBeforeUnmount(() => {
                 v-if="!profile.is_owner"
                 small
                 rounded
-                :tonal="profile.is_following"
-                :disabled="profile.is_following"
+                :tonal="connectionIsFollowing(profile)"
+                :disabled="connectionIsFollowing(profile)"
                 @click="followConnection(profile)"
                 >{{
-                  profile.is_following ? t('unfollow') : t('follow')
+                  connectionIsFollowing(profile) ? t('unfollow') : t('follow')
                 }}</SkyButton
               >
             </template>
@@ -5905,12 +5917,18 @@ onBeforeUnmount(() => {
   border: 2px solid #111;
   border-radius: 50% !important;
   background: var(--sky-app-accent) !important;
+  line-height: 0;
 }
 
 .video-actions .follow-dot svg {
   width: 11px !important;
   height: 11px !important;
   margin: 0;
+  stroke-width: 3;
+}
+
+.video-actions .follow-dot:disabled {
+  opacity: 1;
 }
 
 /* No unused action row is reserved above Discover. */
@@ -6046,8 +6064,19 @@ onBeforeUnmount(() => {
 }
 
 .connections-list .connection-avatar {
+  display: grid;
+  place-items: center;
   line-height: 1;
   text-align: center;
+}
+
+.connections-list .connection-avatar__fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  transform: translateY(-0.5px);
 }
 
 .connections-list :deep(.sky-button:disabled) {

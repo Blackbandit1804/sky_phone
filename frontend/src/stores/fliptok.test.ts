@@ -234,6 +234,24 @@ describe('FlipTok verification updates', () => {
     })
   })
 
+  it('marks every account in the own following list as already followed', async () => {
+    const followedProfile = {
+      ...profile,
+      id: 8,
+      is_following: false,
+      is_owner: false,
+    }
+    vi.mocked(nuiCall).mockResolvedValue({
+      success: true,
+      data: [followedProfile],
+    })
+    const store = useFlipTokStore()
+    store.profile = { ...profile }
+
+    expect(await store.loadConnections(profile.id, 'following')).toBe(true)
+    expect(store.connections[0]?.is_following).toBe(true)
+  })
+
   it('does not show a follow state when the server rejects it', async () => {
     vi.mocked(nuiCall).mockResolvedValue({ success: false })
     const store = useFlipTokStore()

@@ -98,11 +98,15 @@ describe('FlipTokApp Sky UI contract', () => {
     expect(source).toContain("route.query.compose === '1'")
     expect(source).toContain('mediaIds,')
     expect(source).toContain('class="photo-slideshow"')
-    expect(source).toContain('@pointerdown="beginPhotoSlideDrag(video.id, $event)"')
+    expect(source).toContain(
+      '@pointerdown="beginPhotoSlideDrag(video.id, $event)"',
+    )
     expect(source).toContain('@pointermove="updatePhotoSlideDrag"')
     expect(source).toContain('@pointerup="endPhotoSlideDrag(video, $event)"')
     expect(source).not.toContain('photo-slideshow__arrow')
-    expect(source).toContain('window.requestAnimationFrame(() => renderPhotoSlideDrag(drag))')
+    expect(source).toContain(
+      'window.requestAnimationFrame(() => renderPhotoSlideDrag(drag))',
+    )
     expect(source).toContain('function settlePhotoSlide(')
     expect(source).toContain('class="photo-slideshow__track"')
     expect(source).toContain('const animation = track.animate(')
@@ -129,7 +133,10 @@ describe('FlipTokApp Sky UI contract', () => {
   it('shows a centered transient follow control', () => {
     expect(source).toContain('followFeedbackIds')
     expect(source).toContain('follow-dot--confirmed')
-    expect(source).toContain('@click="followFromFeed(video)"')
+    expect(source).toContain('@click.stop="followFromFeed(video)"')
+    expect(source).toContain(
+      'video.is_following || followPendingIds.has(video.id)',
+    )
     expect(source).toMatch(
       /\.video-actions \.follow-dot\s*\{[^}]*min-width: 20px !important;[^}]*min-height: 20px !important;[^}]*place-items: center;/s,
     )
@@ -150,8 +157,19 @@ describe('FlipTokApp Sky UI contract', () => {
     expect(source).toMatch(
       /\.profile-navbar-actions :deep\(\.sky-link\)\s*\{[^}]*width: 38px;[^}]*border:/s,
     )
-    expect(source).toContain(':disabled="profile.is_following"')
+    expect(source).toContain(':disabled="connectionIsFollowing(profile)"')
+    expect(source).toContain("connectionsMode.value === 'following'")
     expect(source).toContain('@click="followConnection(profile)"')
+  })
+
+  it('labels authentication modes and centers connection avatar fallbacks', () => {
+    expect(source).toContain(
+      ":title=\"t(authMode === 'login' ? 'login' : 'register')\"",
+    )
+    expect(source).toContain('class="connection-avatar__fallback"')
+    expect(source).toMatch(
+      /\.connections-list \.connection-avatar__fallback\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s,
+    )
   })
 
   it('supports validated custom audio links in the composer', () => {

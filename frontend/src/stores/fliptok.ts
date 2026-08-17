@@ -238,6 +238,11 @@ export const useFlipTokStore = defineStore('fliptok', {
         profileId,
       })
       this.connections = response.success && response.data ? response.data : []
+      if (mode === 'following' && profileId === this.profile?.id) {
+        this.connections.forEach((profile) => {
+          if (!profile.is_owner) profile.is_following = true
+        })
+      }
       return response.success
     },
     async loadActivities(): Promise<boolean> {
