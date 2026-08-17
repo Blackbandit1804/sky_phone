@@ -6,28 +6,35 @@ import {
   Bookmark,
   Camera,
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Feather,
+  Heart,
   Home,
   ImagePlus,
   Images,
   LogOut,
   MessageCircle,
+  MoreHorizontal,
   PencilLine,
   Plus,
   Search,
+  Send,
   Share2,
   Trash2,
   UserPlus,
   UserMinus,
   UserRound,
   UsersRound,
-  Video,
   X,
 } from 'lucide-vue-next'
 import {
+  SkyActionButton,
+  SkyActionGroup,
+  SkyActionSheet,
+  SkyActionsLabel,
   SkyBlock,
   SkyButton,
   SkyFab,
@@ -39,17 +46,17 @@ import {
   SkyListItem,
   SkyNavbar,
   SkyNavbarBackLink,
+  SkyPillNavigation,
   SkyAppPage,
+  SkyScrollArea,
   SkySpinner,
   SkySearchbar,
   SkySegmented,
   SkySegmentedButton,
   SkySheet,
-  SkyTabBar,
-  SkyTabButton,
   SkyToast,
   SkyToggle,
-  SkyToolbarPane,
+  SkyMessagebar,
 } from '@/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -76,7 +83,7 @@ type Screen =
   | 'connections'
 type ExploreView = 'explore' | 'trending' | 'news'
 type ActivityView = 'all' | 'mentions'
-type ProfileView = 'posts' | 'replies' | 'media' | 'bookmarks'
+type ProfileView = 'posts' | 'replies' | 'bookmarks'
 type SelectedPhoto = { id: number; url: string }
 type ComposerContext = {
   body: string
@@ -106,6 +113,7 @@ const exploreView = ref<ExploreView>('explore')
 const activityView = ref<ActivityView>('all')
 const profileView = ref<ProfileView>('posts')
 const connectionMode = ref<FeatherConnectionMode>('followers')
+const connectionReturnScreen = ref<'main' | 'profile'>('profile')
 const settingsOpen = ref(false)
 const logoutDialogOpen = ref(false)
 const compactMode = ref(false)
@@ -118,9 +126,10 @@ const replyTo = ref<FeatherPost | null>(null)
 const composerBody = ref('')
 const threadReplyBody = ref('')
 const threadReplyTarget = ref<FeatherPost | null>(null)
-const threadReplyInput = ref<HTMLTextAreaElement | null>(null)
+const threadReplyInput = ref<HTMLElement | null>(null)
 const photos = ref<SelectedPhoto[]>([])
 const menuPost = ref<FeatherPost | null>(null)
+const commentLikePulseId = ref<string | null>(null)
 const reportOpen = ref(false)
 const reportReason = ref('spam')
 const reportDetails = ref('')
@@ -135,6 +144,7 @@ const authBusy = ref(false)
 const authError = ref('')
 let exploreSearchTimer: number | undefined
 let networkSearchTimer: number | undefined
+let commentLikePulseTimer: number | undefined
 
 const displayedPosts = computed(() => {
   if (tab.value === 'explore' && search.value.trim())
@@ -154,8 +164,6 @@ const displayedProfilePosts = computed(() => {
   if (profileView.value === 'bookmarks') return feather.bookmarkedPosts
   if (profileView.value === 'replies')
     return feather.profilePosts.filter((post) => Boolean(post.reply_to_id))
-  if (profileView.value === 'media')
-    return feather.profilePosts.filter((post) => post.media.length > 0)
   return feather.profilePosts.filter((post) => !post.reply_to_id)
 })
 const previewMedia = computed(() => {
@@ -183,6 +191,11 @@ const networkSections = computed(() => {
   return sections
 })
 const exploreCategories: ExploreView[] = ['explore', 'trending', 'news']
+const tabOrder: Tab[] = ['home', 'explore', 'network', 'activity', 'profile']
+const exploreViewIndex = computed(() =>
+  Math.max(0, exploreCategories.indexOf(exploreView.value)),
+)
+const tabIndex = computed(() => Math.max(0, tabOrder.indexOf(tab.value)))
 const canPost = computed(
   () =>
     !busy.value &&
@@ -246,6 +259,30 @@ const authUsernameValid = computed(() =>
 
 function t(path: string, params?: Record<string, string>): string {
   return phone.t(`Apps.feather.${path}`, params)
+}
+
+function relativeCommentTime(timestamp: number): string {
+  const elapsed = Math.max(0, Date.now() - timestamp)
+  const minutes = Math.floor(elapsed / 60_000)
+  if (minutes < 1) return t('now')
+  if (minutes < 60) return t('minutesShort', { count: String(minutes) })
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return t('hoursShort', { count: String(hours) })
+  const days = Math.floor(hours / 24)
+  return t('daysShort', { count: String(days) })
+}
+
+function leadingCommentMention(post: FeatherPost): string {
+  return post.body.match(/^@[a-z0-9_]+/i)?.[0] ?? ''
+}
+
+function visibleCommentBody(post: FeatherPost): string {
+  const mention = leadingCommentMention(post)
+  return mention ? post.body.slice(mention.length).trimStart() : post.body
+}
+
+function focusThreadInput(): void {
+  threadReplyInput.value?.querySelector('textarea')?.focus()
 }
 
 function openMediaPreview(post: FeatherPost, index: number): void {
@@ -552,7 +589,7 @@ async function openThread(
   screen.value = 'thread'
   if (focusReply) {
     await nextTick()
-    threadReplyInput.value?.focus()
+    focusThreadInput()
   }
 }
 
@@ -572,7 +609,26 @@ async function focusThreadReply(post: FeatherPost): Promise<void> {
     threadReplyBody.value = `${nextMention}${bodyWithoutPreviousMention}`
   }
   await nextTick()
-  threadReplyInput.value?.focus()
+  focusThreadInput()
+}
+
+async function reactComment(post: FeatherPost): Promise<void> {
+  const isActivating = !post.is_liked
+  await feather.react(post, 'like')
+  if (!isActivating || !post.is_liked) return
+  if (commentLikePulseTimer !== undefined)
+    window.clearTimeout(commentLikePulseTimer)
+  commentLikePulseId.value = post.id
+  commentLikePulseTimer = window.setTimeout(() => {
+    commentLikePulseId.value = null
+    commentLikePulseTimer = undefined
+  }, 480)
+}
+
+function handleCommentKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
+  event.preventDefault()
+  void publishThreadReply()
 }
 
 async function clearThreadReplyTarget(): Promise<void> {
@@ -584,7 +640,7 @@ async function clearThreadReplyTarget(): Promise<void> {
     threadReplyBody.value = threadReplyBody.value.slice(mention.length)
   threadReplyTarget.value = feather.thread.post
   await nextTick()
-  threadReplyInput.value?.focus()
+  focusThreadInput()
 }
 
 async function publishThreadReply(): Promise<void> {
@@ -605,7 +661,7 @@ async function publishThreadReply(): Promise<void> {
   await feather.loadThread(postId)
   threadReplyTarget.value = feather.thread?.post ?? null
   await nextTick()
-  threadReplyInput.value?.focus()
+  focusThreadInput()
 }
 
 async function openProfile(profileId: number): Promise<void> {
@@ -621,6 +677,9 @@ async function followProfile(profile: FeatherProfile): Promise<void> {
 
 async function openConnections(mode: FeatherConnectionMode): Promise<void> {
   if (!activeProfile.value) return
+  if (screen.value !== 'connections') {
+    connectionReturnScreen.value = screen.value === 'main' ? 'main' : 'profile'
+  }
   connectionMode.value = mode
   screen.value = 'connections'
   await feather.loadConnections(activeProfile.value.id, mode)
@@ -703,6 +762,16 @@ async function blockPostAuthor(): Promise<void> {
   }
 }
 
+function openPostReport(): void {
+  reportOpen.value = true
+}
+
+function closePostReport(): void {
+  reportOpen.value = false
+  menuPost.value = null
+  reportDetails.value = ''
+}
+
 async function submitReport(): Promise<void> {
   if (!menuPost.value) return
   const success = await feather.reportPost(
@@ -718,7 +787,9 @@ async function submitReport(): Promise<void> {
 
 function goBack(): void {
   if (screen.value === 'connections') {
-    screen.value = 'profile'
+    screen.value = connectionReturnScreen.value
+    if (screen.value === 'main' && tab.value === 'profile')
+      feather.viewedProfile = null
     return
   }
   if (screen.value === 'edit') {
@@ -764,6 +835,8 @@ watch(
 onBeforeUnmount(() => {
   if (exploreSearchTimer !== undefined) window.clearTimeout(exploreSearchTimer)
   if (networkSearchTimer !== undefined) window.clearTimeout(networkSearchTimer)
+  if (commentLikePulseTimer !== undefined)
+    window.clearTimeout(commentLikePulseTimer)
   window.removeEventListener('keydown', handleMediaPreviewKeydown, true)
 })
 
@@ -861,14 +934,6 @@ onMounted(async () => {
     <SkyNavbar
       v-if="feather.onboarded && isAuthenticated"
       class="feather-navbar"
-      :left-class="
-        screen === 'composer' ? 'feather-navbar__plain-action' : undefined
-      "
-      :right-class="
-        screen === 'composer' || screen === 'edit'
-          ? 'feather-navbar__plain-action'
-          : undefined
-      "
       :subtitle="screen === 'main' && tab === 'home' ? undefined : t('name')"
       :title="screen === 'main' && tab === 'home' ? undefined : navbarTitle"
     >
@@ -908,8 +973,9 @@ onMounted(async () => {
           v-if="screen === 'composer'"
           rounded
           small
+          variant="secondary"
           :disabled="!canPost"
-          class="feather-primary feather-composer-publish"
+          class="feather-composer-publish"
           @click="publish"
         >
           {{ busy ? t('posting') : t('post') }}
@@ -918,11 +984,28 @@ onMounted(async () => {
           v-else-if="screen === 'edit'"
           rounded
           small
+          variant="secondary"
           :disabled="!canSaveProfile"
-          class="feather-primary feather-edit__navbar-save"
+          class="feather-edit__navbar-save"
           @click="saveProfile"
         >
+          <Check :size="14" :stroke-width="2.8" />
           {{ busy ? t('loading') : t('saveProfile') }}
+        </SkyButton>
+        <SkyButton
+          v-else-if="
+            ((screen === 'main' && tab === 'profile') ||
+              screen === 'profile') &&
+            activeProfile?.is_owner
+          "
+          icon-only
+          rounded
+          tonal
+          class="feather-profile__logout"
+          :aria-label="phone.t('Common.signOut')"
+          @click="logoutDialogOpen = true"
+        >
+          <LogOut :size="16" />
         </SkyButton>
       </template>
     </SkyNavbar>
@@ -1185,7 +1268,7 @@ onMounted(async () => {
         </SkyList>
       </section>
 
-      <section
+      <SkyScrollArea
         v-else-if="screen === 'connections' && activeProfile"
         class="feather-scroll feather-connections"
       >
@@ -1264,6 +1347,7 @@ onMounted(async () => {
                 v-else-if="!person.is_owner"
                 rounded
                 small
+                :tonal="person.is_following"
                 class="feather-follow-button"
                 :class="{
                   'feather-follow-button--pending': !person.is_following,
@@ -1276,11 +1360,11 @@ onMounted(async () => {
             </template>
           </SkyListItem>
         </SkyList>
-      </section>
+      </SkyScrollArea>
 
-      <section
+      <SkyScrollArea
         v-else-if="screen === 'thread' && feather.thread"
-        class="feather-scroll"
+        class="feather-scroll feather-thread"
       >
         <FeatherPostCard
           :post="feather.thread.post"
@@ -1293,98 +1377,161 @@ onMounted(async () => {
           @reply="focusThreadReply"
           @share="sharePost"
         />
-        <SkyGlass :highlight="false" class="feather-thread-reply">
-          <form @submit.prevent="publishThreadReply">
-            <span class="feather-avatar feather-thread-reply__avatar">
-              <img
-                v-if="feather.profile?.avatar_url"
-                :src="feather.profile.avatar_url"
-                alt=""
-              />
-              <UserRound v-else :size="19" />
-            </span>
+        <section class="feather-comments">
+          <header class="feather-comments__header">
             <div>
-              <div
-                v-if="
-                  threadReplyTarget &&
-                  threadReplyTarget.id !== feather.thread.post.id
-                "
-                class="feather-thread-reply__comment-target"
-              >
-                <div>
-                  <span class="feather-thread-reply__target">{{
-                    t('replyingTo', { handle: threadReplyTarget.handle })
-                  }}</span>
-                  <p>{{ threadReplyTarget.body }}</p>
-                </div>
-                <SkyButton
-                  clear
-                  rounded
-                  small
-                  type="button"
-                  :aria-label="t('cancel')"
-                  @click="clearThreadReplyTarget"
-                >
-                  <X :size="14" />
-                </SkyButton>
-              </div>
-              <span v-else class="feather-thread-reply__target">{{
-                t('replyingTo', { handle: feather.thread.post.handle })
-              }}</span>
-              <textarea
-                ref="threadReplyInput"
-                v-model="threadReplyBody"
-                :maxlength="360"
-                :placeholder="t('replyPlaceholder')"
-              ></textarea>
-              <footer>
-                <span>{{
-                  t('charactersLeft', {
-                    count: String(360 - threadReplyBody.length),
-                  })
+              <strong>{{ t('comments') }}</strong>
+              <span>{{ feather.thread.replies.length }}</span>
+            </div>
+            <MessageCircle :size="18" />
+          </header>
+
+          <div
+            v-if="!feather.thread.replies.length"
+            class="feather-thread-empty"
+          >
+            <MessageCircle :size="22" />
+            <strong>{{ t('noComments') }}</strong>
+            <span>{{ t('noReplies') }}</span>
+          </div>
+
+          <article
+            v-for="post in feather.thread.replies"
+            v-else
+            :key="post.id"
+            class="feather-comment"
+          >
+            <button
+              type="button"
+              class="feather-avatar feather-comment__avatar"
+              :aria-label="post.display_name"
+              @click="openProfile(post.profile_id)"
+            >
+              <img v-if="post.avatar_url" :src="post.avatar_url" alt="" />
+              <UserRound v-else :size="18" />
+            </button>
+            <div class="feather-comment__copy">
+              <header>
+                <button type="button" @click="openProfile(post.profile_id)">
+                  <strong>{{ post.display_name }}</strong>
+                  <CheckCircle2
+                    v-if="post.verified"
+                    :size="13"
+                    :aria-label="t('verified')"
+                  />
+                </button>
+                <time>{{ relativeCommentTime(post.created_at) }}</time>
+              </header>
+              <p>
+                <span v-if="leadingCommentMention(post)">{{
+                  leadingCommentMention(post)
                 }}</span>
-                <SkyButton
-                  rounded
-                  small
-                  type="submit"
-                  :disabled="!canReply"
-                  class="feather-primary"
+                {{ visibleCommentBody(post) }}
+              </p>
+              <footer>
+                <button type="button" @click="focusThreadReply(post)">
+                  {{ t('reply') }}
+                </button>
+                <span v-if="post.like_count">{{
+                  t('likesCount', { count: String(post.like_count) })
+                }}</span>
+                <button
+                  type="button"
+                  class="feather-comment__more"
+                  :aria-label="t('moreActions')"
+                  @click="menuPost = post"
                 >
-                  {{ busy ? t('posting') : t('reply') }}
-                </SkyButton>
+                  <MoreHorizontal :size="16" />
+                </button>
               </footer>
             </div>
-          </form>
-        </SkyGlass>
-        <h2 class="feather-section-title feather-thread-title">
-          {{ t('replies') }}
-          <span>{{ feather.thread.replies.length }}</span>
-        </h2>
-        <div v-if="!feather.thread.replies.length" class="feather-thread-empty">
-          <MessageCircle :size="22" />
-          <span>{{ t('noReplies') }}</span>
-        </div>
-        <FeatherPostCard
-          v-for="post in feather.thread.replies"
-          :key="post.id"
-          :post="post"
-          @follow="feather.followPost"
-          @media="openMediaPreview"
-          @menu="menuPost = $event"
-          @open="openThread"
-          @profile="openProfile"
-          @react="feather.react"
-          @reply="focusThreadReply"
-          @share="sharePost"
-        />
-      </section>
+            <button
+              type="button"
+              class="feather-comment__like"
+              :class="{
+                'is-liked': post.is_liked,
+                'is-pulsing': commentLikePulseId === post.id,
+              }"
+              :aria-label="t('likeComment', { name: post.display_name })"
+              @click="reactComment(post)"
+            >
+              <Heart
+                :size="17"
+                :fill="post.is_liked ? 'currentColor' : 'none'"
+              />
+            </button>
+          </article>
+        </section>
 
-      <section
+        <div class="feather-comment-composer">
+          <div
+            v-if="
+              threadReplyTarget &&
+              threadReplyTarget.id !== feather.thread.post.id
+            "
+            class="feather-comment-composer__target"
+          >
+            <span>{{
+              t('replyingTo', { handle: threadReplyTarget.handle })
+            }}</span>
+            <SkyButton
+              icon-only
+              rounded
+              tonal
+              type="button"
+              :aria-label="t('cancel')"
+              @click="clearThreadReplyTarget"
+            >
+              <X :size="13" />
+            </SkyButton>
+          </div>
+          <form ref="threadReplyInput" @submit.prevent="publishThreadReply">
+            <SkyMessagebar
+              v-model="threadReplyBody"
+              :aria-label="t('addComment')"
+              embedded
+              :placeholder="t('addComment')"
+              @keydown="handleCommentKeydown"
+            >
+              <template #left>
+                <span class="feather-avatar feather-comment-composer__avatar">
+                  <img
+                    v-if="feather.profile?.avatar_url"
+                    :src="feather.profile.avatar_url"
+                    alt=""
+                  />
+                  <UserRound v-else :size="17" />
+                </span>
+              </template>
+              <template #right>
+                <SkyButton
+                  icon-only
+                  rounded
+                  type="submit"
+                  :disabled="!canReply"
+                  class="feather-comment-composer__send"
+                  :aria-label="t('postComment')"
+                >
+                  <Send :size="16" />
+                </SkyButton>
+              </template>
+            </SkyMessagebar>
+          </form>
+          <span
+            v-if="threadReplyBody.length > 320"
+            class="feather-comment-composer__count"
+            >{{ 360 - threadReplyBody.length }}</span
+          >
+        </div>
+      </SkyScrollArea>
+
+      <SkyScrollArea
         v-else-if="
           (screen === 'profile' || (screen === 'main' && tab === 'profile')) &&
           activeProfile
         "
         class="feather-scroll feather-profile-screen"
+        :with-tabbar="screen === 'main'"
       >
         <SkyGlass :highlight="false" class="feather-profile-glass">
           <div class="feather-profile">
@@ -1393,17 +1540,6 @@ onMounted(async () => {
                 <Feather :size="17" :stroke-width="2" />
                 {{ activeProfile.display_name }}
               </span>
-              <SkyButton
-                v-if="activeProfile.is_owner"
-                icon-only
-                rounded
-                tonal
-                class="feather-profile__logout"
-                :aria-label="phone.t('Common.signOut')"
-                @click="logoutDialogOpen = true"
-              >
-                <LogOut :size="16" />
-              </SkyButton>
             </div>
             <div class="feather-profile__top">
               <div class="feather-profile__avatar">
@@ -1418,6 +1554,7 @@ onMounted(async () => {
                 v-if="!activeProfile.is_owner"
                 rounded
                 small
+                :tonal="activeProfile.is_following"
                 class="feather-follow-button"
                 :class="{
                   'feather-follow-button--pending': !activeProfile.is_following,
@@ -1483,7 +1620,7 @@ onMounted(async () => {
             </div>
           </div>
         </SkyGlass>
-        <SkySegmented class="feather-profile-tabs">
+        <SkySegmented class="feather-profile-tabs" rounded strong>
           <SkySegmentedButton
             type="button"
             :active="profileView === 'posts'"
@@ -1499,14 +1636,6 @@ onMounted(async () => {
             @click="selectProfileView('replies')"
           >
             <AtSign :size="17" />
-          </SkySegmentedButton>
-          <SkySegmentedButton
-            type="button"
-            :active="profileView === 'media'"
-            :class="{ 'is-active': profileView === 'media' }"
-            @click="selectProfileView('media')"
-          >
-            <Video :size="17" />
           </SkySegmentedButton>
           <SkySegmentedButton
             v-if="activeProfile.is_owner"
@@ -1584,6 +1713,7 @@ onMounted(async () => {
               <SkyButton
                 rounded
                 small
+                :tonal="person.is_following"
                 class="feather-follow-button"
                 :class="{
                   'feather-follow-button--pending': !person.is_following,
@@ -1596,7 +1726,7 @@ onMounted(async () => {
             </article>
           </div>
         </section>
-      </section>
+      </SkyScrollArea>
 
       <section v-else-if="screen === 'main'" class="feather-main">
         <div v-if="tab === 'home'" class="feather-feed-tabs">
@@ -1616,15 +1746,6 @@ onMounted(async () => {
               >{{ t('following') }}</SkySegmentedButton
             >
           </SkySegmented>
-          <SkyButton
-            rounded
-            small
-            class="feather-feed-add"
-            @click="selectTab('network')"
-          >
-            <UsersRound :size="15" />
-            {{ t('add') }}
-          </SkyButton>
         </div>
 
         <div v-if="tab === 'explore'" class="feather-explore-head">
@@ -1636,7 +1757,14 @@ onMounted(async () => {
             @input="search = inputValue($event)"
             @keyup.enter="runSearch"
           />
-          <SkySegmented class="feather-context-tabs feather-explore-tabs">
+          <SkySegmented
+            class="feather-explore-tabs"
+            :active-index="exploreViewIndex"
+            :aria-label="t('explore')"
+            :item-count="exploreCategories.length"
+            rounded
+            strong
+          >
             <SkySegmentedButton
               v-for="category in exploreCategories"
               :key="category"
@@ -1671,7 +1799,11 @@ onMounted(async () => {
           </SkySegmented>
         </div>
 
-        <div v-if="tab === 'network'" class="feather-scroll feather-network">
+        <SkyScrollArea
+          v-if="tab === 'network'"
+          class="feather-scroll feather-network"
+          with-tabbar
+        >
           <SkyGlass :highlight="false" class="feather-network-glass">
             <header class="feather-network__hero">
               <div>
@@ -1785,8 +1917,10 @@ onMounted(async () => {
                   </template>
                   <template #after>
                     <SkyButton
+                      inline
                       rounded
                       small
+                      :tonal="person.is_following"
                       class="feather-follow-button feather-network-person__follow"
                       :class="{
                         'feather-follow-button--pending': !person.is_following,
@@ -1794,9 +1928,10 @@ onMounted(async () => {
                       }"
                       @click="followProfile(person)"
                     >
-                      <SkyIcon v-if="!person.is_following"
-                        ><UserPlus :size="13"
-                      /></SkyIcon>
+                      <SkyIcon>
+                        <CheckCircle2 v-if="person.is_following" :size="13" />
+                        <UserPlus v-else :size="13" />
+                      </SkyIcon>
                       {{ person.is_following ? t('following') : t('follow') }}
                     </SkyButton>
                   </template>
@@ -1804,11 +1939,12 @@ onMounted(async () => {
               </SkyList>
             </section>
           </template>
-        </div>
+        </SkyScrollArea>
 
-        <div
+        <SkyScrollArea
           v-else-if="tab === 'explore' && !search.trim()"
           class="feather-scroll feather-trends"
+          with-tabbar
         >
           <div v-if="!feather.topics.length" class="feather-empty">
             <Search :size="34" />
@@ -1827,9 +1963,13 @@ onMounted(async () => {
             <small>{{ t('postsCount', { count: String(topic.count) }) }}</small>
             <b>•••</b>
           </button>
-        </div>
+        </SkyScrollArea>
 
-        <div v-else-if="tab === 'activity'" class="feather-scroll">
+        <SkyScrollArea
+          v-else-if="tab === 'activity'"
+          class="feather-scroll"
+          with-tabbar
+        >
           <div v-if="!displayedActivities.length" class="feather-empty">
             <Bell :size="34" />
             <h2>{{ t('noActivity') }}</h2>
@@ -1857,9 +1997,9 @@ onMounted(async () => {
               {{ t(`activityKinds.${item.kind}`) }}
             </p>
           </button>
-        </div>
+        </SkyScrollArea>
 
-        <div v-else class="feather-scroll">
+        <SkyScrollArea v-else class="feather-scroll" with-tabbar>
           <div
             v-if="tab === 'explore' && feather.exploreLoading"
             class="feather-network-loading"
@@ -1916,6 +2056,7 @@ onMounted(async () => {
               <SkyButton
                 rounded
                 small
+                :tonal="person.is_following"
                 class="feather-follow-button"
                 :class="{
                   'feather-follow-button--pending': !person.is_following,
@@ -1930,113 +2071,77 @@ onMounted(async () => {
               </SkyButton>
             </div>
           </template>
-        </div>
+        </SkyScrollArea>
       </section>
 
-      <SkyTabBar
+      <SkyPillNavigation
         v-if="screen === 'main'"
-        component="nav"
-        icons
-        labels
-        class="bottom-0 left-0 fixed"
-        inner-class="!w-full !max-w-none !gap-0 !px-1"
-        :aria-label="t('name')"
+        class="feather-navigation"
+        :label="t('name')"
+        layout="full"
       >
-        <SkyToolbarPane class="feather-tab-pane">
-          <SkyTabButton
-            component="button"
+        <SkySegmented
+          class="feather-navigation__segments"
+          :active-index="tabIndex"
+          :aria-label="t('name')"
+          :item-count="tabOrder.length"
+          navigation
+          strong
+        >
+          <SkySegmentedButton
             :active="tab === 'home'"
-            :link-props="{ class: 'feather-tab-button', type: 'button' }"
+            class="feather-navigation__button"
             @click="selectTab('home')"
           >
-            <template #label
-              ><span class="feather-tab-label">{{ t('home') }}</span></template
-            >
-            <template #icon
-              ><SkyIcon
-                ><Home
-                  :size="20"
-                  :fill="tab === 'home' ? 'currentColor' : 'none'" /></SkyIcon
-            ></template>
-          </SkyTabButton>
-          <SkyTabButton
-            component="button"
+            <Home :size="20" :fill="tab === 'home' ? 'currentColor' : 'none'" />
+            <small>{{ t('home') }}</small>
+          </SkySegmentedButton>
+          <SkySegmentedButton
             :active="tab === 'explore'"
-            :link-props="{ class: 'feather-tab-button', type: 'button' }"
+            class="feather-navigation__button"
             @click="selectTab('explore')"
           >
-            <template #label
-              ><span class="feather-tab-label">{{
-                t('explore')
-              }}</span></template
-            >
-            <template #icon
-              ><SkyIcon><Search :size="20" /></SkyIcon
-            ></template>
-          </SkyTabButton>
-          <SkyTabButton
-            component="button"
+            <Search :size="20" />
+            <small>{{ t('explore') }}</small>
+          </SkySegmentedButton>
+          <SkySegmentedButton
             :active="tab === 'network'"
-            :link-props="{ class: 'feather-tab-button', type: 'button' }"
+            class="feather-navigation__button"
             @click="selectTab('network')"
           >
-            <template #label
-              ><span class="feather-tab-label">{{
-                t('network')
-              }}</span></template
-            >
-            <template #icon>
-              <SkyIcon
-                ><UsersRound
-                  :size="20"
-                  :fill="tab === 'network' ? 'currentColor' : 'none'"
-              /></SkyIcon>
-            </template>
-          </SkyTabButton>
-          <SkyTabButton
-            component="button"
+            <UsersRound
+              :size="20"
+              :fill="tab === 'network' ? 'currentColor' : 'none'"
+            />
+            <small>{{ t('network') }}</small>
+          </SkySegmentedButton>
+          <SkySegmentedButton
             :active="tab === 'activity'"
-            :link-props="{ class: 'feather-tab-button', type: 'button' }"
+            class="feather-navigation__button"
             @click="selectTab('activity')"
           >
-            <template #label
-              ><span class="feather-tab-label">{{
-                t('activityNav')
-              }}</span></template
-            >
-            <template #icon>
-              <span class="feather-tab-icon">
-                <SkyIcon
-                  ><Bell
-                    :size="20"
-                    :fill="tab === 'activity' ? 'currentColor' : 'none'"
-                /></SkyIcon>
-                <b v-if="unreadActivities">{{ unreadActivities }}</b>
-              </span>
-            </template>
-          </SkyTabButton>
-          <SkyTabButton
-            component="button"
+            <span class="feather-navigation__badge-anchor">
+              <Bell
+                :size="20"
+                :fill="tab === 'activity' ? 'currentColor' : 'none'"
+              />
+              <b v-if="unreadActivities">{{ unreadActivities }}</b>
+            </span>
+            <small>{{ t('activityNav') }}</small>
+          </SkySegmentedButton>
+          <SkySegmentedButton
             :active="tab === 'profile'"
-            :link-props="{ class: 'feather-tab-button', type: 'button' }"
+            class="feather-navigation__button"
             @click="selectTab('profile')"
           >
-            <template #label
-              ><span class="feather-tab-label">{{
-                t('profile')
-              }}</span></template
-            >
-            <template #icon
-              ><SkyIcon
-                ><UserRound
-                  :size="20"
-                  :fill="
-                    tab === 'profile' ? 'currentColor' : 'none'
-                  " /></SkyIcon
-            ></template>
-          </SkyTabButton>
-        </SkyToolbarPane>
-      </SkyTabBar>
+            <UserRound
+              :size="20"
+              :fill="tab === 'profile' ? 'currentColor' : 'none'"
+            />
+            <small>{{ t('profile') }}</small>
+          </SkySegmentedButton>
+        </SkySegmented>
+      </SkyPillNavigation>
       <SkyFab
         v-if="screen === 'main'"
         component="button"
@@ -2092,26 +2197,44 @@ onMounted(async () => {
       </SkyBlock>
     </SkySheet>
 
-    <SkySheet :opened="menuPost !== null" @backdropclick="menuPost = null">
-      <SkyBlock strong inset class="feather-action-sheet">
-        <SkyButton v-if="menuPost?.is_owner" large tonal @click="deletePost"
-          ><Trash2 :size="18" /> {{ t('delete') }}</SkyButton
+    <SkyActionSheet
+      :opened="menuPost !== null && !reportOpen"
+      :label="t('moreActions')"
+      @backdropclick="menuPost = null"
+      @escape="menuPost = null"
+    >
+      <SkyActionGroup class="feather-post-actions">
+        <SkyActionsLabel v-if="menuPost">
+          @{{ menuPost.handle }}
+        </SkyActionsLabel>
+        <SkyActionButton
+          v-if="menuPost?.is_owner"
+          class="feather-post-actions__danger"
+          @click="deletePost"
         >
+          <Trash2 :size="18" />
+          {{ t('delete') }}
+        </SkyActionButton>
         <template v-else>
-          <SkyButton large tonal @click="reportOpen = true">{{
-            t('report')
-          }}</SkyButton>
-          <SkyButton large tonal @click="blockPostAuthor">{{
-            t('block', { handle: menuPost?.handle ?? '' })
-          }}</SkyButton>
+          <SkyActionButton @click="openPostReport">
+            {{ t('report') }}
+          </SkyActionButton>
+          <SkyActionButton
+            class="feather-post-actions__danger"
+            @click="blockPostAuthor"
+          >
+            {{ t('block', { handle: menuPost?.handle ?? '' }) }}
+          </SkyActionButton>
         </template>
-        <SkyButton large clear @click="menuPost = null">{{
-          t('cancel')
-        }}</SkyButton>
-      </SkyBlock>
-    </SkySheet>
+      </SkyActionGroup>
+      <SkyActionGroup>
+        <SkyActionButton bold @click="menuPost = null">
+          {{ t('cancel') }}
+        </SkyActionButton>
+      </SkyActionGroup>
+    </SkyActionSheet>
 
-    <SkySheet :opened="reportOpen" @backdropclick="reportOpen = false">
+    <SkySheet :opened="reportOpen" @backdropclick="closePostReport">
       <SkyBlock strong inset class="feather-report">
         <h2>{{ t('reportTitle') }}</h2>
         <p>{{ t('reportBody') }}</p>
@@ -2142,7 +2265,7 @@ onMounted(async () => {
           @click="submitReport"
           >{{ t('reportSubmit') }}</SkyButton
         >
-        <SkyButton large clear @click="reportOpen = false">
+        <SkyButton large clear @click="closePostReport">
           {{ t('cancel') }}
         </SkyButton>
       </SkyBlock>
@@ -2194,6 +2317,8 @@ onMounted(async () => {
 .feather-app {
   --feather-blue: #438cf5;
   --feather-blue-dark: #2867d8;
+  --sky-app-accent: var(--feather-blue);
+  --sky-app-accent-soft: rgba(67, 140, 245, 0.15);
   --color-primary: var(--feather-blue);
   background: #fff;
   color: #111923;
@@ -2219,8 +2344,8 @@ onMounted(async () => {
   cursor: default;
 }
 .feather-media-preview__arrow {
-  --sky-button-bg-color: rgb(10 14 20 / 88%);
-  --sky-button-text-color: #fff;
+  --sky-app-accent: rgb(10 14 20 / 88%);
+  --sky-button-text: #fff;
   position: absolute;
   top: 50%;
   width: 34px !important;
@@ -2279,8 +2404,8 @@ onMounted(async () => {
   min-height: 32px;
 }
 .feather-primary {
-  --sky-button-bg-color: var(--feather-blue);
-  --sky-button-text-color: #fff;
+  --sky-app-accent: var(--feather-blue);
+  --sky-button-text: #fff;
 }
 .feather-loading,
 .feather-welcome {
@@ -2514,8 +2639,8 @@ onMounted(async () => {
   box-shadow: 0 10px 24px rgb(67 140 245 / 24%);
 }
 .feather-onboarding__button:disabled {
-  --sky-button-bg-color: rgb(67 140 245 / 13%);
-  --sky-button-text-color: #71839a;
+  --sky-app-accent: rgb(67 140 245 / 13%);
+  --sky-button-text: #71839a;
   color: #71839a !important;
   background: rgb(67 140 245 / 13%) !important;
   opacity: 1;
@@ -2617,7 +2742,7 @@ onMounted(async () => {
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  padding-bottom: 56px;
+  padding-bottom: 0;
 }
 .feather-scroll {
   min-height: 0;
@@ -2718,10 +2843,10 @@ onMounted(async () => {
   font-size: 12px;
   line-height: 1.4;
 }
-.feather-tab-icon {
+.feather-navigation__badge-anchor {
   position: relative;
 }
-.feather-tab-icon b {
+.feather-navigation__badge-anchor b {
   position: absolute;
   top: -6px;
   right: -8px;
@@ -2993,7 +3118,6 @@ onMounted(async () => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.feather-action-sheet,
 .feather-report {
   display: grid;
   gap: 8px;
@@ -3055,7 +3179,7 @@ onMounted(async () => {
 .dark.feather-app .feather-main {
   height: auto;
   flex: 1;
-  padding-bottom: 58px;
+  padding-bottom: 0;
   background: #000;
 }
 .dark.feather-app .feather-scroll {
@@ -3182,8 +3306,8 @@ onMounted(async () => {
   -webkit-line-clamp: 2;
 }
 .dark.feather-app .feather-person > :deep(.sky-button) {
-  --sky-button-bg-color: #eff3f4;
-  --sky-button-text-color: #0f1419;
+  --sky-app-accent: #eff3f4;
+  --sky-button-text: #0f1419;
   min-width: 66px;
   font-weight: 800;
 }
@@ -3209,7 +3333,7 @@ onMounted(async () => {
   font-size: 14px;
   line-height: 1.4;
 }
-.dark.feather-app .feather-tab-icon b {
+.dark.feather-app .feather-navigation__badge-anchor b {
   background: var(--feather-blue);
 }
 .dark.feather-app .feather-composer,
@@ -3368,13 +3492,12 @@ onMounted(async () => {
   right: 10px;
   bottom: 74px;
   z-index: 2;
-  --sky-button-bg-color: #eff3f4;
-  --sky-button-text-color: #0f1419;
+  --sky-app-accent: #eff3f4;
+  --sky-button-text: #0f1419;
   min-width: 67px;
   font-weight: 800;
 }
 .dark.feather-app .feather-settings-sheet,
-.dark.feather-app .feather-action-sheet,
 .dark.feather-app .feather-report {
   color: #e7e9ea;
   background: #000;
@@ -3471,7 +3594,7 @@ onMounted(async () => {
   min-height: 0;
   flex-direction: column;
   gap: 9px;
-  padding: 108px 13px 105px;
+  padding: 108px 13px 0;
   background: transparent;
 }
 .feather-app--active.feather-app--home .feather-main {
@@ -3559,24 +3682,6 @@ onMounted(async () => {
 .feather-app--active .feather-feed-tabs .feather-context-tabs {
   min-width: 0;
   flex: 1;
-}
-.feather-app--active .feather-feed-add {
-  --sky-button-bg-color: var(--feather-blue-dark);
-  --sky-button-text-color: #fff;
-  width: 76px !important;
-  min-width: 76px;
-  min-height: 34px;
-  flex: 0 0 76px !important;
-  gap: 5px;
-  border-radius: 9px;
-  padding: 0 11px;
-  box-shadow: 0 4px 12px rgb(20 80 155 / 24%);
-  font-size: 11px;
-  font-weight: 850;
-  transition:
-    transform 160ms ease,
-    box-shadow 160ms ease,
-    filter 160ms ease;
 }
 .feather-app--active .feather-explore-head {
   display: grid;
@@ -3678,32 +3783,36 @@ onMounted(async () => {
   background: var(--feather-blue);
   content: '';
 }
-.feather-app--active .feather-feed-add {
-  margin-block: 4px;
-}
-@media (hover: hover) {
-  .feather-app--active .feather-feed-add:hover {
-    filter: brightness(1.13);
-    box-shadow: 0 7px 17px rgb(39 120 220 / 38%);
-    transform: translateY(-2px);
-  }
-}
-.feather-app--active .feather-feed-add:active {
-  filter: brightness(0.96);
-  box-shadow: 0 3px 9px rgb(20 80 155 / 26%);
-  transform: translateY(0) scale(0.97);
-}
 .feather-app--active .feather-explore-tabs {
+  --sky-segmented-strong-highlight: #f7f9fc;
   display: flex;
   width: 100%;
+  min-height: 40px;
   justify-content: stretch !important;
   gap: 4px;
   overflow: hidden !important;
+  border: 1px solid var(--feather-border);
+  border-radius: var(--sky-radius-pill);
+  padding: 3px;
+  background: rgba(127, 127, 127, 0.1);
 }
-.feather-app--active .feather-explore-tabs :deep(.sky-button) {
+.feather-app--active.feather-app--light .feather-explore-tabs {
+  --sky-segmented-strong-highlight: #fff;
+}
+.feather-app--active .feather-explore-tabs :deep(.sky-segmented-button) {
   width: 0 !important;
   min-width: 0;
+  min-height: 32px;
   flex: 1 1 0 !important;
+  border-radius: var(--sky-radius-pill);
+  color: var(--feather-muted);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+.feather-app--active
+  .feather-explore-tabs
+  :deep(.sky-segmented-button--active) {
+  color: var(--feather-blue-dark);
 }
 .feather-app--active .feather-main > .feather-scroll {
   padding-top: 1px;
@@ -3911,10 +4020,12 @@ onMounted(async () => {
   background: currentColor;
 }
 .feather-network-person__follow {
-  min-width: 63px !important;
-  min-height: 28px !important;
-  padding-inline: 8px !important;
-  font-size: 9px !important;
+  min-width: 84px !important;
+  min-height: 32px !important;
+  justify-content: center;
+  padding-inline: 11px !important;
+  font-size: 9.5px !important;
+  box-shadow: 0 5px 14px rgba(29, 155, 240, 0.2);
 }
 .feather-app--active .feather-network-empty {
   display: flex;
@@ -4005,15 +4116,16 @@ onMounted(async () => {
   margin-right: 4px;
 }
 .feather-app--active .feather-follow-button--pending {
-  --sky-button-bg-color: var(--feather-blue) !important;
-  --sky-button-text-color: #fff !important;
+  --sky-app-accent: var(--feather-blue);
+  --sky-button-text: #fff;
   border-color: color-mix(in srgb, var(--feather-blue) 76%, #fff);
   box-shadow: 0 4px 12px rgb(29 155 240 / 24%);
 }
 .feather-app--active .feather-follow-button--following {
-  --sky-button-bg-color: transparent !important;
-  --sky-button-text-color: currentColor !important;
+  --sky-app-accent: var(--feather-blue);
+  --sky-app-accent-soft: rgba(29, 155, 240, 0.14);
   border-color: color-mix(in srgb, currentColor 22%, transparent);
+  color: var(--feather-blue);
   box-shadow: none;
 }
 @media (hover: hover) {
@@ -4036,170 +4148,282 @@ onMounted(async () => {
   font-size: 16px;
   letter-spacing: -0.2px;
 }
-.feather-app--active .feather-thread-reply {
-  margin: 10px 0 5px;
-  border: 1px solid var(--feather-border);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--feather-panel) 88%, transparent);
-}
-.feather-thread-reply form {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 11px;
-}
-.feather-thread-reply form > div {
-  min-width: 0;
-  flex: 1;
-}
-.feather-thread-reply__avatar {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-}
-.feather-thread-reply__target {
-  display: block;
-  margin-bottom: 3px;
-  color: var(--feather-blue);
-  font-size: 9.5px;
-  font-weight: 700;
-}
-.feather-thread-reply__comment-target {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin-bottom: 7px;
-  border-left: 2px solid var(--feather-blue);
-  border-radius: 0 10px 10px 0;
-  padding: 7px 6px 7px 9px;
-  background: color-mix(in srgb, var(--feather-blue) 9%, transparent);
-}
-.feather-thread-reply__comment-target > div {
-  min-width: 0;
-  flex: 1;
-}
-.feather-thread-reply__comment-target .feather-thread-reply__target {
-  margin-bottom: 2px;
-}
-.feather-thread-reply__comment-target p {
-  display: -webkit-box;
+.feather-comments {
   overflow: hidden;
-  margin: 0;
-  color: var(--feather-muted);
-  font-size: 9.5px;
-  line-height: 1.35;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  border: 1px solid var(--feather-border);
+  border-radius: 17px;
+  background: var(--feather-panel);
 }
-.feather-thread-reply__comment-target :deep(.sky-button) {
-  width: 25px;
-  min-width: 25px;
-  height: 25px;
-  min-height: 25px;
-  padding: 0;
-  color: var(--feather-muted);
-}
-.feather-thread-reply textarea {
-  display: block;
-  width: 100%;
-  min-height: 58px;
-  border: 0;
-  outline: 0;
-  padding: 3px 0 7px;
-  color: inherit;
-  background: transparent;
-  caret-color: var(--feather-blue);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.4;
-  resize: none;
-}
-.feather-thread-reply textarea::placeholder {
-  color: var(--feather-muted);
-}
-.feather-thread-reply footer {
+.feather-comments__header {
   display: flex;
+  min-height: 47px;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--feather-border);
-  padding-top: 7px;
+  padding: 0 13px;
+  border-bottom: 1px solid var(--feather-border);
 }
-.feather-thread-reply footer > span {
-  color: var(--feather-muted);
-  font-size: 9px;
-}
-.feather-thread-reply footer :deep(.sky-button) {
-  min-width: 62px;
-  min-height: 29px;
-  font-size: 10.5px;
-  font-weight: 800;
-}
-.feather-app--active .feather-thread-title {
+.feather-comments__header > div {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-top: 10px;
+  gap: 7px;
 }
-.feather-thread-title span {
+.feather-comments__header strong {
+  font-size: 14px;
+  letter-spacing: -0.2px;
+}
+.feather-comments__header span {
   display: grid;
   min-width: 20px;
   height: 20px;
   place-items: center;
-  border-radius: 999px;
+  border-radius: var(--sky-radius-pill);
   color: var(--feather-blue);
-  background: color-mix(in srgb, var(--feather-blue) 14%, transparent);
+  background: rgba(29, 155, 240, 0.14);
+  font-size: 9px;
+  font-weight: 800;
+}
+.feather-comments__header > svg {
+  color: var(--feather-muted);
+}
+.feather-comment {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 7px 10px 11px;
+}
+.feather-comment + .feather-comment {
+  border-top: 1px solid var(--feather-border);
+}
+.feather-comment__avatar {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+  border: 0;
+}
+.feather-comment__copy {
+  min-width: 0;
+}
+.feather-comment__copy > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.feather-comment__copy > header button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+}
+.feather-comment__copy > header strong {
+  overflow: hidden;
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-comment__copy > header svg {
+  flex: none;
+  color: var(--feather-blue);
+}
+.feather-comment__copy time {
+  flex: none;
+  color: var(--feather-muted);
+  font-size: 9px;
+}
+.feather-comment__copy > p {
+  margin: 0;
+  padding-top: 3px;
+  color: inherit;
+  font-size: 11.5px;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+.feather-comment__copy > p span {
+  color: var(--feather-blue);
+  font-weight: 750;
+}
+.feather-comment__copy > footer {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+  color: var(--feather-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+.feather-comment__copy > footer button {
+  position: relative;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 750;
+}
+.feather-comment__copy > footer button::before {
+  position: absolute;
+  inset: -9px -7px;
+  content: '';
+}
+.feather-comment__more {
+  display: grid;
+  place-items: center;
+}
+.feather-comment__like {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--feather-muted);
+  background: transparent;
+}
+.feather-comment__like.is-liked {
+  color: #f04f65;
+}
+.feather-comment__like.is-pulsing svg {
+  animation: feather-comment-heart 480ms cubic-bezier(0.22, 1.45, 0.36, 1);
+}
+@keyframes feather-comment-heart {
+  0% {
+    transform: scale(0.78);
+  }
+  55% {
+    transform: scale(1.42);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.feather-comment-composer {
+  position: sticky;
+  z-index: 5;
+  bottom: 0;
+  margin-top: auto;
+  border: 1px solid var(--feather-border);
+  border-radius: 20px;
+  padding: 5px;
+  background: var(--feather-panel);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.2);
+}
+.feather-comment-composer__target {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 3px 4px 10px;
+  color: var(--feather-muted);
   font-size: 9.5px;
+}
+.feather-comment-composer__target span {
+  overflow: hidden;
+  color: var(--feather-blue);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feather-comment-composer__target :deep(.sky-button) {
+  --sky-app-accent: var(--feather-muted);
+  --sky-app-accent-soft: rgba(127, 127, 127, 0.12);
+  width: 28px;
+  height: 28px;
+}
+.feather-comment-composer :deep(.sky-messagebar) {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.feather-comment-composer :deep(.sky-messagebar__area) {
+  border: 0;
+  border-radius: var(--sky-radius-pill);
+  background: rgba(127, 127, 127, 0.1);
+  box-shadow: none;
+}
+.feather-comment-composer :deep(textarea) {
+  min-height: 40px;
+  padding-inline: 12px;
+  color: inherit;
+  caret-color: var(--feather-blue);
+  font-size: 12px;
+}
+.feather-comment-composer__avatar {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+}
+.feather-comment-composer__send {
+  --sky-app-accent: var(--feather-blue);
+  --sky-button-text: #fff;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+.feather-comment-composer__count {
+  display: block;
+  padding: 0 11px 5px;
+  color: var(--feather-muted);
+  font-size: 8.5px;
+  text-align: right;
 }
 .feather-thread-empty {
   display: flex;
+  min-height: 150px;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
   gap: 7px;
   padding: 22px 12px;
   color: var(--feather-muted);
   font-size: 11px;
 }
+.feather-thread-empty strong {
+  color: inherit;
+  font-size: 13px;
+}
 .feather-thread-empty svg {
   color: var(--feather-blue);
+}
+@media (prefers-reduced-motion: reduce) {
+  .feather-comment__like.is-pulsing svg {
+    animation: none;
+  }
 }
 .feather-app--active .feather-empty p {
   max-width: 230px;
   font-size: 12px;
 }
-.feather-tab-pane {
-  width: 100% !important;
-  max-width: none;
-  margin-right: auto;
-  margin-left: auto;
-  flex: none;
+.feather-navigation {
+  --sky-app-accent: var(--feather-blue);
+}
+.feather-navigation__segments {
+  width: 100%;
+}
+.feather-navigation__button {
+  min-width: 0;
   gap: 2px;
-  padding: 0 4px;
+  padding-inline: 2px;
 }
-:global(.feather-tab-pane) {
-  width: 100% !important;
-  max-width: none;
-  margin-right: auto;
-  margin-left: auto;
-  flex: none;
-}
-:global(.feather-tab-button) {
-  width: auto !important;
-  min-width: 0 !important;
-  max-width: none !important;
-  flex: 1 1 0 !important;
-  padding-right: 3px !important;
-  padding-left: 3px !important;
-}
-.feather-tab-label {
+.feather-navigation__button small {
   display: block;
-  max-width: 52px;
+  max-width: 58px;
   overflow: hidden;
-  font-size: 9.5px;
-  line-height: 12px;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.feather-tab-icon {
+.feather-navigation__badge-anchor {
   position: relative;
   display: grid;
   place-items: center;
@@ -4231,7 +4455,7 @@ onMounted(async () => {
     0 4px 12px rgb(29 155 240 / 28%),
     inset 0 1px 0 rgb(255 255 255 / 22%);
 }
-.feather-tab-icon b {
+.feather-navigation__badge-anchor b {
   position: absolute;
   top: -5px;
   right: -8px;
@@ -4301,23 +4525,15 @@ onMounted(async () => {
   flex: none;
 }
 .feather-app--active .feather-profile__logout {
-  --sky-button-bg-color: rgb(8 22 39 / 38%);
-  --sky-button-text-color: #fff;
-  position: absolute;
-  z-index: 2;
-  top: 10px;
-  right: 10px;
+  --sky-app-accent: #fff;
+  --sky-app-accent-soft: rgba(255, 255, 255, 0.14);
+  --sky-button-text: #fff;
   width: 34px;
-  min-width: 34px;
   height: 34px;
-  min-height: 34px;
   border: 1px solid rgb(255 255 255 / 24%);
   padding: 0;
   color: #fff;
-  background: rgb(8 22 39 / 38%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%);
-  backdrop-filter: blur(14px) saturate(150%);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
 }
 .feather-app--active .feather-profile__top {
   height: 50px;
@@ -4533,16 +4749,29 @@ onMounted(async () => {
   background: var(--feather-panel);
 }
 .feather-composer-publish {
+  --sky-surface-muted: color-mix(
+    in srgb,
+    var(--feather-panel) 86%,
+    currentColor 14%
+  );
   min-width: 52px;
   min-height: 28px;
+  border-color: var(--feather-border);
   padding-inline: 10px;
   font-size: 10px;
   font-weight: 800;
 }
 .feather-edit__navbar-save {
-  min-width: 58px;
+  --sky-surface-muted: color-mix(
+    in srgb,
+    var(--feather-panel) 86%,
+    currentColor 14%
+  );
+  min-width: 72px;
   min-height: 30px;
-  padding-inline: 12px;
+  gap: 4px;
+  border-color: var(--feather-border);
+  padding-inline: 10px;
   font-size: 10px;
   font-weight: 800;
 }
@@ -4985,10 +5214,15 @@ onMounted(async () => {
   font-weight: 800;
 }
 .feather-app--active .feather-settings-sheet,
-.feather-app--active .feather-action-sheet,
 .feather-app--active .feather-report {
   color: inherit;
   background: var(--feather-panel);
+}
+.feather-post-actions__danger {
+  color: var(--sky-danger);
+}
+.feather-post-actions__danger svg {
+  flex: none;
 }
 @supports not (color: color-mix(in srgb, white, black)) {
   .feather-navbar {
@@ -5030,8 +5264,7 @@ onMounted(async () => {
     background: rgb(127 127 127 / 7%);
   }
   .feather-profile__stats button:active,
-  .feather-thread-reply__comment-target,
-  .feather-thread-title span,
+  .feather-comments__header span,
   .feather-app--active .feather-profile__stats span,
   .feather-composer-media > header > span,
   .feather-composer-media > header > b,
@@ -5047,7 +5280,8 @@ onMounted(async () => {
   }
   .feather-app--active :deep(.feather-post-glass),
   .feather-network-list,
-  .feather-app--active .feather-thread-reply,
+  .feather-comments,
+  .feather-comment-composer,
   .feather-profile-suggestion,
   .feather-edit__identity,
   .feather-edit__photo,
