@@ -1,3 +1,47 @@
+local development_open_handler
+local pending_development_opens = {}
+local server_started = false
+
+Bridge.Callbacks.Register("sky_phone:device:development-open", function(source)
+    if not Config.Phone.DevelopmentCommand then
+        return { success = false, error = "disabled" }
+    end
+    if not server_started or not development_open_handler then
+        pending_development_opens[source] = true
+        return { success = true, data = { queued = true } }
+    end
+    return { success = development_open_handler(source, nil) }
+end)
+
+AddEventHandler("playerDropped", function()
+    pending_development_opens[source] = nil
+end)
+
+AddEventHandler("onServerResourceStart", function(resource_name)
+    if resource_name ~= GetCurrentResourceName() then
+        return
+    end
+
+    server_started = true
+    if not development_open_handler then
+        Bridge.Debug("error", "[sky_phone] Server initialization did not register the development phone handler.")
+        return
+    end
+
+    for player_source in pairs(pending_development_opens) do
+        pending_development_opens[player_source] = nil
+        local success, opened = pcall(development_open_handler, player_source, nil)
+        if not success then
+            Bridge.Debug(
+                "error",
+                "[sky_phone] Queued development phone open failed for source %s: %s",
+                tostring(player_source),
+                tostring(opened)
+            )
+        end
+    end
+end)
+
 Bridge.Database.AfterMigration("sky_phone", function()
 Bridge.Debug("debug", "[sky_phone] Server initialization started after database migration.", { always = true })
 
@@ -14,7 +58,8 @@ local passcode_pepper = tostring(Config.Server.PasscodePepper or "")
 if passcode_pepper == "" then
     Bridge.Debug(
         "warn",
-        "[sky_phone] Config.Server.PasscodePepper is empty; configure it in config/config.lua before production use."
+        "[sky_phone] Config.Server.PasscodePepper is empty. Device passcodes still work, but their hashes lack the required server-side secret. Set a stable random value in config/config.lua before production; changing it later invalidates existing device passcodes.",
+        { always = true }
     )
 end
 local allowed_device_namespaces = {
@@ -965,6 +1010,8 @@ local function open_phone(source, used_item)
     return true
 end
 
+development_open_handler = open_phone
+
 function SkyPhone.OpenDeviceForCall(source, imei)
     local matches = find_device_slots(source, imei)
     if not matches[1] then
@@ -1121,13 +1168,6 @@ Bridge.Callbacks.Register("sky_phone:security:disable-passcode", function(source
     end
     session.unlocked = true
     return { success = true, data = { security = security_status(session.imei) } }
-end)
-
-Bridge.Callbacks.Register("sky_phone:device:development-open", function(source)
-    if not Config.Phone.DevelopmentCommand then
-        return { success = false, error = "disabled" }
-    end
-    return { success = open_phone(source, nil) }
 end)
 
 Bridge.Callbacks.Register("sky_phone:device:save", function(source, data)

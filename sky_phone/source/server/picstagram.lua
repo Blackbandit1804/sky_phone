@@ -5,7 +5,8 @@ local password_pepper = tostring(Config.Server.PicstagramPasswordPepper or "")
 if password_pepper == "" then
     Bridge.Debug(
         "warn",
-        "[sky_phone] Config.Server.PicstagramPasswordPepper is empty; configure it in config/config.lua before production use."
+        "[sky_phone] Config.Server.PicstagramPasswordPepper is empty. Picstagram passwords still work, but their hashes lack the required server-side secret. Set a stable random value in config/config.lua before production; changing it later invalidates existing Picstagram passwords.",
+        { always = true }
     )
 end
 

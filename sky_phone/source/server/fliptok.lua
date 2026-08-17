@@ -19,7 +19,8 @@ local password_pepper = tostring(Config.Server.FlipTokPasswordPepper or "")
 if password_pepper == "" then
     Bridge.Debug(
         "warn",
-        "[sky_phone] Config.Server.FlipTokPasswordPepper is empty; configure it in config/config.lua before production use."
+        "[sky_phone] Config.Server.FlipTokPasswordPepper is empty. FlipTok passwords still work, but their hashes lack the required server-side secret. Set a stable random value in config/config.lua before production; changing it later invalidates existing FlipTok passwords.",
+        { always = true }
     )
 end
 

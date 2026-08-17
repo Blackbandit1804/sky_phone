@@ -975,7 +975,8 @@ end)
 if not api_configured() then
     Bridge.Debug(
         "warn",
-        "[sky_phone] Camera uploads and FiveManage imports are disabled until Config.Media.FiveManage.ApiKey is set in config/media.lua."
+        "[sky_phone] FiveManage media integration is disabled because Config.Media.FiveManage.ApiKey is empty in config/media.lua. Camera photo and video uploads, Voice Memo uploads, remote Gallery deletion, and FiveManage imports are unavailable. Add a FiveManage V3 token with Media access and restart sky_phone.",
+        { always = true }
     )
 end
 end)
