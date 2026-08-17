@@ -435,12 +435,29 @@ end
 
 if Config.Phone.DevelopmentCommand then
     RegisterCommand(Config.Command, function()
-        if is_open then
+        if is_open or open_requested then
             close_phone()
             return
         end
         Bridge.Callbacks.Trigger("sky_phone:device:development-open", {})
     end, false)
+end
+
+RegisterCommand("sky_phone_toggle", function()
+    if is_open or open_requested then
+        close_phone()
+        return
+    end
+
+    Bridge.Callbacks.Trigger("sky_phone:device:open-request", {})
+end, false)
+
+if Config.Phone.Keybind then
+    if type(Config.Phone.Keybind) ~= "string" or Config.Phone.Keybind == "" then
+        error("[sky_phone] Config.Phone.Keybind must be a non-empty keyboard key name or false.")
+    end
+
+    RegisterKeyMapping("sky_phone_toggle", locale.Controls.OpenPhone, "keyboard", Config.Phone.Keybind)
 end
 
 RegisterNetEvent("sky_phone:testdata:feedback", function(success, detail)

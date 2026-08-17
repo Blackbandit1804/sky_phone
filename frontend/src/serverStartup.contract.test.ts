@@ -12,6 +12,16 @@ const phoneServer = readFileSync(
 )
 
 describe('server startup contracts', () => {
+  it('registers the production phone-open callback before the database migration runs', () => {
+    expect(
+      phoneServer.indexOf(
+        'Bridge.Callbacks.Register("sky_phone:device:open-request"',
+      ),
+    ).toBeLessThan(
+      phoneServer.indexOf('Bridge.Database.AfterMigration("sky_phone"'),
+    )
+  })
+
   it('registers the development-open callback before the database migration runs', () => {
     expect(manifest.indexOf("'source/server/phone.lua'")).toBeLessThan(
       manifest.indexOf("'source/server/db_migrate.lua'"),
@@ -25,11 +35,12 @@ describe('server startup contracts', () => {
     )
   })
 
-  it('queues early development opens until the resource has fully started', () => {
+  it('queues early opens until the resource has fully started', () => {
     expect(phoneServer).toContain(
       'AddEventHandler("onServerResourceStart", function(resource_name)',
     )
-    expect(phoneServer).toContain('pending_development_opens[source] = true')
-    expect(phoneServer).toContain('development_open_handler = open_phone')
+    expect(phoneServer).toContain('pending_phone_opens[source] = true')
+    expect(phoneServer).toContain('phone_open_handler = open_phone')
+    expect(phoneServer).toContain('flush_pending_phone_opens()')
   })
 })

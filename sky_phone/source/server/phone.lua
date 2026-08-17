@@ -1,20 +1,41 @@
-local development_open_handler
-local pending_development_opens = {}
+local phone_open_handler
+local pending_phone_opens = {}
 local server_started = false
+
+local function flush_pending_phone_opens()
+    if not server_started or not phone_open_handler then
+        return
+    end
+
+    for player_source in pairs(pending_phone_opens) do
+        pending_phone_opens[player_source] = nil
+        phone_open_handler(player_source, nil)
+    end
+end
+
+Bridge.Callbacks.Register("sky_phone:device:open-request", function(source)
+    if not server_started or not phone_open_handler then
+        pending_phone_opens[source] = true
+        return { success = true, data = { queued = true } }
+    end
+
+    return { success = phone_open_handler(source, nil) }
+end)
 
 Bridge.Callbacks.Register("sky_phone:device:development-open", function(source)
     if not Config.Phone.DevelopmentCommand then
         return { success = false, error = "disabled" }
     end
-    if not server_started or not development_open_handler then
-        pending_development_opens[source] = true
+    if not server_started or not phone_open_handler then
+        pending_phone_opens[source] = true
         return { success = true, data = { queued = true } }
     end
-    return { success = development_open_handler(source, nil) }
+
+    return { success = phone_open_handler(source, nil) }
 end)
 
 AddEventHandler("playerDropped", function()
-    pending_development_opens[source] = nil
+    pending_phone_opens[source] = nil
 end)
 
 AddEventHandler("onServerResourceStart", function(resource_name)
@@ -23,23 +44,7 @@ AddEventHandler("onServerResourceStart", function(resource_name)
     end
 
     server_started = true
-    if not development_open_handler then
-        Bridge.Debug("error", "[sky_phone] Server initialization did not register the development phone handler.")
-        return
-    end
-
-    for player_source in pairs(pending_development_opens) do
-        pending_development_opens[player_source] = nil
-        local success, opened = pcall(development_open_handler, player_source, nil)
-        if not success then
-            Bridge.Debug(
-                "error",
-                "[sky_phone] Queued development phone open failed for source %s: %s",
-                tostring(player_source),
-                tostring(opened)
-            )
-        end
-    end
+    flush_pending_phone_opens()
 end)
 
 Bridge.Database.AfterMigration("sky_phone", function()
@@ -50,6 +55,7 @@ SkyPhone = {}
 local unique_phones = Config.Phone.Unique ~= false
 local sim_cards_enabled = Config.Sim.Enabled ~= false
 local sessions = {}
+local preferred_device_imeis = {}
 local auth_attempts = {}
 local operation_attempts = {}
 local character_device_cache = {}
@@ -311,6 +317,14 @@ local function resolve_used_slot(source, used_item)
         if slot and slot.name == Config.Phone.Item then
             return slot
         end
+
+        Bridge.Debug(
+            "warn",
+            "[sky_phone] Usable item callback reported invalid phone slot %s for source %s.",
+            tostring(slot_id),
+            tostring(source)
+        )
+        return nil, "phone_slot_missing"
     end
 
     local slots = Bridge.Inventory.GetSlotsWithItem(source, Config.Phone.Item)
@@ -332,17 +346,40 @@ local function resolve_used_slot(source, used_item)
             { always = true }
         )
     end
-    if #slots == 1 or (not unique_phones and #slots > 0) then
+
+    if not unique_phones and #slots > 0 then
+        return slots[1]
+    end
+
+    local preferred_imei = preferred_device_imeis[source]
+    if preferred_imei then
+        for _, candidate in ipairs(slots) do
+            if candidate.metadata and candidate.metadata.imei == preferred_imei then
+                return candidate
+            end
+        end
+    end
+
+    table.sort(slots, function(left, right)
+        local left_slot = tonumber(left.slot)
+        local right_slot = tonumber(right.slot)
+        if left_slot and right_slot and left_slot ~= right_slot then
+            return left_slot < right_slot
+        end
+        return tostring(left.slot) < tostring(right.slot)
+    end)
+
+    if slots[1] then
         return slots[1]
     end
 
     Bridge.Debug(
         "warn",
-        "[sky_phone] Usable item callback did not identify an exact phone slot for source %s (%s candidates).",
+        "[sky_phone] No phone item slot was available for source %s (%s candidates).",
         tostring(source),
         tostring(#slots)
     )
-    return nil
+    return nil, "phone_required"
 end
 
 local function ensure_device(source, slot)
@@ -947,15 +984,16 @@ local function open_phone(source, used_item)
         tostring(source),
         { always = true }
     )
-    local slot = resolve_used_slot(source, used_item)
+    local slot, slot_error = resolve_used_slot(source, used_item)
     if not slot then
         Bridge.Debug(
             "debug",
-            "[sky_phone] Phone open rejected for source %s: no exact inventory slot.",
+            "[sky_phone] Phone open rejected for source %s: %s.",
             tostring(source),
+            tostring(slot_error),
             { always = true }
         )
-        TriggerClientEvent("sky_phone:device:error", source, "phone_slot_missing")
+        TriggerClientEvent("sky_phone:device:error", source, slot_error)
         return false
     end
 
@@ -995,6 +1033,7 @@ local function open_phone(source, used_item)
         token = ("%s:%s:%s"):format(imei, tostring(source), tostring(GetGameTimer())),
         unlocked = security == nil,
     }
+    preferred_device_imeis[source] = imei
     local payload = bootstrap(source, security, true)
     Bridge.Debug(
         "debug",
@@ -1010,7 +1049,8 @@ local function open_phone(source, used_item)
     return true
 end
 
-development_open_handler = open_phone
+phone_open_handler = open_phone
+flush_pending_phone_opens()
 
 function SkyPhone.OpenDeviceForCall(source, imei)
     local matches = find_device_slots(source, imei)
@@ -1033,6 +1073,7 @@ function SkyPhone.OpenDeviceForCall(source, imei)
             unlocked = security == nil,
         }
     end
+    preferred_device_imeis[source] = imei
     TriggerClientEvent("sky_phone:device:open", source, bootstrap(source))
     return true
 end
@@ -1045,6 +1086,12 @@ Bridge.Debug(
     { always = true }
 )
 local usable_registered = Bridge.Inventory.RegisterUsableItem(Config.Phone.Item, open_phone)
+if not usable_registered then
+    error(("[sky_phone] Inventory '%s' did not register phone item '%s' as usable."):format(
+        tostring(Bridge.Inventory.GetResourceName()),
+        tostring(Config.Phone.Item)
+    ))
+end
 Bridge.Debug(
     "debug",
     "[sky_phone] Usable item registration returned: %s.",
@@ -1427,6 +1474,7 @@ AddEventHandler("playerDropped", function()
     auth_attempts[source] = nil
     operation_attempts[source] = nil
     character_device_cache[source] = nil
+    preferred_device_imeis[source] = nil
 end)
 
 AddEventHandler("onResourceStop", function(resource_name)
@@ -1435,6 +1483,7 @@ AddEventHandler("onResourceStop", function(resource_name)
         auth_attempts = {}
         operation_attempts = {}
         character_device_cache = {}
+        preferred_device_imeis = {}
     end
 end)
 end)

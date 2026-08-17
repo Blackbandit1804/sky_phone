@@ -252,6 +252,9 @@ local german = translate_shared(clone(Locales["en"] or {}))
 
 merge(german, {
     CommandDescription = "Öffne dein Handy.",
+    Controls = {
+        OpenPhone = "Handy öffnen",
+    },
     TestData = {
         CommandDescription = "Testinhalte für alle datenbasierten Handy-Apps erstellen oder aktualisieren.",
         Success = "Die Testinhalte sind bereit. Deine Sky-Cloud-Anmeldung lautet {email}. Öffne das Handy erneut, um alle Apps zu aktualisieren.",

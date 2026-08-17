@@ -214,6 +214,8 @@ Default entries for unique phones with physical SIM cards:
 
 Do not configure an LB Phone client event or client export. Sky Phone registers the usable items through its server-side inventory adapter.
 
+The server registers `Config.Phone.Item` as usable for every supported inventory adapter: `ox`, `qb`, `lj`, `qs`, `codem`, `core`, `mf`, and `smx`. Resource startup fails visibly if the selected adapter cannot complete that registration.
+
 ### QBCore-style item tables
 
 - Set the phone's `unique` value to match `Config.Phone.Unique`.
@@ -234,6 +236,8 @@ Config.Sim.Enabled = true
 | --- | --- |
 | `Unique = true` | Every phone item receives its own IMEI. Settings, apps, local data, linked account, and SIM move with the item. The item must not stack. |
 | `Unique = false` | Every framework character receives one persistent virtual device. Any configured phone item opens that device. The item may stack. |
+
+With unique phones, using an inventory item selects that exact handset whenever the inventory reports its slot. The F1 hotkey reopens the last selected IMEI; if no handset has been selected yet, the server chooses the first concrete phone slot. The client never supplies a slot or IMEI.
 
 | SIM mode | Behavior |
 | --- | --- |
@@ -362,6 +366,8 @@ Config.Payphones.Locations = {
 The model must also be listed in `Config.Payphones.Props`.
 
 ## Commands
+
+`Config.Phone.Keybind` defaults to `F1` and can be rebound in FiveM's key bindings. Set it to `false` to disable the phone hotkey.
 
 | Command | Where | Purpose |
 | --- | --- | --- |

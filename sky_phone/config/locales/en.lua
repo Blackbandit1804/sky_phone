@@ -1,5 +1,8 @@
 Locales["en"] = {
     CommandDescription = "Open your phone.",
+    Controls = {
+        OpenPhone = "Open phone",
+    },
     TestData = {
         CommandDescription = "Create or refresh test content in every data-driven phone app.",
         Success = "Test content is ready. Your Sky Cloud login is {email}. Reopen the phone to refresh every app.",
