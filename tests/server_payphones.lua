@@ -5,35 +5,41 @@ local allowed_models = {
     prop_phonebox_04 = true,
 }
 
-local locations, rejected = SkyPhonePayphones.ValidateLocations({
+local detected = SkyPhonePayphones.ValidateDetected(
     { model = "prop_phonebox_01a", coords = { x = 100.0, y = 200.0, z = 30.0 } },
-    { model = "prop_phonebox_04", coords = { x = 105.0, y = 200.0, z = 30.0 } },
-    { model = "not_allowed", coords = { x = 100.0, y = 200.0, z = 30.0 } },
-    { model = "prop_phonebox_01a", coords = { x = "100", y = 200.0, z = 30.0 } },
-    { model = "prop_phonebox_01a", coords = { x = 10001.0, y = 200.0, z = 30.0 } },
-    "malformed",
-}, allowed_models)
-
-assert(#locations == 2, "only strictly valid configured locations must be accepted")
-assert(rejected == 4, "every malformed or disallowed configured location must be reported")
-
-local first = SkyPhonePayphones.FindNearest(locations, { x = 101.0, y = 200.0, z = 30.0 }, 3.0)
-assert(first and first.model == "prop_phonebox_01a", "nearest configured booth must be selected")
-
-local second = SkyPhonePayphones.FindNearest(locations, { x = 104.0, y = 200.0, z = 30.0 }, 3.0)
-assert(second and second.model == "prop_phonebox_04", "another configured booth must be selected by proximity")
+    allowed_models,
+    { x = 101.0, y = 200.0, z = 30.0 },
+    3.0
+)
+assert(detected and detected.model == "prop_phonebox_01a", "a nearby detected booth must be accepted")
+assert(detected.coords.x == 100.0, "validated booth coordinates must be preserved")
 
 assert(
-    not SkyPhonePayphones.FindNearest(locations, { x = 0.0, y = 0.0, z = 0.0 }, 3.0),
-    "a player away from every configured booth must be rejected"
+    not SkyPhonePayphones.ValidateDetected(
+        { model = "not_allowed", coords = { x = 100.0, y = 200.0, z = 30.0 } },
+        allowed_models,
+        { x = 101.0, y = 200.0, z = 30.0 },
+        3.0
+    ),
+    "a detected booth with a disallowed model must be rejected"
 )
 assert(
-    not SkyPhonePayphones.FindNearest(locations, { x = "100", y = 200.0, z = 30.0 }, 3.0),
-    "malformed player coordinates must be rejected"
+    not SkyPhonePayphones.ValidateDetected(
+        { model = "prop_phonebox_01a", coords = { x = "100", y = 200.0, z = 30.0 } },
+        allowed_models,
+        { x = 101.0, y = 200.0, z = 30.0 },
+        3.0
+    ),
+    "malformed detected booth coordinates must be rejected"
 )
 assert(
-    not SkyPhonePayphones.FindNearest(locations, { x = 100.0, y = 200.0, z = 30.0 }, 0.0),
-    "an invalid validation distance must be rejected"
+    not SkyPhonePayphones.ValidateDetected(
+        { model = "prop_phonebox_01a", coords = { x = 100.0, y = 200.0, z = 30.0 } },
+        allowed_models,
+        { x = 110.0, y = 200.0, z = 30.0 },
+        3.0
+    ),
+    "a player away from the detected booth must be rejected"
 )
 
-print("Server payphone validation tests passed")
+print("Detected payphone validation tests passed")
