@@ -455,6 +455,8 @@ Sky Phone includes compatibility adapters for supported custom-app contracts fro
 The resource provides the compatibility aliases `lb-phone`, `17mov_Phone`, `high-phone`, `qs-smartphone`, and `yseries`.
 
 See [Custom App Integration](docs/custom-apps.md) for setup details and compatibility limits.
+The complete per-app list of public exports, observer events, internal related contracts, and the
+Custom App iframe protocol is available in [Exports and Events](docs/exports-events.md).
 
 ## Updating Sky Phone
 
