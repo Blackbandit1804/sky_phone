@@ -411,6 +411,11 @@ merge(german, {
                 rateLimited = "Zu viele Versuche. Bitte warte.",
             },
         },
+        HardwareButtons = {
+            lock = "Handy sperren", mute = "Klingelton und Mitteilungen stummschalten", unlock = "Handy entsperren",
+            unmute = "Klingelton und Mitteilungen einschalten", volumeDown = "Leiser",
+            volumeLevel = "Lautstärke {value} Prozent", volumeUp = "Lauter",
+        },
         Home = {
             appLibrary = "App-Mediathek", appLibrarySearch = "Apps suchen", allApps = "Alle Apps",
             apps = "Apps", dock = "Dock", noApps = "Keine Apps gefunden",

@@ -330,6 +330,8 @@ const passcodeResetKey = ref(0)
 const passcodeRetrySeconds = ref(0)
 const passcodeVisible = ref(false)
 const passcodeRequired = ref(false)
+const previousHardwareAlertVolume = ref(75)
+const hardwareVolumeHudVisible = ref(false)
 const setupPreviewDismissed = ref(false)
 const setupDevelopmentSkipped = ref(false)
 const pendingUnlockRoute = ref<string | null>(null)
@@ -344,6 +346,19 @@ const setupRequired = computed(
       (isDevelopment &&
         developmentParameters.has('setupPreview') &&
         !setupPreviewDismissed.value)),
+)
+const hardwareAlertVolume = computed(() =>
+  Math.round(
+    (phone.preferences.settings.notificationVolume +
+      phone.preferences.settings.ringtoneVolume) /
+      2,
+  ),
+)
+const hardwareVolumeHudStyle = computed<CSSProperties>(
+  () =>
+    ({
+      '--phone-hardware-volume-fill': `${32 + hardwareAlertVolume.value * 0.76}px`,
+    }) as CSSProperties,
 )
 const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)')
 const viewportScale = ref(getViewportScale())
@@ -400,6 +415,7 @@ let companiesChangeTimer: number | undefined
 let pendingCompaniesChange: CompanyChangedPayload | null = null
 let unlockTimer: number | undefined
 let passcodeLockTimer: number | undefined
+let hardwareVolumeHudTimer: number | undefined
 let unlockedServicesIdle: number | undefined
 let phoneClosePending = false
 let simPickerClosePending = false
@@ -1264,9 +1280,49 @@ function lockPhone(): void {
   passcodeVisible.value = false
   passcodeBusy.value = false
   passcodeError.value = ''
-  passcodeRequired.value = false
+  passcodeRequired.value = phone.security.enabled
   pendingUnlockRoute.value = null
   isLocked.value = true
+}
+
+function showHardwareVolumeHud(): void {
+  hardwareVolumeHudVisible.value = true
+  if (hardwareVolumeHudTimer !== undefined) {
+    window.clearTimeout(hardwareVolumeHudTimer)
+  }
+  hardwareVolumeHudTimer = window.setTimeout(() => {
+    hardwareVolumeHudVisible.value = false
+    hardwareVolumeHudTimer = undefined
+  }, 1300)
+}
+
+function toggleHardwareLock(): void {
+  if (setupRequired.value) return
+  if (isLocked.value) {
+    unlockPhone()
+    return
+  }
+  lockPhone()
+}
+
+function changeHardwareAlertVolume(delta: number): void {
+  if (setupRequired.value) return
+  const volume = Math.min(100, Math.max(0, hardwareAlertVolume.value + delta))
+  if (volume > 0) previousHardwareAlertVolume.value = volume
+  phone.setAlertVolumes(volume)
+  showHardwareVolumeHud()
+}
+
+function toggleHardwareAlertMute(): void {
+  if (setupRequired.value) return
+  if (hardwareAlertVolume.value > 0) {
+    previousHardwareAlertVolume.value = hardwareAlertVolume.value
+    phone.setAlertVolumes(0)
+    showHardwareVolumeHud()
+    return
+  }
+  phone.setAlertVolumes(previousHardwareAlertVolume.value)
+  showHardwareVolumeHud()
 }
 
 function returnToActiveCall(): void {
@@ -1394,6 +1450,11 @@ watch(
       passcodeBusy.value = false
       passcodeError.value = ''
       passcodeRequired.value = false
+      hardwareVolumeHudVisible.value = false
+      if (hardwareVolumeHudTimer !== undefined) {
+        window.clearTimeout(hardwareVolumeHudTimer)
+        hardwareVolumeHudTimer = undefined
+      }
       pendingUnlockRoute.value = null
       unlockedServicesLoaded.value = false
       if (passcodeLockTimer !== undefined) {
@@ -1443,6 +1504,9 @@ onBeforeUnmount(() => {
   }
   if (unlockTimer !== undefined) window.clearTimeout(unlockTimer)
   if (passcodeLockTimer !== undefined) window.clearInterval(passcodeLockTimer)
+  if (hardwareVolumeHudTimer !== undefined) {
+    window.clearTimeout(hardwareVolumeHudTimer)
+  }
   window.removeEventListener('message', onMessage)
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('resize', updateViewportScale)
@@ -1503,6 +1567,45 @@ onBeforeUnmount(() => {
             }"
             :aria-label="phone.t('Common.phone')"
           >
+            <button
+              type="button"
+              class="phone-hardware-button phone-hardware-button--action"
+              :aria-label="
+                phone.t(
+                  hardwareAlertVolume > 0
+                    ? 'HardwareButtons.mute'
+                    : 'HardwareButtons.unmute',
+                )
+              "
+              :aria-pressed="hardwareAlertVolume === 0"
+              :disabled="setupRequired"
+              @click="toggleHardwareAlertMute"
+            ></button>
+            <button
+              type="button"
+              class="phone-hardware-button phone-hardware-button--volume-up"
+              :aria-label="phone.t('HardwareButtons.volumeUp')"
+              :disabled="setupRequired"
+              @click="changeHardwareAlertVolume(10)"
+            ></button>
+            <button
+              type="button"
+              class="phone-hardware-button phone-hardware-button--volume-down"
+              :aria-label="phone.t('HardwareButtons.volumeDown')"
+              :disabled="setupRequired"
+              @click="changeHardwareAlertVolume(-10)"
+            ></button>
+            <button
+              type="button"
+              class="phone-hardware-button phone-hardware-button--power"
+              :aria-label="
+                phone.t(
+                  isLocked ? 'HardwareButtons.unlock' : 'HardwareButtons.lock',
+                )
+              "
+              :disabled="setupRequired"
+              @click="toggleHardwareLock"
+            ></button>
             <div
               class="phone-screen"
               :class="{
@@ -1511,6 +1614,37 @@ onBeforeUnmount(() => {
                 [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
               }"
             >
+              <Transition name="phone-volume-hud">
+                <div
+                  v-if="hardwareVolumeHudVisible"
+                  class="phone-volume-hud"
+                  :style="hardwareVolumeHudStyle"
+                  role="status"
+                  aria-live="polite"
+                  :aria-label="
+                    phone.t('HardwareButtons.volumeLevel', {
+                      value: String(hardwareAlertVolume),
+                    })
+                  "
+                >
+                  <svg
+                    class="phone-volume-hud__icon"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M4 9v6h4l5 4V5L8 9H4Z" />
+                    <path
+                      v-if="hardwareAlertVolume > 0"
+                      d="M16 8.2c1.1 1 1.7 2.2 1.7 3.8s-.6 2.8-1.7 3.8"
+                    />
+                    <path v-else d="m16.2 9.2 4.6 4.6m0-4.6-4.6 4.6" />
+                  </svg>
+                  <span
+                    class="phone-volume-hud__level"
+                    aria-hidden="true"
+                  ></span>
+                </div>
+              </Transition>
               <k-app
                 theme="ios"
                 :dark="phone.isDarkMode"

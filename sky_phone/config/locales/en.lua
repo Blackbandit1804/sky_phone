@@ -155,6 +155,11 @@ Locales["en"] = {
                 tryAgain = "Try again in {seconds} seconds", rateLimited = "Too many attempts. Please wait.",
             },
         },
+        HardwareButtons = {
+            lock = "Lock phone", mute = "Mute ringtone and notifications", unlock = "Unlock phone",
+            unmute = "Unmute ringtone and notifications", volumeDown = "Volume down",
+            volumeLevel = "Volume {value} percent", volumeUp = "Volume up",
+        },
         Home = {
             appLibrary = "App Library", appLibrarySearch = "Search apps", allApps = "All Apps", apps = "Apps",
             dock = "Dock", noApps = "No apps found", removeApp = "Remove {app} from Home Screen", addToHome = "Add {app} to Home Screen", addPage = "Add Home Screen page", deletePage = "Delete current Home Screen page", removedFromHome = "Removed from Home Screen", page = "Page", pages = "Home screen pages",

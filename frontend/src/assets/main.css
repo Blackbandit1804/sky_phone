@@ -322,6 +322,100 @@ button {
   object-fit: fill;
   pointer-events: none;
 }
+.phone-hardware-button {
+  position: absolute;
+  z-index: 101;
+  width: 26px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.phone-hardware-button:disabled {
+  cursor: default;
+}
+.phone-hardware-button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -6px;
+}
+.phone-hardware-button--action {
+  top: 176px;
+  left: -7px;
+  height: 44px;
+}
+.phone-hardware-button--volume-up {
+  top: 238px;
+  left: -7px;
+  height: 74px;
+}
+.phone-hardware-button--volume-down {
+  top: 315px;
+  left: -7px;
+  height: 74px;
+}
+.phone-hardware-button--power {
+  top: 252px;
+  right: -7px;
+  height: 62px;
+}
+.phone-volume-hud {
+  position: absolute;
+  z-index: 220;
+  top: 188px;
+  left: 6px;
+  width: 30px;
+  height: 108px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 15px;
+  color: #0a84ff;
+  background: rgb(47 47 51 / 98%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+  pointer-events: none;
+}
+.phone-volume-hud__icon {
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: translateX(-50%);
+}
+.phone-volume-hud__level {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--phone-hardware-volume-fill);
+  background: #fff;
+  transition: height 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.phone-volume-hud-enter-active,
+.phone-volume-hud-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.phone-volume-hud-enter-from,
+.phone-volume-hud-leave-to {
+  opacity: 0;
+  transform: translateX(-10px) scale(0.92);
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-volume-hud,
+  .phone-volume-hud__level {
+    transition: none;
+  }
+}
 .phone-screen {
   position: relative;
   container-type: size;
