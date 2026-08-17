@@ -11,6 +11,7 @@ import {
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import WeatherConditionIcon from '@/components/WeatherConditionIcon.vue'
+import { usePullToRefresh } from '@/composables/usePullToRefresh'
 import { usePhoneStore } from '@/stores/phone'
 import { useWeatherStore } from '@/stores/weather'
 import type { WeatherConditionId } from '@/types/weather'
@@ -27,13 +28,22 @@ import {
 const phone = usePhoneStore()
 const weather = useWeatherStore()
 const forecast = computed(() => weather.forecast)
-const pullDistance = ref(0)
 const cooldownToastOpened = ref(false)
-const pullThreshold = 56
-let pullStartY = 0
-let isPulling = false
-let wheelRefreshTimeout: ReturnType<typeof setTimeout> | undefined
 let cooldownToastTimer: ReturnType<typeof setTimeout> | undefined
+
+const {
+  finishPull,
+  movePull,
+  pullDistance,
+  pullThreshold,
+  pullWithWheel,
+  startPull,
+} = usePullToRefresh({
+  isAtTop: (event) =>
+    (event.currentTarget as HTMLElement | null)?.scrollTop === 0,
+  isBusy: () => weather.isLoading,
+  refresh: () => weather.refresh(true, true),
+})
 
 function closeCooldownToast(): void {
   cooldownToastOpened.value = false
@@ -114,52 +124,7 @@ function formatHour(timestamp: number, index: number): string {
   }).format(timestamp)
 }
 
-async function refresh(): Promise<void> {
-  if (weather.isLoading) return
-  pullDistance.value = pullThreshold
-  await weather.refresh(true, true)
-  pullDistance.value = 0
-}
-
-function atTop(event: Event): boolean {
-  return (event.currentTarget as HTMLElement | null)?.scrollTop === 0
-}
-
-function startPull(event: TouchEvent): void {
-  if (!atTop(event) || weather.isLoading) return
-  pullStartY = event.touches[0]?.clientY ?? 0
-  isPulling = true
-}
-
-function movePull(event: TouchEvent): void {
-  if (!isPulling || weather.isLoading) return
-  const distance = (event.touches[0]?.clientY ?? pullStartY) - pullStartY
-  pullDistance.value =
-    distance > 0 ? Math.min(pullThreshold + 20, distance * 0.45) : 0
-}
-
-function finishPull(): void {
-  if (!isPulling && pullDistance.value === 0) return
-  isPulling = false
-  if (pullDistance.value >= pullThreshold) {
-    void refresh()
-    return
-  }
-  pullDistance.value = 0
-}
-
-function pullWithWheel(event: WheelEvent): void {
-  if (!atTop(event) || weather.isLoading || event.deltaY >= 0) return
-  pullDistance.value = Math.min(
-    pullThreshold + 20,
-    pullDistance.value + Math.abs(event.deltaY) * 0.18,
-  )
-  if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
-  wheelRefreshTimeout = setTimeout(finishPull, 130)
-}
-
 onBeforeUnmount(() => {
-  if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
   if (cooldownToastTimer) clearTimeout(cooldownToastTimer)
 })
 

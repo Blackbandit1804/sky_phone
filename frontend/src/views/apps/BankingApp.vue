@@ -13,6 +13,7 @@ import {
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import { usePullToRefresh } from '@/composables/usePullToRefresh'
 import { useBankingStore } from '@/stores/banking'
 import { useCallsStore } from '@/stores/calls'
 import { usePhoneStore } from '@/stores/phone'
@@ -58,18 +59,24 @@ const amount = ref('')
 const target = ref('')
 const formError = ref('')
 const bankingScroll = ref<HTMLElement | null>(null)
-const isRefreshing = ref(false)
-const pullDistance = ref(0)
 const cooldownToastOpened = ref(false)
 const overlayOpened = computed(() =>
   Boolean(action.value || selectedTransaction.value),
 )
 
-const pullThreshold = 56
-let pullStartY = 0
-let isPulling = false
-let wheelRefreshTimeout: ReturnType<typeof setTimeout> | undefined
 let cooldownToastTimer: ReturnType<typeof setTimeout> | undefined
+
+const {
+  finishPull,
+  movePull,
+  pullDistance,
+  pullThreshold,
+  pullWithWheel,
+  startPull,
+} = usePullToRefresh({
+  isAtTop: () => (bankingScroll.value?.scrollTop ?? 0) <= 0,
+  refresh: () => banking.load(true),
+})
 
 function closeCooldownToast(): void {
   cooldownToastOpened.value = false
@@ -211,55 +218,6 @@ function updateAmount(event: Event): void {
   formError.value = ''
 }
 
-async function refresh(): Promise<void> {
-  if (isRefreshing.value) return
-  isRefreshing.value = true
-  pullDistance.value = pullThreshold
-  await banking.load(true)
-  isRefreshing.value = false
-  pullDistance.value = 0
-}
-
-function atTop(): boolean {
-  return (bankingScroll.value?.scrollTop ?? 0) <= 0
-}
-
-function startPull(event: TouchEvent): void {
-  if (!atTop() || isRefreshing.value) return
-  pullStartY = event.touches[0]?.clientY ?? 0
-  isPulling = true
-}
-
-function movePull(event: TouchEvent): void {
-  if (!isPulling || isRefreshing.value) return
-  const distance = (event.touches[0]?.clientY ?? pullStartY) - pullStartY
-  if (distance <= 0) {
-    pullDistance.value = 0
-    return
-  }
-  pullDistance.value = Math.min(pullThreshold + 20, distance * 0.45)
-}
-
-function finishPull(): void {
-  if (!isPulling && pullDistance.value === 0) return
-  isPulling = false
-  if (pullDistance.value >= pullThreshold) {
-    void refresh()
-    return
-  }
-  pullDistance.value = 0
-}
-
-function pullWithWheel(event: WheelEvent): void {
-  if (!atTop() || isRefreshing.value || event.deltaY >= 0) return
-  pullDistance.value = Math.min(
-    pullThreshold + 20,
-    pullDistance.value + Math.abs(event.deltaY) * 0.18,
-  )
-  if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
-  wheelRefreshTimeout = setTimeout(finishPull, 130)
-}
-
 function errorMessage(code: string): string {
   return phone.t(`Apps.banking.errors.${code}`) ===
     `Apps.banking.errors.${code}`
@@ -310,7 +268,6 @@ watch(action, async (currentAction) => {
 })
 
 onBeforeUnmount(() => {
-  if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
   if (cooldownToastTimer) clearTimeout(cooldownToastTimer)
 })
 </script>

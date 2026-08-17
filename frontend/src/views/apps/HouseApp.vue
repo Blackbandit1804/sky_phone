@@ -1,18 +1,5 @@
 <script setup lang="ts">
 import {
-  SkyBlockTitle,
-  SkyButton,
-  SkyCard,
-  SkyDialog,
-  SkyDialogButton,
-  SkyList,
-  SkyListItem,
-  SkyNavbar,
-  SkyAppPage,
-  SkySpinner,
-  SkySheet,
-} from '@/ui'
-import {
   Camera,
   CarFront,
   Check,
@@ -30,15 +17,29 @@ import {
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
-import { useHousingStore } from '@/stores/housing'
+import { usePullToRefresh } from '@/composables/usePullToRefresh'
 import { useEasyShareStore } from '@/stores/easyshare'
+import { useHousingStore } from '@/stores/housing'
 import { usePhoneStore } from '@/stores/phone'
 import type {
   HousingKey,
   HousingKeyCandidate,
   HousingProperty,
 } from '@/types/housing'
-import { SkyToast } from '@/ui'
+import {
+  SkyAppPage,
+  SkyBlockTitle,
+  SkyButton,
+  SkyCard,
+  SkyDialog,
+  SkyDialogButton,
+  SkyList,
+  SkyListItem,
+  SkyNavbar,
+  SkySheet,
+  SkySpinner,
+  SkyToast,
+} from '@/ui'
 
 const phone = usePhoneStore()
 const housing = useHousingStore()
@@ -49,14 +50,25 @@ const revokeCandidate = ref<HousingKey | null>(null)
 const toastOpened = ref(false)
 const toastText = ref('')
 const houseScroll = ref<HTMLElement | null>(null)
-const isRefreshing = ref(false)
-const pullDistance = ref(0)
-
-const pullThreshold = 56
-let pullStartY = 0
-let isPulling = false
-let wheelRefreshTimeout: ReturnType<typeof setTimeout> | undefined
 let toastTimer: number | undefined
+
+const {
+  finishPull,
+  movePull,
+  pullDistance,
+  pullThreshold,
+  pullWithWheel: updatePullWithWheel,
+  refresh,
+  startPull,
+} = usePullToRefresh({
+  isAtTop: () => (houseScroll.value?.scrollTop ?? 0) <= 0,
+  refresh: async () => {
+    const loaded = await housing.load(true)
+    if (!loaded && housing.error === 'reload_cooldown') {
+      showToast(translatedError(housing.error))
+    }
+  },
+})
 
 const properties = computed(() => housing.overview?.properties ?? [])
 const ownedCount = computed(
@@ -93,57 +105,9 @@ function isPending(action: string, property: HousingProperty): boolean {
   return housing.pendingAction === `${action}:${property.id}`
 }
 
-async function refresh(): Promise<void> {
-  if (isRefreshing.value) return
-  isRefreshing.value = true
-  pullDistance.value = pullThreshold
-  const loaded = await housing.load(true)
-  isRefreshing.value = false
-  pullDistance.value = 0
-  if (!loaded && housing.error === 'reload_cooldown') {
-    showToast(translatedError(housing.error))
-  }
-}
-
-function atTop(): boolean {
-  return (houseScroll.value?.scrollTop ?? 0) <= 0
-}
-
-function startPull(event: TouchEvent): void {
-  if (!atTop() || isRefreshing.value) return
-  pullStartY = event.touches[0]?.clientY ?? 0
-  isPulling = true
-}
-
-function movePull(event: TouchEvent): void {
-  if (!isPulling || isRefreshing.value) return
-  const distance = (event.touches[0]?.clientY ?? pullStartY) - pullStartY
-  if (distance <= 0) {
-    pullDistance.value = 0
-    return
-  }
-  pullDistance.value = Math.min(pullThreshold + 20, distance * 0.45)
-}
-
-function finishPull(): void {
-  if (!isPulling && pullDistance.value === 0) return
-  isPulling = false
-  if (pullDistance.value >= pullThreshold) {
-    void refresh()
-    return
-  }
-  pullDistance.value = 0
-}
-
 function pullWithWheel(event: WheelEvent): void {
-  if (!atTop() || isRefreshing.value || event.deltaY >= 0) return
-  pullDistance.value = Math.min(
-    pullThreshold + 20,
-    pullDistance.value + Math.abs(event.deltaY) * 0.18,
-  )
-  if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
+  if (!updatePullWithWheel(event)) return
   if (toastTimer) clearTimeout(toastTimer)
-  wheelRefreshTimeout = setTimeout(finishPull, 130)
 }
 
 async function runCommand(
@@ -233,7 +197,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (wheelRefreshTimeout) clearTimeout(wheelRefreshTimeout)
+  if (toastTimer) clearTimeout(toastTimer)
 })
 </script>
 
