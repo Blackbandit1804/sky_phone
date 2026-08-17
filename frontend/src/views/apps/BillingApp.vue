@@ -47,7 +47,7 @@ import {
   SkySpinner,
   SkyTabBar,
   SkyTabButton,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 
@@ -771,9 +771,11 @@ onBeforeUnmount(() => {
       </section>
     </SkySheet>
 
-    <SkyToast :opened="toastOpen" position="center" class="billing-toast">
-      {{ toastText }}
-    </SkyToast>
+    <SkyNotification
+      :opened="toastOpen"
+      :text="toastText"
+      class="billing-notification"
+    />
   </SkyAppPage>
 </template>
 
@@ -1523,7 +1525,7 @@ onBeforeUnmount(() => {
       var(--billing-panel);
   }
 }
-.billing-toast {
+.billing-notification {
   z-index: 50;
 }
 </style>

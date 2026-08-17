@@ -13,6 +13,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { SkyProvider } from '@/ui'
 import PhoneHomeIndicator from '@/components/PhoneHomeIndicator.vue'
 import PhoneControlCenter from '@/components/PhoneControlCenter.vue'
+import PhoneDynamicIsland from '@/components/PhoneDynamicIsland.vue'
 import PhoneMediaCapture from '@/components/PhoneMediaCapture.vue'
 import PhoneMemoRecorder from '@/components/PhoneMemoRecorder.vue'
 import PhoneLockScreen from '@/components/PhoneLockScreen.vue'
@@ -315,9 +316,6 @@ const DARK_STATUS_BAR_APP_IDS = new Set([
 ])
 const isDevelopmentRoute = computed(
   () => isDevelopment && route.name === 'development-sky-ui',
-)
-const showActiveCallReturn = computed(
-  () => Boolean(calls.activeCall) && route.params.appId !== 'phone',
 )
 const appTransitionName = computed(() =>
   route.query.transition === 'app-switch' ? 'app-switch' : 'app-window',
@@ -1084,7 +1082,6 @@ function onMessage(event: MessageEvent<AppMessage>): void {
       isUnlocking.value = false
       loadUnlockedPhoneData()
     }
-    window.setTimeout(() => void router.push('/apps/phone'), 0)
   } else if (event.data?.type === 'sim:picker' && event.data.data) {
     simPicker.value = event.data.data as unknown as SimPickerPayload
   } else if (event.data?.type === 'sim:picker-close') {
@@ -1330,12 +1327,6 @@ function toggleHardwareAlertMute(): void {
   showHardwareVolumeHud()
 }
 
-function returnToActiveCall(): void {
-  if (!calls.activeCall) return
-  controlCenterOpened.value = false
-  void router.push('/apps/phone')
-}
-
 function unlockCamera(): void {
   if (phone.security.enabled) {
     pendingUnlockRoute.value = '/apps/camera'
@@ -1414,9 +1405,7 @@ onMounted(() => {
         window.setTimeout(() => {
           notifications.show({
             appId: 'messages',
-            persistent: !developmentParameters.has(
-              'mutedNotificationPreview',
-            ),
+            persistent: !developmentParameters.has('mutedNotificationPreview'),
             route: '/apps/messages',
             text: 'You still got that spare alternator?',
             title: 'Tommy V',
@@ -1570,7 +1559,7 @@ onBeforeUnmount(() => {
           @open="openNotificationPreview"
         />
         <div
-          v-if="phone.isOpen || notifications.current"
+          v-if="phone.isOpen || notifications.current || calls.activeCall"
           class="phone-resolution-wrapper phone-resolution-wrapper--primary"
         >
           <div class="phone-resolution-canvas phone-resolution-canvas--primary">
@@ -1682,14 +1671,13 @@ onBeforeUnmount(() => {
                 >
                   <PhoneStatusBar
                     v-if="!isLocked && !(isHomeRoute && springboardEditing)"
-                    :active-call-return="showActiveCallReturn"
                     :control-center-opened="controlCenterOpened"
                     :interactive="!setupRequired"
                     :lockable="!setupRequired"
-                    @active-call="returnToActiveCall"
                     @control-center="toggleControlCenter"
                     @lock="lockPhone"
                   />
+                  <PhoneDynamicIsland v-if="!setupRequired" />
                   <SpringboardView
                     v-if="!isDevelopmentRoute && !setupRequired"
                     @edit-mode-change="springboardEditing = $event"

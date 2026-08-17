@@ -38,7 +38,7 @@ import {
   SkyNavbar,
   SkySheet,
   SkySpinner,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 
 const phone = usePhoneStore()
@@ -572,14 +572,11 @@ onBeforeUnmount(() => {
       </template>
     </sky-dialog>
 
-    <SkyToast
+    <SkyNotification
       :opened="toastOpened"
-      position="center"
-      vertical-position="bottom"
+      :text="toastText"
       @click="toastOpened = false"
-    >
-      {{ toastText }}
-    </SkyToast>
+    />
   </sky-app-page>
 </template>
 

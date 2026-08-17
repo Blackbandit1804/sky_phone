@@ -72,7 +72,7 @@ import {
   SkySegmentedButton,
   SkySheet,
   SkySpinner,
-  SkyToast,
+  SkyNotification,
   SkyToggle,
 } from '@/ui'
 
@@ -2498,12 +2498,7 @@ onBeforeUnmount(() => {
         }}</SkyDialogButton></template
       ></SkyDialog
     >
-    <SkyToast
-      :opened="Boolean(feedback)"
-      position="center"
-      vertical-position="center"
-      >{{ feedback }}</SkyToast
-    >
+    <SkyNotification :opened="Boolean(feedback)" :text="feedback" />
   </SkyAppPage>
 </template>
 

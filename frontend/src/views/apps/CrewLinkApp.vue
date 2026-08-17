@@ -17,7 +17,7 @@ import {
   SkySheet,
   SkyTabBar,
   SkyTabButton,
-  SkyToast,
+  SkyNotification,
   SkyToggle,
   SkyToolbarPane,
 } from '@/ui'
@@ -2352,9 +2352,7 @@ onBeforeUnmount(() => {
       >
     </sky-dialog>
 
-    <sky-toast :opened="Boolean(toastText)" position="center">{{
-      toastText
-    }}</sky-toast>
+    <sky-notification :opened="Boolean(toastText)" :text="toastText" />
   </sky-app-page>
 </template>
 

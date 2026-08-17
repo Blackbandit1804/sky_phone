@@ -11,7 +11,7 @@ import {
   SkySpinner,
   SkySegmented,
   SkySegmentedButton,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 import {
   ChevronLeft,
@@ -1625,13 +1625,11 @@ onBeforeUnmount(() => {
     </template>
   </sky-dialog>
 
-  <sky-toast
+  <sky-notification
     :opened="toastOpened"
-    position="center"
+    :text="toastText"
     @click="toastOpened = false"
-  >
-    {{ toastText }}
-  </sky-toast>
+  />
 </template>
 
 <style scoped>

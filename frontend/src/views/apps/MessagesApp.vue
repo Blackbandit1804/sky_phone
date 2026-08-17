@@ -75,7 +75,7 @@ import {
   SkySettingsRow,
   SkySheet,
   SkySpinner,
-  SkyToast,
+  SkyNotification,
   SkyToolbar,
 } from '@/ui'
 
@@ -1964,13 +1964,11 @@ onBeforeUnmount(() => {
     </template>
   </SkyDialog>
 
-  <SkyToast
+  <SkyNotification
     :opened="toastOpened"
-    position="center"
+    :text="toastText"
     @click="toastOpened = false"
-  >
-    {{ toastText }}
-  </SkyToast>
+  />
 </template>
 
 <style scoped>

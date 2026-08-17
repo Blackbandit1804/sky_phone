@@ -103,7 +103,7 @@ The files contain clearly separated sections for:
 | `Config.Phone` | Phone item, movement, unique-device mode, and development command |
 | `Config.Sim` | Physical or virtual SIM behavior and number formatting |
 | `Config.Calls` / `Config.Radio` | Voice providers, call behavior, radio limits, and permissions |
-| `Config.Payphones` | Payphone pricing, props, validation, and server-owned locations |
+| `Config.Payphones` | Payphone pricing, detected props, validation, and custom spawned locations |
 | `Config.Animations` | Phone prop, animations, and portrait/landscape transforms |
 | App sections | Limits and behavior for every built-in app |
 | `Config.Server` | Stable password and passcode peppers |
@@ -353,17 +353,18 @@ Radio display-name permissions are configured in `Config.Radio.DisplayName.Allow
 
 ## Payphones
 
-Sky Phone includes server-authoritative GTA V payphone locations. Pricing, payment account, props, validation distances, and custom locations are configured under `Config.Payphones`.
+Sky Phone automatically detects nearby world props listed in `Config.Payphones.Props`; GTA V payphones do not need configured coordinates. Pricing, payment account, prop models, and validation distances are configured under `Config.Payphones`.
 
-Custom location example:
+Use `CustomLocations` only when Sky Phone should spawn additional payphone props at custom positions:
 
 ```lua
-Config.Payphones.Locations = {
-    { model = "prop_phonebox_01a", coords = { x = 123.45, y = 678.90, z = 21.0 } },
+Config.Payphones.CustomProp = "prop_phonebox_01b"
+Config.Payphones.CustomLocations = {
+    vector4(123.45, 678.90, 21.0, 90.0),
 }
 ```
 
-The model must also be listed in `Config.Payphones.Props`.
+`CustomProp` must also be listed in `Config.Payphones.Props`. Each custom position uses `vector4(x, y, z, heading)`.
 
 ## Commands
 

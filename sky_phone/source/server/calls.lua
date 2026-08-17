@@ -1074,34 +1074,23 @@ for _, model_name in ipairs(Config.Payphones.Props or {}) do
     end
 end
 
-local payphone_locations, rejected_payphone_locations = SkyPhonePayphones.ValidateLocations(
-    Config.Payphones.Locations,
-    payphone_models
-)
-if Config.Payphones.Enabled and #payphone_locations == 0 then
+if Config.Payphones.Enabled and not next(payphone_models) then
     Bridge.Debug(
         "error",
-        "[sky_phone] Payphones are enabled, but no valid server-owned locations are configured; payphone calls will be rejected.",
-        { always = true }
-    )
-elseif Config.Payphones.Enabled and rejected_payphone_locations > 0 then
-    Bridge.Debug(
-        "warn",
-        "[sky_phone] Ignored %s invalid server-owned payphone location(s).",
-        rejected_payphone_locations,
+        "[sky_phone] Payphones are enabled, but Config.Payphones.Props contains no valid models; payphone calls will be rejected.",
         { always = true }
     )
 end
 
-local function valid_payphone_position(source)
+local function valid_payphone_position(source, detected_booth)
     local ped = GetPlayerPed(source)
     if not ped or ped == 0 then
         return nil
     end
-    local player_coords = GetEntityCoords(ped)
-    local location = SkyPhonePayphones.FindNearest(
-        payphone_locations,
-        player_coords,
+    local location = SkyPhonePayphones.ValidateDetected(
+        detected_booth,
+        payphone_models,
+        GetEntityCoords(ped),
         Config.Payphones.ServerValidationDistance
     )
     if not location then
@@ -1129,7 +1118,7 @@ Bridge.Callbacks.Register("sky_phone:payphone:dial", function(source, data)
     if not Config.Payphones.Enabled or not SkyPhone.AllowOperation(source, "payphone_dial", 15, 60) then
         return { success = false, error = "rate_limited" }
     end
-    local booth_coords, booth_model = valid_payphone_position(source)
+    local booth_coords, booth_model = valid_payphone_position(source, data)
     if not booth_coords then
         return { success = false, error = "invalid_payphone" }
     end

@@ -18,6 +18,7 @@ local visuals_starting = false
 local visuals_ending = false
 local hangup_requested = false
 local remote_visuals = {}
+local custom_payphone_props = {}
 
 local configured_models = {}
 for _, model_name in ipairs(Config.Payphones.Props or {}) do
@@ -96,6 +97,64 @@ local function load_model(model_hash)
     end
     return HasModelLoaded(model_hash)
 end
+
+local function spawn_custom_payphones()
+    local locations = Config.Payphones.CustomLocations or {}
+    if not Config.Payphones.Enabled or #locations == 0 then
+        return
+    end
+
+    local model_name = Config.Payphones.CustomProp
+    local model_hash = type(model_name) == "string" and joaat(model_name) or 0
+    if not configured_models[model_hash] then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] Config.Payphones.CustomProp must also be listed in Config.Payphones.Props.",
+            { always = true }
+        )
+        return
+    end
+    if not load_model(model_hash) then
+        Bridge.Debug("error", "[sky_phone] The configured custom payphone prop could not be loaded.", {
+            always = true,
+        })
+        return
+    end
+
+    for index, coords in ipairs(locations) do
+        local coords_type = type(coords)
+        local x = (coords_type == "vector4" or coords_type == "table")
+            and valid_visual_number(coords.x, 10000.0) or nil
+        local y = x and valid_visual_number(coords.y, 10000.0) or nil
+        local z = y and valid_visual_number(coords.z, 2000.0) or nil
+        local heading = z and valid_visual_number(coords.w, 360000.0) or nil
+        if not heading then
+            Bridge.Debug(
+                "error",
+                "[sky_phone] Ignored invalid Config.Payphones.CustomLocations entry %s; use vector4(x, y, z, heading).",
+                index,
+                { always = true }
+            )
+        else
+            local entity = CreateObjectNoOffset(model_hash, x, y, z, false, true, false)
+            if entity == 0 or not DoesEntityExist(entity) then
+                Bridge.Debug(
+                    "error",
+                    "[sky_phone] Failed to spawn custom payphone %s.",
+                    index,
+                    { always = true }
+                )
+            else
+                SetEntityHeading(entity, heading % 360.0)
+                FreezeEntityPosition(entity, true)
+                custom_payphone_props[#custom_payphone_props + 1] = entity
+            end
+        end
+    end
+    SetModelAsNoLongerNeeded(model_hash)
+end
+
+CreateThread(spawn_custom_payphones)
 
 local function load_animation(dictionary)
     if HasAnimDictLoaded(dictionary) then
@@ -666,5 +725,11 @@ AddEventHandler("onResourceStop", function(resource_name)
     end
     for _, id in ipairs(visual_ids) do
         restore_remote_visual(id)
+    end
+    for _, entity in ipairs(custom_payphone_props) do
+        if DoesEntityExist(entity) then
+            SetEntityAsMissionEntity(entity, true, true)
+            DeleteEntity(entity)
+        end
     end
 end)

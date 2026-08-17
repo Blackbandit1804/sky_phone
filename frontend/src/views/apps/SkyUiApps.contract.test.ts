@@ -83,4 +83,11 @@ describe('phone apps use Sky UI', () => {
       expect(source, file).not.toMatch(/\b:colors=/)
     }
   })
+
+  it('uses top notifications instead of app-level toasts', () => {
+    for (const { file, source } of appSources) {
+      expect(source, file).not.toMatch(/\bSkyToast\b|<sky-toast|<k-toast/)
+      expect(source, file).not.toMatch(/(?:citymarkt|pages)__toast/)
+    }
+  })
 })

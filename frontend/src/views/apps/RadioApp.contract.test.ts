@@ -21,7 +21,7 @@ describe('RadioApp Sky UI contract', () => {
     expect(source).toContain('<SkyRange')
     expect(source).toContain('<SkySettingsGroup')
     expect(source).toContain('<SkySettingsRow')
-    expect(source).toContain('<SkyToast')
+    expect(source).toContain('<SkyNotification')
   })
 
   it('renders Radio and Settings in full-width bottom Glass navigation', () => {
@@ -186,6 +186,7 @@ describe('RadioApp Sky UI contract', () => {
     expect(source).toContain('<SkyEmptyState')
     expect(source).toContain('role="alert"')
     expect(source).toContain(':opened="Boolean(feedback)"')
-    expect(source).toContain('vertical-position="center"')
+    expect(source).toContain(':text="feedback"')
+    expect(source).not.toContain('vertical-position=')
   })
 })

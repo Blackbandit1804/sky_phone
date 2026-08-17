@@ -24,6 +24,7 @@ import {
   SkyButton,
   SkyGlass,
   SkyNavbar,
+  SkyNotification,
   SkyAppPage,
   SkyPillNavigation,
   SkySearchbar,
@@ -1507,11 +1508,7 @@ onMounted(async () => {
       :app-name="phone.t('Apps.localPages.name')"
       @logged-out="tab = 'profile'"
     />
-    <Transition name="toast"
-      ><div v-if="feedback" class="pages__toast">
-        {{ feedback }}
-      </div></Transition
-    >
+    <SkyNotification :opened="Boolean(feedback)" :text="feedback" />
   </sky-app-page>
 </template>
 
@@ -2189,30 +2186,6 @@ onMounted(async () => {
   font-style: normal;
   font-weight: 900;
 }
-.pages__toast {
-  position: absolute;
-  z-index: 20;
-  right: 17px;
-  bottom: 91px;
-  left: 17px;
-  padding: 11px;
-  border-radius: 11px;
-  background: #fff6cf;
-  color: #1b2023;
-  box-shadow: 0 8px 30px #0007;
-  font-size: 10px;
-  font-weight: 800;
-  text-align: center;
-}
-.toast-enter-active,
-.toast-leave-active {
-  transition: 0.2s;
-}
-.toast-enter-from,
-.toast-leave-to {
-  transform: translateY(8px);
-  opacity: 0;
-}
 .pages__header {
   height: 64px;
   padding: 6px 16px 8px;
@@ -2737,9 +2710,6 @@ onMounted(async () => {
 .pages__selected-strip button i,
 .pages__photo-picker i {
   font-size: 10px;
-}
-.pages__toast {
-  font-size: 12px;
 }
 .pages {
   --color-primary: var(--yellow);

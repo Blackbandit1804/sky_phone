@@ -20,7 +20,7 @@ import {
   SkyRange,
   SkySearchbar,
   SkySheet,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 import {
   Check,
@@ -1479,9 +1479,7 @@ onBeforeUnmount(() => {
       </template>
     </sky-dialog>
 
-    <sky-toast position="center" :opened="Boolean(toastText)">{{
-      toastText
-    }}</sky-toast>
+    <sky-notification :opened="Boolean(toastText)" :text="toastText" />
   </sky-app-page>
 </template>
 

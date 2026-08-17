@@ -412,6 +412,13 @@ function onMessage(event: MessageEvent): void {
     const state = message.data as MemoRecorderState
     if (!state || !Array.isArray(state.levels)) return
     recorderState.value = state
+    if (
+      ['paused', 'recording', 'starting', 'stopping', 'uploading'].includes(
+        state.state,
+      )
+    ) {
+      view.value = 'recording'
+    }
     if (state.error) showNotification(recorderError(state.error))
   } else if (message.type === 'memo:saved') {
     const memo = message.data as MemoDto
@@ -423,12 +430,14 @@ function onMessage(event: MessageEvent): void {
   }
 }
 
-onMounted(() => window.addEventListener('message', onMessage))
+onMounted(() => {
+  window.addEventListener('message', onMessage)
+  postRecorderCommand('memo:recordStateRequest')
+})
 
 onBeforeUnmount(() => {
   window.removeEventListener('message', onMessage)
   stopPlayback()
-  if (recordingActive.value) postRecorderCommand('memo:recordCancel')
   if (view.value === 'detail') void persistSelected()
 })
 </script>

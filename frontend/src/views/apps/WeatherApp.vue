@@ -22,7 +22,7 @@ import {
   SkyNavbar,
   SkyScrollArea,
   SkySpinner,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 
 const phone = usePhoneStore()
@@ -283,14 +283,11 @@ watch(
       </SkyLink>
     </div>
 
-    <SkyToast
+    <SkyNotification
       :opened="cooldownToastOpened"
-      position="center"
-      vertical-position="bottom"
+      :text="phone.t('Apps.weather.errors.reload_cooldown')"
       @click="closeCooldownToast"
-    >
-      {{ phone.t('Apps.weather.errors.reload_cooldown') }}
-    </SkyToast>
+    />
   </SkyAppPage>
 </template>
 

@@ -42,7 +42,7 @@ describe('Banking app Sky UI migration', () => {
       'SkyButton',
       'SkySpinner',
       'SkyEmptyState',
-      'SkyToast',
+      'SkyNotification',
     ]) {
       expect(source).toContain(`<${component}`)
     }

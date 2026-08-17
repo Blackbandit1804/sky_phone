@@ -308,8 +308,11 @@ describe('MessagesApp Sky UI contract', () => {
     const contactProfile = source.slice(contactProfileStart, threadScrollStart)
     const blockDialogOpened = source.indexOf(':opened="blockDialogOpened"')
     const blockDialogStart = source.lastIndexOf('<SkyDialog', blockDialogOpened)
-    const toastStart = source.indexOf('<SkyToast', blockDialogStart)
-    const blockDialog = source.slice(blockDialogStart, toastStart)
+    const notificationStart = source.indexOf(
+      '<SkyNotification',
+      blockDialogStart,
+    )
+    const blockDialog = source.slice(blockDialogStart, notificationStart)
 
     expect(contactProfile).toContain('kind="action"')
     expect(contactProfile).toContain('tone="danger"')
