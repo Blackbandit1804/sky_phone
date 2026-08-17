@@ -89,10 +89,15 @@ function updateHighlightPosition(event: PointerEvent): void {
     return
   }
 
-  const bounds = root.value?.getBoundingClientRect()
-  if (!bounds) return
-  highlightX.value = `${Math.max(0, Math.min(bounds.width, event.clientX - bounds.left))}px`
-  highlightY.value = `${Math.max(0, Math.min(bounds.height, event.clientY - bounds.top))}px`
+  const element = root.value
+  const bounds = element?.getBoundingClientRect()
+  if (!element || !bounds) return
+  const scaleX = bounds.width > 0 ? element.offsetWidth / bounds.width : 1
+  const scaleY = bounds.height > 0 ? element.offsetHeight / bounds.height : 1
+  const localX = (event.clientX - bounds.left) * scaleX
+  const localY = (event.clientY - bounds.top) * scaleY
+  highlightX.value = `${Math.max(0, Math.min(element.offsetWidth, localX))}px`
+  highlightY.value = `${Math.max(0, Math.min(element.offsetHeight, localY))}px`
   highlightVisible.value = true
 }
 
