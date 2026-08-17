@@ -4632,17 +4632,49 @@ button {
   color: #a0a0a7;
 }
 .clock-content {
+  --sky-block-gutter-left: 0px;
+  --sky-block-gutter-right: 0px;
   min-height: 0;
   flex: 1;
   overflow-y: auto;
   padding: 0 0
     calc(var(--sky-tabbar-height) + var(--sky-safe-area-bottom) + 16px);
 }
-.clock-navbar.sky-navbar--no-navigation {
-  min-height: calc(
-    var(--sky-navbar-safe-area-top) + var(--sky-navbar-large-title-height)
-  );
-  padding-top: var(--sky-navbar-safe-area-top);
+.clock-navbar.sky-navbar {
+  --sky-navbar-safe-area-top: var(--sky-space-2);
+  --sky-page-gutter: 12px;
+}
+.clock-navbar--alarm .sky-navbar__inner {
+  margin-bottom: 0;
+}
+.clock-navbar--alarm .sky-navbar__left.sky-glass-surface,
+.clock-navbar--alarm .sky-navbar__right.sky-glass-surface {
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.clock-navbar-action.sky-link {
+  min-height: var(--sky-touch-target);
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--sky-radius-pill);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+}
+.clock-navbar-action--icon.sky-link {
+  width: var(--sky-touch-target);
+  padding: 0;
+}
+.clock-navbar-action--icon svg {
+  width: 21px;
+  height: 21px;
 }
 .phone-call-content {
   min-height: 0;
@@ -4663,16 +4695,17 @@ button {
 }
 .clock-world-now {
   margin: 0;
-  padding: 76px 16px 0;
+  padding: 84px 16px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
 }
 .clock-world-location {
-  color: #8e8e93;
+  color: var(--sky-muted);
   font-size: 19px;
   font-weight: 500;
+  line-height: 24px;
 }
 .clock-world-time {
   margin-top: 8px;
@@ -4680,63 +4713,169 @@ button {
   font-size: 74px;
   font-weight: 200;
   letter-spacing: -4px;
+  line-height: 1;
 }
 .clock-world-zone {
-  margin-top: 2px;
-  color: #8e8e93;
+  margin-top: 4px;
+  color: var(--sky-muted);
   font-size: 14px;
+  line-height: 20px;
 }
 .clock-alarm-list {
-  margin-top: 8px;
+  margin: 4px 12px 0;
 }
 .clock-alarm-item {
-  min-height: 86px;
+  min-height: 104px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--sky-hairline);
 }
-.clock-alarm-remove {
+.clock-alarm-copy {
+  min-width: 0;
+  min-height: 104px;
+  grid-column: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: var(--sky-text);
+  text-align: left;
+}
+.clock-alarm-remove + .clock-alarm-copy {
+  grid-column: 2;
+}
+.clock-alarm-copy:focus-visible {
+  border-radius: 10px;
+  outline: 2px solid var(--sky-app-accent);
+  outline-offset: -2px;
+}
+.clock-alarm-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 50px;
+  font-weight: 200;
+  letter-spacing: -2px;
+  line-height: 54px;
+}
+.clock-alarm-subtitle {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clock-alarm-item--disabled .clock-alarm-copy {
+  color: var(--sky-muted);
+}
+.clock-alarm-chevron {
+  width: 18px;
+  height: 18px;
+  grid-column: 3;
+  justify-self: end;
+  color: var(--sky-subtle);
+}
+.clock-alarm-item > .sky-toggle {
+  grid-column: 3;
+  justify-self: end;
+}
+.clock-alarm-remove.sky-button--icon-only {
   width: 28px;
   min-width: 28px;
   height: 28px;
+  min-height: 28px;
+  flex: none;
   padding: 0;
+  border-radius: 50%;
 }
 .clock-alarm-remove svg {
   width: 17px;
   height: 17px;
   stroke-width: 3;
 }
-.clock-alarm-editor {
+.clock-alarm-sheet {
+  --sky-overlay-layer: 90;
+  --sky-sheet-background: #1c1c1d;
+}
+.clock-alarm-sheet .sky-sheet__panel {
+  height: calc(100% - var(--sky-safe-area-top) - var(--sky-space-2));
+  max-height: calc(100% - var(--sky-safe-area-top) - var(--sky-space-2));
+  overflow: hidden;
+  border-radius: var(--sky-radius-sheet) var(--sky-radius-sheet) 0 0;
+  background: var(--sky-sheet-background);
+}
+.clock-alarm-sheet .sky-sheet__grabber {
+  display: none;
+}
+.clock-alarm-sheet-surface {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--sky-radius-sheet) var(--sky-radius-sheet) 0 0;
+  background: var(--sky-sheet-background);
+  color: var(--sky-text);
+}
+.clock-alarm-sheet-navbar.sky-navbar,
+.clock-alarm-sheet-surface > .sky-navbar {
+  --sky-navbar-safe-area-top: var(--sky-space-3);
+  --sky-page-gutter: 12px;
+  --sky-navbar-glass: transparent;
+  flex: none;
+  background: transparent;
+}
+.clock-alarm-sheet-navbar .sky-navbar__blur,
+.clock-alarm-sheet-navbar .sky-navbar__background {
+  background: transparent;
+}
+.clock-alarm-editor.sky-scroll-area--padded {
+  --sky-page-gutter: 12px;
   min-height: 0;
   flex: 1;
   margin: 0;
-  padding: 8px 0 32px;
+  padding-top: 8px;
   overflow-y: auto;
+}
+.clock-alarm-editor .time-wheel-picker {
+  width: 100%;
+  margin-right: 0;
+  margin-left: 0;
+}
+.clock-alarm-editor .sky-list--strong,
+.clock-alarm-editor .sky-list--inset {
+  background: #2c2c2e;
 }
 .time-wheel-picker {
   position: relative;
   width: calc(100% - 32px);
-  height: 200px;
-  margin: 0 16px 16px;
+  height: 240px;
+  margin: 8px 16px 12px;
   display: grid;
-  grid-template-columns: 64px 64px;
+  grid-template-columns: repeat(2, minmax(0, 88px));
   justify-content: center;
-  gap: 8px;
+  gap: 4px;
   overflow: hidden;
 }
 .time-wheel-picker--duration {
-  grid-template-columns: repeat(3, 64px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
 }
 .time-wheel-picker__field {
   position: relative;
-  width: 64px;
-  height: 200px;
+  width: 100%;
+  height: 240px;
 }
 .time-wheel-picker--duration .time-wheel-picker__field {
-  width: 64px;
+  width: 100%;
 }
 .time-wheel-picker__selection {
   position: absolute;
   z-index: 0;
-  top: 80px;
+  top: 100px;
   right: 0;
   left: 0;
   height: 40px;
@@ -4747,8 +4886,8 @@ button {
 .time-wheel-picker__column {
   position: relative;
   z-index: 1;
-  height: 200px;
-  padding: 80px 0;
+  height: 240px;
+  padding: 100px 0;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
@@ -4766,16 +4905,17 @@ button {
   );
 }
 .time-wheel-picker--unit-labels .time-wheel-picker__column {
-  width: 36px;
+  width: 54%;
 }
 .time-wheel-picker__unit {
   position: absolute;
   z-index: 2;
-  top: 80px;
-  left: 34px;
+  top: 100px;
+  left: 53%;
   height: 40px;
-  color: #8e8e93;
-  font-size: 9px;
+  color: var(--sky-text);
+  font-size: 15px;
+  font-weight: 600;
   line-height: 40px;
   pointer-events: none;
 }
@@ -4795,7 +4935,7 @@ button {
   scroll-snap-align: center;
   background: transparent;
   color: #8e8e93;
-  font-size: 27px;
+  font-size: 28px;
   font-weight: 300;
   line-height: 40px;
   opacity: 0.62;
@@ -4810,25 +4950,40 @@ button {
 }
 .time-wheel-picker__value--selected {
   color: #fff;
+  font-size: 32px;
   opacity: 1;
 }
 .clock-alarm-delete {
-  width: calc(100% - 32px);
-  margin: 18px 16px 0;
+  width: 100%;
+  margin: 18px 0 0;
 }
 .clock-alarm-save.sky-link {
-  color: #ff9f0a;
+  background: #ff9f0a;
+  color: #fff;
 }
 .clock-tool {
   margin: 0;
   padding: 0 16px;
   text-align: center;
 }
+.clock-stopwatch {
+  --sky-block-gutter-left: calc(
+    var(--sky-page-gutter) + var(--sky-safe-area-left)
+  );
+  --sky-block-gutter-right: calc(
+    var(--sky-page-gutter) + var(--sky-safe-area-right)
+  );
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 .clock-digits {
-  margin: 70px 0 54px;
+  margin: 118px 0 96px;
   font-variant-numeric: tabular-nums;
-  font-size: 52px;
+  font-size: 68px;
   font-weight: 200;
+  letter-spacing: -4px;
+  line-height: 1;
 }
 .clock-sound-menu {
   min-height: 0;
@@ -4850,18 +5005,52 @@ button {
   height: 17px;
 }
 .clock-actions {
-  display: flex;
-  justify-content: space-between;
-  margin: 12px 0;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr) 82px;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
 }
-.clock-action-button {
-  width: 66px;
-  height: 66px;
-  min-width: 66px;
+.clock-action-button.sky-button {
+  width: 82px;
+  height: 82px;
+  min-width: 82px;
   padding: 0;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 500;
+}
+.clock-action-button.clock-action-button--secondary.sky-button--secondary {
+  background: #1c1c1e;
+  color: #8e8e93;
+}
+.clock-action-button.clock-action-button--start.sky-button--secondary {
+  grid-column: 3;
+  background: #032d13;
+  color: #30d158;
+}
+.clock-action-button.clock-action-button--stop.sky-button--secondary {
+  grid-column: 3;
+  background: #330c0a;
+  color: #ff453a;
+}
+.clock-action-button.sky-button:disabled {
+  opacity: 0.42;
+}
+.clock-action-button--icon svg {
+  width: 34px;
+  height: 34px;
+  stroke-width: 2;
+}
+.clock-action-button--icon.clock-action-button--start svg {
+  fill: currentColor;
+}
+.clock-tool-divider {
+  height: 1px;
+  background: var(--sky-hairline);
 }
 .clock-lap-list {
-  margin-top: 24px;
+  margin-top: 0;
 }
 .timer-ring {
   position: relative;
@@ -4899,17 +5088,24 @@ button {
   font-variant-numeric: tabular-nums;
 }
 .clock-timer-settings {
+  width: 100%;
+  overflow: hidden;
   margin-right: 0;
+  margin-top: 24px;
   margin-left: 0;
 }
-.clock-timer-note {
-  margin-top: 16px;
-}
-.clock-timer-sound {
-  margin-top: 12px;
-}
 .clock-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding-bottom: 28px;
+  justify-content: center;
+  height: 100%;
+}
+.clock-timer-actions {
+  width: 100%;
+  margin-top: 8px;
+  margin-bottom: 24px;
 }
 .store-app {
   background: #000;
@@ -5033,6 +5229,21 @@ button {
 .phone-app--light .clock-app {
   background: #f2f2f7;
   color: #000;
+}
+.phone-app--light
+  .clock-action-button.clock-action-button--secondary.sky-button--secondary {
+  background: #e5e5ea;
+  color: #8e8e93;
+}
+.phone-app--light
+  .clock-action-button.clock-action-button--start.sky-button--secondary {
+  background: #d9f5df;
+  color: #248a3d;
+}
+.phone-app--light
+  .clock-action-button.clock-action-button--stop.sky-button--secondary {
+  background: #ffe5e5;
+  color: #d70015;
 }
 .phone-app--light .time-wheel-picker__selection {
   background: #e5e5ea;

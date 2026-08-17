@@ -244,6 +244,10 @@
   background: rgba(120, 120, 128, 0.38);
 }
 
+.sky-sheet [data-sky-sheet-drag-handle] {
+  touch-action: none;
+}
+
 .sky-action-sheet__panel {
   max-width: 448px;
   margin: 0 auto;

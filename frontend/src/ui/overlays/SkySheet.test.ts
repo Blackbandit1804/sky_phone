@@ -24,10 +24,16 @@ describe('SkySheet', () => {
       swipeToClose: true,
     })
     const ordinary = await renderSheet({ opened: true })
+    const hiddenGrabber = await renderSheet({
+      opened: true,
+      showGrabber: false,
+      swipeToClose: true,
+    })
 
     expect(swipeable).toContain('class="sky-sheet__grabber"')
     expect(swipeable).toContain('Sheet content')
     expect(ordinary).not.toContain('sky-sheet__grabber')
+    expect(hiddenGrabber).not.toContain('sky-sheet__grabber')
   })
 
   it('can expose the drag handle as an accessible close button', async () => {
@@ -56,10 +62,15 @@ describe('SkySheet', () => {
     expect(source).toContain('swipeclose: [event: PointerEvent]')
     expect(source).toContain('grabberclick: [event: MouseEvent]')
     expect(source).toContain('setPointerCapture(event.pointerId)')
+    expect(source).toContain("target.closest('[data-sky-sheet-drag-handle]')")
+    expect(source).toContain('@pointerdown="startDrag"')
     expect(source).toContain('dragOffset.value >= closeThreshold')
     expect(source).toContain("emit('swipeclose', event)")
     expect(overlays).toMatch(
       /\.sky-sheet__grabber\s*\{[^}]*touch-action:\s*none;/s,
+    )
+    expect(overlays).toMatch(
+      /\.sky-sheet \[data-sky-sheet-drag-handle\]\s*\{[^}]*touch-action:\s*none;/s,
     )
     expect(overlays).toMatch(
       /\.sky-sheet__panel--settling\s*\{[^}]*transition:\s*transform 220ms/s,

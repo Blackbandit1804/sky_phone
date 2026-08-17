@@ -1446,7 +1446,7 @@ Locales["en"] = {
                 timer = {
                     time = "Timer duration", hours = "Hours", hoursShort = "hr", minutes = "Minutes", minutesShort = "min",
                     seconds = "Seconds", secondsShort = "sec",
-                    note = "Note", notePlaceholder = "Timer", sound = "Sound", ringing = "Timer",
+                    description = "Description", note = "Note", notePlaceholder = "Timer", sound = "Sound", ringing = "Timer",
                 },
             },
             mail = {

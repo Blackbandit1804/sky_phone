@@ -3666,6 +3666,7 @@ const defaultLocales: LocaleTree = {
         minutesShort: 'min',
         seconds: 'Seconds',
         secondsShort: 'sec',
+        description: 'Description',
         note: 'Note',
         notePlaceholder: 'Timer',
         sound: 'Sound',
