@@ -85,9 +85,7 @@ function memoWaveform(phase = 0) {
 
 let authenticated = true
 let draft = null
-let mockMailboxes = [
-  { count: 0, id: 7, name: 'Projects', sort_order: 0 },
-]
+let mockMailboxes = [{ count: 0, id: 7, name: 'Projects', sort_order: 0 }]
 let nextMockMailboxId = 8
 const radioData = {
   badge: '231',
@@ -218,6 +216,8 @@ let crewLinkProfile = {
   overheadVisible: false,
   username: 'Skyline',
 }
+const crewLinkTestPassword = 'CrewLink123!'
+let crewLinkAuthenticated = false
 let crewLinkGroups = [
   {
     allowMemberPings: true,
@@ -420,14 +420,18 @@ const crewLinkLimits = {
 }
 
 function crewLinkBootstrap(testScenario = '') {
+  if (!crewLinkAuthenticated) {
+    return { authenticated: false, groups: [], invitations: [], profile: null }
+  }
   if (
     testScenario === 'crewlink-onboarding' ||
     (testScenario === 'crewlink-register' && !crewLinkProfile)
   ) {
-    return { groups: [], invitations: [], profile: null }
+    return { authenticated: true, groups: [], invitations: [], profile: null }
   }
   if (testScenario === 'crewlink-empty') {
     return {
+      authenticated: true,
       activeGroup: null,
       groups: [],
       invitations: crewLinkInvitations,
@@ -439,6 +443,7 @@ function crewLinkBootstrap(testScenario = '') {
     (group) => group.id === crewLinkProfile.activeGroupId,
   )
   return {
+    authenticated: true,
     activeGroup: activeSummary
       ? {
           ...activeSummary,
@@ -3425,8 +3430,7 @@ function counts() {
   return {
     drafts: draft ? 1 : 0,
     inbox: messages.filter(
-      (item) =>
-        item.folder === 'inbox' && !item.mailbox_id && !item.trashed_at,
+      (item) => item.folder === 'inbox' && !item.mailbox_id && !item.trashed_at,
     ).length,
     sent: messages.filter(
       (item) => item.folder === 'sent' && !item.mailbox_id && !item.trashed_at,
@@ -3446,8 +3450,7 @@ function mailboxViews() {
   return mockMailboxes.map((mailbox) => ({
     ...mailbox,
     count: messages.filter(
-      (message) =>
-        message.mailbox_id === mailbox.id && !message.trashed_at,
+      (message) => message.mailbox_id === mailbox.id && !message.trashed_at,
     ).length,
   }))
 }
@@ -4127,15 +4130,13 @@ function companyWorkContext(testScenario = '') {
 
 app.post('/api/:endpoint', async (request, response, next) => {
   const endpoint = request.params.endpoint
-  console.log(
-    `[NUI] ${endpoint}`,
-    endpoint === 'memos:devCapture'
-      ? {
-          ...request.body,
-          audioDataUrl: `<${String(request.body.audioDataUrl ?? '').length} characters>`,
-        }
-      : request.body,
-  )
+  const loggedBody = { ...request.body }
+  if (typeof loggedBody.password === 'string')
+    loggedBody.password = '<redacted>'
+  if (endpoint === 'memos:devCapture') {
+    loggedBody.audioDataUrl = `<${String(request.body.audioDataUrl ?? '').length} characters>`
+  }
+  console.log(`[NUI] ${endpoint}`, loggedBody)
   if (endpoint === 'music:bootstrap') {
     response.json({ success: true, data: musicBootstrap() })
     return
@@ -5616,10 +5617,28 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: crewLinkBootstrap(testScenario) })
     return
   }
-  if (endpoint === 'crewlink:create-profile') {
+  if (endpoint === 'crewlink:login') {
+    if (!crewLinkProfile || request.body.password !== crewLinkTestPassword) {
+      response.json({ success: false, error: 'invalid_credentials' })
+      return
+    }
+    crewLinkAuthenticated = true
+    response.json({ success: true, data: crewLinkBootstrap(testScenario) })
+    return
+  }
+  if (endpoint === 'crewlink:register') {
     const username = String(request.body.username ?? '').trim()
     if (!/^[A-Za-z0-9][A-Za-z0-9._]{1,18}[A-Za-z0-9]$/.test(username)) {
       response.json({ success: false, error: 'invalid_username' })
+      return
+    }
+    const password = String(request.body.password ?? '')
+    if (password.length < 8 || password.length > 72) {
+      response.json({ success: false, error: 'invalid_password' })
+      return
+    }
+    if (crewLinkProfile) {
+      response.json({ success: false, error: 'profile_exists' })
       return
     }
     crewLinkProfile = {
@@ -5633,7 +5652,13 @@ app.post('/api/:endpoint', (request, response) => {
       overheadVisible: false,
       username,
     }
-    response.json({ success: true, data: crewLinkBootstrap() })
+    crewLinkAuthenticated = true
+    response.json({ success: true, data: crewLinkBootstrap(testScenario) })
+    return
+  }
+  if (endpoint === 'crewlink:logout') {
+    crewLinkAuthenticated = false
+    response.json({ success: true })
     return
   }
   if (endpoint === 'crewlink:update-profile') {
@@ -8585,6 +8610,7 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'development:bootstrap') {
+    crewLinkAuthenticated = false
     authenticated = testScenario !== 'setup-account-unlinked'
     linkedAccount = authenticated
       ? {
@@ -10364,13 +10390,13 @@ app.post('/api/:endpoint', (request, response) => {
           ? messages.filter(
               (item) => item.mailbox_id === mailboxId && !item.trashed_at,
             )
-        : messages.filter((item) =>
-            folder === 'trash'
-              ? item.trashed_at
-              : item.folder === folder &&
-                !item.mailbox_id &&
-                !item.trashed_at,
-          )
+          : messages.filter((item) =>
+              folder === 'trash'
+                ? item.trashed_at
+                : item.folder === folder &&
+                  !item.mailbox_id &&
+                  !item.trashed_at,
+            )
     const query = String(search).toLowerCase()
     if (query) {
       items = items.filter((item) =>

@@ -1,4 +1,5 @@
 Bridge.Database.AfterMigration("sky_phone", function()
+local password_pepper = tostring(Config.Server.CrewLinkPasswordPepper or "")
 local role_levels = {
     guest = 1,
     member = 2,
@@ -31,6 +32,14 @@ local live_sources_cache = {
     expires_at = 0,
     sources = {},
 }
+
+if password_pepper == "" then
+    Bridge.Debug(
+        "warn",
+        "[sky_phone] Config.Server.CrewLinkPasswordPepper is empty. CrewLink passwords still work, but their hashes lack the required server-side secret. Set a stable random value in config/config.lua before production; changing it later invalidates existing CrewLink passwords.",
+        { always = true }
+    )
+end
 
 local function affected_rows(result)
     if type(result) == "number" then
@@ -90,24 +99,29 @@ local function profile_dto(row)
     }
 end
 
-local function require_profile(source)
-    local account, error_response = SkyPhone.RequireAccount(source)
-    if not account then
+local function profile_for_session(source)
+    local session, error_response = SkyPhone.RequireSession(source)
+    if not session then
         return nil, error_response
     end
     local rows = Bridge.Database.Query([[
         SELECT p.`id`, p.`account_id`, p.`username`, p.`avatar_media_id`, p.`active_group_id`,
             p.`map_visible`, p.`overhead_visible`, avatar.`url` AS `avatar_url`
-        FROM `sky_phone_crewlink_profiles` p
+        FROM `sky_phone_crewlink_sessions` crew_session
+        JOIN `sky_phone_crewlink_profiles` p ON p.`id` = crew_session.`profile_id`
         LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = p.`avatar_media_id`
-        WHERE p.`account_id` = ?
+        WHERE crew_session.`device_imei` = ?
         LIMIT 1
-    ]], { account.id })
+    ]], { session.imei })
     if not rows[1] then
-        return nil, { success = false, error = "profile_required" }
+        return nil, { success = false, error = "not_authenticated" }
     end
     rows[1].account_id = tonumber(rows[1].account_id)
     return rows[1]
+end
+
+local function require_profile(source)
+    return profile_for_session(source)
 end
 
 local function membership(profile_id, group_id)
@@ -359,6 +373,13 @@ local function valid_username(value)
     return username
 end
 
+local function valid_password(value)
+    local length = type(value) == "string" and utf8.len(value) or nil
+    return length
+        and length >= Config.CrewLink.PasswordMinLength
+        and length <= Config.CrewLink.PasswordMaxLength
+end
+
 local function valid_group_name(value)
     local name = trim(value)
     return valid_text(name, Config.CrewLink.GroupNameMinLength, Config.CrewLink.GroupNameMaxLength)
@@ -399,26 +420,23 @@ Bridge.Callbacks.Register("sky_phone:crewlink:bootstrap", function(source)
     ) then
         return { success = false, error = "rate_limited" }
     end
-    local account, error_response = SkyPhone.RequireAccount(source)
-    if not account then
-        return error_response
+    local profile, error_response = profile_for_session(source)
+    if not profile then
+        if error_response and error_response.error ~= "not_authenticated" then
+            return error_response
+        end
+        return {
+            success = true,
+            data = { authenticated = false, profile = nil, groups = {}, invitations = {} },
+        }
     end
-    local rows = Bridge.Database.Query([[
-        SELECT p.`id`, p.`account_id`, p.`username`, p.`avatar_media_id`, p.`active_group_id`,
-            p.`map_visible`, p.`overhead_visible`, avatar.`url` AS `avatar_url`
-        FROM `sky_phone_crewlink_profiles` p
-        LEFT JOIN `sky_phone_media` avatar ON avatar.`id` = p.`avatar_media_id`
-        WHERE p.`account_id` = ? LIMIT 1
-    ]], { account.id })
-    if not rows[1] then
-        return { success = true, data = { profile = nil, groups = {}, invitations = {} } }
-    end
-    rows[1].account_id = tonumber(rows[1].account_id)
-    return { success = true, data = bootstrap(rows[1]) }
+    local data = bootstrap(profile)
+    data.authenticated = true
+    return { success = true, data = data }
 end)
 
-Bridge.Callbacks.Register("sky_phone:crewlink:create-profile", function(source, data)
-    if not allow(source, "profile") then
+Bridge.Callbacks.Register("sky_phone:crewlink:register", function(source, data)
+    if not SkyPhone.AllowOperation(source, "crewlink:register", 5, 60) then
         return { success = false, error = "rate_limited" }
     end
     local account, error_response = SkyPhone.RequireAccount(source)
@@ -430,6 +448,9 @@ Bridge.Callbacks.Register("sky_phone:crewlink:create-profile", function(source, 
     if not username then
         return { success = false, error = "invalid_username" }
     end
+    if not valid_password(data.password) then
+        return { success = false, error = "invalid_password" }
+    end
     local avatar_media_id = tonumber(data.avatarMediaId) or 0
     if avatar_media_id < 0 or avatar_media_id ~= math.floor(avatar_media_id) then
         return { success = false, error = "invalid_profile_image" }
@@ -437,15 +458,107 @@ Bridge.Callbacks.Register("sky_phone:crewlink:create-profile", function(source, 
     if avatar_media_id > 0 and not SkyPhoneMedia.ResolveOwnedMedia(source, avatar_media_id, "photo") then
         return { success = false, error = "invalid_profile_image" }
     end
-    local result = Bridge.Database.Query([[
-        INSERT IGNORE INTO `sky_phone_crewlink_profiles` (`id`, `account_id`, `username`, `avatar_media_id`)
-        VALUES (?, ?, ?, NULLIF(?, 0))
-    ]], { new_id(), account.id, username, avatar_media_id })
-    if affected_rows(result) ~= 1 then
+    local existing = Bridge.Database.Query([[
+        SELECT p.`id`, c.`profile_id` AS `credential_profile_id`
+        FROM `sky_phone_crewlink_profiles` p
+        LEFT JOIN `sky_phone_crewlink_credentials` c ON c.`profile_id` = p.`id`
+        WHERE p.`account_id` = ? LIMIT 1
+    ]], { account.id })[1]
+    if existing and existing.credential_profile_id then
+        return { success = false, error = "profile_exists" }
+    end
+    local duplicate = Bridge.Database.Query([[
+        SELECT `id` FROM `sky_phone_crewlink_profiles`
+        WHERE `username` = ? AND `account_id` <> ? LIMIT 1
+    ]], { username, account.id })
+    if duplicate[1] then
         return { success = false, error = "username_taken" }
     end
+    local entropy = Bridge.Database.Query(
+        "SELECT UUID() AS `id`, REPLACE(UUID(), '-', '') AS `salt`",
+        {}
+    )[1]
+    if not entropy or type(entropy.id) ~= "string" or type(entropy.salt) ~= "string" then
+        error("[sky_phone] Database did not generate CrewLink registration entropy.")
+    end
+    local profile_id = existing and existing.id or entropy.id
+    local queries = {}
+    if existing then
+        queries[#queries + 1] = {
+            query = [[UPDATE `sky_phone_crewlink_profiles`
+                SET `username` = ?, `avatar_media_id` = NULLIF(?, 0) WHERE `id` = ?]],
+            params = { username, avatar_media_id, profile_id },
+        }
+    else
+        queries[#queries + 1] = {
+            query = [[INSERT INTO `sky_phone_crewlink_profiles`
+                (`id`, `account_id`, `username`, `avatar_media_id`) VALUES (?, ?, ?, NULLIF(?, 0))]],
+            params = { profile_id, account.id, username, avatar_media_id },
+        }
+    end
+    queries[#queries + 1] = {
+        query = [[INSERT INTO `sky_phone_crewlink_credentials`
+            (`profile_id`, `password_hash`, `password_salt`)
+            VALUES (?, UNHEX(SHA2(CONCAT(?, ?, ?), 256)), ?)]],
+        params = { profile_id, password_pepper, entropy.salt, data.password, entropy.salt },
+    }
+    queries[#queries + 1] = {
+        query = [[INSERT INTO `sky_phone_crewlink_sessions` (`device_imei`, `profile_id`)
+            VALUES (?, ?) ON DUPLICATE KEY UPDATE `profile_id` = VALUES(`profile_id`),
+                `updated_at` = CURRENT_TIMESTAMP]],
+        params = { account.imei, profile_id },
+    }
+    if not Bridge.Database.Transaction(queries) then
+        return { success = false, error = "request_failed" }
+    end
     local profile = require_profile(source)
-    return { success = true, data = bootstrap(profile) }
+    local response = bootstrap(profile)
+    response.authenticated = true
+    return { success = true, data = response }
+end)
+
+Bridge.Callbacks.Register("sky_phone:crewlink:login", function(source, data)
+    if not SkyPhone.AllowOperation(source, "crewlink:login", 10, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local account, error_response = SkyPhone.RequireAccount(source)
+    if not account then
+        return error_response
+    end
+    if type(data) ~= "table" or not valid_password(data.password) then
+        return { success = false, error = "invalid_credentials" }
+    end
+    local profiles = Bridge.Database.Query([[
+        SELECT p.`id` FROM `sky_phone_crewlink_profiles` p
+        JOIN `sky_phone_crewlink_credentials` c ON c.`profile_id` = p.`id`
+        WHERE p.`account_id` = ?
+            AND c.`password_hash` = UNHEX(SHA2(CONCAT(?, c.`password_salt`, ?), 256))
+        LIMIT 1
+    ]], { account.id, password_pepper, data.password })
+    if not profiles[1] then
+        return { success = false, error = "invalid_credentials" }
+    end
+    Bridge.Database.Query([[
+        INSERT INTO `sky_phone_crewlink_sessions` (`device_imei`, `profile_id`)
+        VALUES (?, ?) ON DUPLICATE KEY UPDATE `profile_id` = VALUES(`profile_id`),
+            `updated_at` = CURRENT_TIMESTAMP
+    ]], { account.imei, profiles[1].id })
+    local profile = require_profile(source)
+    local response = bootstrap(profile)
+    response.authenticated = true
+    return { success = true, data = response }
+end)
+
+Bridge.Callbacks.Register("sky_phone:crewlink:logout", function(source)
+    local session, error_response = SkyPhone.RequireSession(source)
+    if not session then
+        return error_response
+    end
+    Bridge.Database.Query(
+        "DELETE FROM `sky_phone_crewlink_sessions` WHERE `device_imei` = ?",
+        { session.imei }
+    )
+    return { success = true }
 end)
 
 Bridge.Callbacks.Register("sky_phone:crewlink:update-profile", function(source, data)

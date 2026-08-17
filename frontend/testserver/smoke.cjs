@@ -17,6 +17,7 @@ const browserDataRequests = [
   ['companies:work-context', {}],
   ['companies:work-queue', { limit: 20, offset: 0 }],
   ['contacts:list', {}],
+  ['crewlink:login', { password: 'CrewLink123!' }],
   ['crewlink:bootstrap', {}],
   ['crewlink:live', {}],
   ['crewlink:nearby', {}],
@@ -733,12 +734,7 @@ async function verifyStatefulActions(baseUrl) {
     { name: 'Browser Test' },
     true,
   )
-  const mailboxes = await expectSuccess(
-    baseUrl,
-    'mail:mailboxes',
-    {},
-    true,
-  )
+  const mailboxes = await expectSuccess(baseUrl, 'mail:mailboxes', {}, true)
   assert(
     mailboxes.mailboxes.some((item) => item.id === mailbox.id),
     'mail:create-mailbox did not update the mock mailbox list',

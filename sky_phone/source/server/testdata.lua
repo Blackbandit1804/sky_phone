@@ -741,6 +741,19 @@ local function seed_private_and_services(context)
     ]], { crew_bot_seed, bot_id })
     local crew_user = ensure_string_profile("sky_phone_crewlink_profiles", account_id)
     local crew_bot = ensure_string_profile("sky_phone_crewlink_profiles", bot_id)
+    local crew_password_salt = crew_user_seed:gsub("-", "")
+    local crew_bot_password_salt = crew_bot_seed:gsub("-", "")
+    local crew_password_pepper = tostring(Config.Server.CrewLinkPasswordPepper or "")
+    Bridge.Database.Query([[
+        INSERT INTO `sky_phone_crewlink_credentials` (`profile_id`, `password_hash`, `password_salt`)
+        VALUES (?, UNHEX(SHA2(CONCAT(?, ?, 'CrewLink123!'), 256)), ?),
+            (?, UNHEX(SHA2(CONCAT(?, ?, 'CrewLink123!'), 256)), ?)
+        ON DUPLICATE KEY UPDATE `password_hash` = VALUES(`password_hash`),
+            `password_salt` = VALUES(`password_salt`)
+    ]], {
+        crew_user, crew_password_pepper, crew_password_salt, crew_password_salt,
+        crew_bot, crew_password_pepper, crew_bot_password_salt, crew_bot_password_salt,
+    })
     Bridge.Database.Query([[
         INSERT INTO `sky_phone_crewlink_groups`
             (`id`, `name`, `colour`, `owner_profile_id`, `invite_code`, `allow_member_pings`, `overhead_allowed`)

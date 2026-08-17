@@ -166,6 +166,7 @@ const sheet = ref<CrewLinkSheet>(null)
 const username = ref('')
 const authMode = ref<'login' | 'register'>('login')
 const authUsername = ref('')
+const authPassword = ref('')
 const authProfilePhoto = ref<PhoneMedia | null>(null)
 const authPending = ref(false)
 const authError = ref('')
@@ -408,6 +409,7 @@ function showToast(message: string): void {
 function switchAuthMode(mode: 'login' | 'register'): void {
   authMode.value = mode
   authProfilePhoto.value = null
+  authPassword.value = ''
   authUsername.value =
     mode === 'register'
       ? (account.email.split('@')[0] ?? '')
@@ -419,6 +421,8 @@ function switchAuthMode(mode: 'login' | 'register'): void {
 
 function authErrorText(code?: string): string {
   const known = [
+    'invalid_credentials',
+    'invalid_password',
     'invalid_profile_image',
     'invalid_username',
     'no_ifruit_account',
@@ -438,54 +442,43 @@ async function submitAuthentication(): Promise<void> {
     authError.value = authErrorText('no_ifruit_account')
     return
   }
-  if (!authUsernameValid.value) {
+  if (authPassword.value.length < 8 || authPassword.value.length > 72) {
+    authError.value = authErrorText('invalid_password')
+    return
+  }
+  if (authMode.value === 'register' && !authUsernameValid.value) {
     authError.value = authErrorText('invalid_username')
     return
   }
 
   const submittedUsername = authUsername.value.trim()
   authPending.value = true
-  const loaded = await crew.bootstrap()
-  if (!loaded) {
-    authPending.value = false
-    authError.value = authErrorText(crew.error)
+  const response =
+    authMode.value === 'login'
+      ? await crew.login(authPassword.value)
+      : await crew.register(
+          submittedUsername,
+          authPassword.value,
+          authProfilePhoto.value?.id ?? 0,
+        )
+  authPending.value = false
+  if (!response.success || !crew.profile) {
+    authError.value = authErrorText(response.error)
     return
-  }
-
-  if (authMode.value === 'login') {
-    authPending.value = false
-    if (!crew.profile) {
-      authError.value = authErrorText('profile_not_found')
-      return
-    }
-    if (
-      crew.profile.username.toLowerCase() !== submittedUsername.toLowerCase()
-    ) {
-      authError.value = authErrorText('invalid_username')
-      return
-    }
-  } else {
-    if (crew.profile) {
-      authPending.value = false
-      authError.value = authErrorText('profile_exists')
-      return
-    }
-    const response = await crew.createProfile(
-      submittedUsername,
-      authProfilePhoto.value?.id ?? 0,
-    )
-    authPending.value = false
-    if (!response.success) {
-      authError.value = authErrorText(response.error)
-      return
-    }
   }
 
   appAuth.signIn('crewlink', account.email)
   username.value = crew.profile?.username ?? submittedUsername
   authUsername.value = ''
+  authPassword.value = ''
   authProfilePhoto.value = null
   openSharedInvite()
+}
+
+async function handleLoggedOut(): Promise<void> {
+  await crew.logout()
+  activeTab.value = 'map'
+  authPassword.value = ''
 }
 
 function openAuthMedia(app: 'camera' | 'photos'): void {
@@ -655,16 +648,6 @@ function openProfileMedia(app: 'camera' | 'photos'): void {
 function removeProfilePhoto(): void {
   selectedProfilePhoto.value = null
   profileAvatarRemoved.value = true
-}
-
-async function createProfile(): Promise<void> {
-  const response = await crew.createProfile(username.value.trim())
-  if (!response.success) {
-    formError.value = errorText(response.error)
-    return
-  }
-  showToast(t('profileCreated'))
-  openSharedInvite()
 }
 
 async function createGroup(): Promise<void> {
@@ -1136,7 +1119,10 @@ onMounted(async () => {
     authProfilePhoto.value =
       authSelection.media[0] ?? authSelection.context?.selectedPhoto ?? null
   }
-  if (appAuth.isSignedIn('crewlink')) await crew.bootstrap()
+  if (appAuth.isSignedIn('crewlink')) {
+    await crew.bootstrap()
+    if (!crew.authenticated) appAuth.signOut('crewlink')
+  }
   username.value = crew.profile?.username ?? ''
   if (profileSelection && crew.profile) {
     username.value = profileSelection.context?.username ?? crew.profile.username
@@ -1173,6 +1159,7 @@ onBeforeUnmount(() => {
       <div class="crewlink-onboarding crewlink-auth">
         <AppProfileAuth
           :mode="authMode"
+          v-model:password="authPassword"
           v-model:username="authUsername"
           :avatar-url="authProfilePhoto?.url ?? null"
           :body="t('authBody')"
@@ -1186,10 +1173,14 @@ onBeforeUnmount(() => {
           :max-username-length="20"
           :min-username-length="3"
           :pending="authPending"
+          :password-label="t('password')"
+          :password-placeholder="t('passwordPlaceholder')"
           :register-label="t('register')"
+          require-password
           :title="t('authTitle')"
           :username-label="t('username')"
           :username-placeholder="t('usernamePlaceholder')"
+          variant="centered"
           @camera="openAuthMedia('camera')"
           @gallery="openAuthMedia('photos')"
           @submit="submitAuthentication"
@@ -1218,57 +1209,11 @@ onBeforeUnmount(() => {
       </div>
     </template>
 
-    <template v-else-if="!crew.profile">
-      <div class="crewlink-onboarding crewlink-onboarding--profile">
-        <div class="crewlink-orbits" aria-hidden="true">
-          <i></i><i></i><i></i><span><Radio /></span>
-        </div>
-        <small>{{ t('welcomeEyebrow') }}</small>
-        <h1>{{ t('welcomeTitle') }}</h1>
-        <p>{{ t('welcomeBody') }}</p>
-        <sky-list inset strong class="crewlink-form-list">
-          <sky-field
-            input-id="crewlink-username"
-            :label="t('username')"
-            :placeholder="t('usernamePlaceholder')"
-            :value="username"
-            maxlength="20"
-            outline
-            @input="updateValue('username', $event)"
-            @keydown.enter="handleEnterAction($event, createProfile)"
-          />
-        </sky-list>
-        <p v-if="formError" class="crewlink-error" role="alert">
-          {{ formError }}
-        </p>
-        <sky-button
-          large
-          rounded
-          :disabled="crew.isLoading"
-          @click="createProfile"
-        >
-          <sky-spinner v-if="crew.isLoading" />
-          <template v-else>{{ t('createProfile') }}</template>
-        </sky-button>
-        <sky-button
-          large
-          rounded
-          outline
-          class="crewlink-logout-button"
-          @click="logoutDialogOpen = true"
-        >
-          <LogOut />{{ phone.t('Common.signOut') }}
-        </sky-button>
-        <small class="crewlink-privacy"
-          ><ShieldCheck />{{ t('privacyNote') }}</small
-        >
-      </div>
-    </template>
-
-    <template v-else>
+    <template v-else-if="crew.profile">
       <sky-navbar
         v-if="activeGroup"
         class="crewlink-navbar"
+        :class="{ 'crewlink-navbar--map': activeTab === 'map' }"
         :subtitle="headerSubtitle"
         :title="headerTitle"
       />
@@ -1481,7 +1426,10 @@ onBeforeUnmount(() => {
             </div>
           </section>
 
-          <section v-show="activeTab === 'group'" class="crewlink-scroll-tab">
+          <section
+            v-show="activeTab === 'group'"
+            class="crewlink-scroll-tab crewlink-group-tab"
+          >
             <div class="crewlink-group-hero" :style="activeCrewStyle">
               <div class="crewlink-group-hero__signal"><Radio /></div>
               <small>{{ t('activeCrew') }}</small>
@@ -1674,7 +1622,10 @@ onBeforeUnmount(() => {
             </div>
           </section>
 
-          <section v-show="activeTab === 'profile'" class="crewlink-scroll-tab">
+          <section
+            v-show="activeTab === 'profile'"
+            class="crewlink-scroll-tab crewlink-profile-tab"
+          >
             <div
               class="crewlink-profile-card"
               :style="{ '--crew': activeColour }"
@@ -1891,6 +1842,10 @@ onBeforeUnmount(() => {
       <section
         v-if="sheet"
         class="crewlink-sheet__panel__content"
+        :class="{
+          'crewlink-sheet__panel__content--manage': sheet === 'edit-group',
+          'crewlink-sheet__panel__content--ping': sheet === 'ping',
+        }"
         role="dialog"
         aria-modal="true"
       >
@@ -2372,7 +2327,7 @@ onBeforeUnmount(() => {
       v-model:opened="logoutDialogOpen"
       app-id="crewlink"
       :app-name="t('name')"
-      @logged-out="activeTab = 'map'"
+      @logged-out="handleLoggedOut"
     />
 
     <sky-dialog
@@ -2409,6 +2364,7 @@ onBeforeUnmount(() => {
   --cl-surface: rgba(255, 255, 255, 0.84);
   --cl-text: #102034;
   --cl-muted: #6e7c8d;
+  --cl-map-header-background: linear-gradient(90deg, #061823, #0f2837);
   --sky-safe-area-top: 46px;
   --sky-safe-area-bottom: 25px;
   position: relative;
@@ -2428,21 +2384,12 @@ onBeforeUnmount(() => {
 }
 .crewlink-navbar {
   --sky-safe-area-top: 46px;
+  --sky-navbar-glass: var(--cl-bg);
   position: absolute;
   z-index: 20;
   top: 0;
   right: 0;
   left: 0;
-}
-.crewlink-navbar::after {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  left: 0;
-  height: 22px;
-  background: linear-gradient(var(--cl-bg), transparent);
-  content: '';
-  pointer-events: none;
 }
 .crewlink-content {
   position: absolute;
@@ -2476,8 +2423,11 @@ onBeforeUnmount(() => {
 .crewlink-auth {
   --auth-accent: #20bde0;
   --panel: rgba(18, 39, 53, 0.92);
-  padding: 60px 18px 30px;
-  justify-content: flex-start;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: calc(var(--sky-safe-area-top) + 20px) 18px
+    calc(var(--sky-safe-area-bottom) + 20px);
+  justify-content: center;
   color: #f3f8fb;
   background:
     radial-gradient(circle at 82% 8%, rgba(39, 217, 237, 0.2), transparent 34%),
@@ -2485,7 +2435,9 @@ onBeforeUnmount(() => {
   overflow-y: auto;
 }
 .crewlink-auth :deep(.app-profile-auth) {
-  margin: 0 auto;
+  width: min(100%, 340px);
+  flex: none;
+  margin: auto;
 }
 .crewlink-logo {
   width: 78px;
@@ -2521,6 +2473,15 @@ onBeforeUnmount(() => {
 }
 .crewlink-onboarding :deep(.button) {
   width: 100%;
+}
+.crewlink-navbar--map {
+  --sky-text: #f3f8fb;
+  --sky-muted: #aab7c1;
+  background: var(--cl-map-header-background);
+}
+.crewlink-navbar--map :deep(.sky-navbar__blur),
+.crewlink-navbar--map :deep(.sky-navbar__background) {
+  display: none;
 }
 .crewlink-orbits {
   width: 170px;
@@ -2703,17 +2664,27 @@ onBeforeUnmount(() => {
   padding-bottom: var(--sky-safe-area-bottom);
 }
 .crewlink-map-summary {
+  position: relative;
+  z-index: 1001;
   height: 64px;
   padding: 8px 13px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   color: white;
-  background: linear-gradient(
-    90deg,
-    rgba(6, 24, 35, 0.96),
-    rgba(15, 41, 56, 0.95)
-  );
+  background: var(--cl-map-header-background);
+}
+.crewlink-map-summary::after {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 16px;
+  background: var(--cl-map-header-background);
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent);
+  mask-image: linear-gradient(to bottom, #000, transparent);
+  content: '';
+  pointer-events: none;
 }
 .crewlink-map-summary > div:first-child {
   display: grid;
@@ -3020,6 +2991,14 @@ onBeforeUnmount(() => {
     linear-gradient(145deg, #0b2433, #0b1825);
   box-shadow: 0 15px 35px rgba(6, 20, 31, 0.2);
 }
+.crewlink-group-tab {
+  --sky-card-outer-left: 0px;
+  --sky-card-outer-right: 0px;
+  --sky-list-outer-left: 0px;
+  --sky-list-outer-right: 0px;
+  --sky-title-gutter-left: 0px;
+  --sky-title-gutter-right: 0px;
+}
 .crewlink-group-hero__signal {
   width: 48px;
   height: 48px;
@@ -3311,6 +3290,12 @@ onBeforeUnmount(() => {
   color: white;
   background: linear-gradient(145deg, var(--crew), #183a5a);
 }
+.crewlink-profile-tab {
+  --sky-list-outer-left: 0px;
+  --sky-list-outer-right: 0px;
+  --sky-title-gutter-left: 0px;
+  --sky-title-gutter-right: 0px;
+}
 .crewlink-profile-card > span {
   width: 54px;
   height: 54px;
@@ -3412,6 +3397,16 @@ onBeforeUnmount(() => {
   color: var(--cl-text);
   background: var(--cl-bg);
   border-radius: 24px 24px 0 0;
+}
+.crewlink-sheet__panel__content--manage {
+  --sky-card-outer-left: 0px;
+  --sky-card-outer-right: 0px;
+  --sky-list-outer-left: 0px;
+  --sky-list-outer-right: 0px;
+}
+.crewlink-sheet__panel__content--ping {
+  --sky-list-outer-left: 0px;
+  --sky-list-outer-right: 0px;
 }
 .crewlink-sheet__panel__close {
   position: absolute;

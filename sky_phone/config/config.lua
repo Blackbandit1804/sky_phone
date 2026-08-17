@@ -510,6 +510,8 @@ Config.MapMarkers = {
 Config.CrewLink = {
     UsernameMinLength = 3,
     UsernameMaxLength = 20,
+    PasswordMinLength = 8,
+    PasswordMaxLength = 72,
     GroupNameMinLength = 3,
     GroupNameMaxLength = 32,
     MaximumGroupsPerProfile = 5,
@@ -651,6 +653,7 @@ if IsDuplicityVersion() then
     Config.Server = {
         -- Keep these values private and stable. Changing a pepper invalidates existing app passwords.
         PasscodePepper = "f626581802800478346266e66414d8e6f2c28050214a593c25901904c162bffe",
+        CrewLinkPasswordPepper = "2751e5729aee4955a529c1a87104b58fbe1d7280b18b66264236028caa06eb47",
         FlipTokPasswordPepper = "a85ea307680f1205a4fda03be8af18ecf7edf16ffc83450b90cac7e41a9719a7",
         PicstagramPasswordPepper = "653e41dd19aba5ef750a668ad1886273ba7d0e0420bd5c745748df80a6e22676",
     }

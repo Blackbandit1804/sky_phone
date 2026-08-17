@@ -641,10 +641,12 @@ const defaultLocales: LocaleTree = {
       authEyebrow: 'Private crew network',
       authTitle: 'Welcome to CrewLink',
       authBody:
-        'Your iFruit email is linked automatically. Use your CrewLink username to continue.',
+        'Your iFruit email is linked automatically. Enter your password to continue.',
       login: 'Log in',
       register: 'Register',
       ifruitEmail: 'iFruit address',
+      password: 'Password',
+      passwordPlaceholder: '8–72 characters',
       gallery: 'Photos',
       camera: 'Camera',
       backToLogin: 'Back to CrewLink login',
@@ -652,6 +654,8 @@ const defaultLocales: LocaleTree = {
         no_ifruit_account:
           'Sign in to your Sky Cloud account in Settings first.',
         invalid_username: 'Use 3–20 letters, numbers, dots, or underscores.',
+        invalid_password: 'Password must be 8–72 characters.',
+        invalid_credentials: 'The password for this iFruit email is incorrect.',
         profile_not_found: 'No CrewLink profile exists for this iFruit email.',
         profile_exists: 'This iFruit email already has a CrewLink profile.',
         username_taken: 'That CrewLink username is already taken.',

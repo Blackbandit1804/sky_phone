@@ -378,10 +378,10 @@ Locales["en"] = {
                 name = "CrewLink", connecting = "Connecting your crew...", privateNetwork = "Private location network",
                 signInTitle = "Connect your Sky Cloud account", signInBody = "CrewLink uses your private Sky Cloud identity to keep groups and roles available across your phones.", openSettings = "Open Sky Cloud settings",
                 authEyebrow = "Private crew network", authTitle = "Welcome to CrewLink",
-                authBody = "Your iFruit email is linked automatically. Use your CrewLink username to continue.",
-                login = "Log in", register = "Register", ifruitEmail = "iFruit address", gallery = "Photos", camera = "Camera", backToLogin = "Back to CrewLink login",
+                authBody = "Your iFruit email is linked automatically. Enter your password to continue.",
+                login = "Log in", register = "Register", ifruitEmail = "iFruit address", password = "Password", passwordPlaceholder = "8-72 characters", gallery = "Photos", camera = "Camera", backToLogin = "Back to CrewLink login",
                 authErrors = {
-                    no_ifruit_account = "Sign in to your Sky Cloud account in Settings first.", invalid_username = "Use 3-20 letters, numbers, dots, or underscores.",
+                    no_ifruit_account = "Sign in to your Sky Cloud account in Settings first.", invalid_username = "Use 3-20 letters, numbers, dots, or underscores.", invalid_password = "Password must be 8-72 characters.", invalid_credentials = "The password for this iFruit email is incorrect.",
                     profile_not_found = "No CrewLink profile exists for this iFruit email.", profile_exists = "This iFruit email already has a CrewLink profile.",
                     username_taken = "That CrewLink username is already taken.", invalid_profile_image = "Choose a valid photo from this phone.",
                     rate_limited = "Too many attempts. Try again shortly.", request_failed = "CrewLink could not complete the request.",
