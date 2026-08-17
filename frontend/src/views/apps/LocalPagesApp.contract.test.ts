@@ -24,6 +24,9 @@ describe('LocalPagesApp Sky UI contract', () => {
       /\.pages-hero-glass\s*\{[^}]*background:\s*linear-gradient[^}]*color:\s*#fff/s,
     )
     expect(source).toMatch(/\.pages__hero\s*\{[^}]*color:\s*#fff/s)
+    expect(source).toMatch(
+      /\.pages-hero-glass \.pages__hero small,[\s\S]*?\.pages-hero-glass \.pages__hero strong,[\s\S]*?\.pages-hero-glass \.pages__hero span\s*\{[^}]*color:\s*#fff/,
+    )
   })
 
   it('animates successful likes and saves with reduced motion support', () => {

@@ -2791,6 +2791,11 @@ onMounted(async () => {
   color: #fff;
   box-shadow: 0 8px 22px rgb(0 0 0 / 22%);
 }
+.pages-hero-glass .pages__hero small,
+.pages-hero-glass .pages__hero strong,
+.pages-hero-glass .pages__hero span {
+  color: #fff;
+}
 .pages__hero {
   height: 105px;
   margin: 0;
