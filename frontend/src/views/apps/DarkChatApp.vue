@@ -72,7 +72,7 @@ import {
   SkySettingsRow,
   SkySheet,
   SkySpinner,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 
 const VOICE_MAX_DURATION_MS = 60_000
@@ -1896,7 +1896,7 @@ onBeforeUnmount(() => {
   margin: 12px 0 8px;
 }
 
-.dc-toast {
+.dc-notification {
   z-index: 150;
 }
 
@@ -2852,13 +2852,10 @@ onBeforeUnmount(() => {
       </template>
     </SkyDialog>
 
-    <SkyToast
+    <SkyNotification
       :opened="Boolean(toast)"
-      position="center"
-      vertical-position="center"
-      class="dc-toast"
-    >
-      {{ toast }}
-    </SkyToast>
+      :text="toast"
+      class="dc-notification"
+    />
   </SkyAppPage>
 </template>

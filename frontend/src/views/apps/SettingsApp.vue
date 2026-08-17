@@ -74,7 +74,7 @@ import {
   SkySettingsRangeRow,
   SkySettingsRow,
   SkySpinner,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 import {
   APPEARANCE_MODE_IDS,
@@ -1863,14 +1863,11 @@ onBeforeUnmount(() => {
       </template>
     </SkyDialog>
 
-    <SkyToast
+    <SkyNotification
       :opened="Boolean(accountToast)"
-      position="center"
-      vertical-position="center"
+      :text="accountToast"
       @click="accountToast = ''"
-    >
-      {{ accountToast }}
-    </SkyToast>
+    />
   </SkyAppPage>
 </template>
 

@@ -47,7 +47,9 @@ const phone = usePhoneStore()
 const clock = useClockStore()
 const route = useRoute()
 const tab = ref<'world' | 'alarm' | 'stopwatch' | 'timer'>(
-  route.query.section === 'timer' ? 'timer' : 'world',
+  route.query.section === 'timer' || route.query.section === 'stopwatch'
+    ? route.query.section
+    : 'world',
 )
 const alarmEditor = ref<
   { mode: 'create' } | { id: string; mode: 'edit' } | null
@@ -205,7 +207,7 @@ watch([() => clock.stopwatchStartedAt, tab], ([startedAt, activeTab]) => {
 watch(
   () => route.query.section,
   (section) => {
-    if (section === 'timer') tab.value = 'timer'
+    if (section === 'timer' || section === 'stopwatch') tab.value = section
   },
 )
 

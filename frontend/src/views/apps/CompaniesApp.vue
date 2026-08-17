@@ -37,7 +37,7 @@ import {
   SkyScrollRail,
   SkySection,
   SkySheet,
-  SkyToast,
+  SkyNotification,
   SkyToggle,
   SkyToolbarPane,
 } from '@/ui'
@@ -2599,14 +2599,11 @@ onBeforeUnmount(() => {
       </template>
     </SkyDialog>
 
-    <SkyToast
+    <SkyNotification
       :opened="toastOpened"
-      position="center"
-      vertical-position="center"
+      :text="toastText"
       @click="toastOpened = false"
-    >
-      {{ toastText }}
-    </SkyToast>
+    />
   </SkyAppPage>
 </template>
 

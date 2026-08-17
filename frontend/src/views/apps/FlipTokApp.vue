@@ -73,7 +73,7 @@ import {
   SkySegmentedButton,
   SkySheet,
   SkySpinner,
-  SkyToast,
+  SkyNotification,
   SkyToggle,
 } from '@/ui'
 import { nuiCall } from '@/utils/nui'
@@ -3361,13 +3361,11 @@ onBeforeUnmount(() => {
         </SkyDialogButton>
       </template>
     </SkyDialog>
-    <SkyToast
+    <SkyNotification
       :opened="Boolean(feedback)"
-      position="center"
+      :text="feedback"
       @click="feedback = ''"
-    >
-      {{ feedback }}
-    </SkyToast>
+    />
   </SkyAppPage>
 </template>
 

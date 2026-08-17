@@ -56,7 +56,7 @@ import {
   SkySegmented,
   SkySegmentedButton,
   SkySheet,
-  SkyToast,
+  SkyNotification,
   SkyToggle,
   SkyMessagebar,
 } from '@/ui'
@@ -2334,7 +2334,7 @@ onMounted(async () => {
       </template>
     </div>
 
-    <SkyToast :opened="Boolean(feedback)">{{ feedback }}</SkyToast>
+    <SkyNotification :opened="Boolean(feedback)" :text="feedback" />
   </SkyAppPage>
 </template>
 

@@ -557,6 +557,8 @@ function onMessage(event: MessageEvent): void {
     void stopRecording(data)
   } else if (message.type === 'memo:recordCancel') {
     cancelRecording()
+  } else if (message.type === 'memo:recordStateRequest') {
+    postRecorderState(currentState)
   } else if (message.type === 'memos:uploadReady') {
     void uploadReady(data as MemoUploadReady)
   } else if (message.type === 'memos:uploadResult') {

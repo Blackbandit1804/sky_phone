@@ -44,7 +44,7 @@ import {
   SkySpinner,
   SkyTabBar,
   SkyTabButton,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 
 type BankingTab = 'home' | 'activity'
@@ -696,13 +696,10 @@ onBeforeUnmount(() => {
       </section>
     </SkySheet>
 
-    <SkyToast
+    <SkyNotification
       :opened="cooldownToastOpened"
-      position="center"
-      vertical-position="bottom"
+      :text="errorMessage('reload_cooldown')"
       @click="closeCooldownToast"
-    >
-      {{ errorMessage('reload_cooldown') }}
-    </SkyToast>
+    />
   </SkyAppPage>
 </template>

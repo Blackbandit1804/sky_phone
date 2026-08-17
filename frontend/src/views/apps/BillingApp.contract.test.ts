@@ -29,7 +29,7 @@ describe('Billing app Sky UI migration', () => {
       'SkyTabBar',
       'SkyTabButton',
       'SkySheet',
-      'SkyToast',
+      'SkyNotification',
     ]) {
       expect(source).toContain(`<${component}`)
     }

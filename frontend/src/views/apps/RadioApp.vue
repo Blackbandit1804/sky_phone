@@ -30,7 +30,7 @@ import {
   SkySettingsRow,
   SkySpinner,
   SkyStatusCard,
-  SkyToast,
+  SkyNotification,
   SkyToggle,
 } from '@/ui'
 import { isTrustedRootMessageSource } from '@/utils/windowMessages'
@@ -537,14 +537,11 @@ onBeforeUnmount(() => {
       </SkySegmented>
     </SkyPillNavigation>
 
-    <SkyToast
+    <SkyNotification
       :opened="Boolean(feedback)"
-      position="center"
-      vertical-position="center"
+      :text="feedback"
       @click="feedback = ''"
-    >
-      {{ feedback }}
-    </SkyToast>
+    />
   </SkyAppPage>
 </template>
 

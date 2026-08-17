@@ -38,6 +38,7 @@ import {
   SkyButton,
   SkyGlass,
   SkyIcon,
+  SkyNotification,
   SkyNavbar,
   SkyAppPage,
   SkySearchbar,
@@ -2113,11 +2114,7 @@ onMounted(async () => {
       app-id="citymarkt"
       :app-name="phone.t('Apps.citymarkt.name')"
     />
-    <Transition name="toast"
-      ><div v-if="feedback" class="citymarkt__toast">
-        {{ feedback }}
-      </div></Transition
-    >
+    <SkyNotification :opened="Boolean(feedback)" :text="feedback" />
   </sky-app-page>
 </template>
 
@@ -3014,30 +3011,6 @@ onMounted(async () => {
   background: var(--panel);
   color: #ff796f;
 }
-.citymarkt__toast {
-  position: absolute;
-  z-index: 20;
-  right: 18px;
-  bottom: 92px;
-  left: 18px;
-  padding: 10px 12px;
-  border-radius: 11px;
-  background: #f4f4ee;
-  color: #171816;
-  box-shadow: 0 8px 30px #0007;
-  font-size: 10px;
-  font-weight: 800;
-  text-align: center;
-}
-.toast-enter-active,
-.toast-leave-active {
-  transition: 0.2s;
-}
-.toast-enter-from,
-.toast-leave-to {
-  transform: translateY(8px);
-  opacity: 0;
-}
 .citymarkt {
   --color-primary: var(--yellow);
   position: relative;
@@ -3740,8 +3713,7 @@ onMounted(async () => {
   font-size: 10.5px;
 }
 .citymarkt__meta,
-.citymarkt__inline-auth,
-.citymarkt__toast {
+.citymarkt__inline-auth {
   font-size: 12px;
 }
 .citymarkt__composer textarea,

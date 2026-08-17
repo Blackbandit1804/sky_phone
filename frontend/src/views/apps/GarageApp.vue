@@ -42,7 +42,7 @@ import {
   SkySegmentedButton,
   SkySheet,
   SkySpinner,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 
 type GarageFilter = 'all' | GarageVehicleStatus
@@ -570,14 +570,11 @@ onBeforeUnmount(() => {
       </template>
     </SkyDialog>
 
-    <SkyToast
+    <SkyNotification
       :opened="toastOpened"
-      position="center"
-      vertical-position="center"
+      :text="toastText"
       @click="toastOpened = false"
-    >
-      {{ toastText }}
-    </SkyToast>
+    />
   </SkyAppPage>
 </template>
 

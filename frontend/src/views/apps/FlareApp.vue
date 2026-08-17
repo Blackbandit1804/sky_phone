@@ -26,7 +26,7 @@ import {
   SkyTabBar,
   SkyTabButton,
   SkyToolbarPane,
-  SkyToast,
+  SkyNotification,
   SkyToggle,
 } from '@/ui'
 import {
@@ -2237,9 +2237,7 @@ onBeforeUnmount(() => {
       </template>
     </sky-dialog>
 
-    <sky-toast :opened="Boolean(actionToast)" position="center">
-      {{ actionToast }}
-    </sky-toast>
+    <sky-notification :opened="Boolean(actionToast)" :text="actionToast" />
   </sky-app-page>
 </template>
 

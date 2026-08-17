@@ -75,7 +75,7 @@ import {
   SkySpinner as kPreloader,
   SkyTabBar as kTabbar,
   SkyTabButton as kTabbarLink,
-  SkyToast as kToast,
+  SkyNotification as kNotification,
   SkyToggle as kToggle,
 } from '@/ui'
 
@@ -1747,9 +1747,7 @@ onBeforeUnmount(() => {
       >
     </k-dialog>
 
-    <k-toast :opened="Boolean(toastText)" position="center">{{
-      toastText
-    }}</k-toast>
+    <k-notification :opened="Boolean(toastText)" :text="toastText" />
   </k-page>
 </template>
 

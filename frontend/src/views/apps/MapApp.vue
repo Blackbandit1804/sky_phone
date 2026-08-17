@@ -8,7 +8,7 @@ import {
   SkyGlass,
   SkySpinner,
   SkySheet,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 import {
   LocateFixed,
@@ -850,9 +850,7 @@ onBeforeUnmount(() => {
       </sky-sheet>
     </div>
 
-    <sky-toast :opened="Boolean(toastText)" position="center">
-      {{ toastText }}
-    </sky-toast>
+    <sky-notification :opened="Boolean(toastText)" :text="toastText" />
   </SkyAppPage>
 </template>
 

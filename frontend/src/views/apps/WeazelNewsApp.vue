@@ -19,7 +19,7 @@ import {
   SkySearchbar,
   SkySegmented,
   SkySegmentedButton,
-  SkyToast,
+  SkyNotification,
 } from '@/ui'
 import {
   BriefcaseBusiness,
@@ -1514,13 +1514,11 @@ onBeforeUnmount(() => {
       </template>
     </sky-dialog>
 
-    <sky-toast
+    <sky-notification
       :opened="toastOpened"
-      position="center"
+      :text="toastText"
       @click="toastOpened = false"
-    >
-      {{ toastText }}
-    </sky-toast>
+    />
   </sky-app-page>
 </template>
 
