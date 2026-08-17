@@ -224,9 +224,9 @@ describe('phone locale contract', () => {
     expect(missing).toEqual([])
   })
 
-  it('builds German on the complete English locale fallback', () => {
-    expect(germanLocaleSource).toContain(
-      'local german = translate_shared(clone(Locales["en"] or {}))',
-    )
+  it('keeps German structurally aligned with English', () => {
+    const germanPaths = collectLuaLocalePaths(germanLocaleSource)
+
+    expect([...germanPaths].sort()).toEqual([...englishPaths].sort())
   })
 })
