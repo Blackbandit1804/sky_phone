@@ -970,6 +970,9 @@ AddEventHandler("playerDropped", function()
 end)
 
 if not api_configured() then
-    print("^3[sky_phone] Camera uploads and FiveManage imports are disabled until Config.Media.FiveManage.ApiKey is set in config/media.lua.^7")
+    Bridge.Debug(
+        "warn",
+        "[sky_phone] Camera uploads and FiveManage imports are disabled until Config.Media.FiveManage.ApiKey is set in config/config.lua."
+    )
 end
 end)

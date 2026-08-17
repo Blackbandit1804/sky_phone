@@ -10,13 +10,11 @@ local auth_attempts = {}
 local operation_attempts = {}
 local character_device_cache = {}
 local max_device_data_bytes = 100000
-local passcode_pepper = GetConvar(Config.Security.PasscodePepperConvar, "")
+local passcode_pepper = tostring(Config.Server.PasscodePepper or "")
 if passcode_pepper == "" then
     Bridge.Debug(
         "warn",
-        "[sky_phone] Passcode pepper convar '%s' is empty; configure it before production use.",
-        Config.Security.PasscodePepperConvar,
-        { always = true }
+        "[sky_phone] Config.Server.PasscodePepper is empty; configure it in config/config.lua before production use."
     )
 end
 local allowed_device_namespaces = {
@@ -84,6 +82,36 @@ local function character_identifier(source)
         return nil
     end
     return identifier
+end
+
+local function migrated_device_for_character(source)
+    local identifier = character_identifier(source)
+    if not identifier then
+        return nil
+    end
+
+    local rows = Bridge.Database.Query([[
+        SELECT mapping.`device_imei`
+        FROM `sky_phone_migration_owners` mapping
+        JOIN `sky_phone_character_devices` character_device
+            ON character_device.`owner_identifier` = mapping.`owner_identifier`
+            AND character_device.`device_imei` = mapping.`device_imei`
+        JOIN `sky_phone_devices` device ON device.`imei` = mapping.`device_imei`
+        WHERE mapping.`source` = 'lb-phone' AND mapping.`owner_identifier` = ?
+        ORDER BY mapping.`created_at` DESC
+        LIMIT 1
+    ]], { identifier })
+    local imei = rows[1] and rows[1].device_imei or nil
+    if imei and not SkyPhoneImei.IsValid(imei) then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] LB Phone migration mapping contains invalid IMEI '%s' for '%s'.",
+            tostring(imei),
+            identifier
+        )
+        return nil
+    end
+    return imei
 end
 
 local function load_character_device(source, identifier)
@@ -304,6 +332,30 @@ local function ensure_device(source, slot)
     end
 
     if not imei then
+        imei = migrated_device_for_character(source)
+        if imei then
+            metadata.imei = imei
+            local metadata_written = Bridge.Inventory.SetSlotMetadata(source, slot.slot, metadata)
+            if not metadata_written then
+                Bridge.Debug(
+                    "error",
+                    "[sky_phone] Inventory '%s' could not adopt migrated phone metadata for source %s slot %s.",
+                    Bridge.Inventory.GetResourceName(),
+                    tostring(source),
+                    tostring(slot.slot)
+                )
+                return nil, "metadata_unsupported"
+            end
+            Bridge.Debug(
+                "info",
+                "[sky_phone] Adopted LB Phone migrated device %s for source %s.",
+                imei,
+                tostring(source),
+                { always = true }
+            )
+            return imei
+        end
+
         imei = reserve_imei()
         metadata.imei = imei
         Bridge.Debug(

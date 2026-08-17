@@ -3,7 +3,7 @@ if Bridge.Framework.GetName() ~= "esx" then
 end
 
 if GetResourceState("esx_property") ~= "started" then
-    print("[sky_phone] esx_property is not started; the housing provider is disabled.")
+    Bridge.Debug("warn", "[sky_phone] esx_property is not started; the housing provider is disabled.")
     return
 end
 

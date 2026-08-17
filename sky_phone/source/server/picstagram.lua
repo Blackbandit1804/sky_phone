@@ -1,13 +1,11 @@
 Bridge.Database.AfterMigration("sky_phone", function()
 local report_reasons = {}
-local password_pepper = GetConvar(Config.Picstagram.PasswordPepperConvar, "")
+local password_pepper = tostring(Config.Server.PicstagramPasswordPepper or "")
 
 if password_pepper == "" then
     Bridge.Debug(
         "warn",
-        "[sky_phone] Picstagram password pepper convar '%s' is empty; configure it before production use.",
-        Config.Picstagram.PasswordPepperConvar,
-        { always = true }
+        "[sky_phone] Config.Server.PicstagramPasswordPepper is empty; configure it in config/config.lua before production use."
     )
 end
 
@@ -1444,7 +1442,7 @@ RegisterCommand(Config.Picstagram.VerifyCommand, function(source, args)
     end
     local function send_command_feedback(message, notification_type)
         if source == 0 then
-            print(message)
+            Bridge.Debug(notification_type == "error" and "error" or "info", message)
             return
         end
         TriggerClientEvent("sky_phone:picstagram:command-feedback", source, {

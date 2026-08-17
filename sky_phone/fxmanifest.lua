@@ -24,7 +24,8 @@ shared_scripts {
 
 client_scripts {
     'config/config.lua',
-    'config/locales/*.lua',
+    'config/locales/en.lua',
+    'config/locales/de.lua',
     'source/bridge/client/framework.lua',
     'source/bridge/client/callbacks.lua',
     'source/bridge/client/housing.lua',
@@ -49,12 +50,8 @@ client_scripts {
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'config/config.lua',
-    'config/payphones.lua',
-    'config/companies.lua',
-    'config/media.lua',
-    'config/music.lua',
-    'config/weazel_news.lua',
-    'config/locales/*.lua',
+    'config/locales/en.lua',
+    'config/locales/de.lua',
     'source/bridge/server/database.lua',
     'source/bridge/server/migrations.lua',
     'source/bridge/server/callbacks.lua',
@@ -68,6 +65,7 @@ server_scripts {
     'source/server/custom_apps.lua',
     'source/server/custom_app_compat.lua',
     'source/server/db_migrate.lua',
+    'source/server/lb_phone_migration.lua',
     'source/server/media_metadata.lua',
     'source/server/companies.lua',
     'source/server/sim.lua',

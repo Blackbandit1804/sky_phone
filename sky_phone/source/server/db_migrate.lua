@@ -234,6 +234,71 @@ local schema = {
         tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     },
     {
+        name = "sky_phone_migrations",
+        columns = {
+            { name = "name", type = "VARCHAR(96) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "source", type = "VARCHAR(32) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "stats", type = "LONGTEXT NULL" },
+            { name = "completed_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = "name",
+        indexes = {
+            { name = "idx_sky_phone_migrations_source", columns = "(`source`, `completed_at`)" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_migration_numbers",
+        columns = {
+            { name = "source", type = "VARCHAR(32) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "source_number", type = "VARCHAR(64) NOT NULL" },
+            { name = "phone_number", type = "VARCHAR(24) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "sim_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "owned", type = "TINYINT(1) NOT NULL DEFAULT 0" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = { "source", "source_number" },
+        uniqueKeys = {
+            { name = "uniq_sky_phone_migration_number", columns = "(`source`, `phone_number`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_migration_numbers_sim", columns = "(`sim_id`)" },
+        },
+        foreignKeys = {
+            { column = "sim_id", references = "`sky_phone_sims` (`id`) ON DELETE CASCADE" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
+        name = "sky_phone_migration_owners",
+        columns = {
+            { name = "source", type = "VARCHAR(32) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "source_phone_id", type = "VARCHAR(100) NOT NULL" },
+            { name = "source_owner_id", type = "VARCHAR(100) NOT NULL" },
+            { name = "owner_identifier", type = "VARCHAR(80) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "source_phone_number", type = "VARCHAR(64) NOT NULL" },
+            { name = "device_imei", type = "CHAR(15) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "sim_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "account_id", type = "BIGINT UNSIGNED NULL" },
+            { name = "created_at", type = "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+        },
+        primaryKey = { "source", "source_phone_id" },
+        uniqueKeys = {
+            { name = "uniq_sky_phone_migration_owner_number", columns = "(`source`, `source_phone_number`)" },
+        },
+        indexes = {
+            { name = "idx_sky_phone_migration_owner", columns = "(`source`, `owner_identifier`)" },
+            { name = "idx_sky_phone_migration_owner_device", columns = "(`device_imei`)" },
+            { name = "idx_sky_phone_migration_owner_account", columns = "(`account_id`)" },
+        },
+        foreignKeys = {
+            { column = "device_imei", references = "`sky_phone_devices` (`imei`) ON DELETE CASCADE" },
+            { column = "sim_id", references = "`sky_phone_sims` (`id`) ON DELETE CASCADE" },
+            { column = "account_id", references = "`sky_phone_accounts` (`id`) ON DELETE SET NULL" },
+        },
+        tableOptions = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    },
+    {
         name = "sky_phone_device_data",
         columns = {
             { name = "id", type = "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" },

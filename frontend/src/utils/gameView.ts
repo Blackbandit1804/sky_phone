@@ -256,7 +256,6 @@ export function createGameView(
       initializeResources()
       lost = false
       applySize()
-      console.info('[Camera] Game-view WebGL context restored.')
       options.onContextRestored?.()
     } catch (error) {
       lost = true

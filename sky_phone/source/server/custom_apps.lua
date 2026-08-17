@@ -53,9 +53,13 @@ local function register_policy(policy)
     local app_id = policy.id
     local existing = policies_by_id[app_id]
     if existing then
-        print((
-            "[sky_phone] Rejected duplicate custom app policy '%s' from '%s'; it is already owned by '%s'."
-        ):format(app_id, policy.ownerResource, existing.ownerResource))
+        Bridge.Debug(
+            "warn",
+            "[sky_phone] Rejected duplicate custom app policy '%s' from '%s'; it is already owned by '%s'.",
+            app_id,
+            policy.ownerResource,
+            existing.ownerResource
+        )
         return false, "duplicate_app_id"
     end
 

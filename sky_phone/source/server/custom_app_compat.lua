@@ -11,10 +11,10 @@ local function get_calling_resource(export_name)
         return owner_resource
     end
 
-    print(("[%s] %s rejected: the export must be called by another resource."):format(
+    Bridge.Debug("warn", "[%s] %s rejected: the export must be called by another resource.",
         RESOURCE_NAME,
         export_name
-    ))
+    )
     return nil, "invalid_owner"
 end
 
@@ -31,11 +31,11 @@ local function add_high_application(app_name, data, locales)
         locales
     )
     if not definition then
-        print(("[%s] High Phone registration rejected for %s: %s."):format(
+        Bridge.Debug("warn", "[%s] High Phone registration rejected for %s: %s.",
             RESOURCE_NAME,
             owner_resource,
             definition_error
-        ))
+        )
         return false, definition_error
     end
 
@@ -77,9 +77,9 @@ end
 RegisterNetEvent("sky_phone:compat:high:server:requestSnapshot", function()
     local player_source = source
     if player_source <= 0 then
-        print(("[%s] Rejected High Phone snapshot request without a player source."):format(
+        Bridge.Debug("warn", "[%s] Rejected High Phone snapshot request without a player source.",
             RESOURCE_NAME
-        ))
+        )
         return
     end
 
@@ -91,10 +91,10 @@ RegisterNetEvent("sky_phone:compat:high:server:requestSnapshot", function()
         local log_elapsed = last_log and now - last_log or SNAPSHOT_REJECTION_LOG_COOLDOWN_MS
         if log_elapsed < 0 or log_elapsed >= SNAPSHOT_REJECTION_LOG_COOLDOWN_MS then
             snapshot_rejection_logs[player_source] = now
-            print(("[%s] Rate-limited High Phone snapshot request from player %s."):format(
+            Bridge.Debug("warn", "[%s] Rate-limited High Phone snapshot request from player %s.",
                 RESOURCE_NAME,
                 player_source
-            ))
+            )
         end
         return
     end

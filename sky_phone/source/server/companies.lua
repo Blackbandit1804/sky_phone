@@ -903,7 +903,7 @@ local function cleanup_retained_data()
         },
     })
     if not success then
-        print("[sky_phone] Companies retention cleanup failed.")
+        Bridge.Debug("error", "[sky_phone] Companies retention cleanup failed.")
     end
 end
 
