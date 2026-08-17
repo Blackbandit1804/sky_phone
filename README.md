@@ -67,7 +67,7 @@ Start the selected voice resource before Sky Phone.
 1. Copy the resource into your FiveM resources directory.
 2. Keep the resource folder name `sky_phone`.
 3. Start `oxmysql`, your framework, inventory, and voice resource before Sky Phone.
-4. Open `sky_phone/config/config.lua` and review the configuration.
+4. Review `sky_phone/config/config.lua` and `sky_phone/config/media.lua`.
 5. Add the required inventory items.
 6. Add `ensure sky_phone` to `server.cfg`.
 7. Restart the server and watch the console for warnings.
@@ -88,13 +88,14 @@ Sky Phone creates and upgrades its database tables automatically. A manual SQL i
 
 ## Configuration
 
-All customer settings are organized in:
+Customer settings are organized in:
 
 ```text
 sky_phone/config/config.lua
+sky_phone/config/media.lua
 ```
 
-The file contains clearly separated sections for:
+The files contain clearly separated sections for:
 
 | Section | Purpose |
 | --- | --- |
@@ -107,7 +108,7 @@ The file contains clearly separated sections for:
 | App sections | Limits and behavior for every built-in app |
 | `Config.Server` | Stable password and passcode peppers |
 | `Config.Companies` | Company directory, jobs, services, and permissions |
-| `Config.Media` | FiveManage, GIPHY, uploads, and Gallery imports |
+| `Config.Media` (`config/media.lua`) | FiveManage, GIPHY, uploads, and Gallery imports |
 | `Config.Music` | Server music library and playlist limits |
 | `Config.Migrations` | Manual LB Phone migration domains |
 | `Config.WeazelNews` | Editorial jobs, categories, and article limits |
@@ -257,7 +258,7 @@ A Sky Cloud account is optional. Devices without an account retain local setting
 
 ## Media and uploads
 
-Configure FiveManage in the server-only media section:
+Configure FiveManage in the server-only `sky_phone/config/media.lua` file:
 
 ```lua
 Config.Media.FiveManage.ApiKey = "your-fivemanage-v3-media-token"
@@ -454,7 +455,7 @@ See [Custom App Integration](docs/custom-apps.md) for setup details and compatib
 Before updating:
 
 1. Back up the database.
-2. Back up `config/config.lua` and any custom media.
+2. Back up `config/config.lua`, `config/media.lua`, and any custom media.
 3. Keep the three pepper values unchanged.
 4. Replace the resource files.
 5. Reapply customer-specific configuration carefully.

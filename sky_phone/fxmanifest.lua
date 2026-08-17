@@ -50,6 +50,7 @@ client_scripts {
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'config/config.lua',
+    'config/media.lua',
     'config/locales/en.lua',
     'config/locales/de.lua',
     'source/bridge/server/database.lua',

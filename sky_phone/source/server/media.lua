@@ -972,7 +972,7 @@ end)
 if not api_configured() then
     Bridge.Debug(
         "warn",
-        "[sky_phone] Camera uploads and FiveManage imports are disabled until Config.Media.FiveManage.ApiKey is set in config/config.lua."
+        "[sky_phone] Camera uploads and FiveManage imports are disabled until Config.Media.FiveManage.ApiKey is set in config/media.lua."
     )
 end
 end)
