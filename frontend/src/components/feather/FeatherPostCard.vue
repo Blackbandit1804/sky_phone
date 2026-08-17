@@ -8,18 +8,14 @@ import {
   Share2,
   UserRound,
 } from 'lucide-vue-next'
-import {
-  SkyButton as kButton,
-  SkyGlass as kGlass,
-  SkyIcon as kIcon,
-} from '@/ui'
-import { computed, ref } from 'vue'
+import { SkyButton, SkyGlass, SkyIcon } from '@/ui'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 
 import { usePhoneStore } from '@/stores/phone'
 import type { FeatherPost } from '@/types/feather'
 
 const props = defineProps<{ post: FeatherPost }>()
-defineEmits<{
+const emit = defineEmits<{
   follow: [post: FeatherPost]
   media: [post: FeatherPost, index: number]
   menu: [post: FeatherPost]
@@ -32,6 +28,9 @@ defineEmits<{
 
 const phone = usePhoneStore()
 const expanded = ref(false)
+const reactionPulse = ref<'like' | 'bookmark' | null>(null)
+let reactionPulseFrame: number | null = null
+let reactionPulseTimer: number | null = null
 const shouldTruncate = computed(() => props.post.body.length > 260)
 const visibleBody = computed(() =>
   shouldTruncate.value && !expanded.value
@@ -57,10 +56,40 @@ function relativeTime(timestamp: number): string {
     month: 'short',
   }).format(timestamp)
 }
+
+function playReactionPulse(kind: 'like' | 'bookmark'): void {
+  if (reactionPulseFrame !== null)
+    window.cancelAnimationFrame(reactionPulseFrame)
+  if (reactionPulseTimer !== null) window.clearTimeout(reactionPulseTimer)
+  reactionPulse.value = null
+  void nextTick(() => {
+    reactionPulseFrame = window.requestAnimationFrame(() => {
+      reactionPulse.value = kind
+      reactionPulseFrame = null
+      reactionPulseTimer = window.setTimeout(() => {
+        reactionPulse.value = null
+        reactionPulseTimer = null
+      }, 520)
+    })
+  })
+}
+
+function react(kind: 'like' | 'bookmark'): void {
+  const isActivating =
+    kind === 'like' ? !props.post.is_liked : !props.post.is_bookmarked
+  if (isActivating) playReactionPulse(kind)
+  emit('react', props.post, kind)
+}
+
+onBeforeUnmount(() => {
+  if (reactionPulseFrame !== null)
+    window.cancelAnimationFrame(reactionPulseFrame)
+  if (reactionPulseTimer !== null) window.clearTimeout(reactionPulseTimer)
+})
 </script>
 
 <template>
-  <kGlass :highlight="false" class="feather-post-glass">
+  <SkyGlass :highlight="false" class="feather-post-glass">
     <article class="feather-post" @click="$emit('open', post)">
       <button
         class="feather-avatar"
@@ -91,7 +120,7 @@ function relativeTime(timestamp: number): string {
               @{{ post.handle }} · {{ relativeTime(post.created_at) }}
             </span>
           </button>
-          <kButton
+          <SkyButton
             v-if="!post.is_owner && !post.is_following"
             outline
             inline
@@ -101,16 +130,18 @@ function relativeTime(timestamp: number): string {
             @click.stop="$emit('follow', post)"
           >
             {{ phone.t('Apps.feather.follow') }}
-          </kButton>
-          <kButton
-            clear
+          </SkyButton>
+          <SkyButton
+            icon-only
             rounded
             small
+            tonal
             class="feather-more"
+            :aria-label="phone.t('Apps.feather.moreActions')"
             @click.stop="$emit('menu', post)"
           >
-            <kIcon><MoreHorizontal :size="18" /></kIcon>
-          </kButton>
+            <SkyIcon><MoreHorizontal :size="18" /></SkyIcon>
+          </SkyButton>
         </header>
 
         <p v-if="post.body" class="feather-post__text">
@@ -155,16 +186,24 @@ function relativeTime(timestamp: number): string {
           </button>
           <button
             type="button"
-            :class="{ 'is-liked': post.is_liked }"
-            @click.stop="$emit('react', post, 'like')"
+            class="feather-action feather-action--like"
+            :class="{
+              'is-liked': post.is_liked,
+              'is-pulsing': reactionPulse === 'like',
+            }"
+            @click.stop="react('like')"
           >
             <Heart :size="17" :fill="post.is_liked ? 'currentColor' : 'none'" />
             <span v-if="post.like_count">{{ post.like_count }}</span>
           </button>
           <button
             type="button"
-            :class="{ 'is-bookmarked': post.is_bookmarked }"
-            @click.stop="$emit('react', post, 'bookmark')"
+            class="feather-action feather-action--bookmark"
+            :class="{
+              'is-bookmarked': post.is_bookmarked,
+              'is-pulsing': reactionPulse === 'bookmark',
+            }"
+            @click.stop="react('bookmark')"
           >
             <Bookmark
               :size="17"
@@ -177,7 +216,7 @@ function relativeTime(timestamp: number): string {
         </footer>
       </div>
     </article>
-  </kGlass>
+  </SkyGlass>
 </template>
 
 <style scoped>
@@ -267,8 +306,12 @@ function relativeTime(timestamp: number): string {
   color: #438cf5;
 }
 .feather-follow {
-  --sky-app-accent: transparent;
-  --sky-button-text: var(--feather-blue, #1d9bf0);
+  --sky-app-accent: var(--feather-blue, #1d9bf0);
+  --sky-app-accent-soft: color-mix(
+    in srgb,
+    var(--feather-blue, #1d9bf0) 14%,
+    transparent
+  );
   width: auto;
   min-width: 58px;
   max-width: 68px;
@@ -281,17 +324,26 @@ function relativeTime(timestamp: number): string {
     transparent
   );
   padding-inline: 9px;
+  color: var(--feather-blue, #1d9bf0);
+  background: transparent;
   box-shadow: none;
   font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 0.1px;
 }
 .feather-more {
+  --sky-app-accent: #71767b;
+  --sky-app-accent-soft: color-mix(in srgb, currentColor 10%, transparent);
   flex: 0 0 auto;
   margin-left: 0;
   width: 27px;
+  min-width: 27px;
   height: 27px;
+  min-height: 27px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  padding: 0;
   color: #71767b;
+  background: color-mix(in srgb, currentColor 7%, transparent);
 }
 .feather-post__text {
   margin: 2px 0 8px;
@@ -352,6 +404,7 @@ function relativeTime(timestamp: number): string {
   color: #71767b;
 }
 .feather-actions button {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -370,6 +423,57 @@ function relativeTime(timestamp: number): string {
 }
 .feather-actions .is-bookmarked {
   color: #438cf5;
+}
+.feather-actions .feather-action.is-pulsing svg {
+  animation: feather-reaction-pop 520ms cubic-bezier(0.22, 1.45, 0.36, 1) both;
+}
+.feather-actions .feather-action.is-pulsing::after {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  width: 24px;
+  height: 24px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  content: '';
+  pointer-events: none;
+  animation: feather-reaction-ring 520ms ease-out both;
+}
+.feather-actions .feather-action--like.is-pulsing {
+  color: #f04f87;
+}
+.feather-actions .feather-action--bookmark.is-pulsing {
+  color: #438cf5;
+}
+@keyframes feather-reaction-pop {
+  0% {
+    transform: scale(0.78) rotate(-8deg);
+  }
+  48% {
+    transform: scale(1.42) rotate(7deg);
+  }
+  72% {
+    transform: scale(0.94) rotate(-2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes feather-reaction-ring {
+  0% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.65);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .feather-actions .feather-action.is-pulsing svg,
+  .feather-actions .feather-action.is-pulsing::after {
+    animation: none;
+  }
 }
 @supports not (color: color-mix(in srgb, white, black)) {
   .feather-post:active {

@@ -1407,6 +1407,7 @@ const defaultLocales: LocaleTree = {
       verified: 'Verified profile',
       noBio: 'No bio yet.',
       showMore: 'Show more',
+      moreActions: 'More actions',
       replies: 'Replies',
       noReplies: 'No replies yet. Start the conversation.',
       likes: 'Likes',

@@ -847,6 +847,8 @@ onMounted(async () => {
         screen === 'main' &&
         tab === 'home',
       'feather-app--light': !phone.isDarkMode,
+      'feather-app--composer':
+        feather.onboarded && isAuthenticated && screen === 'composer',
       'feather-app--section':
         feather.onboarded &&
         isAuthenticated &&
@@ -892,7 +894,7 @@ onMounted(async () => {
           :aria-label="t('cancel')"
           @click="goBack"
         >
-          <X :size="19" />
+          <X :size="16" />
         </SkyLink>
         <SkyNavbarBackLink
           v-else
@@ -1386,7 +1388,23 @@ onMounted(async () => {
       >
         <SkyGlass :highlight="false" class="feather-profile-glass">
           <div class="feather-profile">
-            <div class="feather-profile__cover"></div>
+            <div class="feather-profile__cover">
+              <span class="feather-profile__cover-title">
+                <Feather :size="17" :stroke-width="2" />
+                {{ activeProfile.display_name }}
+              </span>
+              <SkyButton
+                v-if="activeProfile.is_owner"
+                icon-only
+                rounded
+                tonal
+                class="feather-profile__logout"
+                :aria-label="phone.t('Common.signOut')"
+                @click="logoutDialogOpen = true"
+              >
+                <LogOut :size="16" />
+              </SkyButton>
+            </div>
             <div class="feather-profile__top">
               <div class="feather-profile__avatar">
                 <img
@@ -1461,15 +1479,6 @@ onMounted(async () => {
               >
                 <PencilLine :size="15" />
                 <span>{{ t('editProfile') }}</span>
-              </SkyButton>
-              <SkyButton
-                rounded
-                outline
-                class="feather-profile-action feather-profile-action--logout"
-                @click="logoutDialogOpen = true"
-              >
-                <LogOut :size="15" />
-                <span>{{ phone.t('Common.signOut') }}</span>
               </SkyButton>
             </div>
           </div>
@@ -3723,8 +3732,13 @@ onMounted(async () => {
   color: var(--feather-muted);
 }
 .feather-app--active :deep(.feather-follow) {
-  --sky-button-bg-color: transparent;
-  --sky-button-text-color: var(--feather-blue);
+  --sky-app-accent: var(--feather-blue);
+  --sky-app-accent-soft: color-mix(
+    in srgb,
+    var(--feather-blue) 14%,
+    transparent
+  );
+  color: var(--feather-blue);
 }
 .feather-app--active .feather-trend,
 .feather-app--active .feather-person,
@@ -4260,8 +4274,50 @@ onMounted(async () => {
   background: transparent;
 }
 .feather-app--active .feather-profile__cover {
+  position: relative;
   height: 112px;
+  overflow: hidden;
+  color: #fff;
   background: linear-gradient(135deg, #173f6d, #58a6ff);
+}
+.feather-profile__cover-title {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  max-width: calc(100% - 72px);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 8px rgb(0 0 0 / 34%);
+  white-space: nowrap;
+}
+.feather-profile__cover-title svg {
+  flex: none;
+}
+.feather-app--active .feather-profile__logout {
+  --sky-button-bg-color: rgb(8 22 39 / 38%);
+  --sky-button-text-color: #fff;
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border: 1px solid rgb(255 255 255 / 24%);
+  padding: 0;
+  color: #fff;
+  background: rgb(8 22 39 / 38%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
 }
 .feather-app--active .feather-profile__top {
   height: 50px;
@@ -4335,13 +4391,6 @@ onMounted(async () => {
   padding-inline: 7px;
   font-size: 10.5px;
   font-weight: 750;
-}
-.feather-app--active
-  .feather-profile__actions
-  :deep(.feather-profile-action--logout) {
-  grid-column: 1 / -1;
-  border-color: color-mix(in srgb, #f04f65 62%, transparent);
-  color: #f04f65;
 }
 .feather-onboarding__logout {
   width: 100%;
@@ -4465,10 +4514,17 @@ onMounted(async () => {
   padding: 13px 13px 34px;
   background: transparent;
 }
+.feather-app--active.feather-app--composer .feather-navbar {
+  --sky-safe-area-top: 54px;
+}
+.feather-app--active.feather-app--composer > .feather-composer {
+  top: 112px;
+  padding-top: 18px;
+}
 .feather-composer-close {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   border: 1px solid var(--feather-border);
   border-radius: 50%;
@@ -4476,7 +4532,13 @@ onMounted(async () => {
   color: inherit;
   background: var(--feather-panel);
 }
-.feather-composer-publish,
+.feather-composer-publish {
+  min-width: 52px;
+  min-height: 28px;
+  padding-inline: 10px;
+  font-size: 10px;
+  font-weight: 800;
+}
 .feather-edit__navbar-save {
   min-width: 58px;
   min-height: 30px;
