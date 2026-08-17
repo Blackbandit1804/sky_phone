@@ -248,10 +248,6 @@ button {
   padding: 0 var(--phone-edge-gap, 24px) var(--phone-edge-gap, 24px) 0;
   pointer-events: none;
 }
-.phone-stage--dev {
-  place-items: center;
-  padding: 0;
-}
 .phone-stage--peek .phone-resolution-wrapper--primary .phone-device {
   transform: translateY(calc(100% - 190px));
   transform-origin: right bottom;
@@ -273,11 +269,21 @@ button {
   transform: translateY(calc(100% + var(--phone-edge-gap, 24px)));
 }
 .phone-resolution-wrapper {
+  position: relative;
+  width: var(--phone-rendered-width, 390px);
+  height: var(--phone-rendered-height, 844px);
+}
+
+.phone-resolution-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 390px;
   height: 844px;
   zoom: var(--phone-zoom, 1);
 }
-.phone-stage--landscape .phone-resolution-wrapper--primary {
+
+.phone-stage--landscape .phone-resolution-canvas--primary {
   width: 844px;
   height: 390px;
 }
@@ -2890,25 +2896,8 @@ button {
 .springboard--widget-dragging .springboard-widget-page-scroll {
   overflow: visible;
 }
-.home-drag-layer {
-  position: absolute;
-  z-index: 70;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.home-drag-layer * {
-  pointer-events: none !important;
-}
-.home-drag-ghost {
-  position: absolute;
-  top: 0;
-  left: 0;
-  margin: 0;
-  opacity: 1;
-  transition: none !important;
-  animation: none !important;
-  will-change: transform;
+.springboard--home-dragging .springboard-page--apps {
+  overflow: visible;
 }
 .app-grid {
   display: grid;
@@ -2943,9 +2932,6 @@ button {
   transition: transform var(--springboard-page-duration)
     var(--springboard-page-easing);
 }
-.app-icon-item--drag-source {
-  opacity: 0;
-}
 .app-icon-remove {
   position: absolute;
   z-index: 4;
@@ -2957,22 +2943,30 @@ button {
   border: 0;
   border-radius: 50%;
   background: none;
-  color: black;
+  color: #111;
   display: grid;
   place-items: center;
   cursor: pointer;
   text-shadow: none;
 }
 .app-icon-remove__badge {
+  box-sizing: border-box;
   width: 22px;
   height: 22px;
   min-width: 22px;
   min-height: 22px;
   padding: 0;
-  border: 1px solid #ffffff73;
-  box-shadow: 0 1px 4px #0009;
-  background: #8e8e93;
-  color: #000;
+  border: 1px solid rgb(255 255 255 / 46%);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 46%);
+  background: rgb(174 174 178 / 88%);
+  color: #111;
+}
+.app-icon-remove__badge svg {
+  display: block;
+  stroke: currentcolor;
 }
 .app-icon-item--editing:not(.app-icon-item--dragging) .app-icon-button {
   animation: app-icon-wobble 0.15s ease-in-out infinite alternate;
@@ -3123,11 +3117,13 @@ button {
 .springboard-edit-done {
   position: absolute;
   z-index: 12;
-  top: 45px;
-  right: 18px;
-  min-width: 51px;
-  min-height: 30px;
-  padding: 0 13px;
+  top: 14px;
+  right: 28px;
+  display: grid;
+  width: 58px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
   border: 1px solid #ffffff38;
   border-radius: 999px;
   color: white;
@@ -7777,15 +7773,15 @@ button {
 .springboard-edit-add {
   position: absolute;
   z-index: 12;
-  top: 45px;
-  left: 18px;
+  top: 14px;
+  left: 28px;
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 58px;
+  height: 30px;
   padding: 0;
   place-items: center;
   border: 1px solid #ffffff38;
-  border-radius: 50%;
+  border-radius: 999px;
   color: white;
   text-shadow: 0 1px 3px #000a;
   cursor: pointer;

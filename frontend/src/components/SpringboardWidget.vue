@@ -31,8 +31,11 @@ import {
   type ReorderDirection,
 } from '@/utils/keyboard'
 import {
+  readSpringboardDragMetrics,
   springboardPageDragCompensation,
   springboardSwipeIntent,
+  springboardViewportDeltaToLocal,
+  type SpringboardDragMetrics,
 } from '@/utils/springboardDrag'
 import { WIDGET_SPANS } from '@/utils/widgetLayout'
 
@@ -78,6 +81,7 @@ let holdTimer: number | undefined
 let pointerStart = { x: 0, y: 0 }
 let dragStartPage = 0
 let dragPageWidth = 0
+let dragMetrics: SpringboardDragMetrics | null = null
 let pointerTarget: HTMLElement | null = null
 let pointerId: number | null = null
 
@@ -207,10 +211,18 @@ function onPointerDown(event: PointerEvent): void {
 
 function onPointerMove(event: PointerEvent): void {
   if (isDragging.value) {
-    dragOffset.value = {
-      x: event.clientX - pointerStart.x,
-      y: event.clientY - pointerStart.y,
-    }
+    const deltaX = event.clientX - pointerStart.x
+    const deltaY = event.clientY - pointerStart.y
+    dragOffset.value = dragMetrics
+      ? springboardViewportDeltaToLocal(
+          deltaX,
+          deltaY,
+          dragMetrics.viewportWidth,
+          dragMetrics.viewportHeight,
+          dragMetrics.layoutWidth,
+          dragMetrics.layoutHeight,
+        )
+      : { x: deltaX, y: deltaY }
     emit('dragmove', event)
     return
   }
@@ -227,10 +239,14 @@ function onPointerMove(event: PointerEvent): void {
 
 function beginDrag(event: PointerEvent): void {
   dragStartPage = phone.currentPage
-  dragPageWidth =
-    (event.currentTarget as HTMLElement)
-      .closest<HTMLElement>('.springboard-page')
-      ?.getBoundingClientRect().width ?? 0
+  const element =
+    event.currentTarget instanceof Element
+      ? event.currentTarget
+      : event.target instanceof Element
+        ? event.target
+        : null
+  dragMetrics = readSpringboardDragMetrics(element)
+  dragPageWidth = dragMetrics?.layoutWidth ?? 0
   isDragging.value = true
   emit('dragstart', event)
 }
@@ -265,6 +281,7 @@ function releasePointerCapture(): void {
   }
   pointerTarget = null
   pointerId = null
+  dragMetrics = null
 }
 
 function onKeydown(event: KeyboardEvent): void {

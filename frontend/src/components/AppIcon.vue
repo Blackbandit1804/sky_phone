@@ -17,8 +17,11 @@ import {
   type ReorderDirection,
 } from '@/utils/keyboard'
 import {
+  readSpringboardDragMetrics,
   springboardPageDragCompensation,
   springboardSwipeIntent,
+  springboardViewportToLocal,
+  type SpringboardDragMetrics,
 } from '@/utils/springboardDrag'
 import { bindPointerDragSession } from '@/utils/pointerDragSession'
 
@@ -27,13 +30,11 @@ const props = withDefaults(
     app: PhoneAppDefinition
     compact?: boolean
     editMode?: boolean
-    externalDragVisual?: boolean
     showLabel?: boolean
   }>(),
   {
     compact: false,
     editMode: false,
-    externalDragVisual: false,
     showLabel: true,
   },
 )
@@ -60,15 +61,16 @@ const calendarToday = ref(new Date())
 const dragOffset = ref({ x: 0, y: 0 })
 let dragStartPage = 0
 let dragPageWidth = 0
+let dragPageMetrics: SpringboardDragMetrics | null = null
 const dragStyle = computed(() =>
-  isDragging.value && !props.externalDragVisual
+  isDragging.value
     ? {
         transform: `translate3d(${springboardPageDragCompensation(dragStartPage, phone.currentPage, dragPageWidth)}px, 0, 0)`,
       }
     : undefined,
 )
 const dragPointerStyle = computed(() =>
-  isDragging.value && !props.externalDragVisual
+  isDragging.value
     ? {
         transform: `translate3d(${dragOffset.value.x}px, ${dragOffset.value.y}px, 0)`,
       }
@@ -173,9 +175,36 @@ function onPointerDown(event: PointerEvent): void {
 
 function onPointerMove(event: PointerEvent): void {
   if (isDragging.value) {
-    dragOffset.value = {
-      x: event.clientX - pointerStart.x,
-      y: event.clientY - pointerStart.y,
+    if (dragPageMetrics) {
+      const pointer = springboardViewportToLocal(
+        event.clientX,
+        event.clientY,
+        dragPageMetrics.viewportLeft,
+        dragPageMetrics.viewportTop,
+        dragPageMetrics.viewportWidth,
+        dragPageMetrics.viewportHeight,
+        dragPageMetrics.layoutWidth,
+        dragPageMetrics.layoutHeight,
+      )
+      const start = springboardViewportToLocal(
+        pointerStart.x,
+        pointerStart.y,
+        dragPageMetrics.viewportLeft,
+        dragPageMetrics.viewportTop,
+        dragPageMetrics.viewportWidth,
+        dragPageMetrics.viewportHeight,
+        dragPageMetrics.layoutWidth,
+        dragPageMetrics.layoutHeight,
+      )
+      dragOffset.value = {
+        x: pointer.x - start.x,
+        y: pointer.y - start.y,
+      }
+    } else {
+      dragOffset.value = {
+        x: event.clientX - pointerStart.x,
+        y: event.clientY - pointerStart.y,
+      }
     }
     emit('dragmove', event)
     return
@@ -193,10 +222,15 @@ function onPointerMove(event: PointerEvent): void {
 
 function beginPointerDrag(event: PointerEvent): void {
   dragStartPage = phone.currentPage
-  dragPageWidth =
-    (event.target as HTMLElement)
-      .closest<HTMLElement>('.springboard-page')
-      ?.getBoundingClientRect().width ?? 0
+  const element =
+    pointerTarget ??
+    (event.currentTarget instanceof Element
+      ? event.currentTarget
+      : event.target instanceof Element
+        ? event.target
+        : null)
+  dragPageMetrics = readSpringboardDragMetrics(element)
+  dragPageWidth = dragPageMetrics?.layoutWidth ?? 0
   isDragging.value = true
   emit('dragstart', event)
 }
@@ -235,6 +269,7 @@ function releasePointerCapture(): void {
   }
   pointerTarget = null
   pointerId = null
+  dragPageMetrics = null
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -265,7 +300,6 @@ onBeforeUnmount(() => {
     class="app-icon-item"
     :class="{
       'app-icon-item--compact': compact,
-      'app-icon-item--drag-source': isDragging && externalDragVisual,
       'app-icon-item--dragging': isDragging,
       'app-icon-item--editing': editMode,
     }"
@@ -285,7 +319,6 @@ onBeforeUnmount(() => {
       @contextmenu.prevent
       @keydown="onKeydown"
       @pointerdown="onPointerDown"
-      @pointerleave="isDragging || clearHold()"
     >
       <span class="app-icon-anchor" aria-hidden="true">
         <span
@@ -340,9 +373,9 @@ onBeforeUnmount(() => {
       @click.stop="emit('remove')"
       @pointerdown.stop
     >
-      <k-badge class="app-icon-remove__badge" tone="neutral">
-        <Minus :size="15" :stroke-width="3" aria-hidden="true" />
-      </k-badge>
+      <span class="app-icon-remove__badge" aria-hidden="true">
+        <Minus :size="14" :stroke-width="4" />
+      </span>
     </button>
   </div>
 </template>

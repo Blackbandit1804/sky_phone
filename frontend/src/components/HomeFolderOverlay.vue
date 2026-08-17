@@ -1,16 +1,11 @@
 <script setup lang="ts">
-import { Pencil } from 'lucide-vue-next'
+import { Check, Pencil, X } from 'lucide-vue-next'
 import { computed, nextTick, ref, watch } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
 import { usePhoneStore } from '@/stores/phone'
 import type { PhoneAppDefinition } from '@/types/apps'
-import {
-  SkyButton,
-  SkyField,
-  SkyLink,
-  SkySheet,
-} from '@/ui'
+import { SkyField, SkyLink } from '@/ui'
 import {
   HOME_FOLDER_NAME_MAX_LENGTH,
   HOME_FOLDER_PAGE_SIZE,
@@ -30,6 +25,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   close: []
+  'drag-outside-change': [outside: boolean]
   edit: []
   extract: [index: number, event: PointerEvent]
   move: [sourceIndex: number, targetIndex: number]
@@ -41,6 +37,8 @@ const phone = usePhoneStore()
 const currentPage = ref(0)
 const pageTransitionDirection = ref<'backward' | 'forward'>('forward')
 const draggingIndex = ref<number | null>(null)
+const draggingOutside = ref(false)
+const panelElement = ref<HTMLElement | null>(null)
 const renameOpened = ref(false)
 const renameDraft = ref('')
 let pagePointerStart = 0
@@ -87,7 +85,9 @@ watch(
     emit('rename-opened')
     await nextTick()
     document
-      .querySelector<HTMLInputElement>('.home-folder-rename .sky-field__input')
+      .querySelector<HTMLInputElement>(
+        '.home-folder-rename-field .sky-field__input',
+      )
       ?.select()
   },
   { immediate: true },
@@ -98,36 +98,62 @@ function openRename(): void {
   renameOpened.value = true
   void nextTick(() => {
     document
-      .querySelector<HTMLInputElement>('.home-folder-rename .sky-field__input')
+      .querySelector<HTMLInputElement>(
+        '.home-folder-rename-field .sky-field__input',
+      )
       ?.select()
   })
 }
 
 function saveRename(): void {
-  emit('rename', renameDraft.value.trim() || phone.t('Home.folders.defaultName'))
+  emit(
+    'rename',
+    renameDraft.value.trim() || phone.t('Home.folders.defaultName'),
+  )
   renameOpened.value = false
 }
 
 function startFolderAppDrag(index: number): void {
   draggingIndex.value = index
+  setDraggingOutside(false)
 }
 
-function finishFolderAppDrag(event: PointerEvent): void {
-  const sourceIndex = draggingIndex.value
-  draggingIndex.value = null
-  if (sourceIndex === null) return
-  const panel = document.querySelector<HTMLElement>('.home-folder-panel')
-  if (!panel) return
-  const panelBounds = panel.getBoundingClientRect()
-  const insidePanel =
+function isPointerInsidePanel(event: PointerEvent): boolean {
+  const panelBounds = panelElement.value?.getBoundingClientRect()
+  if (!panelBounds) return false
+  return (
     event.clientX >= panelBounds.left &&
     event.clientX <= panelBounds.right &&
     event.clientY >= panelBounds.top &&
     event.clientY <= panelBounds.bottom
-  if (!insidePanel) {
-    emit('extract', sourceIndex, event)
+  )
+}
+
+function moveFolderAppDrag(event: PointerEvent): void {
+  if (draggingIndex.value === null || draggingOutside.value) return
+  if (!isPointerInsidePanel(event)) setDraggingOutside(true)
+}
+
+function setDraggingOutside(outside: boolean): void {
+  if (draggingOutside.value === outside) return
+  draggingOutside.value = outside
+  emit('drag-outside-change', outside)
+}
+
+function finishFolderAppDrag(event: PointerEvent): void {
+  const sourceIndex = draggingIndex.value
+  const shouldExtract = draggingOutside.value || !isPointerInsidePanel(event)
+  draggingIndex.value = null
+  if (sourceIndex === null) {
+    setDraggingOutside(false)
     return
   }
+  if (shouldExtract) {
+    emit('extract', sourceIndex, event)
+    setDraggingOutside(false)
+    return
+  }
+  setDraggingOutside(false)
 
   const target = document
     .elementsFromPoint(event.clientX, event.clientY)
@@ -143,6 +169,7 @@ function finishFolderAppDrag(event: PointerEvent): void {
 
 function stopFolderAppDrag(): void {
   draggingIndex.value = null
+  setDraggingOutside(false)
 }
 
 function goToPage(page: number): void {
@@ -171,7 +198,10 @@ function finishPageSwipe(event: PointerEvent): void {
 </script>
 
 <template>
-  <div class="home-folder-layer">
+  <div
+    class="home-folder-layer"
+    :class="{ 'home-folder-layer--dragging-out': draggingOutside }"
+  >
     <button
       class="home-folder-backdrop"
       type="button"
@@ -185,7 +215,7 @@ function finishPageSwipe(event: PointerEvent): void {
       :aria-label="folderName"
       @pointerdown.stop
     >
-      <div class="home-folder-heading">
+      <div v-if="!renameOpened" class="home-folder-heading">
         <button
           class="home-folder-title"
           type="button"
@@ -205,7 +235,46 @@ function finishPageSwipe(event: PointerEvent): void {
           <Pencil :size="18" :stroke-width="2.2" />
         </SkyLink>
       </div>
+      <form
+        v-else
+        class="home-folder-heading home-folder-heading--editing"
+        @keydown.esc.prevent="renameOpened = false"
+        @submit.prevent="saveRename"
+      >
+        <SkyLink
+          class="home-folder-rename-action"
+          component="button"
+          icon-only
+          :aria-label="phone.t('Common.cancel')"
+          type="button"
+          @click="renameOpened = false"
+        >
+          <X :size="19" :stroke-width="2.3" />
+        </SkyLink>
+        <SkyField
+          v-model="renameDraft"
+          class="home-folder-rename-field"
+          :aria-label="phone.t('Home.folders.name')"
+          autocomplete="off"
+          autofocus
+          clear-button
+          :clear-label="phone.t('Common.clear')"
+          component="div"
+          :maxlength="HOME_FOLDER_NAME_MAX_LENGTH"
+          :placeholder="phone.t('Home.folders.defaultName')"
+        />
+        <SkyLink
+          class="home-folder-rename-action"
+          component="button"
+          icon-only
+          :aria-label="phone.t('Common.save')"
+          type="submit"
+        >
+          <Check :size="20" :stroke-width="2.5" />
+        </SkyLink>
+      </form>
       <div
+        ref="panelElement"
         class="home-folder-panel"
         :class="{ 'home-folder-panel--dragging': draggingIndex !== null }"
         @pointerdown="startPageSwipe"
@@ -223,6 +292,7 @@ function finishPageSwipe(event: PointerEvent): void {
                 :edit-mode="editMode"
                 @dragcancel="stopFolderAppDrag"
                 @dragend="finishFolderAppDrag"
+                @dragmove="moveFolderAppDrag"
                 @dragstart="startFolderAppDrag(entry.index)"
                 @edit="emit('edit')"
               />
@@ -245,51 +315,6 @@ function finishPageSwipe(event: PointerEvent): void {
         </nav>
       </div>
     </section>
-
-    <SkySheet
-      class="home-folder-rename"
-      :opened="renameOpened"
-      :aria-label="phone.t('Home.folders.rename')"
-      @backdropclick="renameOpened = false"
-      @escape="renameOpened = false"
-    >
-      <form class="home-folder-rename__content" @submit.prevent="saveRename">
-        <span class="home-folder-rename__handle" aria-hidden="true"></span>
-        <header>
-          <div>
-            <small>{{ phone.t('Home.folders.name') }}</small>
-            <h2>{{ phone.t('Home.folders.rename') }}</h2>
-          </div>
-        </header>
-        <ul class="home-folder-rename__fields">
-          <SkyField
-            v-model="renameDraft"
-            :aria-label="phone.t('Home.folders.name')"
-            autocomplete="off"
-            clear-button
-            :clear-label="phone.t('Common.clear')"
-            :maxlength="HOME_FOLDER_NAME_MAX_LENGTH"
-            outline
-            :placeholder="phone.t('Home.folders.defaultName')"
-          />
-        </ul>
-        <div class="home-folder-rename__actions">
-          <SkyButton
-            block
-            large
-            rounded
-            type="button"
-            variant="secondary"
-            @click="renameOpened = false"
-          >
-            {{ phone.t('Common.cancel') }}
-          </SkyButton>
-          <SkyButton block large rounded type="submit">
-            {{ phone.t('Common.save') }}
-          </SkyButton>
-        </div>
-      </form>
-    </SkySheet>
   </div>
 </template>
 
@@ -322,30 +347,32 @@ function finishPageSwipe(event: PointerEvent): void {
 
 .home-folder-dialog {
   position: absolute;
-  top: 108px;
-  right: 18px;
-  left: 18px;
+  top: 118px;
+  right: 30px;
+  left: 30px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 14px;
 }
 
 .home-folder-heading {
+  width: 100%;
   max-width: 100%;
   min-height: 44px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 5px;
 }
 
 .home-folder-title {
   min-width: 0;
-  max-width: 100%;
+  max-width: calc(100% - 49px);
   min-height: 44px;
+  flex: 1 1 auto;
   margin: 0;
-  padding: 2px 12px;
+  padding: 2px 8px;
   overflow: hidden;
   border: 0;
   border-radius: 12px;
@@ -356,7 +383,7 @@ function finishPageSwipe(event: PointerEvent): void {
   font-weight: 650;
   letter-spacing: -0.8px;
   line-height: 36px;
-  text-align: center;
+  text-align: left;
   text-overflow: ellipsis;
   text-shadow: 0 2px 8px rgb(0 0 0 / 38%);
   white-space: nowrap;
@@ -388,11 +415,11 @@ function finishPageSwipe(event: PointerEvent): void {
 .home-folder-panel {
   box-sizing: border-box;
   width: 100%;
-  min-height: 342px;
-  padding: 25px 22px 16px;
+  min-height: 324px;
+  padding: 22px 16px 14px;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 25%);
-  border-radius: 28px;
+  border-radius: 26px;
   background: rgb(115 135 176 / 72%);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 18%),
@@ -406,8 +433,8 @@ function finishPageSwipe(event: PointerEvent): void {
 
 .home-folder-page-viewport {
   position: relative;
-  min-height: 285px;
-  margin-top: -8px;
+  min-height: 270px;
+  margin-top: -6px;
   overflow: hidden;
 }
 
@@ -418,11 +445,11 @@ function finishPageSwipe(event: PointerEvent): void {
 .home-folder-page-grid {
   position: absolute;
   inset: 0;
-  top: 8px;
+  top: 6px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-rows: repeat(3, 79px);
-  gap: 13px 20px;
+  gap: 10px 14px;
   align-items: start;
 }
 
@@ -465,6 +492,36 @@ function finishPageSwipe(event: PointerEvent): void {
   z-index: 80;
 }
 
+.home-folder-backdrop,
+.home-folder-heading,
+.home-folder-panel,
+.home-folder-page-grid :deep(.app-icon-item),
+.home-folder-pages {
+  transition:
+    opacity 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.home-folder-layer--dragging-out .home-folder-backdrop {
+  background: transparent;
+}
+
+.home-folder-layer--dragging-out .home-folder-heading,
+.home-folder-layer--dragging-out .home-folder-pages,
+.home-folder-layer--dragging-out
+  .home-folder-page-grid
+  :deep(.app-icon-item:not(.app-icon-item--dragging)) {
+  opacity: 0;
+}
+
+.home-folder-layer--dragging-out .home-folder-panel {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
 .home-folder-pages {
   min-height: 20px;
   margin-top: 5px;
@@ -491,59 +548,57 @@ function finishPageSwipe(event: PointerEvent): void {
   transform: scale(1.18);
 }
 
-.home-folder-rename {
-  --sky-overlay-layer: 90;
+.home-folder-heading--editing {
+  min-height: 52px;
+  gap: 8px;
 }
 
-.home-folder-rename :deep(.sky-sheet__panel) {
+.home-folder-rename-field {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
-  border-radius: 26px 26px 0 0;
-  background: rgb(28 28 30 / 98%);
-}
-
-.home-folder-rename__content {
-  padding: 9px 16px calc(20px + var(--sky-safe-area-bottom));
-}
-
-.home-folder-rename__handle {
-  display: block;
-  width: 38px;
-  height: 5px;
-  margin: 0 auto 16px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 28%);
-}
-
-.home-folder-rename__content header {
-  margin: 0 2px 14px;
-}
-
-.home-folder-rename__content header small {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--sky-muted);
-  font-size: 12px;
-}
-
-.home-folder-rename__content h2 {
-  margin: 0;
-  color: var(--sky-text);
-  font-size: 21px;
-  line-height: 27px;
-}
-
-.home-folder-rename__fields {
-  margin: 0;
   padding: 0;
-  list-style: none;
-  text-align: left;
+  border: 1px solid rgb(255 255 255 / 26%);
+  border-radius: 14px;
+  background: rgb(28 28 30 / 78%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
 }
 
-.home-folder-rename__actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 16px;
+.home-folder-rename-field :deep(.sky-field__inner) {
+  padding: 2px 12px;
+}
+
+.home-folder-rename-field :deep(.sky-field__input) {
+  height: 46px;
+  min-height: 46px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.home-folder-rename-field :deep(.sky-field__input::placeholder) {
+  color: rgb(255 255 255 / 48%);
+}
+
+.home-folder-rename-field :deep(.sky-field__clear) {
+  color: #fff;
+}
+
+.home-folder-rename-action {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(255 255 255 / 13%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
+}
+
+.home-folder-rename-action:active {
+  background: rgb(255 255 255 / 22%);
+  transform: scale(0.94);
 }
 
 @media (prefers-reduced-motion: reduce) {

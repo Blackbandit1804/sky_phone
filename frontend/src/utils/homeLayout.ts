@@ -8,7 +8,7 @@ export const HOME_GRID_PAGE_SIZE = HOME_GRID_COLUMNS * HOME_GRID_ROWS
 export const HOME_FOLDER_PAGE_SIZE = 9
 export const HOME_FOLDER_NAME_MAX_LENGTH = 32
 export const MAX_HOME_GRID_PAGES = 5
-export const HOME_LAYOUT_VERSION = 5
+export const HOME_LAYOUT_VERSION = 6
 const LEGACY_HOME_GRID_PAGE_SIZE = 20
 
 export type HomeArea = 'dock' | 'grid'
@@ -27,6 +27,7 @@ export type HomeLayout = {
   dock: HomeSlot[]
   grid: HomeSlot[]
   hidden: LaunchablePhoneAppId[]
+  pageCount: number
   version: typeof HOME_LAYOUT_VERSION
 }
 
@@ -90,8 +91,17 @@ function cloneLayout(layout: HomeLayout): HomeLayout {
     dock: layout.dock.map(cloneItem),
     grid: layout.grid.map(cloneItem),
     hidden: [...layout.hidden],
+    pageCount: layout.pageCount,
     version: HOME_LAYOUT_VERSION,
   }
+}
+
+function clampPageCount(value: number): number {
+  return Math.max(1, Math.min(MAX_HOME_GRID_PAGES, Math.trunc(value)))
+}
+
+function inferredPageCount(slots: readonly HomeSlot[]): number {
+  return clampPageCount(Math.ceil(slots.length / HOME_GRID_PAGE_SIZE))
 }
 
 function normalizeFolder(folder: HomeFolder): HomeSlot {
@@ -354,6 +364,43 @@ function serializeGridPages(pages: readonly IndexedHomeItem[][]): HomeSlot[] {
   return slots
 }
 
+export function reflowHomeGridForWidgetChange(
+  layout: HomeLayout,
+  previousCapacities: HomeGridPageCapacities,
+  nextCapacities: HomeGridPageCapacities,
+): HomeLayout | null {
+  const currentPages = distributeGridPages(
+    layout.grid,
+    previousCapacities,
+    layout.pageCount,
+  )
+  if (!currentPages) return null
+
+  const materializedGrid = serializeGridPages(currentPages)
+  const nextPages = distributeGridPages(
+    materializedGrid,
+    nextCapacities,
+    Math.max(layout.pageCount, currentPages.length),
+  )
+  if (!nextPages) return null
+
+  const nextGrid = serializeGridPages(nextPages)
+  const nextPageCount = clampPageCount(
+    Math.max(layout.pageCount, nextPages.length),
+  )
+  if (
+    nextPageCount === layout.pageCount &&
+    JSON.stringify(nextGrid) === JSON.stringify(layout.grid)
+  ) {
+    return layout
+  }
+
+  const next = cloneLayout(layout)
+  next.grid = nextGrid
+  next.pageCount = nextPageCount
+  return next
+}
+
 export function moveHomeAppToGridPage(
   layout: HomeLayout,
   from: HomeArea,
@@ -416,6 +463,9 @@ export function moveHomeAppToGridPage(
 
   const next = cloneLayout(layout)
   next.grid = serializeGridPages(pages)
+  next.pageCount = clampPageCount(
+    Math.max(layout.pageCount, targetPage, pages.length),
+  )
   if (from === 'dock') next.dock[sourceIndex] = null
   if (
     JSON.stringify(next.grid) === JSON.stringify(layout.grid) &&
@@ -446,7 +496,13 @@ export function createDefaultHomeLayout(
     dock[index] = id
   }
 
-  return { dock, grid, hidden: [], version: HOME_LAYOUT_VERSION }
+  return {
+    dock,
+    grid,
+    hidden: [],
+    pageCount: inferredPageCount(grid),
+    version: HOME_LAYOUT_VERSION,
+  }
 }
 
 export function parseHomeLayout(
@@ -461,13 +517,19 @@ export function parseHomeLayout(
   const availableIds = new Set(installedIds)
   if (
     preservePersistedIds &&
-    (source.version === 3 || source.version === 4 || source.version === 5)
+    (source.version === 3 ||
+      source.version === 4 ||
+      source.version === 5 ||
+      source.version === 6)
   ) {
     for (const collection of [source.dock, source.grid, source.hidden]) {
       if (!Array.isArray(collection)) continue
       for (const item of collection) {
         if (isPersistableAppId(item)) availableIds.add(item)
-        if (source.version === 5 && isHomeFolder(item)) {
+        if (
+          (source.version === 5 || source.version === 6) &&
+          isHomeFolder(item)
+        ) {
           for (const appId of item.apps) {
             if (isPersistableAppId(appId)) availableIds.add(appId)
           }
@@ -488,8 +550,15 @@ export function parseHomeLayout(
         ) * HOME_GRID_PAGE_SIZE
       : Math.min(source.grid.length, HOME_GRID_PAGE_SIZE * MAX_HOME_GRID_PAGES)
     : 0
+  const persistedPageCount =
+    source.version === 6 &&
+    typeof source.pageCount === 'number' &&
+    Number.isInteger(source.pageCount)
+      ? clampPageCount(source.pageCount)
+      : clampPageCount(Math.ceil(persistedGridLength / HOME_GRID_PAGE_SIZE))
   const gridLength = Math.max(
     defaults.grid.length,
+    persistedPageCount * HOME_GRID_PAGE_SIZE,
     getGridCapacity(persistedGridLength),
   )
   let grid: HomeSlot[]
@@ -507,9 +576,13 @@ export function parseHomeLayout(
       new Set(),
       false,
     )
-  } else if (source.version === 4 || source.version === 5) {
+  } else if (
+    source.version === 4 ||
+    source.version === 5 ||
+    source.version === 6
+  ) {
     const folderIds = new Set<string>()
-    const allowFolders = source.version === 5
+    const allowFolders = source.version === 5 || source.version === 6
     grid = readSlots(
       source.grid,
       availableIds,
@@ -567,6 +640,7 @@ export function parseHomeLayout(
     dock: dock.map(cloneItem),
     grid: compactGridPages(grid),
     hidden,
+    pageCount: inferredPageCount(grid),
     version: HOME_LAYOUT_VERSION,
   }
 }
@@ -589,6 +663,7 @@ export function removeHomeApp(
     hidden: layout.hidden.includes(appId)
       ? [...layout.hidden]
       : [...layout.hidden, appId],
+    pageCount: layout.pageCount,
     version: HOME_LAYOUT_VERSION,
   }
 }
@@ -613,25 +688,32 @@ export function restoreHomeApp(
     dock: layout.dock.map(cloneItem),
     grid: compactGridPages(grid),
     hidden: layout.hidden.filter((id) => id !== appId),
+    pageCount: inferredPageCount(grid),
     version: HOME_LAYOUT_VERSION,
   }
 }
 
 export function addHomePage(layout: HomeLayout): HomeLayout {
-  if (layout.grid.length >= HOME_GRID_PAGE_SIZE * MAX_HOME_GRID_PAGES) {
+  if (layout.pageCount >= MAX_HOME_GRID_PAGES) {
     return layout
   }
 
+  const pageCount = layout.pageCount + 1
+  const requiredGridLength = pageCount * HOME_GRID_PAGE_SIZE
   return {
     dock: layout.dock.map(cloneItem),
-    grid: [...layout.grid.map(cloneItem), ...createSlots(HOME_GRID_PAGE_SIZE)],
+    grid: [
+      ...layout.grid.map(cloneItem),
+      ...createSlots(Math.max(0, requiredGridLength - layout.grid.length)),
+    ],
     hidden: [...layout.hidden],
+    pageCount,
     version: HOME_LAYOUT_VERSION,
   }
 }
 
 export function deleteHomePage(layout: HomeLayout, page: number): HomeLayout {
-  const pageCount = Math.ceil(layout.grid.length / HOME_GRID_PAGE_SIZE)
+  const pageCount = layout.pageCount
   if (pageCount <= 1 || page < 1 || page > pageCount) return layout
 
   const pageStart = (page - 1) * HOME_GRID_PAGE_SIZE
@@ -648,6 +730,7 @@ export function deleteHomePage(layout: HomeLayout, page: number): HomeLayout {
     dock: layout.dock.map(cloneItem),
     grid: compactGridPages(grid),
     hidden: [...layout.hidden],
+    pageCount: pageCount - 1,
     version: HOME_LAYOUT_VERSION,
   }
 }

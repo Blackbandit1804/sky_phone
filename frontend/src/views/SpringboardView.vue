@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
-import { kButton, kGlass, kList, kListItem, kSheet } from 'konsta/vue'
+import { Check, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
+import { kButton, kGlass } from 'konsta/vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
@@ -15,7 +15,19 @@ import { usePhoneStore } from '@/stores/phone'
 import { useWidgetsStore } from '@/stores/widgets'
 import type { PhoneAppCategory, PhoneAppDefinition } from '@/types/apps'
 import type { LaunchablePhoneAppId } from '@/types/apps'
-import type { WidgetKind, WidgetSettings, WidgetSize } from '@/types/widgets'
+import type {
+  WidgetKind,
+  WidgetLayout,
+  WidgetSettings,
+  WidgetSize,
+} from '@/types/widgets'
+import {
+  SkyActionButton,
+  SkyActionGroup,
+  SkyActionSheet,
+  SkyActionsLabel,
+  SkyProvider,
+} from '@/ui'
 import {
   deleteHomePage as previewHomePageDelete,
   getHomeFolder,
@@ -32,15 +44,18 @@ import type { ReorderDirection } from '@/utils/keyboard'
 import { layoutSpringboardHomePages } from '@/utils/springboardLayout'
 import {
   maximumRenderedWidgetPage,
+  nearestSpringboardRectIndex,
   resolveSpringboardEdgeTurn,
   resolveSpringboardHomeEdgeTurn,
   springboardSwipeIntent,
   springboardViewportDeltaToLocal,
-  springboardViewportToLocal,
 } from '@/utils/springboardDrag'
 import {
+  addWidget as previewWidgetAdd,
   deleteWidgetPage as previewWidgetPageDelete,
   moveWidget as previewWidgetMove,
+  removeWidget as previewWidgetRemove,
+  resizeWidget as previewWidgetResize,
   WIDGET_GRID_COLUMNS,
   widgetKeyboardTarget,
   widgetOccupiedCells,
@@ -54,6 +69,10 @@ const APP_LIBRARY_CATEGORIES: PhoneAppCategory[] = [
   'shopping',
 ]
 const HOME_FOLDER_HOVER_DURATION = 900
+const HOME_EDGE_PAGE_TURN_DELAY = 420
+const emit = defineEmits<{
+  editModeChange: [editing: boolean]
+}>()
 const phone = usePhoneStore()
 const appStore = useAppStoreStore()
 const widgets = useWidgetsStore()
@@ -87,10 +106,9 @@ const draggingHomeApp = ref<{
   area: HomeArea
   index: number
 } | null>(null)
-const homeDragLayer = ref<HTMLElement | null>(null)
-const homeDragVisualActive = ref(false)
 const temporaryHomePage = ref<number | null>(null)
 const openedFolderId = ref<string | null>(null)
+const folderDraggingOutside = ref(false)
 const renameFolderOnOpenId = ref<string | null>(null)
 const folderHoverTarget = ref('')
 let pointerStart = 0
@@ -107,8 +125,6 @@ let edgePageDirection = 0
 let edgePageLocked = false
 let folderHoverTimer: number | undefined
 let lastHomePointer: { clientX: number; clientY: number } | null = null
-let homeDragGhost: HTMLElement | null = null
-let homeDragGrip: { x: number; y: number } | null = null
 
 const installedApps = computed(() =>
   PHONE_APPS.filter((app) => appStore.isInstalled(app.id)),
@@ -121,6 +137,17 @@ const hiddenApps = computed(() =>
     appStore.homeLayout.hidden.includes(app.id),
   ),
 )
+
+function homeGridCapacitiesFor(layout: WidgetLayout): number[] {
+  return Array.from({ length: MAX_HOME_GRID_PAGES }, (_, pageIndex) =>
+    Math.max(
+      0,
+      HOME_GRID_PAGE_SIZE -
+        widgetOccupiedCells(layout.instances, pageIndex + 1).size,
+    ),
+  )
+}
+
 const previewWidgetLayout = computed(() => {
   const preview = widgetDragPreview.value
   return preview
@@ -133,24 +160,13 @@ const previewWidgetLayout = computed(() => {
       )
     : widgets.layout
 })
-const homeGridCapacities = computed(() =>
-  Array.from({ length: MAX_HOME_GRID_PAGES }, (_, pageIndex) =>
-    Math.max(
-      0,
-      HOME_GRID_PAGE_SIZE -
-        widgetOccupiedCells(widgets.layout.instances, pageIndex + 1).size,
-    ),
-  ),
-)
+const homeGridCapacities = computed(() => homeGridCapacitiesFor(widgets.layout))
 const appPages = computed(() => {
   const maxWidgetPage = maximumRenderedWidgetPage(
     widgets.layout.instances.map((instance) => instance.page),
     previewWidgetLayout.value.instances.map((instance) => instance.page),
   )
-  const persistedHomePages = Math.max(
-    1,
-    Math.ceil(appStore.homeLayout.grid.length / HOME_GRID_PAGE_SIZE),
-  )
+  const persistedHomePages = appStore.homeLayout.pageCount
   const lastHomePage = Math.max(
     maxWidgetPage,
     persistedHomePages,
@@ -210,13 +226,10 @@ const isEditablePage = computed(
   () => phone.currentPage >= 0 && phone.currentPage < libraryPage.value,
 )
 const canAddHomePage = computed(
-  () =>
-    appStore.homeLayout.grid.length < HOME_GRID_PAGE_SIZE * MAX_HOME_GRID_PAGES,
+  () => appStore.homeLayout.pageCount < MAX_HOME_GRID_PAGES,
 )
 const addingHomePage = ref(false)
-const persistedHomePageCount = computed(() =>
-  Math.max(1, Math.ceil(appStore.homeLayout.grid.length / HOME_GRID_PAGE_SIZE)),
-)
+const persistedHomePageCount = computed(() => appStore.homeLayout.pageCount)
 const canDeleteCurrentPage = computed(() => {
   if (phone.currentPage < 1 || persistedHomePageCount.value <= 1) return false
   const remainingPages = persistedHomePageCount.value - 1
@@ -244,6 +257,9 @@ const openedFolder = computed(() =>
   openedFolderId.value
     ? getHomeFolder(appStore.homeLayout, openedFolderId.value)
     : null,
+)
+const folderOverlayVisible = computed(
+  () => openedFolder.value !== null && !folderDraggingOutside.value,
 )
 const openedFolderApps = computed(() =>
   openedFolder.value
@@ -365,13 +381,12 @@ function onPointerDown(event: PointerEvent): void {
   pointerStartedAt = Date.now()
   pointerPageStart = phone.currentPage
   blankTapCandidate = editMode.value
-  if (editMode.value) return
   dragging.value = true
   if (!pageSwipeSurface) {
     ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
   }
   clearBackgroundHold()
-  if (pageSwipeSurface) return
+  if (editMode.value || pageSwipeSurface) return
   backgroundHoldTimer = window.setTimeout(() => {
     enterEditMode()
     backgroundHoldTimer = undefined
@@ -458,22 +473,22 @@ function updateWidgetDragPreview(event: {
     `[data-widget-page="${page}"]`,
   )
   const pageElement = grid?.closest<HTMLElement>('.springboard-page')
-  const springboard = grid?.closest<HTMLElement>('.springboard')
-  if (!grid || !pageElement || !springboard) return
+  if (!grid || !pageElement) return
   const renderedGridBounds = grid.getBoundingClientRect()
-  const pageBounds = pageElement.getBoundingClientRect()
-  const springboardBounds = springboard.getBoundingClientRect()
-  const gridLeft =
-    springboardBounds.left + (renderedGridBounds.left - pageBounds.left)
   const gridStyle = getComputedStyle(grid)
-  const columnGap = Number.parseFloat(gridStyle.columnGap) || 0
-  const rowGap = Number.parseFloat(gridStyle.rowGap) || 0
+  const scaleX =
+    grid.offsetWidth > 0 ? renderedGridBounds.width / grid.offsetWidth : 1
+  const scaleY =
+    grid.offsetHeight > 0 ? renderedGridBounds.height / grid.offsetHeight : 1
+  const columnGap = (Number.parseFloat(gridStyle.columnGap) || 0) * scaleX
+  const rowGap = (Number.parseFloat(gridStyle.rowGap) || 0) * scaleY
   const columnWidth =
     (renderedGridBounds.width - columnGap * (WIDGET_GRID_COLUMNS - 1)) /
     WIDGET_GRID_COLUMNS
-  const rowHeight = Number.parseFloat(gridStyle.gridAutoRows)
+  const rowHeight = Number.parseFloat(gridStyle.gridAutoRows) * scaleY
   const column = Math.round(
-    (event.clientX - grip.x - gridLeft) / (columnWidth + columnGap),
+    (event.clientX - grip.x - renderedGridBounds.left) /
+      (columnWidth + columnGap),
   )
   const row = Math.round(
     (event.clientY - grip.y - renderedGridBounds.top) / (rowHeight + rowGap),
@@ -505,7 +520,7 @@ function clearTemporaryHomePage(keepCurrentPage = false): void {
   if (keepCurrentPage) return
   const lastPage = Math.max(
     1,
-    Math.ceil(appStore.homeLayout.grid.length / HOME_GRID_PAGE_SIZE),
+    appStore.homeLayout.pageCount,
     ...widgets.layout.instances.map((instance) => instance.page),
   )
   if (phone.currentPage > lastPage) changePage(lastPage)
@@ -528,7 +543,7 @@ function resolveHomeEdgeTurn(event: { clientX: number }) {
 }
 
 function queueEdgePageTurn(
-  event: PointerEvent,
+  event: { clientX: number; clientY: number },
   dragType: 'app' | 'widget',
 ): void {
   const springboard = document.querySelector<HTMLElement>('.springboard')
@@ -582,8 +597,11 @@ function queueEdgePageTurn(
     }
     edgePageTimer = undefined
     edgePageDirection = direction
-    edgePageLocked = true
-  }, 520)
+    edgePageLocked = dragType === 'widget'
+    if (dragType === 'app' && lastHomePointer && draggingHomeApp.value) {
+      queueEdgePageTurn(lastHomePointer, 'app')
+    }
+  }, HOME_EDGE_PAGE_TURN_DELAY)
 }
 
 function queueWidgetDragPreview(event: PointerEvent): void {
@@ -611,6 +629,19 @@ function clearWidgetDragPreview(): void {
   widgetDragPreview.value = null
 }
 
+function applyWidgetLayout(nextLayout: WidgetLayout): boolean {
+  if (nextLayout === widgets.layout) return true
+  if (
+    !appStore.applyWidgetGridCapacities(
+      homeGridCapacitiesFor(widgets.layout),
+      homeGridCapacitiesFor(nextLayout),
+    )
+  ) {
+    return false
+  }
+  return widgets.applyLayout(nextLayout)
+}
+
 function finishWidgetDrag(event: PointerEvent): void {
   const id = draggingWidgetId.value
   if (!id) return
@@ -618,7 +649,15 @@ function finishWidgetDrag(event: PointerEvent): void {
   updateWidgetDragPreview(lastWidgetPointer)
   const preview = widgetDragPreview.value
   if (preview?.id === id) {
-    widgets.move(id, preview.page, preview.column, preview.row)
+    applyWidgetLayout(
+      previewWidgetMove(
+        widgets.layout,
+        id,
+        preview.page,
+        preview.column,
+        preview.row,
+      ),
+    )
   }
   draggingWidgetId.value = null
   clearWidgetDragPreview()
@@ -634,18 +673,33 @@ function reorderWidget(id: string, direction: ReorderDirection): void {
   if (!instance) return
   const target = widgetKeyboardTarget(instance, direction)
   if (!target) return
-  widgets.move(id, instance.page, target.column, target.row)
+  applyWidgetLayout(
+    previewWidgetMove(
+      widgets.layout,
+      id,
+      instance.page,
+      target.column,
+      target.row,
+    ),
+  )
 }
 
 function removeWidget(id: string): void {
-  widgets.remove(id)
+  if (!applyWidgetLayout(previewWidgetRemove(widgets.layout, id))) return
   if (widgetActionId.value === id) widgetActionId.value = null
   if (widgetConfigId.value === id) widgetConfigId.value = null
 }
 
 async function addWidget(kind: WidgetKind, size: WidgetSize): Promise<void> {
   const targetPage = isEditablePage.value ? phone.currentPage : 1
-  const addedId = widgets.add(kind, size, targetPage)
+  const previousIds = new Set(
+    widgets.layout.instances.map((instance) => instance.id),
+  )
+  const nextLayout = previewWidgetAdd(widgets.layout, kind, size, targetPage)
+  if (nextLayout === widgets.layout || !applyWidgetLayout(nextLayout)) return
+  const addedId = widgets.layout.instances.find(
+    (instance) => !previousIds.has(instance.id),
+  )?.id
   if (!addedId) return
   widgetPickerOpened.value = false
   editMode.value = true
@@ -667,7 +721,8 @@ async function saveWidgetConfig(
 ): Promise<void> {
   if (!widgetConfigId.value) return
   const id = widgetConfigId.value
-  widgets.resize(id, size)
+  const resized = previewWidgetResize(widgets.layout, id, size)
+  if (!applyWidgetLayout(resized)) return
   widgets.updateSettings(id, settings)
   widgetConfigId.value = null
   editMode.value = true
@@ -678,122 +733,10 @@ async function saveWidgetConfig(
   if (configured) changePage(configured.page)
 }
 
-function homeDragLocalPoint(
-  clientX: number,
-  clientY: number,
-): {
-  x: number
-  y: number
-} | null {
-  const layer = homeDragLayer.value
-  if (!layer) return null
-  const bounds = layer.getBoundingClientRect()
-  return springboardViewportToLocal(
-    clientX,
-    clientY,
-    bounds.left,
-    bounds.top,
-    bounds.width,
-    bounds.height,
-    layer.offsetWidth,
-    layer.offsetHeight,
-  )
-}
-
-function clearHomeDragGhost(expectedGhost?: HTMLElement | null): void {
-  if (expectedGhost && homeDragGhost !== expectedGhost) return
-  homeDragGhost?.remove()
-  homeDragGhost = null
-  homeDragGrip = null
-  homeDragVisualActive.value = false
-}
-
-function updateHomeDragGhost(event: {
-  clientX: number
-  clientY: number
-}): void {
-  const point = homeDragLocalPoint(event.clientX, event.clientY)
-  if (!homeDragGhost || !homeDragGrip || !point) return
-  homeDragGhost.style.transform = `translate3d(${point.x - homeDragGrip.x}px, ${point.y - homeDragGrip.y}px, 0)`
-}
-
-function createHomeDragGhost(event: PointerEvent): void {
-  clearHomeDragGhost()
-  const eventTarget =
-    event.currentTarget instanceof Element
-      ? event.currentTarget
-      : event.target instanceof Element
-        ? event.target
-        : null
-  const source = eventTarget?.closest<HTMLElement>('.app-icon-item')
-  const layer = homeDragLayer.value
-  if (!source || !layer) return
-
-  const layerBounds = layer.getBoundingClientRect()
-  const sourceBounds = source.getBoundingClientRect()
-  const sourceOrigin = springboardViewportToLocal(
-    sourceBounds.left,
-    sourceBounds.top,
-    layerBounds.left,
-    layerBounds.top,
-    layerBounds.width,
-    layerBounds.height,
-    layer.offsetWidth,
-    layer.offsetHeight,
-  )
-  const pointer = homeDragLocalPoint(event.clientX, event.clientY)
-  if (!pointer) return
-
-  const ghost = source.cloneNode(true) as HTMLElement
-  ghost.classList.remove(
-    'app-icon-item--dragging',
-    'app-icon-item--editing',
-    'app-icon-item--drag-source',
-    'app-icon-item--drop-settling',
-    'home-folder-item--dragging',
-    'home-item--folder-hover',
-  )
-  ghost.classList.add('home-drag-ghost')
-  ghost.removeAttribute('style')
-  ghost.setAttribute('aria-hidden', 'true')
-  ghost.querySelector('.app-icon-remove')?.remove()
-  for (const element of [ghost, ...Array.from(ghost.querySelectorAll('*'))]) {
-    element.removeAttribute('id')
-    for (const attribute of element.getAttributeNames()) {
-      if (attribute.startsWith('data-home-')) element.removeAttribute(attribute)
-    }
-  }
-  for (const control of ghost.querySelectorAll<HTMLElement>(
-    'a, button, input, select, textarea, [tabindex]',
-  )) {
-    control.tabIndex = -1
-  }
-
-  const localScaleX =
-    layerBounds.width > 0 ? layer.offsetWidth / layerBounds.width : 1
-  const localScaleY =
-    layerBounds.height > 0 ? layer.offsetHeight / layerBounds.height : 1
-  ghost.style.width = `${sourceBounds.width * localScaleX}px`
-  ghost.style.height = `${sourceBounds.height * localScaleY}px`
-  homeDragGhost = ghost
-  homeDragGrip = {
-    x: pointer.x - sourceOrigin.x,
-    y: pointer.y - sourceOrigin.y,
-  }
-  layer.appendChild(ghost)
-  homeDragVisualActive.value = true
-  updateHomeDragGhost(event)
-}
-
-function startHomeDrag(
-  area: HomeArea,
-  index: number,
-  event: PointerEvent,
-): void {
+function startHomeDrag(area: HomeArea, index: number): void {
   clearTemporaryHomePage()
   lastHomePointer = null
   draggingHomeApp.value = { area, index }
-  createHomeDragGhost(event)
 }
 
 function clearFolderHover(): void {
@@ -879,7 +822,6 @@ function queueFolderHover(event: PointerEvent): void {
     if (folderId) {
       draggingHomeApp.value = null
       lastHomePointer = null
-      clearHomeDragGhost()
       clearTemporaryHomePage()
       openedFolderId.value = folderId
     }
@@ -890,7 +832,6 @@ function queueFolderHover(event: PointerEvent): void {
 function moveHomeDrag(event: PointerEvent): void {
   if (!draggingHomeApp.value) return
   lastHomePointer = { clientX: event.clientX, clientY: event.clientY }
-  updateHomeDragGhost(event)
   if (resolveHomeEdgeTurn(event)) {
     clearFolderHover()
     queueEdgePageTurn(event, 'app')
@@ -983,35 +924,25 @@ function nearestGridDropTarget(event: {
     `.springboard-page--apps[data-home-page="${page}"] .app-grid`,
   )
   const pageElement = grid?.closest<HTMLElement>('.springboard-page')
-  const springboard = grid?.closest<HTMLElement>('.springboard')
-  if (!grid || !pageElement || !springboard) return null
+  if (!grid || !pageElement) return null
   const pageBounds = pageElement.getBoundingClientRect()
-  const springboardBounds = springboard.getBoundingClientRect()
   if (
-    event.clientX < springboardBounds.left ||
-    event.clientX > springboardBounds.right ||
-    event.clientY < springboardBounds.top ||
-    event.clientY > springboardBounds.bottom
+    event.clientX < pageBounds.left ||
+    event.clientX > pageBounds.right ||
+    event.clientY < pageBounds.top ||
+    event.clientY > pageBounds.bottom
   ) {
     return null
   }
   const slots = Array.from(
     grid.querySelectorAll<HTMLElement>('[data-home-target-offset]'),
   )
-  const distanceToSlot = (slot: HTMLElement): number => {
-    const bounds = slot.getBoundingClientRect()
-    const centerX =
-      springboardBounds.left +
-      (bounds.left - pageBounds.left) +
-      bounds.width / 2
-    const centerY =
-      springboardBounds.top + (bounds.top - pageBounds.top) + bounds.height / 2
-    return Math.hypot(event.clientX - centerX, event.clientY - centerY)
-  }
-  const closest = slots.reduce<HTMLElement | null>((nearest, slot) => {
-    if (!nearest) return slot
-    return distanceToSlot(slot) < distanceToSlot(nearest) ? slot : nearest
-  }, null)
+  const closestIndex = nearestSpringboardRectIndex(
+    event.clientX,
+    event.clientY,
+    slots.map((slot) => slot.getBoundingClientRect()),
+  )
+  const closest = closestIndex === null ? null : slots[closestIndex]
   const targetOffset = Number(closest?.dataset.homeTargetOffset)
   return Number.isInteger(targetOffset) ? { page, targetOffset } : null
 }
@@ -1031,37 +962,29 @@ function nearestDockDropTarget(event: {
   ) {
     return null
   }
-  return Array.from(
+  const slots = Array.from(
     dock.querySelectorAll<HTMLElement>(
       '[data-home-area="dock"][data-home-index]',
     ),
-  ).reduce<HTMLElement | null>((nearest, slot) => {
-    if (!nearest) return slot
-    const bounds = slot.getBoundingClientRect()
-    const nearestBounds = nearest.getBoundingClientRect()
-    const distance = Math.hypot(
-      event.clientX - (bounds.left + bounds.width / 2),
-      event.clientY - (bounds.top + bounds.height / 2),
-    )
-    const nearestDistance = Math.hypot(
-      event.clientX - (nearestBounds.left + nearestBounds.width / 2),
-      event.clientY - (nearestBounds.top + nearestBounds.height / 2),
-    )
-    return distance < nearestDistance ? slot : nearest
-  }, null)
+  )
+  const closestIndex = nearestSpringboardRectIndex(
+    event.clientX,
+    event.clientY,
+    slots.map((slot) => slot.getBoundingClientRect()),
+  )
+  return closestIndex === null ? null : slots[closestIndex]
 }
 
 function finishHomeDrag(event: PointerEvent): void {
   clearEdgePageTurn()
   clearFolderHover()
   const dragged = draggingHomeApp.value
-  if (!dragged) {
-    clearHomeDragGhost()
-    return
-  }
+  if (!dragged) return
   const draggedItem = appStore.homeLayout[dragged.area][dragged.index]
-  const dropGhost = homeDragGhost
-  const dropOrigin = dropGhost?.getBoundingClientRect()
+  const draggedElement = document.querySelector<HTMLElement>(
+    `[data-home-area="${dragged.area}"][data-home-index="${dragged.index}"]`,
+  )
+  const dropOrigin = draggedElement?.getBoundingClientRect()
   const dockTarget = nearestDockDropTarget(event)
   const gridTarget = dockTarget ? null : nearestGridDropTarget(event)
   let dropArea = dragged.area
@@ -1099,14 +1022,7 @@ function finishHomeDrag(event: PointerEvent): void {
   lastHomePointer = null
   clearTemporaryHomePage(moved && gridTarget !== null)
   if (moved && draggedItem && dropOrigin) {
-    void animateHomeItemDrop(
-      draggedItem,
-      dropArea,
-      dropIndex,
-      dropOrigin,
-    ).finally(() => clearHomeDragGhost(dropGhost))
-  } else {
-    clearHomeDragGhost()
+    void animateHomeItemDrop(draggedItem, dropArea, dropIndex, dropOrigin)
   }
 }
 
@@ -1115,7 +1031,6 @@ function stopHomeDrag(): void {
   clearFolderHover()
   draggingHomeApp.value = null
   lastHomePointer = null
-  clearHomeDragGhost()
   clearTemporaryHomePage()
 }
 
@@ -1184,10 +1099,12 @@ function folderPreviewApps(folder: HomeFolder): PhoneAppDefinition[] {
 
 function openFolder(folderId: string): void {
   pageTransitioning.value = false
+  folderDraggingOutside.value = false
   openedFolderId.value = folderId
 }
 
 function closeFolder(): void {
+  folderDraggingOutside.value = false
   openedFolderId.value = null
   renameFolderOnOpenId.value = null
 }
@@ -1209,9 +1126,11 @@ function extractOpenedFolderApp(
   const folder = openedFolder.value
   if (!folder) return
   const appId = folder.apps[sourceIndex]
-  const sourceElement = (event.currentTarget as HTMLElement | null)?.closest(
-    '.app-icon-item',
-  )
+  const sourceElement = document
+    .querySelector<HTMLElement>(
+      `.home-folder-panel [data-folder-app-index="${sourceIndex}"]`,
+    )
+    ?.closest<HTMLElement>('.app-icon-item')
   const sourceBounds = sourceElement?.getBoundingClientRect()
   const candidates = Array.from(
     document.querySelectorAll<HTMLElement>('[data-home-index][data-home-area]'),
@@ -1238,15 +1157,20 @@ function extractOpenedFolderApp(
     )
     return distance < closestDistance ? candidate : closest
   }, null)
-  if (!target) return
+  if (!target) {
+    closeFolder()
+    return
+  }
 
   const area = target.dataset.homeArea as HomeArea
   const targetIndex = Number(target.dataset.homeIndex)
   if (
     !appStore.extractHomeFolderApp(folder.id, sourceIndex, area, targetIndex)
   ) {
+    closeFolder()
     return
   }
+  closeFolder()
   if (sourceBounds) {
     const extractedIndex = findHomeItemIndex(appId, area, targetIndex)
     if (extractedIndex !== null) {
@@ -1270,6 +1194,7 @@ watch(isEditablePage, (visible) => {
   if (!visible) editMode.value = false
 })
 watch(editMode, (editing) => {
+  emit('editModeChange', editing)
   if (editing) return
   stopHomeDrag()
   stopWidgetDrag()
@@ -1278,6 +1203,7 @@ watch(openedFolder, (folder) => {
   if (!folder) closeFolder()
 })
 onBeforeUnmount(() => {
+  emit('editModeChange', false)
   clearBackgroundHold()
   clearEdgePageTurn()
   clearFolderHover()
@@ -1286,7 +1212,6 @@ onBeforeUnmount(() => {
   pendingWidgetPointer = null
   lastWidgetPointer = null
   lastHomePointer = null
-  clearHomeDragGhost()
   temporaryHomePage.value = null
   draggingHomeApp.value = null
   draggingWidgetId.value = null
@@ -1301,7 +1226,8 @@ onBeforeUnmount(() => {
       {
         'springboard--dragging': dragging,
         'springboard--editing': editMode,
-        'springboard--folder-open': openedFolder !== null,
+        'springboard--folder-open': folderOverlayVisible,
+        'springboard--home-dragging': draggingHomeApp !== null,
         'springboard--widget-dragging': draggingWidgetId !== null,
       },
     ]"
@@ -1377,7 +1303,6 @@ onBeforeUnmount(() => {
               :data-home-index="cell.sourceIndex"
               :data-home-target-offset="cell.targetOffset"
               :edit-mode="editMode"
-              :external-drag-visual="homeDragVisualActive"
               :class="{
                 'home-item--folder-hover':
                   folderHoverTarget === `grid:${cell.sourceIndex}`,
@@ -1385,7 +1310,7 @@ onBeforeUnmount(() => {
               @dragcancel="stopHomeDrag"
               @dragend="finishHomeDrag"
               @dragmove="moveHomeDrag"
-              @dragstart="startHomeDrag('grid', cell.sourceIndex, $event)"
+              @dragstart="startHomeDrag('grid', cell.sourceIndex)"
               @edit="enterEditMode"
               @remove="removeHomeApp(cell.app.id)"
               @reorder="reorderHomeApp('grid', cell.sourceIndex, $event)"
@@ -1400,7 +1325,6 @@ onBeforeUnmount(() => {
               :data-home-index="cell.sourceIndex"
               :data-home-target-offset="cell.targetOffset"
               :edit-mode="editMode"
-              :external-drag-visual="homeDragVisualActive"
               :folder="cell.folder"
               :class="{
                 'home-item--folder-hover':
@@ -1409,7 +1333,7 @@ onBeforeUnmount(() => {
               @dragcancel="stopHomeDrag"
               @dragend="finishHomeDrag"
               @dragmove="moveHomeDrag"
-              @dragstart="startHomeDrag('grid', cell.sourceIndex, $event)"
+              @dragstart="startHomeDrag('grid', cell.sourceIndex)"
               @edit="enterEditMode"
               @open="openFolder(cell.folder.id)"
               @reorder="reorderHomeApp('grid', cell.sourceIndex, $event)"
@@ -1560,11 +1484,9 @@ onBeforeUnmount(() => {
       </section>
     </div>
 
-    <div ref="homeDragLayer" class="home-drag-layer" aria-hidden="true"></div>
-
     <Transition name="edit-done">
       <k-glass
-        v-if="editMode && isEditablePage && !openedFolder"
+        v-if="editMode && isEditablePage && !folderOverlayVisible"
         component="button"
         class="springboard-edit-add"
         type="button"
@@ -1577,13 +1499,14 @@ onBeforeUnmount(() => {
 
     <Transition name="edit-done">
       <k-glass
-        v-if="editMode && isEditablePage && !openedFolder"
+        v-if="editMode && isEditablePage && !folderOverlayVisible"
         component="button"
         class="springboard-edit-done"
         type="button"
+        :aria-label="phone.t('Common.done')"
         @click="editMode = false"
       >
-        {{ phone.t('Common.done') }}
+        <Check :size="20" :stroke-width="3" aria-hidden="true" />
       </k-glass>
     </Transition>
 
@@ -1607,7 +1530,6 @@ onBeforeUnmount(() => {
             :data-home-item-key="`app-${slot.app.id}`"
             :data-home-index="slot.index"
             :edit-mode="editMode"
-            :external-drag-visual="homeDragVisualActive"
             :show-label="false"
             :class="{
               'home-item--folder-hover':
@@ -1616,7 +1538,7 @@ onBeforeUnmount(() => {
             @dragcancel="stopHomeDrag"
             @dragend="finishHomeDrag"
             @dragmove="moveHomeDrag"
-            @dragstart="startHomeDrag('dock', slot.index, $event)"
+            @dragstart="startHomeDrag('dock', slot.index)"
             @edit="enterEditMode"
             @remove="removeHomeApp(slot.app.id)"
             @reorder="reorderHomeApp('dock', slot.index, $event)"
@@ -1630,7 +1552,6 @@ onBeforeUnmount(() => {
             :data-home-item-key="slot.folder.id"
             :data-home-index="slot.index"
             :edit-mode="editMode"
-            :external-drag-visual="homeDragVisualActive"
             :folder="slot.folder"
             :show-label="false"
             :class="{
@@ -1640,7 +1561,7 @@ onBeforeUnmount(() => {
             @dragcancel="stopHomeDrag"
             @dragend="finishHomeDrag"
             @dragmove="moveHomeDrag"
-            @dragstart="startHomeDrag('dock', slot.index, $event)"
+            @dragstart="startHomeDrag('dock', slot.index)"
             @edit="enterEditMode"
             @open="openFolder(slot.folder.id)"
             @reorder="reorderHomeApp('dock', slot.index, $event)"
@@ -1702,6 +1623,7 @@ onBeforeUnmount(() => {
         :folder="openedFolder"
         :rename-on-open="renameFolderOnOpenId === openedFolder.id"
         @close="closeFolder"
+        @drag-outside-change="folderDraggingOutside = $event"
         @edit="enterEditMode"
         @extract="extractOpenedFolderApp"
         @move="moveOpenedFolderApp"
@@ -1710,50 +1632,56 @@ onBeforeUnmount(() => {
       />
     </Transition>
 
-    <div class="widget-action-sheet">
-      <k-sheet
+    <SkyProvider
+      class="widget-action-provider"
+      :dark="phone.isDarkMode"
+      safe-areas
+    >
+      <SkyActionSheet
+        class="widget-action-sheet"
         :opened="widgetActionId !== null"
+        :aria-label="
+          activeWidget
+            ? phone.t(`Home.widgetSystem.${activeWidget.kind}.name`)
+            : phone.t('Home.widgets.label')
+        "
         @backdropclick="widgetActionId = null"
+        @escape="widgetActionId = null"
       >
-        <div class="widget-sheet-handle" />
-        <h3>
-          {{
-            activeWidget
-              ? phone.t(`Home.widgetSystem.${activeWidget.kind}.name`)
-              : phone.t('Home.widgets.label')
-          }}
-        </h3>
-        <k-list inset strong class="widget-action-list">
-          <k-list-item
-            link
-            link-component="button"
-            content-class="w-full"
-            :title="phone.t('Home.widgetSystem.editWidget')"
+        <SkyActionGroup>
+          <SkyActionsLabel>
+            {{
+              activeWidget
+                ? phone.t(`Home.widgetSystem.${activeWidget.kind}.name`)
+                : phone.t('Home.widgets.label')
+            }}
+          </SkyActionsLabel>
+          <SkyActionButton
+            class="widget-action-button"
             @click="openWidgetConfig"
           >
-            <template #media><Pencil :size="20" /></template>
-          </k-list-item>
-          <k-list-item
-            link
-            link-component="button"
-            content-class="w-full"
-            class="widget-action-remove"
-            :title="phone.t('Home.widgetSystem.removeWidget')"
+            <Pencil :size="20" />
+            <span>{{ phone.t('Home.widgetSystem.editWidget') }}</span>
+          </SkyActionButton>
+          <SkyActionButton
+            class="widget-action-button widget-action-remove"
             @click="activeWidget && removeWidget(activeWidget.id)"
           >
-            <template #media><Trash2 :size="20" /></template>
-          </k-list-item>
-        </k-list>
-        <k-button
-          large
-          rounded
-          class="widget-action-cancel"
-          @click="widgetActionId = null"
-        >
-          {{ phone.t('Common.cancel') }}
-        </k-button>
-      </k-sheet>
-    </div>
+            <Trash2 :size="20" />
+            <span>{{ phone.t('Home.widgetSystem.removeWidget') }}</span>
+          </SkyActionButton>
+        </SkyActionGroup>
+        <SkyActionGroup>
+          <SkyActionButton
+            bold
+            class="widget-action-cancel"
+            @click="widgetActionId = null"
+          >
+            {{ phone.t('Common.cancel') }}
+          </SkyActionButton>
+        </SkyActionGroup>
+      </SkyActionSheet>
+    </SkyProvider>
 
     <WidgetPickerSheet
       :opened="widgetPickerOpened"
@@ -1770,44 +1698,54 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.widget-action-sheet {
-  display: contents;
-}
-
-.widget-action-sheet :deep(.k-sheet) {
+.widget-action-provider {
+  position: absolute;
   z-index: 105;
-  padding: 9px 0 30px;
-  border-radius: 25px 25px 0 0;
+  inset: 0;
+  pointer-events: none;
 }
 
-.widget-sheet-handle {
-  width: 36px;
-  height: 5px;
-  margin: 0 auto 9px;
-  border-radius: 999px;
-  background: rgb(142 142 147 / 45%);
+.widget-action-sheet {
+  --sky-overlay-layer: 105;
 }
 
-.widget-action-sheet h3 {
-  margin: 3px 18px 9px;
-  color: inherit;
-  font-size: 16px;
-  font-weight: 650;
-  text-align: center;
+.widget-action-sheet :deep(.sky-overlay-backdrop) {
+  background: rgb(0 0 0 / 58%);
 }
 
-.widget-action-list {
-  margin-top: 0;
-  margin-bottom: 10px;
+.widget-action-sheet :deep(.sky-action-sheet__panel) {
+  max-width: 100%;
 }
 
-.widget-action-remove :deep([class*='title']),
-.widget-action-remove :deep(svg) {
-  color: #ff3b30 !important;
+.widget-action-sheet :deep(.sky-action-group) {
+  border-radius: var(--sky-radius-card);
+  background: var(--sky-surface);
 }
 
-.widget-action-cancel {
-  width: calc(100% - 32px);
-  margin: 0 16px;
+.widget-action-sheet :deep(.sky-actions-label) {
+  color: var(--sky-muted);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.widget-action-sheet :deep(.sky-action-button) {
+  color: #fff;
+  font-size: 17px;
+}
+
+.widget-action-sheet :deep(.widget-action-button) {
+  justify-content: flex-start;
+  gap: var(--sky-space-3);
+  text-align: left;
+}
+
+.widget-action-sheet :deep(.widget-action-button svg) {
+  width: 24px;
+  flex: none;
+}
+
+.widget-action-sheet :deep(.widget-action-remove) {
+  color: var(--sky-danger);
 }
 </style>

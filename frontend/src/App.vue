@@ -257,8 +257,7 @@ type CrewLinkNotificationData = {
 }
 const REFERENCE_VIEWPORT_WIDTH = 1920
 const REFERENCE_VIEWPORT_HEIGHT = 1080
-const PHONE_BASE_SCALE = 0.69
-const DEVELOPMENT_PHONE_SCALE = 1.25
+const PHONE_BASE_SCALE = 0.69 * 1.2
 const PHONE_PORTRAIT_WIDTH = 390
 const PHONE_PORTRAIT_HEIGHT = 844
 const MIN_PRODUCTION_PHONE_ZOOM = 260 / PHONE_PORTRAIT_WIDTH
@@ -295,6 +294,7 @@ const easyShare = useEasyShareStore()
 const notifications = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
+const isHomeRoute = computed(() => route.name === 'home')
 const isAppRoute = computed(() => route.name === 'app')
 const activeAppId = computed(() =>
   typeof route.params.appId === 'string' ? route.params.appId : '',
@@ -323,6 +323,7 @@ const appTransitionName = computed(() =>
   route.query.transition === 'app-switch' ? 'app-switch' : 'app-window',
 )
 const isLocked = ref(false)
+const springboardEditing = ref(false)
 const isUnlocking = ref(false)
 const passcodeBusy = ref(false)
 const passcodeError = ref('')
@@ -363,11 +364,7 @@ const hardwareVolumeHudStyle = computed<CSSProperties>(
 const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)')
 const viewportScale = ref(getViewportScale())
 const browserDevicePixelRatio = ref(window.devicePixelRatio || 1)
-const phoneBaseZoom = computed(
-  () =>
-    viewportScale.value *
-    (isDevelopment ? DEVELOPMENT_PHONE_SCALE : PHONE_BASE_SCALE),
-)
+const phoneBaseZoom = computed(() => viewportScale.value * PHONE_BASE_SCALE)
 const phoneZoom = computed(() => {
   const preferred =
     phoneBaseZoom.value * (phone.preferences.settings.phoneScale / 100)
@@ -395,6 +392,14 @@ const phoneZoom = computed(() => {
 const phoneResolutionStyle = computed<CSSProperties>(() => ({
   ...getHairlinePixelStyle(phoneZoom.value, browserDevicePixelRatio.value),
   '--phone-edge-gap': `${24 * viewportScale.value}px`,
+  '--phone-rendered-height': `${
+    (phone.cameraLandscape ? PHONE_PORTRAIT_WIDTH : PHONE_PORTRAIT_HEIGHT) *
+    phoneZoom.value
+  }px`,
+  '--phone-rendered-width': `${
+    (phone.cameraLandscape ? PHONE_PORTRAIT_HEIGHT : PHONE_PORTRAIT_WIDTH) *
+    phoneZoom.value
+  }px`,
   '--phone-stack-gap': `${16 * viewportScale.value}px`,
   '--phone-zoom': phoneZoom.value,
 }))
@@ -1535,7 +1540,6 @@ onBeforeUnmount(() => {
       "
       class="phone-stage"
       :class="{
-        'phone-stage--dev': isDevelopment,
         'phone-stage--landscape': phone.cameraLandscape,
         'phone-stage--peek': notifications.isPeeking,
       }"
@@ -1559,200 +1563,209 @@ onBeforeUnmount(() => {
           v-if="phone.isOpen || notifications.current"
           class="phone-resolution-wrapper phone-resolution-wrapper--primary"
         >
-          <section
-            class="phone-device"
-            :class="{
-              'phone-app--light': !phone.isDarkMode,
-              [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
-            }"
-            :aria-label="phone.t('Common.phone')"
-          >
-            <button
-              type="button"
-              class="phone-hardware-button phone-hardware-button--action"
-              :aria-label="
-                phone.t(
-                  hardwareAlertVolume > 0
-                    ? 'HardwareButtons.mute'
-                    : 'HardwareButtons.unmute',
-                )
-              "
-              :aria-pressed="hardwareAlertVolume === 0"
-              :disabled="setupRequired"
-              @click="toggleHardwareAlertMute"
-            ></button>
-            <button
-              type="button"
-              class="phone-hardware-button phone-hardware-button--volume-up"
-              :aria-label="phone.t('HardwareButtons.volumeUp')"
-              :disabled="setupRequired"
-              @click="changeHardwareAlertVolume(10)"
-            ></button>
-            <button
-              type="button"
-              class="phone-hardware-button phone-hardware-button--volume-down"
-              :aria-label="phone.t('HardwareButtons.volumeDown')"
-              :disabled="setupRequired"
-              @click="changeHardwareAlertVolume(-10)"
-            ></button>
-            <button
-              type="button"
-              class="phone-hardware-button phone-hardware-button--power"
-              :aria-label="
-                phone.t(
-                  isLocked ? 'HardwareButtons.unlock' : 'HardwareButtons.lock',
-                )
-              "
-              :disabled="setupRequired"
-              @click="toggleHardwareLock"
-            ></button>
-            <div
-              class="phone-screen"
+          <div class="phone-resolution-canvas phone-resolution-canvas--primary">
+            <section
+              class="phone-device"
               :class="{
-                'phone-screen--app': isAppRoute || isDevelopmentRoute,
                 'phone-app--light': !phone.isDarkMode,
                 [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
               }"
+              :aria-label="phone.t('Common.phone')"
             >
-              <Transition name="phone-volume-hud">
-                <div
-                  v-if="hardwareVolumeHudVisible"
-                  class="phone-volume-hud"
-                  :style="hardwareVolumeHudStyle"
-                  role="status"
-                  aria-live="polite"
-                  :aria-label="
-                    phone.t('HardwareButtons.volumeLevel', {
-                      value: String(hardwareAlertVolume),
-                    })
-                  "
-                >
-                  <svg
-                    class="phone-volume-hud__icon"
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M4 9v6h4l5 4V5L8 9H4Z" />
-                    <path
-                      v-if="hardwareAlertVolume > 0"
-                      d="M16 8.2c1.1 1 1.7 2.2 1.7 3.8s-.6 2.8-1.7 3.8"
-                    />
-                    <path v-else d="m16.2 9.2 4.6 4.6m0-4.6-4.6 4.6" />
-                  </svg>
-                  <span
-                    class="phone-volume-hud__level"
-                    aria-hidden="true"
-                  ></span>
-                </div>
-              </Transition>
-              <k-app
-                theme="ios"
-                :dark="phone.isDarkMode"
-                safe-areas
-                class="phone-app"
-                :style="phoneDisplayStyle"
+              <button
+                type="button"
+                class="phone-hardware-button phone-hardware-button--action"
+                :aria-label="
+                  phone.t(
+                    hardwareAlertVolume > 0
+                      ? 'HardwareButtons.mute'
+                      : 'HardwareButtons.unmute',
+                  )
+                "
+                :aria-pressed="hardwareAlertVolume === 0"
+                :disabled="setupRequired"
+                @click="toggleHardwareAlertMute"
+              ></button>
+              <button
+                type="button"
+                class="phone-hardware-button phone-hardware-button--volume-up"
+                :aria-label="phone.t('HardwareButtons.volumeUp')"
+                :disabled="setupRequired"
+                @click="changeHardwareAlertVolume(10)"
+              ></button>
+              <button
+                type="button"
+                class="phone-hardware-button phone-hardware-button--volume-down"
+                :aria-label="phone.t('HardwareButtons.volumeDown')"
+                :disabled="setupRequired"
+                @click="changeHardwareAlertVolume(-10)"
+              ></button>
+              <button
+                type="button"
+                class="phone-hardware-button phone-hardware-button--power"
+                :aria-label="
+                  phone.t(
+                    isLocked
+                      ? 'HardwareButtons.unlock'
+                      : 'HardwareButtons.lock',
+                  )
+                "
+                :disabled="setupRequired"
+                @click="toggleHardwareLock"
+              ></button>
+              <div
+                class="phone-screen"
                 :class="{
-                  dark: phone.isDarkMode,
+                  'phone-screen--app': isAppRoute || isDevelopmentRoute,
                   'phone-app--light': !phone.isDarkMode,
-                  'phone-app--messages': route.params.appId === 'messages',
-                  'phone-app--status-light':
-                    WHITE_STATUS_BAR_APP_IDS.has(activeAppId),
-                  'phone-app--status-dark':
-                    DARK_STATUS_BAR_APP_IDS.has(activeAppId),
                   [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
-                  'phone-app--unlocking': isUnlocking,
                 }"
               >
-                <PhoneStatusBar
-                  v-if="!isLocked"
-                  :active-call-return="showActiveCallReturn"
-                  :control-center-opened="controlCenterOpened"
-                  :interactive="!setupRequired"
-                  :lockable="!setupRequired"
-                  @active-call="returnToActiveCall"
-                  @control-center="toggleControlCenter"
-                  @lock="lockPhone"
-                />
-                <SpringboardView v-if="!isDevelopmentRoute && !setupRequired" />
-                <SkyProvider
-                  class="phone-app-theme"
+                <Transition name="phone-volume-hud">
+                  <div
+                    v-if="hardwareVolumeHudVisible"
+                    class="phone-volume-hud"
+                    :style="hardwareVolumeHudStyle"
+                    role="status"
+                    aria-live="polite"
+                    :aria-label="
+                      phone.t('HardwareButtons.volumeLevel', {
+                        value: String(hardwareAlertVolume),
+                      })
+                    "
+                  >
+                    <svg
+                      class="phone-volume-hud__icon"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M4 9v6h4l5 4V5L8 9H4Z" />
+                      <path
+                        v-if="hardwareAlertVolume > 0"
+                        d="M16 8.2c1.1 1 1.7 2.2 1.7 3.8s-.6 2.8-1.7 3.8"
+                      />
+                      <path v-else d="m16.2 9.2 4.6 4.6m0-4.6-4.6 4.6" />
+                    </svg>
+                    <span
+                      class="phone-volume-hud__level"
+                      aria-hidden="true"
+                    ></span>
+                  </div>
+                </Transition>
+                <k-app
+                  theme="ios"
                   :dark="phone.isDarkMode"
                   safe-areas
+                  class="phone-app"
+                  :style="phoneDisplayStyle"
+                  :class="{
+                    dark: phone.isDarkMode,
+                    'phone-app--light': !phone.isDarkMode,
+                    'phone-app--messages': route.params.appId === 'messages',
+                    'phone-app--status-light':
+                      WHITE_STATUS_BAR_APP_IDS.has(activeAppId),
+                    'phone-app--status-dark':
+                      DARK_STATUS_BAR_APP_IDS.has(activeAppId),
+                    [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
+                    'phone-app--unlocking': isUnlocking,
+                  }"
                 >
-                  <RouterView v-slot="{ Component }">
-                    <Transition :name="appTransitionName">
-                      <component
-                        :is="Component"
-                        v-if="
-                          !setupRequired && (isAppRoute || isDevelopmentRoute)
-                        "
-                        :key="
-                          isDevelopmentRoute ? String(route.name) : route.path
-                        "
-                      />
-                    </Transition>
-                  </RouterView>
-                </SkyProvider>
-                <PhoneHomeIndicator v-if="!isLocked && !setupRequired" />
-                <PhoneControlCenter
-                  v-if="!setupRequired"
-                  :opened="controlCenterOpened"
-                  @close="controlCenterOpened = false"
-                />
-                <Transition name="lock-screen" @after-leave="completeUnlock">
-                  <PhoneLockScreen
-                    v-if="isLocked && !setupRequired"
-                    :notifications="notifications.lockScreenNotifications"
-                    @camera="unlockCamera"
-                    @clear-notifications="notifications.clearLockScreen"
-                    @dismiss-notification="notifications.dismissFromLockScreen"
-                    @open-notification="openLockScreenNotification"
-                    @unlock="unlockPhone"
+                  <PhoneStatusBar
+                    v-if="!isLocked && !(isHomeRoute && springboardEditing)"
+                    :active-call-return="showActiveCallReturn"
+                    :control-center-opened="controlCenterOpened"
+                    :interactive="!setupRequired"
+                    :lockable="!setupRequired"
+                    @active-call="returnToActiveCall"
+                    @control-center="toggleControlCenter"
+                    @lock="lockPhone"
                   />
-                </Transition>
-                <Transition name="lock-screen">
-                  <PhonePasscode
-                    v-if="isLocked && passcodeVisible && !setupRequired"
-                    :busy="passcodeBusy"
-                    :disabled="passcodeRetrySeconds > 0"
-                    :error="passcodeError"
-                    :length="phone.security.length ?? 6"
-                    lock-screen
-                    :reset-key="passcodeResetKey"
-                    :subtitle="
-                      passcodeRetrySeconds > 0
-                        ? phone.t('LockScreen.passcode.tryAgain', {
-                            seconds: String(passcodeRetrySeconds),
-                          })
-                        : phone.t('LockScreen.passcode.unlockSubtitle')
-                    "
-                    :title="phone.t('LockScreen.passcode.enter')"
-                    @cancel="cancelPasscode"
-                    @complete="submitUnlockPasscode"
+                  <SpringboardView
+                    v-if="!isDevelopmentRoute && !setupRequired"
+                    @edit-mode-change="springboardEditing = $event"
                   />
-                </Transition>
-                <PhoneSetupAssistant
-                  v-if="setupRequired"
-                  @complete="completePhoneSetup"
-                  @skip="skipPhoneSetupForDevelopment"
-                />
-                <PhoneNotifications
-                  :notification="notifications.current"
-                  @close="notifications.dismissCurrent()"
-                  @open="openNotificationPreview"
-                />
-                <EasyShareSheet />
-                <div class="phone-display-dimmer" aria-hidden="true"></div>
-              </k-app>
-            </div>
-            <img
-              class="phone-device__frame"
-              :src="phoneFrameImage"
-              alt=""
-              aria-hidden="true"
-              draggable="false"
-            />
-          </section>
+                  <SkyProvider
+                    class="phone-app-theme"
+                    :dark="phone.isDarkMode"
+                    safe-areas
+                  >
+                    <RouterView v-slot="{ Component }">
+                      <Transition :name="appTransitionName">
+                        <component
+                          :is="Component"
+                          v-if="
+                            !setupRequired && (isAppRoute || isDevelopmentRoute)
+                          "
+                          :key="
+                            isDevelopmentRoute ? String(route.name) : route.path
+                          "
+                        />
+                      </Transition>
+                    </RouterView>
+                  </SkyProvider>
+                  <PhoneHomeIndicator v-if="!isLocked && !setupRequired" />
+                  <PhoneControlCenter
+                    v-if="!setupRequired"
+                    :opened="controlCenterOpened"
+                    @close="controlCenterOpened = false"
+                  />
+                  <Transition name="lock-screen" @after-leave="completeUnlock">
+                    <PhoneLockScreen
+                      v-if="isLocked && !setupRequired"
+                      :notifications="notifications.lockScreenNotifications"
+                      @camera="unlockCamera"
+                      @clear-notifications="notifications.clearLockScreen"
+                      @dismiss-notification="
+                        notifications.dismissFromLockScreen
+                      "
+                      @open-notification="openLockScreenNotification"
+                      @unlock="unlockPhone"
+                    />
+                  </Transition>
+                  <Transition name="lock-screen">
+                    <PhonePasscode
+                      v-if="isLocked && passcodeVisible && !setupRequired"
+                      :busy="passcodeBusy"
+                      :disabled="passcodeRetrySeconds > 0"
+                      :error="passcodeError"
+                      :length="phone.security.length ?? 6"
+                      lock-screen
+                      :reset-key="passcodeResetKey"
+                      :subtitle="
+                        passcodeRetrySeconds > 0
+                          ? phone.t('LockScreen.passcode.tryAgain', {
+                              seconds: String(passcodeRetrySeconds),
+                            })
+                          : phone.t('LockScreen.passcode.unlockSubtitle')
+                      "
+                      :title="phone.t('LockScreen.passcode.enter')"
+                      @cancel="cancelPasscode"
+                      @complete="submitUnlockPasscode"
+                    />
+                  </Transition>
+                  <PhoneSetupAssistant
+                    v-if="setupRequired"
+                    @complete="completePhoneSetup"
+                    @skip="skipPhoneSetupForDevelopment"
+                  />
+                  <PhoneNotifications
+                    :notification="notifications.current"
+                    @close="notifications.dismissCurrent()"
+                    @open="openNotificationPreview"
+                  />
+                  <EasyShareSheet />
+                  <div class="phone-display-dimmer" aria-hidden="true"></div>
+                </k-app>
+              </div>
+              <img
+                class="phone-device__frame"
+                :src="phoneFrameImage"
+                alt=""
+                aria-hidden="true"
+                draggable="false"
+              />
+            </section>
+          </div>
         </div>
       </div>
     </main>

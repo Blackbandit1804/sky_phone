@@ -1,13 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  DEFAULT_INSTALLED_PHONE_APP_IDS,
-} from '@/config/apps'
+import { DEFAULT_INSTALLED_PHONE_APP_IDS } from '@/config/apps'
 import { useAppStoreStore } from '@/stores/app-store'
 import {
   getHomeFolder,
   HOME_GRID_PAGE_SIZE,
+  HOME_LAYOUT_VERSION,
   removeHomeApp,
 } from '@/utils/homeLayout'
 
@@ -112,7 +111,7 @@ describe('app store', () => {
     })
 
     expect(apps.claimedApps).toEqual(['external-radio'])
-    expect(apps.homeLayout.version).toBe(5)
+    expect(apps.homeLayout.version).toBe(HOME_LAYOUT_VERSION)
     expect(apps.homeLayout.grid).toContain('external-radio')
     const pageAppCount = apps.homeLayout.grid
       .slice(0, HOME_GRID_PAGE_SIZE)
@@ -122,7 +121,7 @@ describe('app store', () => {
     expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps external app state from current version 5 layouts', () => {
+  it('keeps external app state from current layouts', () => {
     const apps = useAppStoreStore()
 
     apps.hydrate({
@@ -131,7 +130,8 @@ describe('app store', () => {
         dock: [],
         grid: ['external-radio'],
         hidden: [],
-        version: 5,
+        pageCount: 1,
+        version: HOME_LAYOUT_VERSION,
       },
       launchCounts: { 'external-radio': 3 },
     })
@@ -142,7 +142,7 @@ describe('app store', () => {
     expect(mocks.phone.saveDeviceNamespace).not.toHaveBeenCalled()
   })
 
-  it('persists a page-aware version 3 to version 5 migration once', () => {
+  it('persists a page-aware version 3 migration once', () => {
     const apps = useAppStoreStore()
     const grid = Array.from({ length: 40 }, () => null as string | null)
     grid[20] = 'external-page-two'
@@ -152,7 +152,7 @@ describe('app store', () => {
       homeLayout: { dock: [], grid, hidden: [], version: 3 },
     })
 
-    expect(apps.homeLayout.version).toBe(5)
+    expect(apps.homeLayout.version).toBe(HOME_LAYOUT_VERSION)
     expect(apps.homeLayout.grid[20]).not.toBe('external-page-two')
     expect(apps.homeLayout.grid[24]).toBe('external-page-two')
     expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
@@ -329,6 +329,53 @@ describe('app store', () => {
     ).toBe(true)
     expect(apps.homeLayout.grid[HOME_GRID_PAGE_SIZE]).toBe('phone')
     expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
+  })
+
+  it('persists widget reflow without pulling apps back a page', () => {
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+    mocks.phone.saveDeviceNamespace.mockClear()
+    const originalApps = apps.homeLayout.grid.filter(Boolean)
+
+    expect(
+      apps.applyWidgetGridCapacities(
+        [10, HOME_GRID_PAGE_SIZE],
+        [HOME_GRID_PAGE_SIZE, 10],
+      ),
+    ).toBe(true)
+    expect(
+      apps.homeLayout.grid.slice(0, HOME_GRID_PAGE_SIZE).filter(Boolean),
+    ).toEqual(originalApps.slice(0, 10))
+    expect(
+      apps.homeLayout.grid
+        .slice(HOME_GRID_PAGE_SIZE, HOME_GRID_PAGE_SIZE * 2)
+        .filter(Boolean),
+    ).toEqual(originalApps.slice(10))
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
+  })
+
+  it('persists and restores an otherwise empty extra page', () => {
+    const apps = useAppStoreStore()
+    apps.hydrate(null)
+    mocks.phone.saveDeviceNamespace.mockClear()
+
+    expect(apps.addHomePage()).toBe(true)
+    expect(apps.homeLayout.pageCount).toBe(2)
+    expect(mocks.phone.saveDeviceNamespace).toHaveBeenCalledTimes(1)
+
+    const persisted = mocks.phone.saveDeviceNamespace.mock.calls[0]?.[1] as {
+      homeLayout: typeof apps.homeLayout
+    }
+    apps.hydrate({
+      ...persisted,
+      homeLayout: {
+        ...persisted.homeLayout,
+        grid: persisted.homeLayout.grid.slice(0, HOME_GRID_PAGE_SIZE),
+      },
+    })
+
+    expect(apps.homeLayout.pageCount).toBe(2)
+    expect(apps.homeLayout.grid).toHaveLength(HOME_GRID_PAGE_SIZE * 2)
   })
 
   it('persists the complete folder lifecycle through store actions', () => {

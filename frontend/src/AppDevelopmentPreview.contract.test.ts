@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./App.vue', import.meta.url), 'utf8')
-const styles = readFileSync(
+const mainCss = readFileSync(
   new URL('./assets/main.css', import.meta.url),
   'utf8',
 )
@@ -53,12 +53,35 @@ describe('browser development preview contract', () => {
     expect(source).toMatch(
       /function changeHardwareAlertVolume\(delta: number\): void \{[\s\S]*?phone\.setAlertVolumes\(volume\)/,
     )
-    expect(styles).toMatch(
+    expect(mainCss).toMatch(
       /\.phone-hardware-button\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?z-index:\s*101;/,
     )
-    expect(styles).toContain('.phone-hardware-button--power')
+    expect(mainCss).toContain('.phone-hardware-button--power')
     expect(source).toContain('class="phone-volume-hud"')
     expect(source).toContain('showHardwareVolumeHud()')
-    expect(styles).toContain('.phone-volume-hud__level')
+    expect(mainCss).toContain('.phone-volume-hud__level')
+  })
+
+  it('uses layout zoom so the fixed-resolution phone stays sharply rasterized', () => {
+    expect(source).toContain('phone-resolution-canvas--primary')
+    expect(source).toContain("'--phone-rendered-height'")
+    expect(source).toContain("'--phone-rendered-width'")
+    expect(mainCss).toMatch(
+      /\.phone-resolution-canvas\s*\{[^}]*zoom:\s*var\(--phone-zoom, 1\);/s,
+    )
+    expect(mainCss).not.toMatch(
+      /\.phone-resolution-canvas\s*\{[^}]*transform:\s*scale\(/s,
+    )
+  })
+
+  it('matches the production phone size and bottom-right stage in development', () => {
+    expect(source).toContain('const PHONE_BASE_SCALE = 0.69 * 1.2')
+    expect(source).toContain('() => viewportScale.value * PHONE_BASE_SCALE')
+    expect(source).not.toContain('DEVELOPMENT_PHONE_SCALE')
+    expect(source).not.toContain("'phone-stage--dev': isDevelopment")
+    expect(mainCss).toMatch(
+      /\.phone-stage\s*\{[^}]*place-items:\s*end;[^}]*padding:\s*0 var\(--phone-edge-gap, 24px\) var\(--phone-edge-gap, 24px\) 0;/s,
+    )
+    expect(mainCss).not.toContain('.phone-stage--dev')
   })
 })

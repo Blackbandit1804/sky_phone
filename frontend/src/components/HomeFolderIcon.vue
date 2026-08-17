@@ -9,8 +9,11 @@ import {
   type ReorderDirection,
 } from '@/utils/keyboard'
 import {
+  readSpringboardDragMetrics,
   springboardPageDragCompensation,
   springboardSwipeIntent,
+  springboardViewportToLocal,
+  type SpringboardDragMetrics,
 } from '@/utils/springboardDrag'
 import { bindPointerDragSession } from '@/utils/pointerDragSession'
 
@@ -19,13 +22,11 @@ const props = withDefaults(
     apps: PhoneAppDefinition[]
     defaultName: string
     editMode?: boolean
-    externalDragVisual?: boolean
     folder: HomeFolder
     showLabel?: boolean
   }>(),
   {
     editMode: false,
-    externalDragVisual: false,
     showLabel: true,
   },
 )
@@ -45,6 +46,7 @@ const dragOffset = ref({ x: 0, y: 0 })
 const suppressClick = ref(false)
 let dragStartPage = 0
 let dragPageWidth = 0
+let dragMetrics: SpringboardDragMetrics | null = null
 let holdTimer: number | undefined
 let pointerStart = { x: 0, y: 0 }
 let pointerTarget: HTMLElement | null = null
@@ -53,14 +55,14 @@ let stopPointerSession: (() => void) | null = null
 
 const folderName = computed(() => props.folder.name || props.defaultName)
 const dragStyle = computed(() =>
-  isDragging.value && !props.externalDragVisual
+  isDragging.value
     ? {
         transform: `translate3d(${springboardPageDragCompensation(dragStartPage, phone.currentPage, dragPageWidth)}px, 0, 0)`,
       }
     : undefined,
 )
 const dragPointerStyle = computed(() =>
-  isDragging.value && !props.externalDragVisual
+  isDragging.value
     ? {
         transform: `translate3d(${dragOffset.value.x}px, ${dragOffset.value.y}px, 0)`,
       }
@@ -84,16 +86,56 @@ function releasePointerCapture(): void {
   }
   pointerTarget = null
   pointerId = null
+  dragMetrics = null
 }
 
 function beginPointerDrag(event: PointerEvent): void {
   dragStartPage = phone.currentPage
-  dragPageWidth =
-    (event.target as HTMLElement)
-      .closest<HTMLElement>('.springboard-page')
-      ?.getBoundingClientRect().width ?? 0
+  const element =
+    pointerTarget ??
+    (event.currentTarget instanceof Element
+      ? event.currentTarget
+      : event.target instanceof Element
+        ? event.target
+        : null)
+  dragMetrics = readSpringboardDragMetrics(element)
+  dragPageWidth = dragMetrics?.layoutWidth ?? 0
   isDragging.value = true
   emit('dragstart', event)
+}
+
+function updateDragOffset(event: PointerEvent): void {
+  if (dragMetrics) {
+    const pointer = springboardViewportToLocal(
+      event.clientX,
+      event.clientY,
+      dragMetrics.viewportLeft,
+      dragMetrics.viewportTop,
+      dragMetrics.viewportWidth,
+      dragMetrics.viewportHeight,
+      dragMetrics.layoutWidth,
+      dragMetrics.layoutHeight,
+    )
+    const start = springboardViewportToLocal(
+      pointerStart.x,
+      pointerStart.y,
+      dragMetrics.viewportLeft,
+      dragMetrics.viewportTop,
+      dragMetrics.viewportWidth,
+      dragMetrics.viewportHeight,
+      dragMetrics.layoutWidth,
+      dragMetrics.layoutHeight,
+    )
+    dragOffset.value = {
+      x: pointer.x - start.x,
+      y: pointer.y - start.y,
+    }
+    return
+  }
+  dragOffset.value = {
+    x: event.clientX - pointerStart.x,
+    y: event.clientY - pointerStart.y,
+  }
 }
 
 function onPointerDown(event: PointerEvent): void {
@@ -110,10 +152,7 @@ function onPointerDown(event: PointerEvent): void {
   })
   pointerStart = { x: event.clientX, y: event.clientY }
   clearHold()
-  if (props.editMode) {
-    beginPointerDrag(event)
-    return
-  }
+  if (props.editMode) return
   holdTimer = window.setTimeout(() => {
     suppressClick.value = true
     emit('edit')
@@ -124,10 +163,7 @@ function onPointerDown(event: PointerEvent): void {
 
 function onPointerMove(event: PointerEvent): void {
   if (isDragging.value) {
-    dragOffset.value = {
-      x: event.clientX - pointerStart.x,
-      y: event.clientY - pointerStart.y,
-    }
+    updateDragOffset(event)
     emit('dragmove', event)
     return
   }
@@ -139,6 +175,11 @@ function onPointerMove(event: PointerEvent): void {
   ) {
     suppressClick.value = true
     clearHold()
+    if (props.editMode) {
+      beginPointerDrag(event)
+      updateDragOffset(event)
+      emit('dragmove', event)
+    }
   }
 }
 
@@ -165,7 +206,7 @@ function cancelPointerDrag(): void {
 }
 
 function openFolder(): void {
-  if (props.editMode || suppressClick.value) {
+  if (suppressClick.value) {
     suppressClick.value = false
     return
   }
@@ -191,7 +232,6 @@ onBeforeUnmount(() => {
   <div
     class="home-folder-item app-icon-item"
     :class="{
-      'app-icon-item--drag-source': isDragging && externalDragVisual,
       'app-icon-item--dragging': isDragging,
       'app-icon-item--editing': editMode,
       'home-folder-item--dragging': isDragging,
@@ -210,7 +250,6 @@ onBeforeUnmount(() => {
       @contextmenu.prevent
       @keydown="onKeydown"
       @pointerdown="onPointerDown"
-      @pointerleave="isDragging || clearHold()"
     >
       <span class="home-folder-preview" aria-hidden="true">
         <span
