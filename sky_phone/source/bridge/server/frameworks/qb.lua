@@ -55,6 +55,14 @@ local function get_character_info(source)
     return player and player.PlayerData and player.PlayerData.charinfo or nil
 end
 
+function Bridge.Framework.GetCharacterName(source)
+    local character = get_character_info(source)
+    if not character then
+        return nil, nil
+    end
+    return character.firstname, character.lastname
+end
+
 function Bridge.Framework.GetFirstname(source)
     local character = get_character_info(source)
     return character and character.firstname or nil

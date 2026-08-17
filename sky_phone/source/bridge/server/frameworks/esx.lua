@@ -89,6 +89,35 @@ function Bridge.Framework.GetLastname(source)
     return player and player.get("lastName") or nil
 end
 
+function Bridge.Framework.GetCharacterName(source)
+    local player = get_player(source)
+    if not player then
+        return nil, nil
+    end
+
+    local first_name = player.get and player.get("firstName") or nil
+    local last_name = player.get and player.get("lastName") or nil
+    if first_name and first_name ~= "" and last_name and last_name ~= "" then
+        return first_name, last_name
+    end
+
+    local identifier = player.identifier
+    if not identifier then
+        return first_name, last_name
+    end
+
+    local rows = Bridge.Database.Query(
+        "SELECT `firstname`, `lastname` FROM `users` WHERE `identifier` = ? LIMIT 1",
+        { identifier }
+    )
+    local identity = rows[1]
+    if not identity then
+        return first_name, last_name
+    end
+
+    return identity.firstname or first_name, identity.lastname or last_name
+end
+
 function Bridge.Framework.GetBirthdate(source)
     local player = get_player(source)
     return player and (player.get("dateofbirth") or player.get("dob")) or nil
