@@ -2,6 +2,7 @@
 import {
   AlignLeft,
   AtSign,
+  Ban,
   Bell,
   Bookmark,
   Camera,
@@ -11,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Feather,
+  Flag,
   Heart,
   Home,
   ImagePlus,
@@ -215,9 +217,19 @@ const canReply = computed(() => {
     threadReplyBody.value.length <= 360
   )
 })
+const hasProfileChanges = computed(() => {
+  const profile = feather.profile
+  if (!profile) return false
+  return (
+    selectedProfilePhoto.value !== null ||
+    editing.value.displayName !== profile.display_name ||
+    editing.value.bio !== profile.bio
+  )
+})
 const canSaveProfile = computed(
   () =>
     !busy.value &&
+    hasProfileChanges.value &&
     editing.value.displayName.trim().length > 0 &&
     editing.value.displayName.length <= 50 &&
     editing.value.bio.length <= 160,
@@ -745,6 +757,15 @@ async function saveProfile(): Promise<void> {
   closeProfileEdit()
 }
 
+function openPostMenu(post: FeatherPost): void {
+  reportOpen.value = false
+  menuPost.value = post
+}
+
+function closePostMenu(): void {
+  menuPost.value = null
+}
+
 async function deletePost(): Promise<void> {
   if (!menuPost.value) return
   const success = await feather.deletePost(menuPost.value.id)
@@ -982,15 +1003,17 @@ onMounted(async () => {
         </SkyButton>
         <SkyButton
           v-else-if="screen === 'edit'"
+          icon-only
           rounded
           small
           variant="secondary"
           :disabled="!canSaveProfile"
           class="feather-edit__navbar-save"
+          :aria-label="busy ? t('loading') : t('saveProfile')"
           @click="saveProfile"
         >
-          <Check :size="14" :stroke-width="2.8" />
-          {{ busy ? t('loading') : t('saveProfile') }}
+          <SkySpinner v-if="busy" :size="15" />
+          <Check v-else :size="16" :stroke-width="2.8" />
         </SkyButton>
         <SkyButton
           v-else-if="
@@ -1370,7 +1393,7 @@ onMounted(async () => {
           :post="feather.thread.post"
           @follow="feather.followPost"
           @media="openMediaPreview"
-          @menu="menuPost = $event"
+          @menu="openPostMenu"
           @open="() => undefined"
           @profile="openProfile"
           @react="feather.react"
@@ -1379,11 +1402,8 @@ onMounted(async () => {
         />
         <section class="feather-comments">
           <header class="feather-comments__header">
-            <div>
-              <strong>{{ t('comments') }}</strong>
-              <span>{{ feather.thread.replies.length }}</span>
-            </div>
-            <MessageCircle :size="18" />
+            <strong>{{ t('comments') }}</strong>
+            <span>{{ feather.thread.replies.length }}</span>
           </header>
 
           <div
@@ -1400,6 +1420,9 @@ onMounted(async () => {
             v-else
             :key="post.id"
             class="feather-comment"
+            :class="{
+              'feather-comment--reply': Boolean(leadingCommentMention(post)),
+            }"
           >
             <button
               type="button"
@@ -1439,7 +1462,7 @@ onMounted(async () => {
                   type="button"
                   class="feather-comment__more"
                   :aria-label="t('moreActions')"
-                  @click="menuPost = post"
+                  @click="openPostMenu(post)"
                 >
                   <MoreHorizontal :size="16" />
                 </button>
@@ -1672,7 +1695,7 @@ onMounted(async () => {
           :post="post"
           @follow="feather.followPost"
           @media="openMediaPreview"
-          @menu="menuPost = $event"
+          @menu="openPostMenu"
           @open="openThread"
           @profile="openProfile"
           @react="feather.react"
@@ -2028,7 +2051,7 @@ onMounted(async () => {
             :post="post"
             @follow="feather.followPost"
             @media="openMediaPreview"
-            @menu="menuPost = $event"
+            @menu="openPostMenu"
             @open="openThread"
             @profile="openProfile"
             @react="feather.react"
@@ -2200,8 +2223,8 @@ onMounted(async () => {
     <SkyActionSheet
       :opened="menuPost !== null && !reportOpen"
       :label="t('moreActions')"
-      @backdropclick="menuPost = null"
-      @escape="menuPost = null"
+      @backdropclick="closePostMenu"
+      @escape="closePostMenu"
     >
       <SkyActionGroup class="feather-post-actions">
         <SkyActionsLabel v-if="menuPost">
@@ -2217,18 +2240,20 @@ onMounted(async () => {
         </SkyActionButton>
         <template v-else>
           <SkyActionButton @click="openPostReport">
-            {{ t('report') }}
+            <Flag :size="18" />
+            <span>{{ t('report') }}</span>
           </SkyActionButton>
           <SkyActionButton
             class="feather-post-actions__danger"
             @click="blockPostAuthor"
           >
-            {{ t('block', { handle: menuPost?.handle ?? '' }) }}
+            <Ban :size="18" />
+            <span>{{ t('block', { handle: menuPost?.handle ?? '' }) }}</span>
           </SkyActionButton>
         </template>
       </SkyActionGroup>
       <SkyActionGroup>
-        <SkyActionButton bold @click="menuPost = null">
+        <SkyActionButton bold @click="closePostMenu">
           {{ t('cancel') }}
         </SkyActionButton>
       </SkyActionGroup>
@@ -4149,57 +4174,62 @@ onMounted(async () => {
   letter-spacing: -0.2px;
 }
 .feather-comments {
-  overflow: hidden;
-  border: 1px solid var(--feather-border);
-  border-radius: 17px;
-  background: var(--feather-panel);
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .feather-comments__header {
   display: flex;
-  min-height: 47px;
+  min-height: 44px;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 13px;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 4px;
   border-bottom: 1px solid var(--feather-border);
 }
-.feather-comments__header > div {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
 .feather-comments__header strong {
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: -0.2px;
 }
 .feather-comments__header span {
-  display: grid;
-  min-width: 20px;
-  height: 20px;
-  place-items: center;
-  border-radius: var(--sky-radius-pill);
-  color: var(--feather-blue);
-  background: rgba(29, 155, 240, 0.14);
-  font-size: 9px;
-  font-weight: 800;
-}
-.feather-comments__header > svg {
   color: var(--feather-muted);
+  font-size: 10px;
+  font-weight: 700;
 }
 .feather-comment {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-columns: 36px minmax(0, 1fr) 34px;
   align-items: flex-start;
-  gap: 8px;
-  padding: 11px 7px 10px 11px;
+  gap: 9px;
+  padding: 10px 2px;
 }
 .feather-comment + .feather-comment {
-  border-top: 1px solid var(--feather-border);
+  border-top: 0;
+}
+.feather-comment--reply {
+  margin-left: 34px;
+  padding-top: 5px;
+}
+.feather-comment--reply .feather-comment__avatar {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+}
+.feather-comment--reply .feather-comment__avatar::before {
+  inset: -6px;
 }
 .feather-comment__avatar {
-  width: 44px;
-  height: 44px;
-  flex-basis: 44px;
+  width: 36px;
+  height: 36px;
+  position: relative;
+  flex-basis: 36px;
   border: 0;
+}
+.feather-comment__avatar::before {
+  position: absolute;
+  inset: -4px;
+  content: '';
 }
 .feather-comment__copy {
   min-width: 0;
@@ -4222,7 +4252,7 @@ onMounted(async () => {
 }
 .feather-comment__copy > header strong {
   overflow: hidden;
-  font-size: 11.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4237,9 +4267,9 @@ onMounted(async () => {
 }
 .feather-comment__copy > p {
   margin: 0;
-  padding-top: 3px;
+  padding-top: 2px;
   color: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.42;
   overflow-wrap: anywhere;
 }
@@ -4249,10 +4279,10 @@ onMounted(async () => {
 }
 .feather-comment__copy > footer {
   display: flex;
-  min-height: 30px;
+  min-height: 27px;
   align-items: center;
-  gap: 12px;
-  margin-top: 2px;
+  gap: 11px;
+  margin-top: 1px;
   color: var(--feather-muted);
   font-size: 9px;
   font-weight: 700;
@@ -4277,13 +4307,19 @@ onMounted(async () => {
 }
 .feather-comment__like {
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 40px;
+  position: relative;
   place-items: center;
   border: 0;
   border-radius: 50%;
   color: var(--feather-muted);
   background: transparent;
+}
+.feather-comment__like::before {
+  position: absolute;
+  inset: -2px -5px;
+  content: '';
 }
 .feather-comment__like.is-liked {
   color: #f04f65;
@@ -4307,19 +4343,20 @@ onMounted(async () => {
   z-index: 5;
   bottom: 0;
   margin-top: auto;
-  border: 1px solid var(--feather-border);
-  border-radius: 20px;
-  padding: 5px;
-  background: var(--feather-panel);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.2);
+  border: 0;
+  border-top: 1px solid var(--feather-border);
+  border-radius: 0;
+  padding: 7px 2px 5px;
+  background: var(--sky-bg, #12171b);
+  box-shadow: 0 -8px 18px rgb(0 0 0 / 8%);
 }
 .feather-comment-composer__target {
   display: flex;
-  min-height: 36px;
+  min-height: 30px;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 2px 3px 4px 10px;
+  padding: 0 3px 4px 10px;
   color: var(--feather-muted);
   font-size: 9.5px;
 }
@@ -4344,9 +4381,9 @@ onMounted(async () => {
   box-shadow: none;
 }
 .feather-comment-composer :deep(.sky-messagebar__area) {
-  border: 0;
+  border: 1px solid var(--feather-border);
   border-radius: var(--sky-radius-pill);
-  background: rgba(127, 127, 127, 0.1);
+  background: var(--feather-panel);
   box-shadow: none;
 }
 .feather-comment-composer :deep(textarea) {
@@ -4762,18 +4799,15 @@ onMounted(async () => {
   font-weight: 800;
 }
 .feather-edit__navbar-save {
-  --sky-surface-muted: color-mix(
-    in srgb,
-    var(--feather-panel) 86%,
-    currentColor 14%
-  );
-  min-width: 72px;
-  min-height: 30px;
-  gap: 4px;
-  border-color: var(--feather-border);
-  padding-inline: 10px;
-  font-size: 10px;
-  font-weight: 800;
+  --sky-surface-muted: #2c3035;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border-color: rgb(255 255 255 / 14%);
+  padding: 0;
+  color: #fff;
+  box-shadow: 0 5px 14px rgb(0 0 0 / 18%);
 }
 .feather-composer-card {
   flex: none;
@@ -5220,6 +5254,9 @@ onMounted(async () => {
 }
 .feather-post-actions__danger {
   color: var(--sky-danger);
+}
+.feather-post-actions :deep(.sky-action-button) {
+  gap: 8px;
 }
 .feather-post-actions__danger svg {
   flex: none;

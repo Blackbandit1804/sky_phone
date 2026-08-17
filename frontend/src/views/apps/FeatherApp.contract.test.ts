@@ -84,12 +84,17 @@ describe('FeatherApp Sky UI contract', () => {
     expect(source).toContain('<SkyActionGroup')
     expect(source).toContain('<SkyActionButton')
     expect(source).toContain('<SkyActionsLabel')
+    expect(source).toContain('function openPostMenu(post: FeatherPost)')
+    expect(source).toContain('@menu="openPostMenu"')
+    expect(source).toContain('@click="openPostMenu(post)"')
+    expect(source).toContain('@backdropclick="closePostMenu"')
     expect(source).not.toContain('<SkySheet :opened="menuPost !== null"')
   })
 
   it('renders compact Instagram-style comments with a bottom message bar', () => {
     expect(source).toContain('class="feather-comments"')
     expect(source).toContain('class="feather-comment"')
+    expect(source).toContain("'feather-comment--reply'")
     expect(source).toContain('class="feather-comment__like"')
     expect(source).toContain('class="feather-comment-composer"')
     expect(source).toContain('<SkyMessagebar')
@@ -97,6 +102,12 @@ describe('FeatherApp Sky UI contract', () => {
     expect(source).toContain('@click="focusThreadReply(post)"')
     expect(source).not.toMatch(
       /<FeatherPostCard\s+v-for="post in feather\.thread\.replies"/,
+    )
+    expect(source).toMatch(
+      /\.feather-comment\s*\{[^}]*grid-template-columns:\s*36px minmax\(0, 1fr\) 34px/s,
+    )
+    expect(source).toMatch(
+      /\.feather-comment-composer\s*\{[^}]*border-top:\s*1px solid var\(--feather-border\)[^}]*border-radius:\s*0/s,
     )
   })
 
@@ -138,7 +149,12 @@ describe('FeatherApp Sky UI contract', () => {
     expect(source).toContain(':aria-label="phone.t(\'Common.signOut\')"')
     expect(source).toContain('@click="logoutDialogOpen = true"')
     expect(profile).not.toContain('feather-profile-action--logout')
-    expect(source).toContain('<Check :size="14" :stroke-width="2.8" />')
+    expect(source).toMatch(
+      /v-else-if="screen === 'edit'"[\s\S]*?icon-only[\s\S]*?class="feather-edit__navbar-save"[\s\S]*?<SkySpinner v-if="busy"[\s\S]*?<Check v-else/,
+    )
+    expect(source).toMatch(
+      /\.feather-edit__navbar-save\s*\{[^}]*width:\s*32px[^}]*height:\s*32px[^}]*color:\s*#fff/s,
+    )
     expect(source).not.toContain("profileView === 'media'")
     expect(source).not.toContain("selectProfileView('media')")
     expect(source).toMatch(
