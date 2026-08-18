@@ -3590,6 +3590,7 @@ onUnmounted(() => {
   min-height: 15px;
   line-height: 1;
   white-space: nowrap;
+  transform: translateY(-3px);
 }
 .activity-filters :deep(.activity-filter-content svg) {
   display: block;
