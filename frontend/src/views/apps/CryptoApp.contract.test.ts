@@ -216,7 +216,7 @@ describe('VaultX crypto app contracts', () => {
     expect(source.match(/class="activity-filter-content"/g)).toHaveLength(3)
     expect(source).toContain('<WalletCards :size="15" />')
     expect(source).not.toContain('inset-inline-start: 10px;')
-    expect(source).toContain('transform: translateY(-1px);')
+    expect(source).toContain('transform: translateY(1px);')
   })
 
   it('exposes a broad fictional market with dedicated logo marks', () => {
