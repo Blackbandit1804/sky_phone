@@ -2143,11 +2143,13 @@ local function run_dark_chat(dry_run)
     for index = 1, #channels do
         local channel = channels[index]
         local usernames = members_by_channel[tostring(channel.name)] or {}
-        local first_profile = profile_by_username[usernames[1]:lower()]
-        local second_profile = profile_by_username[usernames[2]:lower()]
-        if tonumber(channel.member_count) == 2 and #usernames == 2
-            and first_profile and second_profile and first_profile ~= second_profile
-        then
+        local first_profile
+        local second_profile
+        if tonumber(channel.member_count) == 2 and #usernames == 2 then
+            first_profile = profile_by_username[usernames[1]:lower()]
+            second_profile = profile_by_username[usernames[2]:lower()]
+        end
+        if first_profile and second_profile and first_profile ~= second_profile then
             local conversation_id = deterministic_uuid("lb-phone-darkchat-conversation", channel.name)
             conversation_by_channel[tostring(channel.name)] = conversation_id
             local first_at = channel.first_at or channel.last_at
