@@ -45,6 +45,39 @@ import {
 
 type Tab = 'portfolio' | 'markets' | 'activity' | 'profile'
 type Sheet = 'trade' | 'deposit' | 'withdraw' | 'profile' | null
+type ChartPeriod = '1D' | '1W' | '1M' | '6M' | '1Y'
+
+const CHART_PERIODS: ChartPeriod[] = ['1D', '1W', '1M', '6M', '1Y']
+const CHART_PERIOD_CONFIG: Record<
+  ChartPeriod,
+  { duration: number; multiplier: number; noise: number; samples: number }
+> = {
+  '1D': { duration: 86_400_000, multiplier: 1, noise: 0.025, samples: 16 },
+  '1W': {
+    duration: 7 * 86_400_000,
+    multiplier: 1.4,
+    noise: 0.05,
+    samples: 18,
+  },
+  '1M': {
+    duration: 30 * 86_400_000,
+    multiplier: 2.2,
+    noise: 0.09,
+    samples: 20,
+  },
+  '6M': {
+    duration: 183 * 86_400_000,
+    multiplier: 3.5,
+    noise: 0.16,
+    samples: 22,
+  },
+  '1Y': {
+    duration: 365 * 86_400_000,
+    multiplier: 5,
+    noise: 0.24,
+    samples: 24,
+  },
+}
 const crypto = useCryptoStore()
 const phone = usePhoneStore()
 const tab = ref<Tab>('portfolio')
@@ -67,7 +100,7 @@ const priceAlerts = ref(true)
 const confirmations = ref(true)
 const hideBalances = ref(false)
 const saved = ref(false)
-const period = ref('1D')
+const period = ref<ChartPeriod>('1D')
 
 const locale = computed(() => phone.lang || 'de')
 const authenticated = computed(() => crypto.data?.authenticated === true)
@@ -211,6 +244,97 @@ const detailHolding = computed(() =>
 const selectedHolding = computed(() =>
   holdings.value.find((item) => item.assetId === selectedMarket.value?.id),
 )
+const detailChart = computed(() => {
+  const left = 52
+  const right = 307
+  const top = 14
+  const bottom = 137
+  const config = CHART_PERIOD_CONFIG[period.value]
+  const selected = detail.value
+
+  if (!selected) {
+    return {
+      areaPoints: '',
+      changePercent: 0,
+      marker: { labelY: top, x: right, y: bottom },
+      points: '',
+      xTicks: [],
+      yTicks: [],
+    }
+  }
+
+  const currentPrice = Number(selected.price)
+  const seed = [...selected.id].reduce(
+    (total, character) => total + character.charCodeAt(0),
+    0,
+  )
+  const periodBias = ((seed % 13) - 6) * (config.multiplier - 1) * 0.24
+  const periodReturn = Math.max(
+    -72,
+    Math.min(180, selected.changePercent * config.multiplier + periodBias),
+  )
+  const startPrice = currentPrice / (1 + periodReturn / 100)
+  const sparkline = selected.sparkline.length ? selected.sparkline : [0.5, 0.5]
+  const values = Array.from({ length: config.samples }, (_, index) => {
+    const ratio = index / (config.samples - 1)
+    const sourcePosition = ratio * (sparkline.length - 1)
+    const sourceIndex = Math.floor(sourcePosition)
+    const sourceRatio = sourcePosition - sourceIndex
+    const sourceValue =
+      (sparkline[sourceIndex] ?? 0.5) * (1 - sourceRatio) +
+      (sparkline[Math.min(sourceIndex + 1, sparkline.length - 1)] ?? 0.5) *
+        sourceRatio
+    const trend = startPrice + (currentPrice - startPrice) * ratio
+    const wave =
+      (sourceValue - 0.5) * 0.72 +
+      Math.sin((ratio * (1.4 + config.multiplier * 0.28) + seed) * Math.PI) *
+        0.2
+
+    return Math.max(
+      currentPrice * 0.01,
+      trend + currentPrice * config.noise * wave * Math.sin(Math.PI * ratio),
+    )
+  })
+  values[0] = startPrice
+  values[values.length - 1] = currentPrice
+
+  const minimum = Math.min(...values)
+  const maximum = Math.max(...values)
+  const padding = Math.max((maximum - minimum) * 0.16, currentPrice * 0.012)
+  const axisMinimum = Math.max(0, minimum - padding)
+  const axisMaximum = maximum + padding
+  const axisRange = Math.max(axisMaximum - axisMinimum, currentPrice * 0.02)
+  const x = (ratio: number) => left + ratio * (right - left)
+  const y = (value: number) =>
+    top + ((axisMaximum - value) / axisRange) * (bottom - top)
+  const linePoints = values
+    .map((value, index) => `${x(index / (values.length - 1))},${y(value)}`)
+    .join(' ')
+  const markerY = y(currentPrice)
+
+  return {
+    areaPoints: `${left},${bottom} ${linePoints} ${right},${bottom}`,
+    changePercent: ((currentPrice - startPrice) / startPrice) * 100,
+    marker: {
+      labelY: markerY < 31 ? markerY + 19 : markerY - 10,
+      x: right,
+      y: markerY,
+    },
+    points: linePoints,
+    xTicks: Array.from({ length: 5 }, (_, index) => {
+      const ratio = index / 4
+      return {
+        label: chartTimeLabel(period.value, ratio, config.duration),
+        x: x(ratio),
+      }
+    }),
+    yTicks: Array.from({ length: 4 }, (_, index) => {
+      const ratio = index / 3
+      const value = axisMaximum - axisRange * ratio
+      return { label: chartMoney(value), value, y: y(value) }
+    }),
+  }
+})
 const estimatedTradeValue = computed(
   () => Number(amount.value || 0) * Number(selectedMarket.value?.price || 0),
 )
@@ -247,6 +371,33 @@ function compact(value: string | number) {
     maximumFractionDigits: 2,
     notation: 'compact',
   }).format(Number(value) || 0)
+}
+function chartMoney(value: number) {
+  const absolute = Math.abs(value)
+  return new Intl.NumberFormat(locale.value, {
+    currency: 'USD',
+    maximumFractionDigits:
+      absolute >= 1_000 ? 0 : absolute >= 1 ? 2 : absolute >= 0.01 ? 3 : 5,
+    notation: absolute >= 1_000_000 ? 'compact' : 'standard',
+    style: 'currency',
+  }).format(value)
+}
+function chartTimeLabel(
+  selectedPeriod: ChartPeriod,
+  ratio: number,
+  duration: number,
+) {
+  const date = new Date(Date.now() - duration * (1 - ratio))
+  const options: Intl.DateTimeFormatOptions =
+    selectedPeriod === '1D'
+      ? { hour: '2-digit', minute: '2-digit' }
+      : selectedPeriod === '1W'
+        ? { weekday: 'short' }
+        : selectedPeriod === '1M'
+          ? { day: '2-digit', month: '2-digit' }
+          : { month: 'short' }
+
+  return new Intl.DateTimeFormat(locale.value, options).format(date)
 }
 function points(values: number[], width = 320, height = 110) {
   return values
@@ -539,41 +690,96 @@ onMounted(() => void crypto.load())
         <CryptoLogo class="coin large" :market="detail" />
         <p>{{ detail.symbol }} · {{ detail.name }}</p>
         <strong>{{ money(detail.price) }}</strong
-        ><em :class="detail.changePercent >= 0 ? 'up' : 'down'"
-          >{{ detail.changePercent >= 0 ? '▲' : '▼' }}
-          {{ Math.abs(detail.changePercent).toFixed(2) }}% ·
-          {{ t('marketDetail.today') }}</em
+        ><em :class="detailChart.changePercent >= 0 ? 'up' : 'down'"
+          >{{ detailChart.changePercent >= 0 ? '▲' : '▼' }}
+          {{ Math.abs(detailChart.changePercent).toFixed(2) }}% ·
+          {{ period === '1D' ? t('marketDetail.today') : period }}</em
         >
       </section>
       <SkyCard class="big-chart"
-        ><svg viewBox="0 0 320 160" preserveAspectRatio="none">
+        ><svg
+          :key="`${detail.id}-${period}`"
+          class="detail-chart"
+          viewBox="0 0 320 180"
+          preserveAspectRatio="none"
+          role="img"
+          :aria-label="`${detail.symbol} · ${period}`"
+        >
           <defs>
             <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stop-color="#31d6aa" stop-opacity=".4" />
               <stop offset="1" stop-color="#31d6aa" stop-opacity="0" />
             </linearGradient>
           </defs>
-          <g class="grid">
+          <g class="detail-chart__grid">
             <line
-              v-for="y in [25, 65, 105, 145]"
-              :key="y"
-              x1="0"
-              :y1="y"
-              x2="320"
-              :y2="y"
+              v-for="tick in detailChart.yTicks"
+              :key="tick.y"
+              x1="52"
+              :y1="tick.y"
+              x2="307"
+              :y2="tick.y"
+            />
+            <line
+              v-for="tick in detailChart.xTicks"
+              :key="tick.x"
+              :x1="tick.x"
+              y1="14"
+              :x2="tick.x"
+              y2="137"
             />
           </g>
-          <polygon
-            :points="`0,160 ${points(detail.sparkline, 320, 150)} 320,160`"
-            fill="url(#fill)"
-          />
-          <polyline :points="points(detail.sparkline, 320, 150)" />
+          <g class="detail-chart__axis">
+            <text
+              v-for="tick in detailChart.yTicks"
+              :key="tick.label"
+              x="47"
+              :y="tick.y + 3"
+              text-anchor="end"
+            >
+              {{ tick.label }}
+            </text>
+            <text
+              v-for="(tick, index) in detailChart.xTicks"
+              :key="tick.label"
+              :x="tick.x"
+              y="158"
+              :text-anchor="
+                index === 0 ? 'start' : index === 4 ? 'end' : 'middle'
+              "
+            >
+              {{ tick.label }}
+            </text>
+          </g>
+          <polygon :points="detailChart.areaPoints" fill="url(#fill)" />
+          <polyline :points="detailChart.points" />
+          <g class="detail-chart__marker">
+            <line
+              :x1="detailChart.marker.x"
+              y1="14"
+              :x2="detailChart.marker.x"
+              y2="137"
+            />
+            <circle
+              :cx="detailChart.marker.x"
+              :cy="detailChart.marker.y"
+              r="4.5"
+            />
+            <text
+              :x="detailChart.marker.x - 7"
+              :y="detailChart.marker.labelY"
+              text-anchor="end"
+            >
+              {{ chartMoney(Number(detail.price)) }}
+            </text>
+          </g>
         </svg>
         <div class="periods">
           <button
-            v-for="value in ['1D', '1W', '1M', '6M', '1Y']"
+            v-for="value in CHART_PERIODS"
             :key="value"
             :class="{ active: period === value }"
+            :aria-pressed="period === value"
             @click="period = value"
           >
             {{ value }}
@@ -1748,10 +1954,52 @@ onMounted(() => void crypto.load())
 }
 .big-chart svg {
   width: 100%;
-  height: 160px;
+  height: 180px;
 }
-.grid line {
+.detail-chart__grid line {
   stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.detail-chart__axis text {
+  fill: rgba(214, 224, 230, 0.58);
+  font-size: 10px;
+  font-weight: 650;
+}
+.detail-chart__marker line {
+  stroke: rgba(101, 251, 210, 0.3);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  vector-effect: non-scaling-stroke;
+}
+.detail-chart__marker circle {
+  fill: #07110f;
+  stroke: var(--vault-mint);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 5px rgba(101, 251, 210, 0.8));
+}
+.detail-chart__marker text {
+  fill: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: rgba(7, 11, 16, 0.94);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.detail-chart {
+  animation: detail-chart-in 240ms ease-out;
+}
+@keyframes detail-chart-in {
+  from {
+    opacity: 0.35;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .periods {
   display: grid;
@@ -1759,15 +2007,25 @@ onMounted(() => void crypto.load())
   padding: 3px 9px;
 }
 .periods button {
-  height: 35px;
+  min-height: 44px;
   color: var(--muted);
   background: none;
   border: 0;
   border-radius: 11px;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 .periods button.active {
   color: #fff;
   background: #252a31;
+}
+@media (prefers-reduced-motion: reduce) {
+  .detail-chart {
+    animation: none;
+  }
 }
 .detail-copy {
   color: var(--muted);

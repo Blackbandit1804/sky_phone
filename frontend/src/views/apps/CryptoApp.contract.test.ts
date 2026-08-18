@@ -51,7 +51,13 @@ describe('VaultX crypto app contracts', () => {
   })
 
   it('includes advanced market detail and persistent profile controls', () => {
-    expect(source).toContain('detail.sparkline')
+    expect(source).toContain('selected.sparkline')
+    expect(source).toContain('const detailChart = computed')
+    expect(source).toContain('CHART_PERIOD_CONFIG[period.value]')
+    expect(source).toContain('class="detail-chart__marker"')
+    expect(source).toContain('v-for="tick in detailChart.yTicks"')
+    expect(source).toContain('v-for="value in CHART_PERIODS"')
+    expect(source).toContain(':aria-pressed="period === value"')
     expect(source).toContain("t('marketDetail.statistics')")
     expect(source).toContain('class="detail-trade-dock"')
     expect(source).toContain('class="vault-view vault-detail-scroll"')
