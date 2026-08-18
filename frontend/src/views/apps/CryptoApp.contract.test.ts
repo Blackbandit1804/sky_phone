@@ -90,6 +90,11 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('class="sheet-market-summary"')
   })
 
+  it('keeps app typography readable on the scaled phone surface', () => {
+    expect(source).not.toMatch(/font-size:\s*[6-8]px/)
+    expect(source).toContain(':content-wrap="false"')
+  })
+
   it('exposes a broad fictional market with dedicated logo marks', () => {
     const cryptoConfig = config.slice(
       config.indexOf('Config.Crypto = {'),

@@ -1002,7 +1002,7 @@ onMounted(() => void crypto.load())
             <small>{{ t('profile.memberSince') }}</small>
           </div>
         </div>
-        <SkyCard class="security-overview">
+        <SkyCard class="security-overview" :content-wrap="false">
           <div class="security-score">
             <ShieldCheck :size="22" /><b>100</b><small>/100</small>
           </div>
@@ -1280,7 +1280,7 @@ onMounted(() => void crypto.load())
 }
 .auth-hero p {
   color: #49e4b2;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1301,7 +1301,7 @@ onMounted(() => void crypto.load())
   gap: 7px;
   align-items: center;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 .success,
 .up {
@@ -1332,7 +1332,7 @@ onMounted(() => void crypto.load())
   align-items: center;
   margin: 15px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .portfolio > strong {
   margin: 7px 0 2px;
@@ -1341,7 +1341,7 @@ onMounted(() => void crypto.load())
 }
 .portfolio em,
 .detail-head em {
-  font-size: 11px;
+  font-size: 13px;
   font-style: normal;
 }
 .portfolio svg {
@@ -1372,7 +1372,7 @@ onMounted(() => void crypto.load())
   gap: 6px;
   padding: 0;
   color: #eef3f5;
-  font-size: 9px;
+  font-size: 11px;
   background: none;
   border: 0;
 }
@@ -1454,7 +1454,7 @@ onMounted(() => void crypto.load())
 .row small {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .coin,
 .activity-icon {
@@ -1472,7 +1472,7 @@ onMounted(() => void crypto.load())
 }
 .market-head small {
   color: #49e4b2;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1480,7 +1480,7 @@ onMounted(() => void crypto.load())
 .market-head em,
 .heading em {
   color: #49e4b2;
-  font-size: 9px;
+  font-size: 11px;
   font-style: normal;
 }
 .market-grid {
@@ -1507,7 +1507,7 @@ onMounted(() => void crypto.load())
   font-size: 18px;
 }
 .market-grid em {
-  font-size: 10px;
+  font-size: 12px;
   font-style: normal;
 }
 .market-grid svg {
@@ -1546,7 +1546,7 @@ onMounted(() => void crypto.load())
 }
 .movers small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .detail-head {
   display: grid;
@@ -1563,7 +1563,7 @@ onMounted(() => void crypto.load())
 .detail-head p {
   margin: 9px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 .detail-head > strong {
   font-size: 34px;
@@ -1598,7 +1598,7 @@ onMounted(() => void crypto.load())
 }
 .detail-copy {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .investment,
@@ -1629,14 +1629,14 @@ onMounted(() => void crypto.load())
 }
 .investment small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .stats div {
   display: flex;
   justify-content: space-between;
   padding: 12px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 10px;
+  font-size: 12px;
 }
 .stats div:last-child {
   border: 0;
@@ -1661,7 +1661,7 @@ onMounted(() => void crypto.load())
 .activity-head span {
   margin: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .activity-head strong {
   font-size: 32px;
@@ -1681,7 +1681,7 @@ onMounted(() => void crypto.load())
   align-items: center;
   margin: 0;
   color: #49e4b2;
-  font-size: 10px;
+  font-size: 12px;
 }
 .profile-stats {
   display: grid;
@@ -1698,7 +1698,7 @@ onMounted(() => void crypto.load())
 }
 .profile-stats small {
   color: var(--muted);
-  font-size: 8px;
+  font-size: 11px;
 }
 .settings {
   padding: 0 14px;
@@ -1724,7 +1724,7 @@ onMounted(() => void crypto.load())
 .settings small {
   max-width: 180px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 11px;
 }
 .profile-form {
   padding: 15px;
@@ -1745,7 +1745,7 @@ onMounted(() => void crypto.load())
 }
 .security small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .sheet {
   display: grid;
@@ -1765,11 +1765,11 @@ onMounted(() => void crypto.load())
   display: flex;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 .quote small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 /* VaultX owns a dense trading surface while shared phone geometry stays in Sky UI. */
@@ -1846,12 +1846,12 @@ onMounted(() => void crypto.load())
   line-height: 1.05;
 }
 .vault-detail-title b {
-  font-size: 13px;
+  font-size: 14px;
 }
 .vault-detail-title small {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 600;
 }
 .crypto-app :deep(.sky-scroll-area__content) {
@@ -1956,7 +1956,7 @@ onMounted(() => void crypto.load())
   z-index: 1;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
@@ -2015,7 +2015,7 @@ onMounted(() => void crypto.load())
 .portfolio-value small {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 600;
 }
 .portfolio-chart {
@@ -2036,7 +2036,7 @@ onMounted(() => void crypto.load())
   height: 22px;
   padding-right: 7px;
   color: var(--muted);
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 700;
 }
 .portfolio-chart__legend span {
@@ -2110,13 +2110,13 @@ onMounted(() => void crypto.load())
 }
 .portfolio-current-label text {
   fill: #fff;
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.01em;
 }
 .portfolio-scale-label {
   fill: rgba(255, 255, 255, 0.46);
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 700;
 }
 .portfolio-metrics {
@@ -2136,10 +2136,10 @@ onMounted(() => void crypto.load())
 }
 .portfolio-metrics small {
   color: var(--muted);
-  font-size: 8px;
+  font-size: 11px;
 }
 .portfolio-metrics b {
-  font-size: 12px;
+  font-size: 13px;
 }
 .portfolio-metrics > i {
   width: 1px;
@@ -2172,13 +2172,13 @@ onMounted(() => void crypto.load())
   background: rgba(101, 251, 210, 0.08);
 }
 .quick button b {
-  font-size: 9px;
+  font-size: 11px;
 }
 .quick button small {
   max-width: 62px;
   overflow: hidden;
   color: var(--muted);
-  font-size: 7px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2211,10 +2211,10 @@ onMounted(() => void crypto.load())
 }
 .allocation-copy small {
   color: var(--muted);
-  font-size: 8px;
+  font-size: 11px;
 }
 .allocation-copy b {
-  font-size: 11px;
+  font-size: 13px;
 }
 .allocation-copy > strong {
   color: var(--vault-mint);
@@ -2284,7 +2284,7 @@ onMounted(() => void crypto.load())
 }
 .featured-market__top small {
   color: var(--vault-mint);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2295,7 +2295,7 @@ onMounted(() => void crypto.load())
 }
 .featured-market__top em {
   color: var(--muted);
-  font-size: 8px;
+  font-size: 11px;
   font-style: normal;
 }
 .featured-market__quote {
@@ -2307,7 +2307,7 @@ onMounted(() => void crypto.load())
   letter-spacing: -0.04em;
 }
 .featured-market__quote span {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
 }
 .featured-market > svg {
@@ -2329,10 +2329,10 @@ onMounted(() => void crypto.load())
 }
 .featured-market__stats small {
   color: var(--muted);
-  font-size: 7px;
+  font-size: 11px;
 }
 .featured-market__stats b {
-  font-size: 10px;
+  font-size: 12px;
 }
 .market-list-heading {
   margin-top: 2px;
@@ -2360,15 +2360,15 @@ onMounted(() => void crypto.load())
   flex: 1;
 }
 .market-tile__top b {
-  font-size: 12px;
+  font-size: 13px;
 }
 .market-tile__top small {
   margin: 1px 0 0 !important;
-  font-size: 8px !important;
+  font-size: 11px !important;
 }
 .market-tile__top em {
   padding: 5px 7px;
-  font-size: 9px;
+  font-size: 11px;
   background: rgba(101, 251, 210, 0.08);
   border-radius: var(--sky-radius-pill);
 }
@@ -2447,7 +2447,7 @@ onMounted(() => void crypto.load())
   max-width: 52px;
   margin-top: 2px;
   color: var(--muted);
-  font-size: 6px;
+  font-size: 10px;
   text-align: center;
 }
 .activity-title {
@@ -2550,7 +2550,7 @@ onMounted(() => void crypto.load())
 .profile-status {
   max-width: 150px;
   color: var(--vault-mint);
-  font-size: 7px;
+  font-size: 11px;
 }
 .profile-card h2 {
   position: relative;
@@ -2564,7 +2564,7 @@ onMounted(() => void crypto.load())
   align-items: center;
   margin: 0;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .profile-card > p svg {
   color: var(--vault-mint);
@@ -2579,13 +2579,13 @@ onMounted(() => void crypto.load())
 }
 .profile-card__id small {
   color: var(--muted);
-  font-size: 7px;
+  font-size: 11px;
   letter-spacing: 0.14em;
 }
 .profile-card__id b {
   grid-column: 1;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.16em;
 }
 .profile-card__id svg {
@@ -2636,7 +2636,7 @@ onMounted(() => void crypto.load())
   line-height: 1;
 }
 .security-score small {
-  font-size: 6px;
+  font-size: 9px;
 }
 .security-overview > span {
   display: grid;
@@ -2644,14 +2644,14 @@ onMounted(() => void crypto.load())
 }
 .security-overview > span small {
   color: var(--vault-mint);
-  font-size: 8px;
+  font-size: 11px;
 }
 .security-overview > span b {
-  font-size: 11px;
+  font-size: 13px;
 }
 .security-overview > span em {
   color: var(--muted);
-  font-size: 7px;
+  font-size: 11px;
   font-style: normal;
   line-height: 1.35;
 }
@@ -2787,7 +2787,7 @@ onMounted(() => void crypto.load())
 .sheet-heading small {
   overflow: hidden;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2840,21 +2840,21 @@ onMounted(() => void crypto.load())
 }
 .sheet-market-summary span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
 }
 .sheet-market-summary b {
   flex: 1;
-  font-size: 13px;
+  font-size: 14px;
 }
 .sheet-market-summary em {
-  font-size: 9px;
+  font-size: 11px;
   font-style: normal;
   font-weight: 800;
 }
 .sheet-copy {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .quote {
