@@ -264,6 +264,22 @@ onMounted(() => void crypto.load())
       "
       large
     >
+      <template #title>
+        <span v-if="!detail" class="vault-header-brand">
+          <i><ChartCandlestick :size="15" /></i>
+          <span>{{ t('name') }}</span>
+        </span>
+        <span v-else>{{ detail.symbol }}</span>
+      </template>
+      <template #subtitle>
+        <span class="vault-header-subtitle">
+          <i v-if="authenticated && !detail" />
+          {{
+            detail?.name ??
+            (authenticated ? `@${profile?.handle}` : t('subtitle'))
+          }}
+        </span>
+      </template>
       <template v-if="detail" #left
         ><SkyLink :aria-label="t('marketDetail.back')" @click="detail = null"
           ><ArrowLeft :size="19" /></SkyLink
@@ -1575,11 +1591,70 @@ onMounted(() => void crypto.load())
   mask-image: linear-gradient(to bottom, #000, transparent 58%);
 }
 .crypto-app :deep(.sky-navbar) {
+  --sky-navbar-safe-area-top: calc(var(--sky-safe-area-top) + 12px);
   background: linear-gradient(
     180deg,
     rgba(5, 8, 13, 0.98),
     rgba(5, 8, 13, 0.78)
   );
+}
+.crypto-app :deep(.sky-navbar__title-container) {
+  align-items: flex-end;
+  padding-bottom: 5px;
+}
+.crypto-app :deep(.sky-navbar__title-container > div) {
+  position: relative;
+  width: 100%;
+  padding-left: 11px;
+}
+.crypto-app :deep(.sky-navbar__title-container > div)::before {
+  position: absolute;
+  top: 5px;
+  bottom: 4px;
+  left: 0;
+  width: 3px;
+  border-radius: var(--sky-radius-pill);
+  content: '';
+  background: linear-gradient(180deg, var(--vault-mint), var(--vault-blue));
+  box-shadow: 0 0 12px rgba(101, 251, 210, 0.35);
+}
+.crypto-app :deep(.sky-navbar__title-container .sky-navbar__title) {
+  font-size: 28px;
+  line-height: 32px;
+  letter-spacing: -0.045em;
+}
+.crypto-app :deep(.sky-navbar__title-container .sky-navbar__subtitle) {
+  margin-top: 1px;
+  font-size: 10px;
+  line-height: 14px;
+}
+.vault-header-brand {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.vault-header-brand > i {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  color: #07100e;
+  background: linear-gradient(145deg, #9affe4, #5f9dff);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 8px;
+  box-shadow: 0 7px 18px rgba(101, 251, 210, 0.16);
+}
+.vault-header-subtitle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.vault-header-subtitle > i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--vault-mint);
+  box-shadow: 0 0 7px var(--vault-mint);
 }
 .crypto-app :deep(.sky-scroll-area__content) {
   position: relative;
