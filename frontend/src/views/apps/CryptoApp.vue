@@ -3043,6 +3043,7 @@ onMounted(() => void crypto.load())
 }
 .quick button {
   align-content: center;
+  min-width: 0;
   min-height: 84px;
   gap: 8px;
   padding: 11px 5px;
@@ -3074,7 +3075,11 @@ onMounted(() => void crypto.load())
     box-shadow 180ms ease;
 }
 .quick button b {
+  max-width: 100%;
+  overflow: hidden;
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .quick button:focus-visible {
   border-color: rgba(101, 251, 210, 0.5);
