@@ -2437,6 +2437,145 @@ onBeforeUnmount(() => {
   flex: none;
   margin: auto;
 }
+.crewlink-auth :deep(.app-profile-auth__mode) {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  min-height: 44px;
+  padding: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(132, 173, 192, 0.18);
+  border-radius: var(--sky-radius-pill, 999px);
+  background: rgba(5, 20, 29, 0.62);
+  box-shadow: none;
+}
+.crewlink-auth :deep(.app-profile-auth__mode::before) {
+  position: absolute;
+  z-index: 0;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 12px) / 2);
+  border-radius: var(--sky-radius-pill, 999px);
+  background: linear-gradient(135deg, #139de9, #1687f5);
+  box-shadow: 0 5px 14px rgba(13, 126, 226, 0.26);
+  content: '';
+  pointer-events: none;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.crewlink-auth :deep(.app-profile-auth__mode--register::before) {
+  transform: translateX(calc(100% + 4px));
+}
+.crewlink-auth :deep(.app-profile-auth__mode-button) {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 34px;
+  border-radius: var(--sky-radius-pill, 999px) !important;
+  color: var(--auth-accent);
+  background: transparent;
+  box-shadow: none;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 100ms ease;
+}
+.crewlink-auth :deep(.app-profile-auth__mode-button--active) {
+  color: #ffffff;
+  background: transparent !important;
+  box-shadow: none;
+}
+.crewlink-auth :deep(.app-profile-auth__mode-button:active) {
+  transform: scale(0.98);
+}
+@media (prefers-reduced-motion: reduce) {
+  .crewlink-auth :deep(.app-profile-auth__mode::before),
+  .crewlink-auth :deep(.app-profile-auth__mode-button) {
+    transition: none;
+  }
+}
+.crewlink-auth :deep(.app-profile-auth__fields) {
+  --sky-list-outer-left: 0px;
+  --sky-list-outer-right: 0px;
+  margin: 0 0 11px;
+  padding: 12px;
+  border: 1px solid rgba(132, 173, 192, 0.1);
+  border-radius: 22px;
+  background: rgba(13, 35, 47, 0.74) !important;
+}
+.crewlink-auth :deep(.app-profile-auth__fields > .sky-list__items) {
+  display: grid;
+  gap: 11px;
+}
+.crewlink-auth :deep(.app-profile-auth__credential-field) {
+  min-height: 56px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid rgba(145, 178, 194, 0.52);
+  border-radius: 11px;
+  color: #f3f8fb;
+  background: rgba(8, 25, 35, 0.32);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.crewlink-auth :deep(.app-profile-auth__credential-field:focus-within) {
+  border-color: var(--auth-accent);
+  background: rgba(11, 34, 45, 0.72);
+  box-shadow: 0 0 0 2px rgba(32, 189, 224, 0.14);
+}
+.crewlink-auth :deep(.app-profile-auth__credential-field .sky-field__border) {
+  display: none;
+}
+.crewlink-auth :deep(.app-profile-auth__credential-field .sky-field__media) {
+  width: 22px;
+  justify-content: center;
+  margin-right: 10px;
+  padding: 0;
+  color: #e6f4f8;
+}
+.crewlink-auth :deep(.app-profile-auth__credential-field .sky-field__inner) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 7px 0;
+}
+.crewlink-auth :deep(.app-profile-auth__credential-field .sky-field__label) {
+  display: block;
+  margin: 0;
+  color: #8ea5b0;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 13px;
+  transform: none;
+}
+.crewlink-auth
+  :deep(.app-profile-auth__credential-field .sky-field__label-text) {
+  position: static;
+  top: auto;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+.crewlink-auth :deep(.app-profile-auth__credential-field .sky-field__control) {
+  margin: 0;
+}
+.crewlink-auth :deep(.app-profile-auth__credential-field .sky-field__input) {
+  height: 24px;
+  min-height: 24px;
+  color: #f3f8fb;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+}
+.crewlink-auth
+  :deep(.app-profile-auth__credential-field .sky-field__input::placeholder) {
+  color: #647b86;
+  opacity: 1;
+}
 .crewlink-logo {
   width: 78px;
   height: 78px;
@@ -3703,13 +3842,18 @@ onBeforeUnmount(() => {
   z-index: 2;
   top: -6px !important;
   right: -9px !important;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 4px;
+  display: grid;
+  min-width: 16px;
+  min-height: 16px;
+  height: 16px;
+  place-items: center;
+  padding: 3px 3px 0;
   border: 2px solid #071018;
   border-radius: 999px;
+  box-sizing: border-box;
   font-size: 7px;
-  line-height: 11px;
+  line-height: 1;
+  text-align: center;
   pointer-events: none;
 }
 .crewlink-sheet__panel__content :deep(.crewlink-nearby-rescan) {

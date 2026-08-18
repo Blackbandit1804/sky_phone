@@ -8610,7 +8610,10 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'development:bootstrap') {
-    crewLinkAuthenticated = false
+    crewLinkAuthenticated = ![
+      'crewlink-login',
+      'crewlink-register',
+    ].includes(testScenario)
     authenticated = testScenario !== 'setup-account-unlinked'
     linkedAccount = authenticated
       ? {

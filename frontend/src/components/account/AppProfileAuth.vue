@@ -118,7 +118,13 @@ const canSubmit = computed(() => {
     </header>
 
     <SkyGlass class="app-profile-auth__card">
-      <SkySegmented raised class="app-profile-auth__mode">
+      <SkySegmented
+        raised
+        class="app-profile-auth__mode"
+        :class="{
+          'app-profile-auth__mode--register': mode === 'register',
+        }"
+      >
         <SkySegmentedButton
           class="app-profile-auth__mode-button app-profile-auth__mode-button--login"
           :class="{
@@ -402,6 +408,7 @@ const canSubmit = computed(() => {
   display: grid;
   width: 66px;
   height: 66px;
+  aspect-ratio: 1;
   flex: none;
   place-items: center;
   border: 2px solid rgba(255, 214, 62, 0.58);
@@ -421,6 +428,8 @@ const canSubmit = computed(() => {
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
 }
 .app-profile-auth__photo img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -438,6 +447,7 @@ const canSubmit = computed(() => {
   border-radius: 50%;
   color: #fff;
   background: var(--auth-accent, #ffd63e);
+  z-index: 1;
 }
 .app-profile-auth__photo > div {
   display: grid;
