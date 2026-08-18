@@ -22,7 +22,6 @@ import {
   Sparkles,
   UserRound,
   WalletCards,
-  X,
 } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import cryptoHeaderLogo from '@/assets/img/app-icons/crypto-header-logo.png'
@@ -1673,16 +1672,6 @@ onUnmounted(() => {
               </h2>
             </span>
           </div>
-          <SkyLink
-            v-if="sheet === 'trade' || sheet === 'send'"
-            component="button"
-            icon-only
-            class="sheet-close"
-            :aria-label="phone.t('Common.close')"
-            @click="closeSheet"
-          >
-            <X :size="18" />
-          </SkyLink>
         </header>
         <template v-if="sheet === 'trade' && selectedMarket">
           <div class="sheet-market-summary">
@@ -1718,11 +1707,14 @@ onUnmounted(() => {
           <div class="trade-entry-card">
             <SkyField
               v-model="amount"
+              class="sheet-field"
+              :error="Boolean(formError)"
               :label="t('trade.quantity')"
               placeholder="0.000000"
               inputmode="decimal"
               outline
-            />
+              ><template #leading><ChartCandlestick :size="18" /></template
+            ></SkyField>
             <div class="trade-entry-meta">
               <span>
                 <small>{{ t('trade.available') }}</small>
@@ -1799,6 +1791,7 @@ onUnmounted(() => {
           <div class="transfer-key-entry">
             <SkyField
               v-model="transferWalletKey"
+              class="sheet-field"
               :label="t('transfer.walletKey')"
               placeholder="VX-0000-0000-0000-0000"
               maxlength="22"
@@ -1840,14 +1833,15 @@ onUnmounted(() => {
           </div>
           <SkyField
             v-model="transferQuantity"
+            class="sheet-field"
             :label="t('transfer.quantity')"
             placeholder="0.000000"
             inputmode="decimal"
             outline
             ><template #trailing
               ><b>{{ transferMarket?.symbol }}</b></template
-            ></SkyField
-          >
+            ><template #leading><Send :size="18" /></template
+          ></SkyField>
           <div class="transfer-balance">
             <span>{{ t('transfer.available') }}</span>
             <b
@@ -1857,6 +1851,7 @@ onUnmounted(() => {
           </div>
           <SkyField
             v-model="transferPassword"
+            class="sheet-field"
             :label="t('transfer.password')"
             type="password"
             autocomplete="current-password"
@@ -1885,7 +1880,8 @@ onUnmounted(() => {
             <div class="profile-edit-fields">
               <SkyField
                 v-model="profileHandle"
-                class="profile-edit-field"
+                class="sheet-field profile-edit-field"
+                :error="Boolean(formError)"
                 :label="t('auth.handle')"
                 maxlength="20"
                 autocomplete="username"
@@ -1894,7 +1890,8 @@ onUnmounted(() => {
               ></SkyField>
               <SkyField
                 v-model="profileCurrentPassword"
-                class="profile-edit-field"
+                class="sheet-field profile-edit-field"
+                :error="Boolean(formError)"
                 :label="t('profile.currentPassword')"
                 :placeholder="t('profile.currentPasswordPlaceholder')"
                 type="password"
@@ -1904,7 +1901,8 @@ onUnmounted(() => {
               ></SkyField>
               <SkyField
                 v-model="profileNewPassword"
-                class="profile-edit-field"
+                class="sheet-field profile-edit-field"
+                :error="Boolean(formError)"
                 :label="t('profile.newPassword')"
                 :placeholder="t('profile.newPasswordPlaceholder')"
                 type="password"
@@ -1941,7 +1939,7 @@ onUnmounted(() => {
             <div class="settlement-fields">
               <SkyField
                 v-model="amount"
-                class="settlement-field"
+                class="sheet-field settlement-field"
                 :error="Boolean(formError)"
                 :label="t('settlement.amount')"
                 placeholder="0"
@@ -1951,7 +1949,7 @@ onUnmounted(() => {
               ></SkyField>
               <SkyField
                 v-model="financialPassword"
-                class="settlement-field"
+                class="sheet-field settlement-field"
                 :error="Boolean(formError)"
                 :label="t('auth.password')"
                 type="password"
@@ -2696,7 +2694,7 @@ onUnmounted(() => {
 .sheet {
   display: grid;
   gap: 13px;
-  padding: 2px 18px calc(var(--sky-safe-area-bottom) + 20px);
+  padding: 2px 12px calc(var(--sky-safe-area-bottom) + 20px);
 }
 .sheet h2,
 .sheet p {
@@ -4096,13 +4094,14 @@ onUnmounted(() => {
   align-items: center;
 }
 .sheet-header {
-  min-height: 52px;
-  justify-content: space-between;
+  min-height: 58px;
+  justify-content: flex-start;
   gap: 12px;
-  padding-bottom: 10px;
+  padding: 0 2px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 .sheet-heading {
+  width: 100%;
   min-width: 0;
   gap: 10px;
 }
@@ -4145,17 +4144,6 @@ onUnmounted(() => {
 .sheet-crypto-logo {
   width: 40px;
   height: 40px;
-}
-.sheet-header :deep(.sheet-close) {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  color: #f8fbfd;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 50%;
 }
 .sheet-market-summary {
   justify-content: space-between;
@@ -4347,16 +4335,15 @@ onUnmounted(() => {
 }
 .transfer-key-entry {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 7px;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
 }
 .transfer-resolve {
-  width: auto;
-  min-width: 72px;
-  min-height: 48px;
-  padding: 0 11px;
-  border-radius: 14px;
+  width: 100%;
+  min-height: 50px;
+  font-size: 12px;
+  font-weight: 850;
+  border-radius: 15px;
 }
 .transfer-recipient {
   gap: 10px;
@@ -4444,15 +4431,6 @@ onUnmounted(() => {
 }
 .sheet--settlement {
   gap: 14px;
-  padding-right: 12px;
-  padding-left: 12px;
-}
-.sheet--settlement .sheet-header {
-  min-height: 58px;
-  padding: 0 2px 12px;
-}
-.sheet--settlement .sheet-heading {
-  width: 100%;
 }
 .settlement-form {
   display: grid;
@@ -4496,7 +4474,7 @@ onUnmounted(() => {
   display: grid;
   gap: 10px;
 }
-.settlement-field {
+.sheet-field {
   min-height: 64px;
   margin: 0;
   padding: 0 15px;
@@ -4506,14 +4484,14 @@ onUnmounted(() => {
   border-radius: 17px;
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
 }
-.settlement-field:focus-within {
+.sheet-field:focus-within {
   background:
     linear-gradient(145deg, rgba(101, 251, 210, 0.07), transparent), #090f16;
   box-shadow:
     0 0 0 3px rgba(101, 251, 210, 0.065),
     inset 0 1px rgba(255, 255, 255, 0.05);
 }
-.settlement-field :deep(.sky-field__media) {
+.sheet-field :deep(.sky-field__media) {
   display: grid;
   width: 36px;
   height: 36px;
@@ -4526,25 +4504,25 @@ onUnmounted(() => {
   border: 1px solid rgba(101, 251, 210, 0.13);
   border-radius: 12px;
 }
-.settlement-field :deep(.sky-field__inner) {
+.sheet-field :deep(.sky-field__inner) {
   padding: 12px 0 10px;
 }
-.settlement-field :deep(.sky-field__label) {
+.sheet-field :deep(.sky-field__label) {
   margin-top: 0;
   color: rgba(255, 255, 255, 0.55);
   font-size: 10px;
   font-weight: 750;
 }
-.settlement-field :deep(.sky-field__label-text) {
+.sheet-field :deep(.sky-field__label-text) {
   top: 0;
   margin: 0;
   padding: 0;
   background: transparent;
 }
-.settlement-field :deep(.sky-field__control) {
+.sheet-field :deep(.sky-field__control) {
   margin: -2px 0 0;
 }
-.settlement-field :deep(.sky-field__input) {
+.sheet-field :deep(.sky-field__input) {
   height: 31px;
   min-height: 31px;
   color: #fff;
@@ -4552,18 +4530,18 @@ onUnmounted(() => {
   font-weight: 700;
   line-height: 21px;
 }
-.settlement-field :deep(.sky-field__input::placeholder) {
+.sheet-field :deep(.sky-field__input::placeholder) {
   color: rgba(255, 255, 255, 0.24);
 }
-.settlement-field :deep(.sky-field__border) {
+.sheet-field :deep(.sky-field__border) {
   inset: 0;
   border-color: rgba(255, 255, 255, 0.12);
   border-radius: 17px;
 }
-.settlement-field:focus-within :deep(.sky-field__border) {
+.sheet-field:focus-within :deep(.sky-field__border) {
   border-color: rgba(101, 251, 210, 0.58);
 }
-.settlement-field.sky-field--error :deep(.sky-field__border) {
+.sheet-field.sky-field--error :deep(.sky-field__border) {
   border-color: rgba(255, 117, 136, 0.6);
 }
 .settlement-error {
@@ -4591,14 +4569,6 @@ onUnmounted(() => {
 }
 .sheet--profile {
   gap: 14px;
-  padding-right: 12px;
-  padding-left: 12px;
-}
-.sheet--profile .sheet-header {
-  min-height: 56px;
-}
-.sheet--profile .sheet-heading {
-  width: 100%;
 }
 .sheet--profile .sheet-copy {
   padding: 0 3px;
@@ -4613,71 +4583,6 @@ onUnmounted(() => {
 .profile-edit-fields {
   display: grid;
   gap: 9px;
-}
-.profile-edit-field {
-  min-height: 62px;
-  margin: 0;
-  padding: 0 15px;
-  color: #f8fbfd;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent), #0a1017;
-  border-radius: 16px;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
-}
-.profile-edit-field:focus-within {
-  background:
-    linear-gradient(145deg, rgba(101, 251, 210, 0.07), transparent), #0a1017;
-  box-shadow:
-    0 0 0 3px rgba(101, 251, 210, 0.06),
-    inset 0 1px rgba(255, 255, 255, 0.05);
-}
-.profile-edit-field :deep(.sky-field__media) {
-  width: 34px;
-  height: 34px;
-  justify-content: center;
-  margin-right: 11px;
-  padding: 0;
-  color: var(--vault-mint);
-  background: rgba(101, 251, 210, 0.07);
-  border: 1px solid rgba(101, 251, 210, 0.12);
-  border-radius: 11px;
-}
-.profile-edit-field :deep(.sky-field__inner) {
-  padding: 12px 0 10px;
-}
-.profile-edit-field :deep(.sky-field__label) {
-  margin-top: 0;
-  color: rgba(255, 255, 255, 0.56);
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.01em;
-}
-.profile-edit-field :deep(.sky-field__label-text) {
-  top: 0;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-}
-.profile-edit-field :deep(.sky-field__control) {
-  margin: -2px 0 0;
-}
-.profile-edit-field :deep(.sky-field__input) {
-  height: 30px;
-  min-height: 30px;
-  font-size: 14px;
-  font-weight: 650;
-  line-height: 20px;
-}
-.profile-edit-field :deep(.sky-field__input::placeholder) {
-  color: rgba(255, 255, 255, 0.28);
-}
-.profile-edit-field :deep(.sky-field__border) {
-  inset: 0;
-  border-color: rgba(255, 255, 255, 0.11);
-  border-radius: 16px;
-}
-.profile-edit-field:focus-within :deep(.sky-field__border) {
-  border-color: rgba(101, 251, 210, 0.52);
 }
 .profile-edit-note {
   display: flex;

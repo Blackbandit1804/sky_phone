@@ -177,8 +177,7 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('class="vault-view"')
     expect(source).toContain('@keyframes vault-view-in')
     expect(source).toContain('class="sheet-header"')
-    expect(source).toContain('class="sheet-close"')
-    expect(source).toContain("v-if=\"sheet === 'trade' || sheet === 'send'\"")
+    expect(source).not.toContain('class="sheet-close"')
     expect(source).toContain('class="sheet-market-summary"')
     expect(source).toContain('grabber-clickable')
     expect(source).toContain('@grabberclick="closeSheet"')
@@ -190,20 +189,23 @@ describe('VaultX crypto app contracts', () => {
       "'sheet--settlement': sheet === 'deposit' || sheet === 'withdraw'",
     )
     expect(source).toContain('class="settlement-form"')
-    expect(source.match(/class="settlement-field"/g)).toHaveLength(2)
+    expect(source.match(/class="sheet-field settlement-field"/g)).toHaveLength(
+      2,
+    )
     expect(source).toContain('class="settlement-submit"')
-    expect(source).toContain('.settlement-field :deep(.sky-field__border)')
-    expect(source).toContain('.sheet--settlement .sheet-heading')
+    expect(source).toContain('.sheet-field :deep(.sky-field__border)')
   })
 
   it('gives profile editing a full-width field and save treatment', () => {
     expect(source).toContain("'sheet--profile': sheet === 'profile'")
     expect(source).toContain('class="profile-edit-fields"')
-    expect(source.match(/class="profile-edit-field"/g)).toHaveLength(3)
+    expect(
+      source.match(/class="sheet-field profile-edit-field"/g),
+    ).toHaveLength(3)
     expect(source).toContain('autocomplete="current-password"')
     expect(source).toContain('autocomplete="new-password"')
     expect(source).toContain('class="profile-save-button"')
-    expect(source).toContain('.profile-edit-field :deep(.sky-field__border)')
+    expect(source.match(/class="sheet-field(?: [^"]+)?"/g)).toHaveLength(9)
   })
 
   it('keeps app typography readable on the scaled phone surface', () => {
