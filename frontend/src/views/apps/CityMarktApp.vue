@@ -23,6 +23,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Pencil,
+  Phone as PhoneIcon,
   Rows3,
   Search,
   Send,
@@ -38,6 +39,7 @@ import {
   SkyButton,
   SkyGlass,
   SkyIcon,
+  SkyLink,
   SkyNotification,
   SkyNavbar,
   SkyAppPage,
@@ -46,7 +48,7 @@ import {
   SkyTabButton,
   SkyToolbarPane,
 } from '@/ui'
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import CityMarktSelect from '@/components/citymarkt/CityMarktSelect.vue'
@@ -63,6 +65,7 @@ import { useMessageMediaStore } from '@/stores/messageMedia'
 import { usePagesStore } from '@/stores/pages'
 import { usePhoneStore } from '@/stores/phone'
 import { parseDatabaseDate, type DatabaseDateValue } from '@/utils/date'
+import { formatPhoneNumber } from '@/utils/phone'
 import type {
   MarketplaceCategory,
   MarketplaceChat,
@@ -128,10 +131,13 @@ const pages = usePagesStore()
 const logoutDialogOpen = ref(false)
 const authMode = ref<'login' | 'register'>('login')
 const authError = ref('')
+const authPassword = ref('')
+const authConfirmPassword = ref('')
 const tab = ref<Tab>('discover')
 const screen = ref<Screen>('main')
 const selectedListing = ref<MarketplaceListing | null>(null)
 const selectedChat = ref<MarketplaceChat | null>(null)
+const chatMessages = ref<HTMLElement | null>(null)
 const search = ref('')
 const listingLayout = ref<'compact' | 'wide'>('compact')
 const category = ref<MarketplaceCategory | 'all'>('all')
@@ -558,61 +564,57 @@ async function finishAuthentication(): Promise<void> {
 function switchAuthMode(mode: 'login' | 'register'): void {
   authMode.value = mode
   authError.value = ''
-  profileDraft.value.displayName =
-    mode === 'login'
-      ? (marketplace.profile?.display_name ?? '')
-      : (account.email.split('@')[0] ?? '')
+  authPassword.value = ''
+  authConfirmPassword.value = ''
   if (mode === 'login') selectedProfilePhoto.value = null
 }
 
 async function submitCityMarktAuth(): Promise<void> {
-  const username = profileDraft.value.displayName.trim()
   authError.value = ''
   if (!account.email) {
     authError.value = phone.t('Apps.citymarkt.authErrors.no_ifruit_account')
     return
   }
-  if (username.length < 2 || username.length > 40) {
-    authError.value = phone.t('Apps.citymarkt.authErrors.invalid_username')
+  if (authPassword.value.length < 6 || authPassword.value.length > 64) {
+    authError.value = phone.t('Apps.citymarkt.authErrors.invalid_password')
+    return
+  }
+  if (
+    authMode.value === 'register' &&
+    authConfirmPassword.value !== authPassword.value
+  ) {
+    authError.value = phone.t('Apps.citymarkt.passwordsMismatch')
     return
   }
 
   profilePending.value = true
-  await marketplace.loadProfile()
-  if (authMode.value === 'login') {
-    profilePending.value = false
-    if (!marketplace.profile?.exists) {
-      authError.value = phone.t('Apps.citymarkt.authErrors.profile_not_found')
-      return
-    }
-    if (
-      marketplace.profile.display_name.trim().toLocaleLowerCase(phone.lang) !==
-      username.toLocaleLowerCase(phone.lang)
-    ) {
-      authError.value = phone.t('Apps.citymarkt.authErrors.invalid_username')
-      return
-    }
-  } else {
-    if (marketplace.profile?.exists) {
-      profilePending.value = false
-      authError.value = phone.t('Apps.citymarkt.authErrors.profile_exists')
-      return
-    }
-    const response = await marketplace.saveProfile({
-      avatarMediaId:
-        selectedProfilePhoto.value?.id ?? profileDraft.value.avatarMediaId,
-      bio: '',
-      displayName: username,
-    })
-    profilePending.value = false
-    if (!response.success) {
-      authError.value = phone.t(
-        `Apps.citymarkt.errors.${response.error ?? 'default'}`,
-      )
-      return
-    }
+  const response = await marketplace.authenticate(
+    authMode.value,
+    authPassword.value,
+    selectedProfilePhoto.value?.id ?? profileDraft.value.avatarMediaId,
+  )
+  profilePending.value = false
+  if (!response.success) {
+    const knownErrors = [
+      'invalid_credentials',
+      'invalid_password',
+      'invalid_profile_image',
+      'profile_exists',
+      'profile_not_found',
+      'rate_limited',
+    ]
+    authError.value = phone.t(
+      `Apps.citymarkt.authErrors.${
+        response.error && knownErrors.includes(response.error)
+          ? response.error
+          : 'default'
+      }`,
+    )
+    return
   }
 
+  authPassword.value = ''
+  authConfirmPassword.value = ''
   appAuth.signIn('citymarkt', account.email)
   await finishAuthentication()
 }
@@ -839,7 +841,14 @@ async function sendFirstMessage(): Promise<void> {
   if (chatResponse.success && chatResponse.data) {
     selectedChat.value = chatResponse.data
     screen.value = 'chat'
+    await scrollChatToBottom()
   }
+}
+
+async function scrollChatToBottom(): Promise<void> {
+  await nextTick()
+  if (!chatMessages.value) return
+  chatMessages.value.scrollTop = chatMessages.value.scrollHeight
 }
 
 async function openChat(id: string): Promise<void> {
@@ -849,6 +858,7 @@ async function openChat(id: string): Promise<void> {
     message.value = ''
     offerPanelOpen.value = false
     screen.value = 'chat'
+    await scrollChatToBottom()
     await Promise.all([marketplace.loadInquiries(), marketplace.loadCounts()])
   }
 }
@@ -933,7 +943,10 @@ async function sendChatMessage(): Promise<void> {
     const refreshed = await marketplace.getInquiry(
       selectedChat.value.inquiry.id,
     )
-    if (refreshed.data) selectedChat.value = refreshed.data
+    if (refreshed.data) {
+      selectedChat.value = refreshed.data
+      await scrollChatToBottom()
+    }
   } else setFeedback(`Apps.citymarkt.errors.${response.error ?? 'default'}`)
 }
 
@@ -1076,7 +1089,20 @@ onMounted(async () => {
             : `Apps.citymarkt.tabs.${tab}`,
         )
       "
-    />
+    >
+      <template v-if="tab === 'profile'" #right>
+        <sky-link
+          component="button"
+          icon-only
+          type="button"
+          :aria-label="phone.t('Common.signOut')"
+          :title="phone.t('Common.signOut')"
+          @click="logoutDialogOpen = true"
+        >
+          <LogOut :size="18" />
+        </sky-link>
+      </template>
+    </sky-navbar>
 
     <div v-if="!onboardingReady" class="citymarkt__gate-loading">
       {{ phone.t('Common.loading') }}
@@ -1281,7 +1307,8 @@ onMounted(async () => {
         <div v-if="!isAuthenticated" class="citymarkt__auth">
           <CityMarktAuth
             v-model:mode="authMode"
-            v-model:username="profileDraft.displayName"
+            v-model:password="authPassword"
+            v-model:confirm-password="authConfirmPassword"
             :avatar-url="selectedProfilePhoto?.url ?? null"
             :email="account.email"
             :error="authError"
@@ -1470,16 +1497,6 @@ onMounted(async () => {
               >
             </div>
           </template>
-          <sky-button
-            large
-            rounded
-            outline
-            class="citymarkt__logout"
-            @click="logoutDialogOpen = true"
-          >
-            <LogOut :size="17" />
-            {{ phone.t('Common.signOut') }}
-          </sky-button>
         </template>
       </template>
     </section>
@@ -1489,14 +1506,16 @@ onMounted(async () => {
       class="citymarkt__detail"
     >
       <div class="citymarkt__glass-actions">
-        <sky-glass
+        <sky-link
           component="button"
+          icon-only
           type="button"
-          class="citymarkt-detail-action"
+          class="citymarkt-detail-action citymarkt-detail-action--back"
           :aria-label="phone.t('Common.back')"
+          :title="phone.t('Common.back')"
           @click="screen = 'main'"
           ><ArrowLeft :size="19"
-        /></sky-glass>
+        /></sky-link>
         <div>
           <sky-glass
             v-if="!selectedListing.is_owner"
@@ -1536,7 +1555,13 @@ onMounted(async () => {
         :next-label="phone.t('Apps.citymarkt.nextPhoto')"
         :photo-label="phone.t('Apps.citymarkt.photo')"
       />
-      <div class="citymarkt__detail-body">
+      <div
+        class="citymarkt__detail-body"
+        :class="{
+          'citymarkt__detail-body--contact':
+            !selectedListing.is_owner && isAuthenticated,
+        }"
+      >
         <div class="citymarkt__price-row">
           <div>
             <h2>{{ formatPrice(selectedListing) }}</h2>
@@ -1575,10 +1600,18 @@ onMounted(async () => {
             >
           </div>
         </div>
-        <p v-if="selectedListing.phone_number" class="citymarkt__phone">
-          {{ phone.t('Apps.citymarkt.phone') }}:
-          {{ selectedListing.phone_number }}
-        </p>
+        <sky-glass
+          v-if="selectedListing.phone_number"
+          class="citymarkt__phone"
+        >
+          <span class="citymarkt__phone-icon"><PhoneIcon :size="18" /></span>
+          <span class="citymarkt__phone-copy">
+            <small>{{ phone.t('Apps.citymarkt.phone') }}</small>
+            <strong>{{
+              formatPhoneNumber(selectedListing.phone_number)
+            }}</strong>
+          </span>
+        </sky-glass>
         <button
           v-if="
             selectedListing.status === 'active' ||
@@ -1624,7 +1657,8 @@ onMounted(async () => {
             ><button
               v-if="
                 selectedListing.status === 'reserved' ||
-                selectedListing.status === 'expired'
+                selectedListing.status === 'expired' ||
+                selectedListing.status === 'sold'
               "
               @click="setListingStatus('active')"
             >
@@ -1655,20 +1689,23 @@ onMounted(async () => {
               v-model="firstMessage"
               maxlength="1000"
               :placeholder="phone.t('Apps.citymarkt.messagePlaceholder')"
-            /><button
-              :disabled="!firstMessage.trim()"
-              @click="sendFirstMessage"
-            >
-              <MessageCircle :size="17" />{{
-                phone.t('Apps.citymarkt.contactSeller')
-              }}
-            </button>
+            />
           </div>
         </template>
         <sky-glass v-else class="citymarkt__glass-auth">{{
           phone.t('Apps.citymarkt.signInToMessage')
         }}</sky-glass>
       </div>
+      <button
+        v-if="!selectedListing.is_owner && isAuthenticated"
+        class="citymarkt__contact-fixed"
+        :disabled="!firstMessage.trim()"
+        @click="sendFirstMessage"
+      >
+        <MessageCircle :size="17" />{{
+          phone.t('Apps.citymarkt.contactSeller')
+        }}
+      </button>
     </section>
 
     <section v-else-if="screen === 'sell'" class="citymarkt__sell">
@@ -1905,6 +1942,15 @@ onMounted(async () => {
           <small
             ><MapPin :size="13" />
             {{ label('districts', draft.district) }}</small
+          ><div
+            v-if="draft.showPhone && phone.device?.sim?.number"
+            class="citymarkt__preview-phone"
+          >
+            <span class="citymarkt__phone-icon"><PhoneIcon :size="16" /></span>
+            <span class="citymarkt__phone-copy">
+              <small>{{ phone.t('Apps.citymarkt.phone') }}</small>
+              <strong>{{ formatPhoneNumber(phone.device.sim.number) }}</strong>
+            </span></div
           ></template
         >
       </div>
@@ -1925,7 +1971,14 @@ onMounted(async () => {
       class="citymarkt__chat"
     >
       <header>
-        <sky-button component="button" clear rounded @click="closeChat"
+        <sky-button
+          component="button"
+          class="citymarkt__chat-back"
+          clear
+          rounded
+          :aria-label="phone.t('Common.back')"
+          :title="phone.t('Common.back')"
+          @click="closeChat"
           ><ArrowLeft :size="19"
         /></sky-button>
         <div>
@@ -1944,7 +1997,7 @@ onMounted(async () => {
         </div>
         <i>{{ label('status', selectedChat.inquiry.status) }}</i></sky-glass
       >
-      <div class="citymarkt__messages">
+      <div ref="chatMessages" class="citymarkt__messages">
         <template v-for="item in chatTimeline" :key="item.key">
           <article
             v-if="item.kind === 'message'"
@@ -2030,7 +2083,13 @@ onMounted(async () => {
           v-model="message"
           maxlength="1000"
           :placeholder="phone.t('Apps.citymarkt.writeMessage')"
-        /><button :disabled="!message.trim()"><Send :size="17" /></button>
+        /><button
+          :aria-label="phone.t('Common.send')"
+          :title="phone.t('Common.send')"
+          :disabled="!message.trim()"
+        >
+          <Send :size="17" />
+        </button>
       </form>
     </section>
 
@@ -2039,7 +2098,13 @@ onMounted(async () => {
       class="citymarkt__report"
     >
       <header>
-        <sky-button component="button" clear rounded @click="screen = 'detail'"
+        <sky-button
+          component="button"
+          clear
+          rounded
+          :aria-label="phone.t('Common.back')"
+          :title="phone.t('Common.back')"
+          @click="screen = 'detail'"
           ><ArrowLeft :size="19" /></sky-button
         ><strong>{{ phone.t('Apps.citymarkt.reportListing') }}</strong>
       </header>
@@ -2275,7 +2340,7 @@ onMounted(async () => {
 }
 .citymarkt__section-title div {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
 }
 .citymarkt__section-title strong {
@@ -2561,6 +2626,18 @@ onMounted(async () => {
   overflow: hidden;
   background: #151613;
 }
+.citymarkt__detail {
+  padding-top: var(--sky-safe-area-top);
+  display: flex;
+  flex-direction: column;
+}
+.citymarkt__chat {
+  padding-top: var(--sky-safe-area-top);
+  padding-bottom: calc(var(--sky-safe-area-bottom) + 4px);
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+}
 .citymarkt--light .citymarkt__detail,
 .citymarkt--light .citymarkt__sell,
 .citymarkt--light .citymarkt__chat,
@@ -2596,9 +2673,13 @@ onMounted(async () => {
   font-size: 8px;
 }
 .citymarkt__detail-body {
-  height: calc(100% - 205px);
+  min-height: 0;
   padding: 13px 15px 35px;
+  flex: 1;
   overflow-y: auto;
+}
+.citymarkt__detail-body--contact {
+  padding-bottom: calc(var(--sky-safe-area-bottom) + 72px);
 }
 .citymarkt__price-row {
   display: flex;
@@ -2655,10 +2736,47 @@ onMounted(async () => {
 .citymarkt__seller small {
   display: block;
 }
-.citymarkt__seller small,
-.citymarkt__phone {
+.citymarkt__seller small {
   color: var(--muted);
   font-size: 9px;
+}
+.citymarkt__phone,
+.citymarkt__preview-phone {
+  margin: 4px 0 10px;
+  padding: 9px 11px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.citymarkt__phone-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: #ffcc001a;
+  color: var(--yellow);
+}
+.citymarkt__phone-copy {
+  min-width: 0;
+}
+.citymarkt__phone-copy small,
+.citymarkt__phone-copy strong {
+  display: block;
+}
+.citymarkt__phone-copy small {
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+.citymarkt__phone-copy strong {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
 }
 .citymarkt__composer textarea {
   width: 100%;
@@ -2672,6 +2790,7 @@ onMounted(async () => {
   font-size: 10px;
 }
 .citymarkt__composer button,
+.citymarkt__contact-fixed,
 .citymarkt__owner-actions button,
 .citymarkt__report > div button {
   width: 100%;
@@ -2687,6 +2806,19 @@ onMounted(async () => {
   color: #171816;
   font-size: 10px;
   font-weight: 900;
+}
+.citymarkt__contact-fixed {
+  position: absolute;
+  z-index: 3;
+  right: calc(var(--sky-safe-area-right) + 15px);
+  bottom: calc(var(--sky-safe-area-bottom) + 10px);
+  left: calc(var(--sky-safe-area-left) + 15px);
+  width: auto;
+  min-height: 44px;
+  margin: 0;
+}
+.citymarkt__contact-fixed:disabled {
+  opacity: 0.45;
 }
 .citymarkt__owner-actions {
   display: grid;
@@ -2708,7 +2840,6 @@ onMounted(async () => {
   text-align: center;
   font-size: 10px;
 }
-.citymarkt__sell > header,
 .citymarkt__chat > header,
 .citymarkt__report > header {
   height: 54px;
@@ -2718,8 +2849,12 @@ onMounted(async () => {
   gap: 8px;
   border-bottom: 1px solid #ffffff12;
 }
-.citymarkt__sell > header > button:first-child,
-.citymarkt__chat > header > button,
+.citymarkt__chat > header {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  background: inherit;
+}
 .citymarkt__report > header > button {
   width: 32px;
   height: 32px;
@@ -2730,31 +2865,23 @@ onMounted(async () => {
   place-items: center;
   background: var(--panel);
 }
-.citymarkt__sell > header > div,
 .citymarkt__chat > header > div {
+  min-width: 0;
   flex: 1;
 }
-.citymarkt__sell > header strong,
-.citymarkt__sell > header small,
 .citymarkt__chat > header strong,
 .citymarkt__chat > header small {
   display: block;
 }
-.citymarkt__sell > header small,
 .citymarkt__chat > header small {
   color: var(--muted);
   font-size: 9px;
 }
-.citymarkt__sell > header > button:last-child {
-  padding: 6px;
-  border: 0;
-  background: none;
-  color: var(--yellow);
-  font-size: 10px;
-  font-weight: 800;
-}
-.citymarkt__sell > header > button:disabled {
-  opacity: 0.35;
+.citymarkt__chat > header strong,
+.citymarkt__chat > header small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .citymarkt__progress {
   height: 3px;
@@ -2887,6 +3014,10 @@ onMounted(async () => {
   gap: 3px;
   color: var(--muted);
 }
+.citymarkt__sell-body > .citymarkt__preview-phone {
+  margin-top: 8px;
+  background: var(--panel);
+}
 .citymarkt__previous {
   position: absolute;
   bottom: 33px;
@@ -2955,11 +3086,10 @@ onMounted(async () => {
   text-align: right;
 }
 .citymarkt__chat-composer {
-  position: absolute;
-  right: 8px;
-  bottom: 29px;
-  left: 8px;
+  position: static;
+  flex: none;
   height: 40px;
+  margin: 0 8px;
   padding: 4px 4px 4px 10px;
   border-radius: 14px;
   display: flex;
@@ -3121,22 +3251,23 @@ onMounted(async () => {
   background: #0000000b;
 }
 .citymarkt__messages {
-  position: absolute;
-  top: 158px;
-  right: 0;
-  bottom: 116px;
-  left: 0;
+  position: static;
+  min-height: 0;
+  flex: 1 1 auto;
   height: auto;
 }
 .citymarkt__messages .citymarkt-offer {
   width: 92%;
   max-width: 92%;
+  align-self: flex-start;
+}
+.citymarkt__messages .citymarkt-offer--own {
+  align-self: flex-end;
 }
 .citymarkt__chat-actions {
-  position: absolute;
-  right: 9px;
-  bottom: 75px;
-  left: 9px;
+  position: static;
+  flex: none;
+  margin: 0 9px 6px;
   display: flex;
   gap: 5px;
 }
@@ -3695,8 +3826,7 @@ onMounted(async () => {
 .citymarkt__list b,
 .citymarkt__profile small,
 .citymarkt__price-row > small,
-.citymarkt__seller small,
-.citymarkt__phone {
+.citymarkt__seller small {
   font-size: 11.5px;
 }
 .citymarkt__inquiries small,
@@ -3721,6 +3851,7 @@ onMounted(async () => {
   font-size: 13px;
 }
 .citymarkt__composer button,
+.citymarkt__contact-fixed,
 .citymarkt__owner-actions button,
 .citymarkt__report > div button {
   font-size: 13px;
@@ -3842,9 +3973,9 @@ onMounted(async () => {
 .citymarkt__glass-actions {
   position: absolute;
   z-index: 2;
-  top: 52px;
-  right: 12px;
-  left: 12px;
+  top: calc(var(--sky-safe-area-top) + 8px);
+  right: calc(var(--sky-safe-area-right) + 12px);
+  left: calc(var(--sky-safe-area-left) + 12px);
   display: flex;
   justify-content: space-between;
 }
@@ -3861,6 +3992,16 @@ onMounted(async () => {
   overflow: hidden;
   display: grid;
   place-items: center;
+}
+.citymarkt button.citymarkt-detail-action--back {
+  border: 1px solid #ffffff26;
+  background: #181916b8;
+  color: #fff;
+  box-shadow: 0 5px 14px #00000059;
+  backdrop-filter: blur(12px) saturate(1.15);
+}
+.citymarkt button.citymarkt-detail-action--back:hover {
+  background: #24251fd9;
 }
 .citymarkt-detail-action.active {
   color: var(--yellow);
@@ -4003,6 +4144,8 @@ onMounted(async () => {
   overflow: hidden;
   font-size: 12px;
   line-height: 15px;
+  white-space: normal;
+  overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -4220,12 +4363,16 @@ onMounted(async () => {
   color: var(--yellow);
 }
 .citymarkt__glass-chat-listing {
+  position: relative;
+  z-index: 2;
+  flex: none;
   margin: 8px 10px;
   padding: 8px 10px;
   border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  box-shadow: 0 8px 18px #0000004d;
 }
 .citymarkt__glass-chat-listing strong,
 .citymarkt__glass-chat-listing span {
@@ -4240,7 +4387,6 @@ onMounted(async () => {
   font-style: normal;
 }
 .citymarkt-create-navbar {
-  --sky-safe-area-top: 46px;
   position: absolute;
   z-index: 5;
   top: 0;
@@ -4261,9 +4407,26 @@ onMounted(async () => {
   font-size: 13px;
 }
 .citymarkt__profile-editor {
+  min-height: 100%;
   padding: 14px;
   border: 1px solid #ffffff14;
   border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.citymarkt__chat-back {
+  width: var(--sky-touch-target);
+  min-width: var(--sky-touch-target);
+  max-width: var(--sky-touch-target);
+  height: var(--sky-touch-target);
+  min-height: var(--sky-touch-target);
+  max-height: var(--sky-touch-target);
+  padding: 0;
+  border: 0;
+  flex: 0 0 var(--sky-touch-target);
+  display: grid;
+  place-items: center;
   background: var(--panel);
 }
 .citymarkt__profile-editor > header {
@@ -4360,7 +4523,8 @@ onMounted(async () => {
   min-height: 72px;
 }
 .citymarkt__profile-actions {
-  margin-top: 14px;
+  margin-top: auto;
+  padding-top: 14px;
   display: flex;
   gap: 8px;
 }
@@ -4379,11 +4543,6 @@ onMounted(async () => {
 }
 .citymarkt__profile-actions button:disabled {
   opacity: 0.4;
-}
-.citymarkt__logout {
-  width: 100%;
-  margin-top: 12px;
-  color: #ff796f;
 }
 :global(.citymarkt--light) .citymarkt__profile-editor {
   border-color: #00000012;
@@ -4424,14 +4583,19 @@ onMounted(async () => {
 .citymarkt__sell > .citymarkt__progress {
   position: absolute;
   z-index: 4;
-  top: 101px;
+  top: calc(
+    var(--sky-safe-area-top) + var(--sky-navbar-height) + var(--sky-space-3)
+  );
   right: 0;
   left: 0;
   background: transparent;
 }
 .citymarkt__sell > .citymarkt__sell-body {
   position: absolute;
-  top: 104px;
+  top: calc(
+    var(--sky-safe-area-top) + var(--sky-navbar-height) + var(--sky-space-3) +
+      3px
+  );
   right: 0;
   bottom: 0;
   left: 0;
@@ -4526,6 +4690,13 @@ onMounted(async () => {
 }
 
 .citymarkt__content--auth {
-  padding: 68px 18px 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 54px 18px 30px;
+}
+.citymarkt__content--auth .citymarkt__auth {
+  width: 100%;
+  min-height: 0;
 }
 </style>

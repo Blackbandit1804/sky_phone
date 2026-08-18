@@ -61,6 +61,7 @@ local server_callbacks = {
     "mail:empty-trash",
     "marketplace:list",
     "marketplace:profile",
+    "marketplace:auth",
     "marketplace:profile-save",
     "marketplace:get",
     "marketplace:list-own",

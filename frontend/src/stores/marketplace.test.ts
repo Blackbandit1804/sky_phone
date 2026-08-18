@@ -47,4 +47,28 @@ describe('marketplace store offers', () => {
       inquiryId: 'inquiry-id',
     })
   })
+
+  it('authenticates CityMarkt with the iFruit password and stores the profile', async () => {
+    const profile = {
+      avatar_media_id: null,
+      avatar_url: null,
+      bio: '',
+      display_name: 'demo',
+      email: 'demo@ifruit.com',
+      exists: true,
+      listing_count: 0,
+    }
+    mockNuiCall.mockResolvedValueOnce({ data: profile, success: true })
+
+    const marketplace = useMarketplaceStore()
+    const response = await marketplace.authenticate('register', 'secret12', 7)
+
+    expect(response).toEqual({ data: profile, success: true })
+    expect(mockNuiCall).toHaveBeenCalledWith('marketplace:auth', {
+      avatarMediaId: 7,
+      mode: 'register',
+      password: 'secret12',
+    })
+    expect(marketplace.profile).toEqual(profile)
+  })
 })

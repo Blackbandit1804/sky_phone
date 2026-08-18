@@ -123,6 +123,66 @@ Bridge.Callbacks.Register("sky_phone:marketplace:profile", function(source)
     return { success = true, data = profile_dto(account) }
 end)
 
+Bridge.Callbacks.Register("sky_phone:marketplace:auth", function(source, data)
+    local account, error_response = require_account(source)
+    if not account then return error_response end
+    if not SkyPhone.AllowOperation(source, "marketplace:auth", 8, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    if type(data) ~= "table" or (data.mode ~= "login" and data.mode ~= "register") then
+        return { success = false, error = "invalid_request" }
+    end
+    if not valid_text(data.password, Config.Mail.PasswordMinLength, Config.Mail.PasswordMaxLength) then
+        return {
+            success = false,
+            error = data.mode == "register" and "invalid_password" or "invalid_credentials",
+        }
+    end
+
+    local credentials = Bridge.Database.Query([[
+        SELECT `id` FROM `sky_phone_accounts`
+        WHERE `id` = ? AND `email` = ? AND `password` = ?
+        LIMIT 1
+    ]], { account.id, account.email, data.password })
+    if not credentials[1] then
+        return { success = false, error = "invalid_credentials" }
+    end
+
+    local profiles = Bridge.Database.Query([[
+        SELECT `account_id` FROM `sky_phone_marketplace_profiles`
+        WHERE `account_id` = ? LIMIT 1
+    ]], { account.id })
+    if data.mode == "login" then
+        if not profiles[1] then
+            return { success = false, error = "profile_not_found" }
+        end
+        return { success = true, data = profile_dto(account) }
+    end
+    if profiles[1] then
+        return { success = false, error = "profile_exists" }
+    end
+
+    local avatar_media_id = tonumber(data.avatarMediaId) or 0
+    if avatar_media_id < 0 or avatar_media_id ~= math.floor(avatar_media_id) then
+        return { success = false, error = "invalid_profile_image" }
+    end
+    if avatar_media_id > 0
+        and not SkyPhoneMedia.ResolveOwnedMedia(source, tostring(avatar_media_id), "photo")
+    then
+        Bridge.Debug("warn", "[sky_phone] Rejected unowned CityMarkt registration image from source %s.", tostring(source))
+        return { success = false, error = "invalid_profile_image" }
+    end
+
+    local result = Bridge.Database.Query([[
+        INSERT IGNORE INTO `sky_phone_marketplace_profiles` (`account_id`, `display_name`, `bio`, `avatar_media_id`)
+        VALUES (?, ?, '', NULLIF(?, 0))
+    ]], { account.id, default_display_name(account), avatar_media_id })
+    if affected_rows(result) ~= 1 then
+        return { success = false, error = "profile_exists" }
+    end
+    return { success = true, data = profile_dto(account) }
+end)
+
 Bridge.Callbacks.Register("sky_phone:marketplace:profile-save", function(source, data)
     local account, error_response = require_account(source)
     if not account then return error_response end
@@ -428,7 +488,8 @@ Bridge.Callbacks.Register("sky_phone:marketplace:get", function(source, data)
     end
     listing.images = load_images(id)
     listing.is_owner = account_id and tonumber(listing.seller_account_id) == account_id or false
-    listing.phone_number = listing.show_phone == 1 and listing.phone_number or nil
+    listing.show_phone = listing.show_phone == true or tonumber(listing.show_phone) == 1
+    listing.phone_number = listing.show_phone and listing.phone_number or nil
     listing.reserved_account_id = listing.is_owner and listing.reserved_account_id or nil
     return { success = true, data = listing }
 end)
@@ -585,7 +646,7 @@ Bridge.Callbacks.Register("sky_phone:marketplace:set-status", function(source, d
         if not inquiries[1] then return { success = false, error = "inquiry_not_found" } end
         reserved_account_id = inquiries[1].buyer_account_id
     elseif data.status == "active" then
-        if current.status ~= "reserved" and current.status ~= "expired" then
+        if current.status ~= "reserved" and current.status ~= "expired" and current.status ~= "sold" then
             return { success = false, error = "invalid_status" }
         end
     elseif data.status == "sold" then

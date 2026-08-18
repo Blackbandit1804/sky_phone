@@ -9697,6 +9697,53 @@ app.post('/api/:endpoint', (request, response) => {
     )
     return
   }
+  if (endpoint === 'marketplace:auth') {
+    const password = String(request.body.password ?? '')
+    if (password.length < 6 || password.length > 64) {
+      response.json({
+        success: false,
+        error:
+          request.body.mode === 'register'
+            ? 'invalid_password'
+            : 'invalid_credentials',
+      })
+      return
+    }
+    if (request.body.mode === 'login') {
+      response.json(
+        marketplaceProfile.exists
+          ? { success: true, data: marketplaceProfile }
+          : { success: false, error: 'profile_not_found' },
+      )
+      return
+    }
+    if (request.body.mode !== 'register') {
+      response.json({ success: false, error: 'invalid_request' })
+      return
+    }
+    if (marketplaceProfile.exists) {
+      response.json({ success: false, error: 'profile_exists' })
+      return
+    }
+    const avatarMediaId = Number(request.body.avatarMediaId) || 0
+    const avatar = mockMedia.find(
+      (item) => item.id === avatarMediaId && item.mediaType === 'photo',
+    )
+    if (avatarMediaId > 0 && !avatar) {
+      response.json({ success: false, error: 'invalid_profile_image' })
+      return
+    }
+    marketplaceProfile = {
+      ...marketplaceProfile,
+      avatar_media_id: avatarMediaId || null,
+      avatar_url: avatar?.url ?? null,
+      bio: '',
+      display_name: linkedAccount?.email?.split('@')[0] ?? 'CityMarkt',
+      exists: true,
+    }
+    response.json({ success: true, data: marketplaceProfile })
+    return
+  }
   if (endpoint.startsWith('marketplace:') && !authenticated) {
     response.json({ success: false, error: 'not_authenticated' })
     return
@@ -9792,7 +9839,7 @@ app.post('/api/:endpoint', (request, response) => {
       item_condition: request.body.condition,
       price_type: request.body.priceType,
       show_phone: request.body.showPhone ? 1 : 0,
-      phone_number: null,
+      phone_number: request.body.showPhone ? (mockSim?.number ?? null) : null,
       status: 'active',
       revision: 1,
       created_at: '2026-08-06 11:00:00',
@@ -9831,8 +9878,10 @@ app.post('/api/:endpoint', (request, response) => {
       image: selected[0]?.gradient ?? null,
       images: selected,
       item_condition: request.body.condition,
+      phone_number: request.body.showPhone ? (mockSim?.number ?? null) : null,
       price_type: request.body.priceType,
       revision: item.revision + 1,
+      show_phone: request.body.showPhone ? 1 : 0,
     })
     response.json({ success: true, data: { revision: item.revision } })
     return
@@ -9849,7 +9898,21 @@ app.post('/api/:endpoint', (request, response) => {
     const item = marketplaceListings.find(
       (listing) => listing.id === request.body.id,
     )
-    if (item) item.status = request.body.status
+    if (!item) {
+      response.json({ success: false, error: 'listing_not_found' })
+      return
+    }
+    const validTransitions = {
+      active: ['reserved', 'expired', 'sold'],
+      removed: ['active', 'reserved', 'expired'],
+      reserved: ['active'],
+      sold: ['active', 'reserved'],
+    }
+    if (!validTransitions[request.body.status]?.includes(item.status)) {
+      response.json({ success: false, error: 'invalid_status' })
+      return
+    }
+    item.status = request.body.status
     response.json({ success: true })
     return
   }

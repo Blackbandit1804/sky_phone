@@ -28,6 +28,19 @@ export const useMarketplaceStore = defineStore('marketplace', {
     profile: null as MarketplaceProfile | null,
   }),
   actions: {
+    async authenticate(
+      mode: 'login' | 'register',
+      password: string,
+      avatarMediaId = 0,
+    ): Promise<NuiResponse<MarketplaceProfile>> {
+      const response = await nuiCall<MarketplaceProfile>('marketplace:auth', {
+        avatarMediaId,
+        mode,
+        password,
+      })
+      if (response.success && response.data) this.profile = response.data
+      return response
+    },
     async loadProfile(): Promise<boolean> {
       const response = await nuiCall<MarketplaceProfile>('marketplace:profile')
       if (response.success && response.data) this.profile = response.data

@@ -8,13 +8,13 @@ import {
   UserRound,
 } from 'lucide-vue-next'
 import {
-  SkyButton as kButton,
-  SkyField as kListInput,
-  SkyGlass as kGlass,
-  SkyList as kList,
-  SkySegmented as kSegmented,
-  SkySegmentedButton as kSegmentedButton,
-  SkySpinner as kPreloader,
+  SkyButton,
+  SkyField,
+  SkyGlass,
+  SkyList,
+  SkySegmented,
+  SkySegmentedButton,
+  SkySpinner,
 } from '@/ui'
 import { computed } from 'vue'
 
@@ -24,6 +24,7 @@ const props = withDefaults(
     body: string
     cameraLabel: string
     email: string
+    emailAsField?: boolean
     emailLabel: string
     error: string
     eyebrow: string
@@ -38,19 +39,38 @@ const props = withDefaults(
     pending: boolean
     registerLabel: string
     requirePassword?: boolean
+    submitEnabled?: boolean
     title: string
     username: string
+    usernameAutocomplete?: string
+    usernameHelp?: string
+    usernameInputType?: 'password' | 'text'
     usernameLabel: string
     usernamePlaceholder?: string
     variant?: 'default' | 'centered'
+    confirmPassword?: string
+    confirmPasswordError?: boolean | string
+    confirmPasswordLabel?: string
+    confirmPasswordPlaceholder?: string
+    showConfirmPassword?: boolean
   }>(),
   {
+    confirmPassword: '',
+    confirmPasswordError: false,
+    confirmPasswordLabel: '',
+    confirmPasswordPlaceholder: '',
+    emailAsField: false,
     maxUsernameLength: 40,
     minUsernameLength: 2,
     password: '',
     passwordLabel: 'Password',
     passwordPlaceholder: '',
     requirePassword: false,
+    showConfirmPassword: false,
+    submitEnabled: undefined,
+    usernameAutocomplete: 'username',
+    usernameHelp: '',
+    usernameInputType: 'text',
     usernamePlaceholder: '',
     variant: 'default',
   },
@@ -59,6 +79,7 @@ const emit = defineEmits<{
   camera: []
   gallery: []
   submit: []
+  'update:confirmPassword': [value: string]
   'update:mode': [value: 'login' | 'register']
   'update:password': [value: string]
   'update:username': [value: string]
@@ -68,13 +89,16 @@ const canSubmit = computed(() => {
   const length = props.username.trim().length
   const validUsername =
     length >= props.minUsernameLength && length <= props.maxUsernameLength
-  return Boolean(
-    props.email &&
-      (props.mode === 'login' && props.requirePassword
-        ? true
-        : validUsername) &&
-      (!props.requirePassword ||
-        (props.password.length >= 8 && props.password.length <= 72)),
+  return (
+    props.submitEnabled ??
+    Boolean(
+      props.email &&
+        (props.mode === 'login' && props.requirePassword
+          ? true
+          : validUsername) &&
+        (!props.requirePassword ||
+          (props.password.length >= 8 && props.password.length <= 72)),
+    )
   )
 })
 </script>
@@ -93,41 +117,9 @@ const canSubmit = computed(() => {
       <p>{{ body }}</p>
     </header>
 
-    <k-glass class="app-profile-auth__card">
-      <div
-        v-if="variant === 'centered'"
-        class="app-profile-auth__mode app-profile-auth__mode--centered"
-        role="tablist"
-        :aria-label="`${loginLabel} / ${registerLabel}`"
-      >
-        <button
-          type="button"
-          class="app-profile-auth__mode-choice"
-          :class="{
-            'app-profile-auth__mode-choice--active': mode === 'login',
-          }"
-          role="tab"
-          :aria-selected="mode === 'login'"
-          @click="emit('update:mode', 'login')"
-        >
-          {{ loginLabel }}
-        </button>
-        <button
-          type="button"
-          class="app-profile-auth__mode-choice"
-          :class="{
-            'app-profile-auth__mode-choice--active': mode === 'register',
-          }"
-          role="tab"
-          :aria-selected="mode === 'register'"
-          @click="emit('update:mode', 'register')"
-        >
-          {{ registerLabel }}
-        </button>
-      </div>
-
-      <k-segmented v-else raised class="app-profile-auth__mode">
-        <k-segmented-button
+    <SkyGlass class="app-profile-auth__card">
+      <SkySegmented raised class="app-profile-auth__mode">
+        <SkySegmentedButton
           class="app-profile-auth__mode-button app-profile-auth__mode-button--login"
           :class="{
             'app-profile-auth__mode-button--active': mode === 'login',
@@ -136,8 +128,8 @@ const canSubmit = computed(() => {
           @click="emit('update:mode', 'login')"
         >
           {{ loginLabel }}
-        </k-segmented-button>
-        <k-segmented-button
+        </SkySegmentedButton>
+        <SkySegmentedButton
           class="app-profile-auth__mode-button app-profile-auth__mode-button--register"
           :class="{
             'app-profile-auth__mode-button--active': mode === 'register',
@@ -146,8 +138,8 @@ const canSubmit = computed(() => {
           @click="emit('update:mode', 'register')"
         >
           {{ registerLabel }}
-        </k-segmented-button>
-      </k-segmented>
+        </SkySegmentedButton>
+      </SkySegmented>
 
       <div v-if="mode === 'register'" class="app-profile-auth__photo">
         <span class="app-profile-auth__avatar">
@@ -156,16 +148,16 @@ const canSubmit = computed(() => {
           <i><Camera :size="11" /></i>
         </span>
         <div>
-          <k-button rounded outline @click="emit('gallery')">
+          <SkyButton rounded outline @click="emit('gallery')">
             <Images :size="15" />{{ galleryLabel }}
-          </k-button>
-          <k-button rounded outline @click="emit('camera')">
+          </SkyButton>
+          <SkyButton rounded outline @click="emit('camera')">
             <Camera :size="15" />{{ cameraLabel }}
-          </k-button>
+          </SkyButton>
         </div>
       </div>
 
-      <div class="app-profile-auth__identity">
+      <div v-if="!emailAsField" class="app-profile-auth__identity">
         <span><Mail :size="17" /></span>
         <div>
           <small>{{ emailLabel }}</small>
@@ -174,71 +166,34 @@ const canSubmit = computed(() => {
         <LockKeyhole :size="15" />
       </div>
 
-      <label
-        v-if="
-          variant === 'centered' && (mode === 'register' || !requirePassword)
-        "
-        class="app-profile-auth__username-field"
-        for="app-profile-auth-username"
-      >
-        <span><UserRound :size="17" /></span>
-        <div>
-          <small>{{ usernameLabel }}</small>
-          <input
-            id="app-profile-auth-username"
-            :value="username"
-            :maxlength="maxUsernameLength"
-            :placeholder="usernamePlaceholder"
-            autocomplete="username"
-            autocapitalize="none"
-            autocorrect="off"
-            spellcheck="false"
-            @input="
-              emit('update:username', ($event.target as HTMLInputElement).value)
-            "
-            @keydown.enter="emit('submit')"
-          />
-        </div>
-      </label>
-
-      <label
-        v-if="variant === 'centered' && requirePassword"
-        class="app-profile-auth__password-field"
-        for="app-profile-auth-password"
-      >
-        <span><LockKeyhole :size="17" /></span>
-        <div>
-          <small>{{ passwordLabel }}</small>
-          <input
-            id="app-profile-auth-password"
-            :value="password"
-            maxlength="72"
-            :placeholder="passwordPlaceholder"
-            :autocomplete="
-              mode === 'login' ? 'current-password' : 'new-password'
-            "
-            type="password"
-            @input="
-              emit('update:password', ($event.target as HTMLInputElement).value)
-            "
-            @keydown.enter="emit('submit')"
-          />
-        </div>
-      </label>
-
-      <k-list
-        v-else-if="variant !== 'centered'"
-        inset
-        strong
-        class="app-profile-auth__fields"
-      >
-        <k-list-input
+      <SkyList inset strong class="app-profile-auth__fields">
+        <SkyField
+          v-if="emailAsField"
+          class="app-profile-auth__email-field"
+          input-id="app-profile-auth-email"
+          :label="emailLabel"
+          :value="email"
+          type="email"
+          autocomplete="email"
+          inputmode="email"
+          readonly
+          outline
+        >
+          <template #leading><Mail :size="17" /></template>
+          <template #trailing><LockKeyhole :size="15" /></template>
+        </SkyField>
+        <SkyField
+          v-if="variant !== 'centered' || mode === 'register' || !requirePassword"
+          class="app-profile-auth__credential-field"
           input-id="app-profile-auth-username"
           :label="usernameLabel"
           :value="username"
           :maxlength="maxUsernameLength"
+          :minlength="minUsernameLength"
           :placeholder="usernamePlaceholder"
-          autocomplete="username"
+          :help="usernameHelp"
+          :type="usernameInputType"
+          :autocomplete="usernameAutocomplete"
           autocapitalize="none"
           autocorrect="off"
           spellcheck="false"
@@ -247,26 +202,80 @@ const canSubmit = computed(() => {
             emit('update:username', ($event.target as HTMLInputElement).value)
           "
           @keydown.enter="emit('submit')"
-        />
-      </k-list>
+        >
+          <template v-if="usernameInputType === 'password'" #leading>
+            <LockKeyhole :size="17" />
+          </template>
+        </SkyField>
+        <SkyField
+          v-if="requirePassword"
+          class="app-profile-auth__credential-field"
+          input-id="app-profile-auth-password"
+          :label="passwordLabel"
+          :value="password"
+          type="password"
+          maxlength="72"
+          minlength="8"
+          :placeholder="passwordPlaceholder"
+          :autocomplete="
+            mode === 'login' ? 'current-password' : 'new-password'
+          "
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          outline
+          @input="
+            emit('update:password', ($event.target as HTMLInputElement).value)
+          "
+          @keydown.enter="emit('submit')"
+        >
+          <template #leading><LockKeyhole :size="17" /></template>
+        </SkyField>
+        <SkyField
+          v-if="showConfirmPassword"
+          class="app-profile-auth__credential-field"
+          input-id="app-profile-auth-confirm-password"
+          :label="confirmPasswordLabel"
+          :value="confirmPassword"
+          type="password"
+          :maxlength="maxUsernameLength"
+          :minlength="minUsernameLength"
+          :placeholder="confirmPasswordPlaceholder"
+          :error="confirmPasswordError"
+          autocomplete="new-password"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          outline
+          @input="
+            emit(
+              'update:confirmPassword',
+              ($event.target as HTMLInputElement).value,
+            )
+          "
+          @keydown.enter="emit('submit')"
+        >
+          <template #leading><LockKeyhole :size="17" /></template>
+        </SkyField>
+      </SkyList>
 
       <div v-if="error" class="app-profile-auth__error" role="alert">
         {{ error }}
       </div>
-      <k-button
+      <SkyButton
         large
         rounded
         class="app-profile-auth__submit"
         :disabled="!canSubmit || pending"
         @click="emit('submit')"
       >
-        <k-preloader v-if="pending" />
+        <SkySpinner v-if="pending" />
         <template v-else>
           <span>{{ mode === 'login' ? loginLabel : registerLabel }}</span>
           <ArrowRight :size="18" />
         </template>
-      </k-button>
-    </k-glass>
+      </SkyButton>
+    </SkyGlass>
   </section>
 </template>
 
