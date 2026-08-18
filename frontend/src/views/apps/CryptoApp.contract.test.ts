@@ -95,6 +95,57 @@ describe('VaultX crypto app contracts', () => {
     )
 
     expect(source).toContain('class="password-strength"')
+    expect(source).not.toContain('class="auth-status"')
+    expect(source).toContain('class="auth-action-dock"')
+    expect(source).toContain('form="vault-auth-form"')
+    expect(source).toMatch(
+      /\.auth-action-dock\s*\{[^}]*flex:\s*0 0 auto;[^}]*border-top:[^}]*background:\s*#05080d;/s,
+    )
+    expect(source).toMatch(
+      /\.auth\s*\{[^}]*min-height:\s*0;[^}]*flex:\s*1 1 auto;/s,
+    )
+    expect(source).toMatch(
+      /\.auth-submit\s*\{[^}]*background:\s*var\(--vault-mint\);[^}]*box-shadow:\s*none;/s,
+    )
+    for (const selector of [
+      'transfer-submit',
+      'settlement-submit',
+      'profile-save-button',
+    ]) {
+      expect(source).toMatch(
+        new RegExp(
+          `\\.${selector}\\s*\\{[^}]*background:\\s*var\\(--vault-mint\\);[^}]*box-shadow:\\s*none;`,
+          's',
+        ),
+      )
+    }
+    for (const selector of [
+      'detail-trade-action--buy',
+      'detail-trade-action--sell',
+      'trade-submit--buy',
+      'trade-submit--sell',
+    ]) {
+      const rule = source.match(
+        new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`, 's'),
+      )
+      expect(rule?.[1]).not.toContain('linear-gradient')
+      expect(rule?.[1]).toContain('box-shadow: none')
+    }
+    expect(source).toMatch(
+      /\.password-rules span\s*\{[^}]*font-size:\s*10\.5px;/s,
+    )
+    expect(source).toMatch(
+      /\.password-strength i\.active\s*\{[^}]*background:\s*var\(--vault-mint\);/s,
+    )
+    expect(source).not.toMatch(
+      /\.password-strength i\.active\s*\{[^}]*linear-gradient/s,
+    )
+    expect(testServer).toContain('let cryptoRegistered = true')
+    expect(testServer).toContain('registered: cryptoRegistered')
+    expect(testServer).toContain(
+      "cryptoRegistered = testScenario !== 'crypto-register'",
+    )
+    expect(testServer).toContain('cryptoPassword = password')
     expect(source).toContain('v-model="confirmPassword"')
     expect(source).toContain('<SkyCheckbox')
     expect(source).toContain("sheet.value = 'send'")

@@ -751,132 +751,145 @@ onUnmounted(() => {
       ><SkySpinner />
       <p>{{ t('loading') }}</p></SkyScrollArea
     >
-    <SkyScrollArea
-      v-else-if="!authenticated"
-      key="auth"
-      class="auth vault-view"
-      padded
-    >
-      <div class="auth-hero">
-        <span class="auth-hero__mark"><ChartCandlestick :size="30" /></span>
-        <span class="auth-status"><i />{{ t('auth.network') }}</span>
-        <p>{{ t('auth.eyebrow') }}</p>
-        <h2>
-          {{
-            t(authMode === 'login' ? 'auth.loginTitle' : 'auth.registerTitle')
-          }}
-        </h2>
-        <small>{{ t('auth.body') }}</small>
-        <div class="auth-benefits">
-          <span><ShieldCheck :size="16" />{{ t('auth.serverSecured') }}</span>
-          <span><KeyRound :size="16" />{{ t('auth.personalKey') }}</span>
-          <span><Fingerprint :size="16" />{{ t('auth.characterBound') }}</span>
-        </div>
-      </div>
-      <section class="auth-panel">
-        <SkySegmented
-          class="auth-mode"
-          strong
-          :active-index="authMode === 'login' ? 0 : 1"
-          :item-count="2"
-          ><SkySegmentedButton
-            :active="authMode === 'login'"
-            @click="authMode = 'login'"
-            >{{ t('auth.login') }}</SkySegmentedButton
-          ><SkySegmentedButton
-            :active="authMode === 'register'"
-            @click="authMode = 'register'"
-            >{{ t('auth.register') }}</SkySegmentedButton
-          ></SkySegmented
-        >
-        <div class="auth-panel__heading">
-          <span>{{ authMode === 'login' ? '01' : '02' }}</span>
-          <div>
-            <b>{{ t(`auth.${authMode}PanelTitle`) }}</b>
-            <small>{{ t(`auth.${authMode}PanelBody`) }}</small>
+    <template v-else-if="!authenticated">
+      <SkyScrollArea key="auth" class="auth vault-view" padded>
+        <div class="auth-hero">
+          <span class="auth-hero__mark"><ChartCandlestick :size="30" /></span>
+          <p>{{ t('auth.eyebrow') }}</p>
+          <h2>
+            {{
+              t(authMode === 'login' ? 'auth.loginTitle' : 'auth.registerTitle')
+            }}
+          </h2>
+          <small>{{ t('auth.body') }}</small>
+          <div class="auth-benefits">
+            <span><ShieldCheck :size="16" />{{ t('auth.serverSecured') }}</span>
+            <span><KeyRound :size="16" />{{ t('auth.personalKey') }}</span>
+            <span
+              ><Fingerprint :size="16" />{{ t('auth.characterBound') }}</span
+            >
           </div>
         </div>
-        <form class="form auth-form" @submit.prevent="submitAuth">
-          <SkyField
-            v-if="authMode === 'register'"
-            v-model="handle"
-            :label="t('auth.handle')"
-            :placeholder="t('auth.handlePlaceholder')"
-            maxlength="20"
-            outline
-            ><template #leading><UserRound :size="18" /></template
-          ></SkyField>
-          <SkyField
-            v-model="password"
-            :label="t('auth.password')"
-            :type="showPassword ? 'text' : 'password'"
-            :placeholder="t('auth.passwordPlaceholder')"
-            maxlength="72"
-            outline
-            ><template #leading><LockKeyhole :size="18" /></template
-            ><template #trailing
-              ><button
-                class="visibility"
-                type="button"
-                @click="showPassword = !showPassword"
-              >
-                <EyeOff v-if="showPassword" :size="18" /><Eye
-                  v-else
-                  :size="18"
-                /></button></template
-          ></SkyField>
-          <template v-if="authMode === 'register'">
+        <section class="auth-panel">
+          <SkySegmented
+            class="auth-mode"
+            strong
+            :active-index="authMode === 'login' ? 0 : 1"
+            :item-count="2"
+            ><SkySegmentedButton
+              :active="authMode === 'login'"
+              @click="authMode = 'login'"
+              >{{ t('auth.login') }}</SkySegmentedButton
+            ><SkySegmentedButton
+              :active="authMode === 'register'"
+              @click="authMode = 'register'"
+              >{{ t('auth.register') }}</SkySegmentedButton
+            ></SkySegmented
+          >
+          <div class="auth-panel__heading">
+            <span>{{ authMode === 'login' ? '01' : '02' }}</span>
+            <div>
+              <b>{{ t(`auth.${authMode}PanelTitle`) }}</b>
+              <small>{{ t(`auth.${authMode}PanelBody`) }}</small>
+            </div>
+          </div>
+          <form
+            id="vault-auth-form"
+            class="form auth-form"
+            @submit.prevent="submitAuth"
+          >
             <SkyField
-              v-model="confirmPassword"
-              :label="t('auth.confirmPassword')"
+              v-if="authMode === 'register'"
+              v-model="handle"
+              :label="t('auth.handle')"
+              :placeholder="t('auth.handlePlaceholder')"
+              maxlength="20"
+              outline
+              ><template #leading><UserRound :size="18" /></template
+            ></SkyField>
+            <SkyField
+              v-model="password"
+              :label="t('auth.password')"
               :type="showPassword ? 'text' : 'password'"
-              :placeholder="t('auth.confirmPasswordPlaceholder')"
+              :placeholder="t('auth.passwordPlaceholder')"
               maxlength="72"
               outline
-              ><template #leading><Fingerprint :size="18" /></template
+              ><template #leading><LockKeyhole :size="18" /></template
+              ><template #trailing
+                ><button
+                  class="visibility"
+                  type="button"
+                  @click="showPassword = !showPassword"
+                >
+                  <EyeOff v-if="showPassword" :size="18" /><Eye
+                    v-else
+                    :size="18"
+                  /></button></template
             ></SkyField>
-            <div class="password-strength">
-              <div>
-                <i
-                  v-for="index in 4"
-                  :key="index"
-                  :class="{ active: passwordStrength >= index }"
-                />
+            <template v-if="authMode === 'register'">
+              <SkyField
+                v-model="confirmPassword"
+                :label="t('auth.confirmPassword')"
+                :type="showPassword ? 'text' : 'password'"
+                :placeholder="t('auth.confirmPasswordPlaceholder')"
+                maxlength="72"
+                outline
+                ><template #leading><Fingerprint :size="18" /></template
+              ></SkyField>
+              <div class="password-strength">
+                <div>
+                  <i
+                    v-for="index in 4"
+                    :key="index"
+                    :class="{ active: passwordStrength >= index }"
+                  />
+                </div>
+                <span>{{ t(`auth.strength${passwordStrength}`) }}</span>
               </div>
-              <span>{{ t(`auth.strength${passwordStrength}`) }}</span>
-            </div>
-            <div class="password-rules">
-              <span :class="{ done: passwordChecks.length }"
-                ><CheckCircle2 :size="13" />{{ t('auth.ruleLength') }}</span
-              >
-              <span :class="{ done: passwordChecks.mixed }"
-                ><CheckCircle2 :size="13" />{{ t('auth.ruleMixed') }}</span
-              >
-              <span :class="{ done: passwordChecks.number }"
-                ><CheckCircle2 :size="13" />{{ t('auth.ruleNumber') }}</span
-              >
-              <span :class="{ done: passwordChecks.special }"
-                ><CheckCircle2 :size="13" />{{ t('auth.ruleSpecial') }}</span
-              >
-            </div>
-            <SkyCheckbox v-model="acceptedTerms" class="auth-consent">
-              <span
-                ><b>{{ t('auth.acceptTitle') }}</b
-                ><small>{{ t('auth.acceptBody') }}</small></span
-              >
-            </SkyCheckbox>
-          </template>
-          <p class="hint"><ShieldCheck :size="15" />{{ t('auth.security') }}</p>
-          <p v-if="formError" class="error">{{ formError }}</p>
-          <SkyButton block large class="auth-submit" type="submit">{{
+              <div class="password-rules">
+                <span :class="{ done: passwordChecks.length }"
+                  ><CheckCircle2 :size="13" />{{ t('auth.ruleLength') }}</span
+                >
+                <span :class="{ done: passwordChecks.mixed }"
+                  ><CheckCircle2 :size="13" />{{ t('auth.ruleMixed') }}</span
+                >
+                <span :class="{ done: passwordChecks.number }"
+                  ><CheckCircle2 :size="13" />{{ t('auth.ruleNumber') }}</span
+                >
+                <span :class="{ done: passwordChecks.special }"
+                  ><CheckCircle2 :size="13" />{{ t('auth.ruleSpecial') }}</span
+                >
+              </div>
+              <SkyCheckbox v-model="acceptedTerms" class="auth-consent">
+                <span
+                  ><b>{{ t('auth.acceptTitle') }}</b
+                  ><small>{{ t('auth.acceptBody') }}</small></span
+                >
+              </SkyCheckbox>
+            </template>
+            <p class="hint">
+              <ShieldCheck :size="15" />{{ t('auth.security') }}
+            </p>
+            <p v-if="formError" class="error">{{ formError }}</p>
+          </form>
+          <div class="auth-footer">
+            <LockKeyhole :size="13" />{{ t('auth.footer') }}
+          </div>
+        </section>
+      </SkyScrollArea>
+      <div class="auth-action-dock">
+        <SkyButton
+          block
+          large
+          class="auth-submit"
+          type="submit"
+          form="vault-auth-form"
+          >{{
             t(authMode === 'login' ? 'auth.loginAction' : 'auth.registerAction')
-          }}</SkyButton>
-        </form>
-        <div class="auth-footer">
-          <LockKeyhole :size="13" />{{ t('auth.footer') }}
-        </div>
-      </section>
-    </SkyScrollArea>
+          }}</SkyButton
+        >
+      </div>
+    </template>
 
     <SkyScrollArea
       v-else-if="detail"
@@ -2029,28 +2042,10 @@ onUnmounted(() => {
 .auth {
   align-content: start;
   gap: 14px;
+  min-height: 0;
+  flex: 1 1 auto;
   padding-top: 12px !important;
   padding-bottom: 28px !important;
-}
-.auth-status {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  margin-top: 4px;
-  padding: 5px 9px;
-  color: var(--vault-mint);
-  font-size: 10px;
-  font-weight: 800;
-  background: rgba(101, 251, 210, 0.08);
-  border: 1px solid rgba(101, 251, 210, 0.16);
-  border-radius: var(--sky-radius-pill);
-}
-.auth-status i {
-  width: 5px;
-  height: 5px;
-  background: currentColor;
-  border-radius: 50%;
-  box-shadow: 0 0 7px currentColor;
 }
 .auth-benefits {
   display: grid;
@@ -2067,7 +2062,7 @@ onUnmounted(() => {
   gap: 5px;
   padding: 7px 4px;
   color: rgba(255, 255, 255, 0.7);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.15;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.055);
@@ -2128,7 +2123,7 @@ onUnmounted(() => {
 }
 .auth-panel__heading small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 .auth-form {
   padding: 0 4px 4px;
@@ -2144,25 +2139,31 @@ onUnmounted(() => {
   border-radius: 3px;
 }
 .password-strength i.active {
-  background: linear-gradient(90deg, var(--vault-mint), var(--vault-blue));
+  background: var(--vault-mint);
 }
 .password-strength span {
   display: block;
   margin-top: 5px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 .password-rules {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 5px;
+  gap: 8px 6px;
 }
 .password-rules span {
   display: flex;
-  gap: 5px;
+  gap: 6px;
   align-items: center;
   color: rgba(255, 255, 255, 0.35);
-  font-size: 9px;
+  font-size: 10.5px;
+  line-height: 1.2;
+}
+.password-rules svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
 }
 .password-rules span.done {
   color: var(--vault-mint);
@@ -2185,15 +2186,26 @@ onUnmounted(() => {
 }
 .auth-consent small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.35;
+}
+.auth-action-dock {
+  flex: 0 0 auto;
+  padding: 9px calc(var(--sky-page-gutter) + var(--sky-safe-area-right))
+    calc(var(--sky-safe-area-bottom) + 9px)
+    calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: #05080d;
 }
 .auth-submit {
   min-height: 50px;
   color: #06110e;
+  font-size: 13px;
   font-weight: 900;
-  background: linear-gradient(135deg, #7dffe0, #4da3ff);
-  border-radius: 15px;
+  border: 1px solid rgba(101, 251, 210, 0.48);
+  border-radius: 12px;
+  background: var(--vault-mint);
+  box-shadow: none;
 }
 .auth-footer {
   display: flex;
@@ -2202,7 +2214,7 @@ onUnmounted(() => {
   justify-content: center;
   padding: 9px 4px 2px;
   color: rgba(255, 255, 255, 0.36);
-  font-size: 9px;
+  font-size: 10px;
 }
 .form {
   display: grid;
@@ -4042,12 +4054,13 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .detail-trade-action--buy {
-  background: linear-gradient(135deg, #179d7d, #0f8068);
-  box-shadow: 0 10px 24px rgba(23, 157, 125, 0.24);
+  background: #179d7d;
+  box-shadow: none;
 }
 .detail-trade-action--sell {
-  background: linear-gradient(135deg, #272d37, #171c24);
+  background: #202630;
   border: 1px solid rgba(255, 117, 136, 0.22);
+  box-shadow: none;
 }
 .vault-view {
   animation: vault-view-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -4282,10 +4295,12 @@ onUnmounted(() => {
   font-weight: 850;
 }
 .trade-submit--buy {
-  background: linear-gradient(135deg, #179d7d, #0f8068);
+  background: #179d7d;
+  box-shadow: none;
 }
 .trade-submit--sell {
-  background: linear-gradient(135deg, #d75268, #a9334b);
+  background: #c4475c;
+  box-shadow: none;
 }
 .transfer-intro,
 .transfer-recipient,
@@ -4421,8 +4436,9 @@ onUnmounted(() => {
   gap: 8px;
   color: #06110e;
   font-weight: 900;
-  background: linear-gradient(135deg, #70f7d2, #4b9eff);
+  background: var(--vault-mint);
   border-radius: 16px;
+  box-shadow: none;
 }
 .sheet-copy {
   color: var(--muted);
@@ -4553,13 +4569,13 @@ onUnmounted(() => {
   color: #06110e;
   font-size: 13px;
   font-weight: 900;
-  background: linear-gradient(135deg, #78f8d5, #4fd9ba 55%, #5aa7ff);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--vault-mint);
+  border: 1px solid rgba(101, 251, 210, 0.48);
   border-radius: 17px;
-  box-shadow: 0 14px 30px rgba(54, 220, 178, 0.18);
+  box-shadow: none;
 }
 .settlement-submit:active {
-  box-shadow: 0 7px 18px rgba(54, 220, 178, 0.13);
+  box-shadow: none;
   transform: translateY(1px);
 }
 @media (hover: hover) {
@@ -4606,13 +4622,13 @@ onUnmounted(() => {
   color: #06110e;
   font-size: 13px;
   font-weight: 900;
-  background: linear-gradient(135deg, #70f7d2, #4fd9ba 58%, #4b9eff);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--vault-mint);
+  border: 1px solid rgba(101, 251, 210, 0.48);
   border-radius: 16px;
-  box-shadow: 0 13px 30px rgba(54, 220, 178, 0.17);
+  box-shadow: none;
 }
 .profile-save-button:active {
-  box-shadow: 0 6px 18px rgba(54, 220, 178, 0.13);
+  box-shadow: none;
   transform: translateY(1px);
 }
 .quote {

@@ -198,10 +198,11 @@ async function fetchYoutubeMetadata(videoId) {
 }
 let mockBankBalance = 24787
 let cryptoAuthenticated = true
+let cryptoRegistered = true
 let cryptoCashBalance = 18420
 let cryptoQuote = null
 let nextCryptoActivityId = 5
-const cryptoPassword = 'VaultX123!'
+let cryptoPassword = 'VaultX123!'
 function createCryptoMarket({
   changePercent,
   color,
@@ -6940,7 +6941,7 @@ app.post('/api/:endpoint', (request, response) => {
           ),
       ),
       profile: cryptoAuthenticated ? cryptoProfile : null,
-      registered: true,
+      registered: cryptoRegistered,
     }
   }
   const billingInvoice = (invoice) => ({
@@ -8443,6 +8444,8 @@ app.post('/api/:endpoint', (request, response) => {
       return
     }
     cryptoAuthenticated = true
+    cryptoRegistered = true
+    cryptoPassword = password
     cryptoProfile = {
       createdAt: Date.now(),
       handle,
@@ -9373,6 +9376,7 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'development:bootstrap') {
+    cryptoRegistered = testScenario !== 'crypto-register'
     cryptoAuthenticated = !['crypto-login', 'crypto-register'].includes(
       testScenario,
     )
