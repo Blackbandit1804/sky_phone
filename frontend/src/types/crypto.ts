@@ -7,6 +7,7 @@ export type CryptoMarket = {
   high24h: string
   id: string
   issuedSupply: string
+  logo: string
   low24h: string
   name: string
   price: string

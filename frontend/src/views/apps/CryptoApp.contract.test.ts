@@ -14,6 +14,10 @@ const passwordProvider = readFileSync(
   ),
   'utf8',
 )
+const config = readFileSync(
+  new URL('../../../../sky_phone/config/config.lua', import.meta.url),
+  'utf8',
+)
 
 describe('VaultX crypto app contracts', () => {
   it('uses Sky UI without introducing Konsta components', () => {
@@ -54,6 +58,17 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('class="profile-card"')
     expect(source).not.toContain('RefreshCw')
     expect(source).not.toContain(':aria-label="t(\'refresh\')"')
+  })
+
+  it('exposes a broad fictional market with dedicated logo marks', () => {
+    const cryptoConfig = config.slice(
+      config.indexOf('Config.Crypto = {'),
+      config.indexOf('-- Server-only configuration'),
+    )
+    expect(cryptoConfig.match(/\n\s+Id = "/g)).toHaveLength(24)
+    expect(cryptoConfig.match(/\n\s+Logo = "/g)).toHaveLength(24)
+    expect(server).toContain('logo = config.Logo')
+    expect(source).toContain('detail.logo')
   })
 
   it('keeps all consequential calculations and state transitions on the server', () => {

@@ -115,9 +115,17 @@ function verifyBrowserTestData(dataByEndpoint) {
 
   expectItems(dataByEndpoint.get('health:overview').days, 'health history', 7)
   const crypto = dataByEndpoint.get('crypto:bootstrap')
-  expectItems(crypto.markets, 'crypto markets', 3)
+  expectItems(crypto.markets, 'crypto markets', 24)
   assert.equal(typeof crypto.profile.priceAlerts, 'boolean')
   assert.equal(typeof crypto.markets[0].issuedSupply, 'string')
+  assert(crypto.markets.every((market) => typeof market.logo === 'string'))
+  assert(
+    Math.max(...crypto.markets.map((market) => Number(market.price))) >=
+      1000000,
+  )
+  assert(
+    Math.min(...crypto.markets.map((market) => Number(market.price))) <= 0.01,
+  )
   expectItems(
     dataByEndpoint.get('billing:list').invoices,
     'billing invoices',

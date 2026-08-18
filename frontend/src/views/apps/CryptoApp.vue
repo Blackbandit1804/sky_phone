@@ -354,7 +354,7 @@ onMounted(() => void crypto.load())
     <SkyScrollArea v-else-if="detail" with-tabbar padded>
       <section class="detail-head">
         <span class="coin large" :style="{ background: detail.color }">{{
-          detail.symbol[0]
+          detail.logo
         }}</span>
         <p>{{ detail.symbol }} · {{ detail.name }}</p>
         <strong>{{ money(detail.price) }}</strong
@@ -406,7 +406,7 @@ onMounted(() => void crypto.load())
         ><strong>{{ privateMoney(detailHolding?.value ?? '0') }}</strong>
         <div>
           <span class="coin" :style="{ background: detail.color }">{{
-            detail.symbol[0]
+            detail.logo
           }}</span
           ><span
             ><b>{{ detail.name }}</b
@@ -554,7 +554,7 @@ onMounted(() => void crypto.load())
           <span
             class="coin"
             :style="{ background: market(holding.assetId)?.color }"
-            >{{ market(holding.assetId)?.symbol[0] }}</span
+            >{{ market(holding.assetId)?.logo }}</span
           ><span
             ><b>{{ market(holding.assetId)?.name }}</b
             ><small
@@ -597,7 +597,7 @@ onMounted(() => void crypto.load())
         >
           <div class="featured-market__top">
             <span class="coin large" :style="{ background: topMover.color }">{{
-              topMover.symbol[0]
+              topMover.logo
             }}</span>
             <span>
               <small>{{ t('markets.movers') }}</small>
@@ -639,7 +639,7 @@ onMounted(() => void crypto.load())
           >
             <div class="market-tile__top">
               <span class="coin" :style="{ background: item.color }">{{
-                item.symbol[0]
+                item.logo
               }}</span>
               <span
                 ><b>{{ item.symbol }}</b
@@ -665,14 +665,14 @@ onMounted(() => void crypto.load())
             <em>{{ t('markets.today') }}</em>
           </div>
           <button
-            v-for="item in [...markets].sort(
-              (a, b) => b.changePercent - a.changePercent,
-            )"
+            v-for="item in [...markets]
+              .sort((a, b) => b.changePercent - a.changePercent)
+              .slice(0, 5)"
             :key="item.id"
             @click="openMarket(item)"
           >
             <span class="coin" :style="{ background: item.color }">{{
-              item.symbol[0]
+              item.logo
             }}</span
             ><span
               ><b>{{ item.name }}</b

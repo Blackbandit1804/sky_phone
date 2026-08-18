@@ -390,6 +390,7 @@ local function market_dtos()
             symbol = config.Symbol,
             name = config.Name,
             color = config.Color,
+            logo = config.Logo,
             price = decimal_string(price, Config.Crypto.PriceScale),
             changePercent = first > 0 and ((price - first) / first) * 100 or 0,
             enabled = row.status == "active",
