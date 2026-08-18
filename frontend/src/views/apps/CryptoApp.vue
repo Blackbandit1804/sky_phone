@@ -4,13 +4,16 @@ import {
   ArrowLeftRight,
   ArrowUpFromLine,
   ChartCandlestick,
+  ChartNoAxesCombined,
   ChevronRight,
   Eye,
   EyeOff,
+  History,
   LockKeyhole,
   LogOut,
   RefreshCw,
   ShieldCheck,
+  WalletCards,
 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
@@ -431,17 +434,20 @@ onMounted(() => void crypto.load())
         <SkySegmentedButton
           :active="activeTab === 'portfolio'"
           @click="activeTab = 'portfolio'"
-          >{{ t('tabs.portfolio') }}</SkySegmentedButton
+          ><WalletCards :size="19" :stroke-width="2.2" />
+          <span>{{ t('tabs.portfolio') }}</span></SkySegmentedButton
         >
         <SkySegmentedButton
           :active="activeTab === 'markets'"
           @click="activeTab = 'markets'"
-          >{{ t('tabs.markets') }}</SkySegmentedButton
+          ><ChartNoAxesCombined :size="19" :stroke-width="2.2" />
+          <span>{{ t('tabs.markets') }}</span></SkySegmentedButton
         >
         <SkySegmentedButton
           :active="activeTab === 'activity'"
           @click="activeTab = 'activity'"
-          >{{ t('tabs.activity') }}</SkySegmentedButton
+          ><History :size="19" :stroke-width="2.2" />
+          <span>{{ t('tabs.activity') }}</span></SkySegmentedButton
         >
       </SkySegmented>
     </SkyPillNavigation>

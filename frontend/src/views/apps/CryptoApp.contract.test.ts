@@ -32,6 +32,12 @@ describe('VaultX crypto app contracts', () => {
     }
   })
 
+  it('shows distinct icons in every primary navigation item', () => {
+    expect(source).toContain('<WalletCards')
+    expect(source).toContain('<ChartNoAxesCombined')
+    expect(source).toContain('<History')
+  })
+
   it('keeps all consequential calculations and state transitions on the server', () => {
     expect(server).toContain(
       'Bridge.Callbacks.Register("sky_phone:crypto:quote"',
