@@ -4530,9 +4530,9 @@ button {
   display: grid;
   grid-template-columns: 21px 1fr;
   gap: 4px 7px;
-  min-height: 82px;
+  min-height: 94px;
   margin: 0;
-  padding: 12px;
+  padding: 14px;
   border-radius: calc(var(--sky-radius-card) - 6px);
 }
 .weather-detail-card svg {
