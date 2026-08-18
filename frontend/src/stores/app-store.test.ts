@@ -33,7 +33,7 @@ describe('app store', () => {
     vi.useRealTimers()
   })
 
-  it('installs the fifteen system apps by default', () => {
+  it('installs the sixteen system apps by default', () => {
     const apps = useAppStoreStore()
 
     apps.hydrate(null)
@@ -54,6 +54,7 @@ describe('app store', () => {
       'map',
       'calendar',
       'health',
+      'citywarn',
     ])
     for (const appId of DEFAULT_INSTALLED_PHONE_APP_IDS) {
       expect(apps.isInstalled(appId)).toBe(true)
@@ -62,6 +63,7 @@ describe('app store', () => {
     expect(apps.isInstalled('feather')).toBe(false)
     expect(apps.isInstalled('snake')).toBe(false)
     expect(apps.isInstalled('health')).toBe(true)
+    expect(apps.isInstalled('citywarn')).toBe(true)
   })
 
   it('removes old automatic apps unless the player installed them', () => {

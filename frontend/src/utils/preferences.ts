@@ -113,6 +113,7 @@ const DEFAULT_APP_NOTIFICATIONS: Record<
   'sky-flappy': { enabled: true, sounds: true },
   'neon-drop': { enabled: true, sounds: true },
   citymarkt: { enabled: true, sounds: true },
+  citywarn: { enabled: true, sounds: true },
   companies: { enabled: true, sounds: true },
   'weazel-news': { enabled: true, sounds: true },
   'local-pages': { enabled: true, sounds: true },

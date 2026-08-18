@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Newspaper } from 'lucide-vue-next'
+import { Newspaper, Siren } from 'lucide-vue-next'
 
 import { isPhoneAppId, PHONE_APPS } from './apps'
 describe('app registry', () => {
@@ -84,6 +84,14 @@ describe('app registry', () => {
     expect(PHONE_APPS.find((app) => app.id === 'weazel-news')?.icon).toBe(
       Newspaper,
     )
+    expect(PHONE_APPS.find((app) => app.id === 'citywarn')).toMatchObject({
+      category: 'utilities',
+      gridOrder: 30,
+      labelKey: 'Apps.citywarn.name',
+      route: '/apps/citywarn',
+    })
+    expect(PHONE_APPS.find((app) => app.id === 'citywarn')?.icon).toBe(Siren)
+    expect(isPhoneAppId('citywarn')).toBe(true)
     expect(PHONE_APPS.find((app) => app.id === 'music')).toMatchObject({
       category: 'utilities',
       gridOrder: 26,

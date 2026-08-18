@@ -35,6 +35,7 @@ import {
   UsersRound,
   Building2,
   Newspaper,
+  Siren,
   HeartPulse,
   ChartCandlestick,
 } from 'lucide-vue-next'
@@ -80,6 +81,7 @@ import featherIcon from '@/assets/img/app-icons/feather.svg'
 import crewLinkIcon from '@/assets/img/app-icons/crewlink.svg'
 import companiesIcon from '@/assets/img/app-icons/companies.svg'
 import weazelNewsIcon from '@/assets/img/app-icons/weazel-news.svg'
+import cityWarnIcon from '@/assets/img/app-icons/citywarn.webp'
 import type {
   BuiltinPhoneAppDefinition,
   BuiltinPhoneAppId,
@@ -91,6 +93,20 @@ import type {
 } from '@/types/apps'
 
 export const PHONE_APPS = shallowReactive<PhoneAppDefinition[]>([
+  {
+    category: 'utilities',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/CityWarnApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 30,
+    icon: markRaw(Siren),
+    iconClass: 'app-icon--citywarn',
+    iconImage: cityWarnIcon,
+    id: 'citywarn',
+    labelKey: 'Apps.citywarn.name',
+    route: '/apps/citywarn',
+  },
   {
     category: 'utilities',
     component: markRaw(
@@ -676,6 +692,7 @@ export const DEFAULT_INSTALLED_PHONE_APP_IDS: ReadonlySet<BuiltinPhoneAppId> =
     'map',
     'calendar',
     'health',
+    'citywarn',
   ])
 
 export const NON_REMOVABLE_PHONE_APP_IDS: ReadonlySet<LaunchablePhoneAppId> =
@@ -688,6 +705,7 @@ export const NON_REMOVABLE_PHONE_APP_IDS: ReadonlySet<LaunchablePhoneAppId> =
     'messages',
     'mail',
     'health',
+    'citywarn',
   ])
 
 export const PHONE_APP_IDS = PHONE_APPS.map((app) => app.id)

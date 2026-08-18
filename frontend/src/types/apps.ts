@@ -41,6 +41,7 @@ export type BuiltinPhoneAppId =
   | 'crewlink'
   | 'companies'
   | 'weazel-news'
+  | 'citywarn'
 
 declare const externalPhoneAppId: unique symbol
 
