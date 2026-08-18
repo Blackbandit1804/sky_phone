@@ -15,6 +15,7 @@ const browserDataRequests = [
   ['billing:overview', {}],
   ['billing:list', { filter: 'all', limit: 20, offset: 0 }],
   ['calendar:list', { endsAt: 4_102_444_800, startsAt: 0 }],
+  ['citywarn:bootstrap', {}],
   ['calls:recents', {}],
   ['companies:list', {}],
   ['companies:my-requests', { limit: 20, offset: 0 }],
@@ -152,6 +153,15 @@ function verifyBrowserTestData(dataByEndpoint) {
     3,
   )
   expectItems(dataByEndpoint.get('calendar:list'), 'calendar events', 5)
+  const cityWarn = dataByEndpoint.get('citywarn:bootstrap')
+  expectItems(cityWarn.active, 'active CityWarn alerts', 2)
+  expectItems(cityWarn.archive, 'CityWarn alert history')
+  assert.equal(cityWarn.context.canPublish, true)
+  assert.deepEqual(
+    cityWarn.active.map((alert) => alert.title),
+    ['Police operation in Mission Row', 'Water supply disruption'],
+  )
+  assert.equal(cityWarn.archive[0].title, 'City radio network restored')
   expectItems(dataByEndpoint.get('calls:recents'), 'recent calls', 5)
   expectItems(dataByEndpoint.get('companies:list').companies, 'companies', 3)
   expectItems(dataByEndpoint.get('contacts:list'), 'contacts', 10)

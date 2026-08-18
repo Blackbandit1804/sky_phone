@@ -5437,6 +5437,140 @@ const easyShareCatalog = [
 }))
 let easyShareVisibility = 'everyone'
 
+let cityWarnSequence = 4
+let cityWarnAlerts = [
+  {
+    area: {
+      centerX: 425.1,
+      centerY: -979.5,
+      label: 'Mission Row & Textile City',
+      radius: 900,
+      type: 'radius',
+    },
+    authorName: 'Jordan Hayes',
+    body: 'Police have closed the area around Mission Row. Avoid access roads and follow instructions from emergency personnel.',
+    category: 'police',
+    createdAt: Date.now() - 11 * 60 * 1000,
+    expiresAt: Date.now() + 49 * 60 * 1000,
+    id: 'f074ea9d-45ab-4d90-9057-000000000001',
+    instructions:
+      'Stay outside the marked area. Use Elgin Avenue or Strawberry Avenue as alternate routes.',
+    revision: 2,
+    severity: 'danger',
+    sourceLabel: 'Los Santos Police Department',
+    startsAt: Date.now() - 11 * 60 * 1000,
+    status: 'active',
+    title: 'Police operation in Mission Row',
+    updatedAt: Date.now() - 4 * 60 * 1000,
+    updates: [
+      {
+        actorName: 'Jordan Hayes',
+        createdAt: Date.now() - 4 * 60 * 1000,
+        id: 'f074ea9d-45ab-4d90-9057-000000000012',
+        kind: 'update',
+        message: 'The closure has been extended to Textile City.',
+      },
+      {
+        actorName: 'Jordan Hayes',
+        createdAt: Date.now() - 11 * 60 * 1000,
+        id: 'f074ea9d-45ab-4d90-9057-000000000011',
+        kind: 'published',
+        message: 'Police operation in Mission Row',
+      },
+    ],
+  },
+  {
+    area: {
+      centerX: 1177.2,
+      centerY: -1453.6,
+      label: 'El Burro Heights',
+      radius: null,
+      type: 'district',
+    },
+    authorName: 'Maya Torres',
+    body: 'Following a damaged water main, pressure fluctuations and temporary outages may occur in the eastern part of the city.',
+    category: 'infrastructure',
+    createdAt: Date.now() - 38 * 60 * 1000,
+    expiresAt: Date.now() + 142 * 60 * 1000,
+    id: 'f074ea9d-45ab-4d90-9057-000000000002',
+    instructions:
+      'Keep drinking water available as a precaution. Emergency services are not affected.',
+    revision: 1,
+    severity: 'warning',
+    sourceLabel: 'Los Santos Fire Department',
+    startsAt: Date.now() - 38 * 60 * 1000,
+    status: 'active',
+    title: 'Water supply disruption',
+    updatedAt: Date.now() - 38 * 60 * 1000,
+    updates: [
+      {
+        actorName: 'Maya Torres',
+        createdAt: Date.now() - 38 * 60 * 1000,
+        id: 'f074ea9d-45ab-4d90-9057-000000000021',
+        kind: 'published',
+        message: 'Water supply disruption',
+      },
+    ],
+  },
+  {
+    area: {
+      centerX: null,
+      centerY: null,
+      label: 'Los Santos',
+      radius: null,
+      type: 'city',
+    },
+    authorName: 'Maya Torres',
+    body: 'The technical fault in the city radio network has been resolved.',
+    category: 'public_safety',
+    createdAt: Date.now() - 27 * 60 * 60 * 1000,
+    expiresAt: Date.now() - 26 * 60 * 60 * 1000,
+    id: 'f074ea9d-45ab-4d90-9057-000000000003',
+    instructions: 'No further action is required.',
+    revision: 2,
+    severity: 'information',
+    sourceLabel: 'City Administration',
+    startsAt: Date.now() - 27 * 60 * 60 * 1000,
+    status: 'resolved',
+    title: 'City radio network restored',
+    updatedAt: Date.now() - 26 * 60 * 60 * 1000,
+    updates: [
+      {
+        actorName: 'Maya Torres',
+        createdAt: Date.now() - 26 * 60 * 60 * 1000,
+        id: 'f074ea9d-45ab-4d90-9057-000000000032',
+        kind: 'resolved',
+        message: 'All systems are operating normally again.',
+      },
+    ],
+  },
+]
+
+function cityWarnBootstrap(testScenario) {
+  const readonly = testScenario === 'citywarn-readonly'
+  return {
+    active: cityWarnAlerts.filter(
+      (alert) => alert.status === 'active' && alert.expiresAt > Date.now(),
+    ),
+    archive: cityWarnAlerts.filter(
+      (alert) => alert.status !== 'active' || alert.expiresAt <= Date.now(),
+    ),
+    context: {
+      allowedCategories: readonly
+        ? []
+        : ['public_safety', 'police', 'infrastructure', 'evacuation'],
+      canCityWide: !readonly,
+      canPublish: !readonly,
+      gradeLabel: readonly ? null : 'Sergeant',
+      jobLabel: readonly ? null : 'Los Santos Police Department',
+      maximumSeverity: readonly ? null : 'extreme',
+      onDuty: !readonly,
+      requiresDuty: true,
+    },
+    onlinePlayers: 127,
+  }
+}
+
 function easyShareHistoryForScenario(testScenario) {
   if (testScenario === 'easyshare-empty') return []
   if (testScenario === 'easyshare-incoming') {
@@ -5461,6 +5595,112 @@ app.post('/api/:endpoint', (request, response) => {
   const testScenario = String(request.body._testScenario ?? '')
   if (lifecycleEndpoints.has(endpoint)) {
     response.json({ success: true })
+    return
+  }
+  const cityWarnReadonly = testScenario === 'citywarn-readonly'
+  if (endpoint === 'citywarn:bootstrap') {
+    response.json({ success: true, data: cityWarnBootstrap(testScenario) })
+    return
+  }
+  if (
+    ['citywarn:publish', 'citywarn:update', 'citywarn:resolve'].includes(
+      endpoint,
+    ) &&
+    cityWarnReadonly
+  ) {
+    response.json({ success: false, error: 'not_authorized' })
+    return
+  }
+  if (endpoint === 'citywarn:publish') {
+    const title = String(request.body.title ?? '').trim()
+    const body = String(request.body.body ?? '').trim()
+    const area = request.body.area
+    if (!title || !body || !area?.label || !area?.type) {
+      response.json({ success: false, error: 'invalid_warning' })
+      return
+    }
+    const now = Date.now()
+    const alert = {
+      area: {
+        centerX: area.centerX == null ? null : Number(area.centerX),
+        centerY: area.centerY == null ? null : Number(area.centerY),
+        label: String(area.label),
+        radius: area.radius == null ? null : Number(area.radius),
+        type: String(area.type),
+      },
+      authorName: 'Jordan Hayes',
+      body,
+      category: String(request.body.category),
+      createdAt: now,
+      expiresAt: now + Number(request.body.durationMinutes ?? 60) * 60000,
+      id: `f074ea9d-45ab-4d90-9057-${String(cityWarnSequence++).padStart(12, '0')}`,
+      instructions: String(request.body.instructions ?? ''),
+      revision: 1,
+      severity: String(request.body.severity),
+      sourceLabel: 'Los Santos Police Department',
+      startsAt: now,
+      status: 'active',
+      title,
+      updatedAt: now,
+      updates: [
+        {
+          actorName: 'Jordan Hayes',
+          createdAt: now,
+          id: randomUUID(),
+          kind: 'published',
+          message: title,
+        },
+      ],
+    }
+    cityWarnAlerts.unshift(alert)
+    response.json({ success: true, data: { alert, recipients: 127 } })
+    return
+  }
+  if (endpoint === 'citywarn:update') {
+    const alert = cityWarnAlerts.find((item) => item.id === request.body.id)
+    const message = String(request.body.message ?? '').trim()
+    if (!alert || alert.status !== 'active') {
+      response.json({ success: false, error: 'not_found' })
+      return
+    }
+    if (!message || alert.revision !== Number(request.body.revision)) {
+      response.json({ success: false, error: 'revision_conflict' })
+      return
+    }
+    alert.revision += 1
+    alert.updatedAt = Date.now()
+    alert.updates.unshift({
+      actorName: 'Jordan Hayes',
+      createdAt: alert.updatedAt,
+      id: randomUUID(),
+      kind: 'update',
+      message,
+    })
+    response.json({ success: true, data: { alert } })
+    return
+  }
+  if (endpoint === 'citywarn:resolve') {
+    const alert = cityWarnAlerts.find((item) => item.id === request.body.id)
+    const message = String(request.body.message ?? '').trim()
+    if (!alert || alert.status !== 'active') {
+      response.json({ success: false, error: 'not_found' })
+      return
+    }
+    if (!message || alert.revision !== Number(request.body.revision)) {
+      response.json({ success: false, error: 'revision_conflict' })
+      return
+    }
+    alert.revision += 1
+    alert.status = 'resolved'
+    alert.updatedAt = Date.now()
+    alert.updates.unshift({
+      actorName: 'Jordan Hayes',
+      createdAt: alert.updatedAt,
+      id: randomUUID(),
+      kind: 'resolved',
+      message,
+    })
+    response.json({ success: true, data: { alert } })
     return
   }
   const canManageWeazelNews = testScenario !== 'weazel-readonly'
