@@ -110,6 +110,18 @@ describe('VaultX crypto app contracts', () => {
     expect(transferServer).not.toContain('Bridge.Framework.RemoveMoney')
   })
 
+  it('copies and shares the public account key through phone-owned flows', () => {
+    expect(source).toContain("import { copyText } from '@/utils/clipboard'")
+    expect(source).toContain(
+      "import { useEasyShareStore } from '@/stores/easyshare'",
+    )
+    expect(source).toContain('class="wallet-key-card__actions"')
+    expect(source).toContain('@click="copyWalletKey"')
+    expect(source).toContain('@click="shareWalletKey"')
+    expect(source).toContain("appId: 'crypto'")
+    expect(source).toContain("kind: 'text'")
+  })
+
   it('uses the premium dashboard hierarchy without manual refresh controls', () => {
     expect(source).toContain('class="portfolio-shell"')
     expect(source).toContain('class="featured-market"')

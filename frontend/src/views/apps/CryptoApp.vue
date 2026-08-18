@@ -17,6 +17,7 @@ import {
   LogOut,
   Settings2,
   Send,
+  Share2,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -27,6 +28,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import cryptoHeaderLogo from '@/assets/img/app-icons/crypto-header-logo.png'
 import CryptoLogo from '@/components/crypto/CryptoLogo.vue'
 import { useCryptoStore } from '@/stores/crypto'
+import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
 import type {
   CryptoActivity,
@@ -52,6 +54,7 @@ import {
   SkyStatusCard,
   SkyToggle,
 } from '@/ui'
+import { copyText } from '@/utils/clipboard'
 
 type Tab = 'portfolio' | 'markets' | 'activity' | 'profile'
 type Sheet = 'trade' | 'deposit' | 'withdraw' | 'profile' | 'send' | null
@@ -81,6 +84,7 @@ const CHART_PERIOD_CONFIG: Record<
   },
 }
 const crypto = useCryptoStore()
+const easyShare = useEasyShareStore()
 const phone = usePhoneStore()
 const tab = ref<Tab>('portfolio')
 const authMode = ref<'login' | 'register'>('login')
@@ -485,8 +489,8 @@ async function submitAuth() {
       passwordStrength.value < 4
         ? 'errors.invalid_password'
         : password.value !== confirmPassword.value
-        ? 'errors.password_mismatch'
-        : 'errors.accept_terms',
+          ? 'errors.password_mismatch'
+          : 'errors.accept_terms',
     )
     return
   }
@@ -530,15 +534,23 @@ async function submitTransfer() {
   if (!success) formError.value = errorText(crypto.error)
   else closeSheet()
 }
-async function copyWalletKey() {
+function copyWalletKey() {
   if (!profile.value?.walletKey) return
-  try {
-    await navigator.clipboard.writeText(profile.value.walletKey)
-    walletKeyCopied.value = true
+  walletKeyCopied.value = copyText(profile.value.walletKey)
+  if (walletKeyCopied.value) {
     globalThis.setTimeout(() => (walletKeyCopied.value = false), 1800)
-  } catch {
-    walletKeyCopied.value = false
   }
+}
+function shareWalletKey() {
+  if (!profile.value?.walletKey) return
+  easyShare.open({
+    appId: 'crypto',
+    copyText: `${t('profile.shareText')}\n${profile.value.walletKey}`,
+    id: profile.value.walletKey,
+    kind: 'text',
+    subtitle: `@${profile.value.handle}`,
+    title: t('profile.shareTitle'),
+  })
 }
 function activityValue(item: CryptoActivity) {
   if (item.type === 'transfer_in' || item.type === 'transfer_out') {
@@ -1425,16 +1437,24 @@ onMounted(() => void crypto.load())
           </div>
         </section>
         <SkyCard class="wallet-key-card" :content-wrap="false">
-          <span class="wallet-key-card__icon"><KeyRound :size="20" /></span>
-          <span>
-            <small>{{ t('profile.walletKey') }}</small>
-            <b>{{ profile?.walletKey }}</b>
-            <em>{{ t('profile.walletKeyBody') }}</em>
-          </span>
-          <button :aria-label="t('profile.copyKey')" @click="copyWalletKey">
-            <CheckCircle2 v-if="walletKeyCopied" :size="17" />
-            <Copy v-else :size="17" />
-          </button>
+          <div class="wallet-key-card__content">
+            <span class="wallet-key-card__icon"><KeyRound :size="20" /></span>
+            <span>
+              <small>{{ t('profile.walletKey') }}</small>
+              <b>{{ profile?.walletKey }}</b>
+              <em>{{ t('profile.walletKeyBody') }}</em>
+            </span>
+          </div>
+          <div class="wallet-key-card__actions">
+            <SkyButton variant="secondary" tonal @click="copyWalletKey">
+              <CheckCircle2 v-if="walletKeyCopied" :size="16" />
+              <Copy v-else :size="16" />
+              {{ t(walletKeyCopied ? 'profile.copied' : 'profile.copyKey') }}
+            </SkyButton>
+            <SkyButton @click="shareWalletKey">
+              <Share2 :size="16" />{{ t('profile.shareKey') }}
+            </SkyButton>
+          </div>
         </SkyCard>
         <div class="profile-stats profile-stats--premium">
           <div>
@@ -3651,9 +3671,7 @@ onMounted(() => void crypto.load())
 }
 .wallet-key-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 11px;
-  align-items: center;
+  gap: 12px;
   margin-top: 11px;
   padding: 13px;
   background:
@@ -3666,6 +3684,12 @@ onMounted(() => void crypto.load())
   border: 1px solid rgba(101, 251, 210, 0.13);
   border-radius: 19px;
 }
+.wallet-key-card__content {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+}
 .wallet-key-card__icon {
   display: grid;
   place-items: center;
@@ -3676,7 +3700,7 @@ onMounted(() => void crypto.load())
   border: 1px solid rgba(101, 251, 210, 0.13);
   border-radius: 14px;
 }
-.wallet-key-card > span:nth-child(2) {
+.wallet-key-card__content > span:nth-child(2) {
   display: grid;
   min-width: 0;
   gap: 2px;
@@ -3695,15 +3719,18 @@ onMounted(() => void crypto.load())
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.wallet-key-card button {
+.wallet-key-card__actions {
   display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  color: var(--vault-mint);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 12px;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.wallet-key-card__actions :deep(.sky-button) {
+  min-height: 42px;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 13px;
 }
 .profile-stats--premium {
   margin-top: 10px;
