@@ -1611,7 +1611,11 @@ onUnmounted(() => {
       @backdropclick="closeSheet"
       @escape="closeSheet"
       @swipeclose="closeSheet"
-      ><div v-if="sheet" class="sheet">
+      ><div
+        v-if="sheet"
+        class="sheet"
+        :class="{ 'sheet--profile': sheet === 'profile' }"
+      >
         <header class="sheet-header" data-sky-sheet-drag-handle>
           <div class="sheet-heading">
             <span
@@ -1654,6 +1658,7 @@ onUnmounted(() => {
             </span>
           </div>
           <SkyLink
+            v-if="sheet !== 'profile'"
             component="button"
             icon-only
             class="sheet-close"
@@ -1861,37 +1866,46 @@ onUnmounted(() => {
         ><template v-else-if="sheet === 'profile'">
           <p class="sheet-copy">{{ t('profile.editBody') }}</p>
           <form class="profile-edit-sheet" @submit.prevent="saveProfile">
-            <SkyField
-              v-model="profileHandle"
-              :label="t('auth.handle')"
-              maxlength="20"
-              outline
-              ><template #leading><UserRound :size="18" /></template
-            ></SkyField>
-            <SkyField
-              v-model="profileCurrentPassword"
-              :label="t('profile.currentPassword')"
-              :placeholder="t('profile.currentPasswordPlaceholder')"
-              type="password"
-              outline
-              ><template #leading><LockKeyhole :size="18" /></template
-            ></SkyField>
-            <SkyField
-              v-model="profileNewPassword"
-              :label="t('profile.newPassword')"
-              :placeholder="t('profile.newPasswordPlaceholder')"
-              type="password"
-              outline
-              ><template #leading><Fingerprint :size="18" /></template
-            ></SkyField>
+            <div class="profile-edit-fields">
+              <SkyField
+                v-model="profileHandle"
+                class="profile-edit-field"
+                :label="t('auth.handle')"
+                maxlength="20"
+                autocomplete="username"
+                outline
+                ><template #leading><UserRound :size="18" /></template
+              ></SkyField>
+              <SkyField
+                v-model="profileCurrentPassword"
+                class="profile-edit-field"
+                :label="t('profile.currentPassword')"
+                :placeholder="t('profile.currentPasswordPlaceholder')"
+                type="password"
+                autocomplete="current-password"
+                outline
+                ><template #leading><LockKeyhole :size="18" /></template
+              ></SkyField>
+              <SkyField
+                v-model="profileNewPassword"
+                class="profile-edit-field"
+                :label="t('profile.newPassword')"
+                :placeholder="t('profile.newPasswordPlaceholder')"
+                type="password"
+                autocomplete="new-password"
+                outline
+                ><template #leading><Fingerprint :size="18" /></template
+              ></SkyField>
+            </div>
             <div class="profile-edit-note">
               <ShieldCheck :size="17" />
               <span>{{ t('profile.passwordSecurity') }}</span>
             </div>
             <p v-if="formError" class="error">{{ formError }}</p>
-            <SkyButton block type="submit">{{
-              t('profile.saveChanges')
-            }}</SkyButton>
+            <SkyButton block large class="profile-save-button" type="submit">
+              <ShieldCheck :size="18" />
+              <span>{{ t('profile.saveChanges') }}</span>
+            </SkyButton>
           </form>
         </template>
         <template v-else
@@ -4342,9 +4356,95 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.5;
 }
+.sheet--profile {
+  gap: 14px;
+  padding-right: 12px;
+  padding-left: 12px;
+}
+.sheet--profile .sheet-header {
+  min-height: 56px;
+}
+.sheet--profile .sheet-heading {
+  width: 100%;
+}
+.sheet--profile .sheet-copy {
+  padding: 0 3px;
+  font-size: 11px;
+  line-height: 1.55;
+}
 .profile-edit-sheet {
   display: grid;
-  gap: 12px;
+  width: 100%;
+  gap: 13px;
+}
+.profile-edit-fields {
+  display: grid;
+  gap: 9px;
+}
+.profile-edit-field {
+  min-height: 62px;
+  margin: 0;
+  padding: 0 15px;
+  color: #f8fbfd;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent), #0a1017;
+  border-radius: 16px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+.profile-edit-field:focus-within {
+  background:
+    linear-gradient(145deg, rgba(101, 251, 210, 0.07), transparent), #0a1017;
+  box-shadow:
+    0 0 0 3px rgba(101, 251, 210, 0.06),
+    inset 0 1px rgba(255, 255, 255, 0.05);
+}
+.profile-edit-field :deep(.sky-field__media) {
+  width: 34px;
+  height: 34px;
+  justify-content: center;
+  margin-right: 11px;
+  padding: 0;
+  color: var(--vault-mint);
+  background: rgba(101, 251, 210, 0.07);
+  border: 1px solid rgba(101, 251, 210, 0.12);
+  border-radius: 11px;
+}
+.profile-edit-field :deep(.sky-field__inner) {
+  padding: 12px 0 10px;
+}
+.profile-edit-field :deep(.sky-field__label) {
+  margin-top: 0;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+}
+.profile-edit-field :deep(.sky-field__label-text) {
+  top: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+.profile-edit-field :deep(.sky-field__control) {
+  margin: -2px 0 0;
+}
+.profile-edit-field :deep(.sky-field__input) {
+  height: 30px;
+  min-height: 30px;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+}
+.profile-edit-field :deep(.sky-field__input::placeholder) {
+  color: rgba(255, 255, 255, 0.28);
+}
+.profile-edit-field :deep(.sky-field__border) {
+  inset: 0;
+  border-color: rgba(255, 255, 255, 0.11);
+  border-radius: 16px;
+}
+.profile-edit-field:focus-within :deep(.sky-field__border) {
+  border-color: rgba(101, 251, 210, 0.52);
 }
 .profile-edit-note {
   display: flex;
@@ -4361,6 +4461,21 @@ onUnmounted(() => {
 .profile-edit-note svg {
   flex: 0 0 auto;
   color: var(--vault-mint);
+}
+.profile-save-button {
+  min-height: 52px;
+  gap: 8px;
+  color: #06110e;
+  font-size: 13px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #70f7d2, #4fd9ba 58%, #4b9eff);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  box-shadow: 0 13px 30px rgba(54, 220, 178, 0.17);
+}
+.profile-save-button:active {
+  box-shadow: 0 6px 18px rgba(54, 220, 178, 0.13);
+  transform: translateY(1px);
 }
 .quote {
   display: grid;

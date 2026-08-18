@@ -170,7 +170,18 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('@keyframes vault-view-in')
     expect(source).toContain('class="sheet-header"')
     expect(source).toContain('class="sheet-close"')
+    expect(source).toContain('v-if="sheet !== \'profile\'"')
     expect(source).toContain('class="sheet-market-summary"')
+  })
+
+  it('gives profile editing a full-width field and save treatment', () => {
+    expect(source).toContain("'sheet--profile': sheet === 'profile'")
+    expect(source).toContain('class="profile-edit-fields"')
+    expect(source.match(/class="profile-edit-field"/g)).toHaveLength(3)
+    expect(source).toContain('autocomplete="current-password"')
+    expect(source).toContain('autocomplete="new-password"')
+    expect(source).toContain('class="profile-save-button"')
+    expect(source).toContain('.profile-edit-field :deep(.sky-field__border)')
   })
 
   it('keeps app typography readable on the scaled phone surface', () => {
