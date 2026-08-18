@@ -53,6 +53,12 @@ describe('VaultX crypto app contracts', () => {
   it('includes advanced market detail and persistent profile controls', () => {
     expect(source).toContain('detail.sparkline')
     expect(source).toContain("t('marketDetail.statistics')")
+    expect(source).toContain('class="detail-trade-dock"')
+    expect(source).toContain('class="vault-view vault-detail-scroll"')
+    expect(source).toContain('class="trade-side-selector"')
+    expect(source).toContain('class="trade-entry-card"')
+    expect(source).toContain('class="trade-protection"')
+    expect(source).toContain('crypto.pendingQuote = null')
     expect(source).toContain('<SkyToggle')
     expect(server).toContain('sky_phone:crypto:update-profile')
     expect(server).toContain('`price_alerts`')
@@ -90,6 +96,8 @@ describe('VaultX crypto app contracts', () => {
   })
 
   it('uses the compact Flare-style navigation and polished overlay transitions', () => {
+    const navbarTag = source.match(/<SkyNavbar[\s\S]*?>/)?.[0] ?? ''
+
     expect(source).toContain('class="vault-navbar"')
     expect(source).toContain('class="vault-header-logo"')
     expect(source).toContain(
@@ -98,7 +106,7 @@ describe('VaultX crypto app contracts', () => {
     expect(source).not.toContain('class="coin-detail-logo"')
     expect(source).not.toContain('.vault-header-brand > i')
     expect(source).toContain(':show-back="Boolean(detail)"')
-    expect(source).not.toMatch(/<SkyNavbar[\s\S]*?\slarge(?:\s|>)/)
+    expect(navbarTag).not.toMatch(/\slarge(?:\s|=|>)/)
     expect(source).toContain('class="vault-view"')
     expect(source).toContain('@keyframes vault-view-in')
     expect(source).toContain('class="sheet-header"')

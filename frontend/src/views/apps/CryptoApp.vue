@@ -211,6 +211,9 @@ const detailHolding = computed(() =>
 const selectedHolding = computed(() =>
   holdings.value.find((item) => item.assetId === selectedMarket.value?.id),
 )
+const estimatedTradeValue = computed(
+  () => Number(amount.value || 0) * Number(selectedMarket.value?.price || 0),
+)
 
 function t(key: string) {
   return phone.t(`Apps.crypto.${key}`)
@@ -279,6 +282,12 @@ function openTrade(next: CryptoMarket, nextSide: CryptoSide = 'buy') {
   formError.value = ''
   crypto.pendingQuote = null
   sheet.value = 'trade'
+}
+function selectTradeSide(next: CryptoSide) {
+  if (side.value === next) return
+  side.value = next
+  crypto.pendingQuote = null
+  formError.value = ''
 }
 function openSettlement(next: 'deposit' | 'withdraw') {
   sheet.value = next
@@ -385,6 +394,12 @@ watch(
   },
   { immediate: true },
 )
+watch(amount, () => {
+  if (sheet.value === 'trade' && crypto.pendingQuote) {
+    crypto.pendingQuote = null
+    formError.value = ''
+  }
+})
 onMounted(() => void crypto.load())
 </script>
 
@@ -520,7 +535,7 @@ onMounted(() => void crypto.load())
     <SkyScrollArea
       v-else-if="detail"
       :key="`detail-${detail.id}`"
-      class="vault-view"
+      class="vault-view vault-detail-scroll"
       with-tabbar
       padded
     >
@@ -609,17 +624,6 @@ onMounted(() => void crypto.load())
           ><b>{{ compact(detail.treasuryAvailable) }} {{ detail.symbol }}</b>
         </div></SkyCard
       >
-      <div class="dual">
-        <SkyButton block @click="openTrade(detail, 'buy')">{{
-          t('trade.buy')
-        }}</SkyButton
-        ><SkyButton
-          block
-          variant="secondary"
-          @click="openTrade(detail, 'sell')"
-          >{{ t('trade.sell') }}</SkyButton
-        >
-      </div>
     </SkyScrollArea>
 
     <SkyScrollArea
@@ -1125,6 +1129,37 @@ onMounted(() => void crypto.load())
       </template>
     </SkyScrollArea>
 
+    <div
+      v-if="authenticated && detail"
+      class="detail-trade-dock"
+      role="group"
+      :aria-label="t('trade.actions')"
+    >
+      <SkyButton
+        large
+        class="detail-trade-action detail-trade-action--buy"
+        @click="openTrade(detail, 'buy')"
+      >
+        <span><ArrowDownLeft :size="19" /></span>
+        <span>
+          <b>{{ t('trade.buy') }}</b>
+          <small>{{ t('trade.buyBody') }}</small>
+        </span>
+      </SkyButton>
+      <SkyButton
+        large
+        variant="secondary"
+        class="detail-trade-action detail-trade-action--sell"
+        @click="openTrade(detail, 'sell')"
+      >
+        <span><ArrowUpRight :size="19" /></span>
+        <span>
+          <b>{{ t('trade.sell') }}</b>
+          <small>{{ t('trade.sellBody') }}</small>
+        </span>
+      </SkyButton>
+    </div>
+
     <SkyPillNavigation
       v-if="authenticated && !detail"
       layout="full"
@@ -1211,42 +1246,88 @@ onMounted(() => void crypto.load())
             <X :size="18" />
           </SkyLink>
         </header>
-        <template v-if="sheet === 'trade' && selectedMarket"
-          ><div class="sheet-market-summary">
-            <span>{{ selectedMarket.symbol }}</span>
-            <b>{{ money(selectedMarket.price) }}</b>
+        <template v-if="sheet === 'trade' && selectedMarket">
+          <div class="sheet-market-summary">
+            <span>
+              <small>{{ t('trade.marketPrice') }}</small>
+              <b>{{ money(selectedMarket.price) }}</b>
+            </span>
             <em :class="selectedMarket.changePercent >= 0 ? 'up' : 'down'">
               {{ selectedMarket.changePercent >= 0 ? '↗' : '↘' }}
               {{ Math.abs(selectedMarket.changePercent).toFixed(2) }}%
             </em>
           </div>
           <SkySegmented
+            class="trade-side-selector"
             strong
+            rounded
             :item-count="2"
             :active-index="side === 'buy' ? 0 : 1"
             ><SkySegmentedButton
               :active="side === 'buy'"
-              @click="side = 'buy'"
-              >{{ t('trade.buy') }}</SkySegmentedButton
+              @click="selectTradeSide('buy')"
+              ><ArrowDownLeft :size="16" />{{
+                t('trade.buy')
+              }}</SkySegmentedButton
             ><SkySegmentedButton
               :active="side === 'sell'"
-              @click="side = 'sell'"
-              >{{ t('trade.sell') }}</SkySegmentedButton
+              @click="selectTradeSide('sell')"
+              ><ArrowUpRight :size="16" />{{
+                t('trade.sell')
+              }}</SkySegmentedButton
             ></SkySegmented
-          ><SkyField
-            v-model="amount"
-            :label="t('trade.quantity')"
-            placeholder="0.000000"
-            inputmode="decimal"
-            outline
-          /><small v-if="side === 'sell' && selectedHolding"
-            >{{ t('trade.available') }}
-            {{ quantity(selectedHolding.quantity) }}
-            {{ selectedMarket.symbol }}</small
-          ><SkyCard v-if="crypto.pendingQuote" class="quote"
-            ><div>
+          >
+          <div class="trade-entry-card">
+            <SkyField
+              v-model="amount"
+              :label="t('trade.quantity')"
+              placeholder="0.000000"
+              inputmode="decimal"
+              outline
+            />
+            <div class="trade-entry-meta">
+              <span>
+                <small>{{ t('trade.available') }}</small>
+                <b v-if="side === 'buy'">{{
+                  privateMoney(crypto.data?.cashBalance ?? '0')
+                }}</b>
+                <b v-else>
+                  {{ quantity(selectedHolding?.quantity ?? '0') }}
+                  {{ selectedMarket.symbol }}
+                </b>
+              </span>
+              <span>
+                <small>{{ t('trade.estimated') }}</small>
+                <b>{{ money(estimatedTradeValue) }}</b>
+              </span>
+            </div>
+          </div>
+          <div v-if="!crypto.pendingQuote" class="trade-protection">
+            <ShieldCheck :size="18" />
+            <span>
+              <b>{{ t('trade.protected') }}</b>
+              <small>{{ t('trade.protectedBody') }}</small>
+            </span>
+          </div>
+          <SkyCard
+            v-if="crypto.pendingQuote"
+            class="quote"
+            :content-wrap="false"
+          >
+            <div class="quote-heading">
+              <span>
+                <small>{{ t('trade.review') }}</small>
+                <b>{{ t(`trade.${side}`) }} {{ selectedMarket.symbol }}</b>
+              </span>
+              <ShieldCheck :size="18" />
+            </div>
+            <div>
               <span>{{ t('trade.price') }}</span
               ><b>{{ money(crypto.pendingQuote.price) }}</b>
+            </div>
+            <div>
+              <span>{{ t('trade.gross') }}</span
+              ><b>{{ money(crypto.pendingQuote.gross) }}</b>
             </div>
             <div>
               <span>{{ t('trade.fee') }}</span
@@ -1256,16 +1337,19 @@ onMounted(() => void crypto.load())
               <span>{{ t('trade.total') }}</span
               ><b>{{ money(crypto.pendingQuote.net) }}</b>
             </div>
-            <small>{{ t('trade.quoteExpiry') }}</small></SkyCard
-          >
+            <small class="quote-expiry">{{ t('trade.quoteExpiry') }}</small>
+          </SkyCard>
           <p v-if="formError" class="error">{{ formError }}</p>
           <SkyButton
             block
+            large
+            class="trade-submit"
+            :class="`trade-submit--${side}`"
             @click="crypto.pendingQuote ? executeQuote() : requestQuote()"
             >{{
               t(crypto.pendingQuote ? 'trade.confirm' : 'trade.getQuote')
             }}</SkyButton
-          ></template
+          > </template
         ><template v-else-if="sheet === 'profile'">
           <p class="sheet-copy">{{ t('profile.editBody') }}</p>
           <form class="profile-edit-sheet" @submit.prevent="saveProfile">
@@ -1741,11 +1825,10 @@ onMounted(() => void crypto.load())
 .stats span {
   color: var(--muted);
 }
-.dual {
+.detail-trade-dock {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 9px;
-  margin-top: 16px;
+  gap: 8px;
 }
 .activity-head,
 .profile-head {
@@ -2957,15 +3040,65 @@ onMounted(() => void crypto.load())
   background: var(--vault-mint);
   box-shadow: 0 5px 18px rgba(101, 251, 210, 0.18);
 }
-.dual {
-  position: sticky;
+.vault-detail-scroll {
+  padding-bottom: calc(
+    var(--sky-safe-area-bottom) + var(--sky-tabbar-height) + var(--sky-space-5)
+  );
+}
+.detail-trade-dock {
+  position: absolute;
+  right: calc(var(--sky-page-gutter) + var(--sky-safe-area-right));
   bottom: calc(var(--sky-safe-area-bottom) + 4px);
-  z-index: 3;
+  left: calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
+  z-index: 11;
   padding: 6px;
-  background: rgba(7, 10, 14, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.55);
+  background: #080d13;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 23px;
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.62),
+    inset 0 1px rgba(255, 255, 255, 0.06);
+}
+.detail-trade-action {
+  min-width: 0;
+  min-height: 56px;
+  gap: 9px;
+  justify-content: flex-start;
+  padding: 0 12px;
+  border-radius: 17px;
+}
+.detail-trade-action > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 11px;
+}
+.detail-trade-action > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+  text-align: left;
+}
+.detail-trade-action b {
+  font-size: 13px;
+}
+.detail-trade-action small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-trade-action--buy {
+  background: linear-gradient(135deg, #179d7d, #0f8068);
+  box-shadow: 0 10px 24px rgba(23, 157, 125, 0.24);
+}
+.detail-trade-action--sell {
+  background: linear-gradient(135deg, #272d37, #171c24);
+  border: 1px solid rgba(255, 117, 136, 0.22);
 }
 .vault-view {
   animation: vault-view-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -3073,24 +3206,144 @@ onMounted(() => void crypto.load())
 .sheet-market-summary {
   justify-content: space-between;
   gap: 9px;
-  padding: 12px 13px;
-  background: linear-gradient(145deg, #151d27, #0b1016);
+  min-height: 72px;
+  padding: 13px 15px;
+  background:
+    radial-gradient(
+      circle at 90% 0%,
+      rgba(101, 251, 210, 0.14),
+      transparent 42%
+    ),
+    linear-gradient(145deg, #17212c, #0b1016);
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 16px;
+  border-radius: 19px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.045);
 }
 .sheet-market-summary span {
+  display: grid;
+  gap: 3px;
+}
+.sheet-market-summary small {
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .sheet-market-summary b {
-  flex: 1;
-  font-size: 14px;
+  font-size: 22px;
+  letter-spacing: -0.035em;
 }
 .sheet-market-summary em {
+  padding: 7px 9px;
   font-size: 11px;
   font-style: normal;
   font-weight: 800;
+  background: rgba(101, 251, 210, 0.08);
+  border: 1px solid currentColor;
+  border-radius: var(--sky-radius-pill);
+}
+.trade-side-selector {
+  min-height: 50px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 17px;
+}
+.trade-side-selector :deep(.sky-segmented-button) {
+  min-height: 42px;
+  gap: 7px;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 13px;
+}
+:deep(.trade-side-selector.sky-segmented--strong .sky-segmented__highlight) {
+  top: 3px;
+  bottom: 3px;
+  inset-inline-start: 3px;
+  background: linear-gradient(
+    135deg,
+    rgba(101, 251, 210, 0.18),
+    rgba(104, 167, 255, 0.12)
+  );
+  border: 1px solid rgba(101, 251, 210, 0.28);
+  border-radius: 13px;
+}
+:deep(
+  .trade-side-selector.sky-segmented--strong .sky-segmented-button--active
+) {
+  color: #fff;
+}
+.trade-entry-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: linear-gradient(145deg, #131b24, #0a0f15);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 19px;
+}
+.trade-entry-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.trade-entry-meta > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+}
+.trade-entry-meta small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.trade-entry-meta b {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trade-protection {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 11px 12px;
+  color: var(--vault-mint);
+  background: rgba(101, 251, 210, 0.055);
+  border: 1px solid rgba(101, 251, 210, 0.12);
+  border-radius: 15px;
+}
+.trade-protection svg {
+  flex: 0 0 auto;
+}
+.trade-protection span {
+  display: grid;
+  gap: 2px;
+}
+.trade-protection b {
+  color: #f8fbfd;
+  font-size: 11px;
+}
+.trade-protection small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.trade-submit {
+  min-height: 52px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 850;
+}
+.trade-submit--buy {
+  background: linear-gradient(135deg, #179d7d, #0f8068);
+}
+.trade-submit--sell {
+  background: linear-gradient(135deg, #d75268, #a9334b);
 }
 .sheet-copy {
   color: var(--muted);
@@ -3118,8 +3371,49 @@ onMounted(() => void crypto.load())
   color: var(--vault-mint);
 }
 .quote {
+  display: grid;
+  gap: 0;
+  padding: 13px;
   background: linear-gradient(145deg, #151d27, #0c1117);
   border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+}
+.quote-heading {
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 0 0 11px !important;
+  color: #f8fbfd !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.quote-heading > span {
+  display: grid;
+  gap: 2px;
+}
+.quote-heading small {
+  color: var(--vault-mint);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.quote-heading > svg {
+  color: var(--vault-mint);
+}
+.quote > div:not(.quote-heading) {
+  padding: 6px 0;
+}
+.quote > div:nth-last-of-type(1) {
+  margin-top: 4px;
+  padding-top: 10px;
+  color: #f8fbfd;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.quote-expiry {
+  margin-top: 8px;
+  padding: 8px 9px;
+  line-height: 1.35;
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 10px;
 }
 @media (prefers-reduced-motion: reduce) {
   .portfolio-shell::after {
