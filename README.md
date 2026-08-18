@@ -214,7 +214,9 @@ Default entries for unique phones with physical SIM cards:
 
 Do not configure an LB Phone client event or client export. Sky Phone registers the usable items through its server-side inventory adapter.
 
-The server registers `Config.Phone.Item` as usable for every supported inventory adapter: `ox`, `qb`, `lj`, `qs`, `codem`, `core`, `mf`, and `smx`. Resource startup fails visibly if the selected adapter cannot complete that registration.
+The server registers `Config.Phone.Item` as usable for every supported inventory adapter: `ox`, `qb`, `lj`, `qs`, `codem`, `core`, `mf`, `smx`, `hex`, and `esx`. Resource startup fails visibly if the selected adapter cannot complete that registration.
+
+The `hex` and `esx` adapters use ESX's count-based item API. They require both `Config.Phone.Unique = false` and `Config.Sim.Enabled = false` because this API cannot persist per-item phone or physical SIM metadata. `auto` selects `hex` when `hex_4_inventory` is started and otherwise falls back to `esx` on an ESX server when no metadata-capable inventory is detected.
 
 ### QBCore-style item tables
 

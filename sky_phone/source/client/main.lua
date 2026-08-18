@@ -17,6 +17,10 @@ local phone_block_look = false
 local phone_game_input = false
 local phone_cursor_disabled = false
 
+SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "IsOpen", function()
+    return is_open
+end)
+
 Bridge.Debug("debug", "[sky_phone] Client script initialized.", { always = true })
 
 local server_callbacks = {

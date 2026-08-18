@@ -14,6 +14,8 @@ const inventoryAdapters = [
   ['core', 'source/bridge/server/inventory/core.lua'],
   ['mf', 'source/bridge/server/inventory/mf.lua'],
   ['smx', 'source/bridge/server/inventory/smx.lua'],
+  ['hex', 'source/bridge/server/inventory/esx.lua'],
+  ['esx', 'source/bridge/server/inventory/esx.lua'],
 ] as const
 
 describe('phone inventory contracts', () => {
@@ -33,6 +35,28 @@ describe('phone inventory contracts', () => {
       'Bridge.Inventory.RegisterUsableItem(Config.Phone.Item, open_phone)',
     )
     expect(phoneServer).toContain('if not usable_registered then')
+  })
+
+  it('auto-detects HEX and limits count-based ESX inventories to metadata-free modes', () => {
+    const inventoryBridge = readResourceFile(
+      'source/bridge/server/inventory.lua',
+    )
+
+    expect(inventoryBridge).toContain(
+      'GetResourceState("hex_4_inventory") == "started"',
+    )
+    expect(inventoryBridge).toContain('configured_inventory = "hex"')
+    expect(inventoryBridge).toContain('Config.Phone.Unique ~= false')
+    expect(inventoryBridge).toContain('Config.Sim.Enabled ~= false')
+  })
+
+  it('provides the LB IsOpen export alias from the authoritative client state', () => {
+    const phoneClient = readResourceFile('source/client/main.lua')
+
+    expect(phoneClient).toContain(
+      'SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "IsOpen"',
+    )
+    expect(phoneClient).toContain('return is_open')
   })
 
   it('opens from a configurable F1 mapping without client-provided device identity', () => {
@@ -56,7 +80,9 @@ describe('phone inventory contracts', () => {
     const phoneServer = readResourceFile('source/server/phone.lua')
 
     expect(phoneServer).toContain('local preferred_device_imeis = {}')
-    expect(phoneServer).toContain('local preferred_imei = preferred_device_imeis[source]')
+    expect(phoneServer).toContain(
+      'local preferred_imei = preferred_device_imeis[source]',
+    )
     expect(phoneServer).toContain('preferred_device_imeis[source] = imei')
   })
 })

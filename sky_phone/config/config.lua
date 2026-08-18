@@ -16,7 +16,7 @@
 
 Config.Bridge = {
     Framework = "auto", -- auto, esx, qbox, qb
-    Inventory = "auto", -- auto, ox, qb, lj, qs, codem, core, mf, smx
+    Inventory = "auto", -- auto, ox, qb, lj, qs, codem, core, mf, smx, hex, esx
     Locale = "en",
     CallbackTimeout = 15000,
     Debug = false, -- true: show debug/info output; warnings and errors are always shown
@@ -26,7 +26,7 @@ Config.Command = "phone"
 
 Config.Phone = {
     Item = "phone",
-    Unique = true, -- true: data follows each phone item; false: one persistent phone per character
+    Unique = true, -- true: data follows each phone item; false: one persistent phone per character; hex/esx require false
     Keybind = "F1", -- false disables the configurable phone key mapping
     AllowMovement = true, -- true: game input stays active while the mobile phone is open
     DevelopmentCommand = true,
@@ -64,7 +64,7 @@ Config.Security = {
 }
 
 Config.Sim = {
-    Enabled = true, -- false: devices without a SIM receive a persistent random number automatically
+    Enabled = true, -- false: devices receive a persistent random number automatically; hex/esx require false
     RegisteredItem = "sky_phone_sim_registered",
     AnonymousItem = "sky_phone_sim_anonymous",
     NumberLength = 10,

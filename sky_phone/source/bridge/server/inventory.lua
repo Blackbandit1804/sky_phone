@@ -17,6 +17,10 @@ if configured_inventory == "auto" then
         configured_inventory = "mf"
     elseif GetResourceState("smx-inventory") == "started" then
         configured_inventory = "smx"
+    elseif GetResourceState("hex_4_inventory") == "started" then
+        configured_inventory = "hex"
+    elseif Bridge.Framework.GetName() == "esx" then
+        configured_inventory = "esx"
     end
 end
 
@@ -29,10 +33,24 @@ local supported_inventories = {
     core = true,
     mf = true,
     smx = true,
+    hex = true,
+    esx = true,
 }
 
 if not supported_inventories[configured_inventory] then
-    error(("[sky_phone] Unsupported or unavailable inventory '%s'. A metadata-capable inventory adapter is required."):format(tostring(configured_inventory)))
+    error(("[sky_phone] Unsupported or unavailable inventory '%s'. Configure a supported inventory adapter."):format(tostring(configured_inventory)))
+end
+
+if configured_inventory == "hex" or configured_inventory == "esx" then
+    if Bridge.Framework.GetName() ~= "esx" then
+        error(("[sky_phone] Inventory '%s' is only supported with ESX."):format(configured_inventory))
+    end
+    if Config.Phone.Unique ~= false then
+        error(("[sky_phone] Inventory '%s' cannot store unique phone metadata. Set Config.Phone.Unique = false or configure a metadata-capable inventory."):format(configured_inventory))
+    end
+    if Config.Sim.Enabled ~= false then
+        error(("[sky_phone] Inventory '%s' cannot store physical SIM metadata. Set Config.Sim.Enabled = false or configure a metadata-capable inventory."):format(configured_inventory))
+    end
 end
 
 Bridge.Inventory.Name = configured_inventory
