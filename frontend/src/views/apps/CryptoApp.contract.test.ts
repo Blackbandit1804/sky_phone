@@ -95,6 +95,13 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain(':content-wrap="false"')
   })
 
+  it('groups the activity summary and icon filters into one VaultX hub', () => {
+    expect(source).toContain('class="activity-overview"')
+    expect(source).toContain('class="activity-filter-panel"')
+    expect(source).toContain('class="activity-filters"')
+    expect(source).toContain('<WalletCards :size="15" />')
+  })
+
   it('exposes a broad fictional market with dedicated logo marks', () => {
     const cryptoConfig = config.slice(
       config.indexOf('Config.Crypto = {'),

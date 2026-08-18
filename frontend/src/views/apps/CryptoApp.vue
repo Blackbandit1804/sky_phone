@@ -882,47 +882,64 @@ onMounted(() => void crypto.load())
       </template>
 
       <template v-else-if="tab === 'activity'">
-        <section class="activity-head activity-dashboard">
-          <div class="activity-dashboard__copy">
-            <p>{{ t('activity.volume') }}</p>
-            <strong>{{ privateMoney(profile?.totalVolume ?? '0') }}</strong>
-            <span
-              >{{ profile?.totalTrades }}
-              {{ t('activity.completedTrades') }}</span
-            >
+        <section class="activity-overview">
+          <div class="activity-head activity-dashboard">
+            <div class="activity-dashboard__copy">
+              <p><History :size="14" />{{ t('activity.volume') }}</p>
+              <strong>{{ privateMoney(profile?.totalVolume ?? '0') }}</strong>
+              <span class="activity-trade-count"
+                ><i />{{ profile?.totalTrades }}
+                {{ t('activity.completedTrades') }}</span
+              >
+            </div>
+            <div class="activity-ring">
+              <svg viewBox="0 0 72 72">
+                <circle cx="36" cy="36" r="29" />
+                <circle class="activity-ring__value" cx="36" cy="36" r="29" />
+              </svg>
+              <span
+                ><ShieldCheck :size="15" /><small>{{
+                  t('statuses.completed')
+                }}</small></span
+              >
+            </div>
           </div>
-          <div class="activity-ring">
-            <svg viewBox="0 0 72 72">
-              <circle cx="36" cy="36" r="29" />
-              <circle class="activity-ring__value" cx="36" cy="36" r="29" />
-            </svg>
-            <span
-              ><ShieldCheck :size="15" /><small>{{
-                t('statuses.completed')
-              }}</small></span
+          <div class="activity-filter-panel">
+            <SkySegmented
+              class="activity-filters"
+              strong
+              rounded
+              :aria-label="t('activity.title')"
+              :active-index="
+                activityFilter === 'all'
+                  ? 0
+                  : activityFilter === 'trades'
+                    ? 1
+                    : 2
+              "
+              :item-count="3"
+              ><SkySegmentedButton
+                :active="activityFilter === 'all'"
+                @click="activityFilter = 'all'"
+                ><History :size="15" /><span>{{
+                  t('activity.filters.all')
+                }}</span></SkySegmentedButton
+              ><SkySegmentedButton
+                :active="activityFilter === 'trades'"
+                @click="activityFilter = 'trades'"
+                ><ChartNoAxesCombined :size="15" /><span>{{
+                  t('activity.filters.trades')
+                }}</span></SkySegmentedButton
+              ><SkySegmentedButton
+                :active="activityFilter === 'wallet'"
+                @click="activityFilter = 'wallet'"
+                ><WalletCards :size="15" /><span>{{
+                  t('activity.filters.wallet')
+                }}</span></SkySegmentedButton
+              ></SkySegmented
             >
           </div>
         </section>
-        <SkySegmented
-          strong
-          :active-index="
-            activityFilter === 'all' ? 0 : activityFilter === 'trades' ? 1 : 2
-          "
-          :item-count="3"
-          ><SkySegmentedButton
-            :active="activityFilter === 'all'"
-            @click="activityFilter = 'all'"
-            >{{ t('activity.filters.all') }}</SkySegmentedButton
-          ><SkySegmentedButton
-            :active="activityFilter === 'trades'"
-            @click="activityFilter = 'trades'"
-            >{{ t('activity.filters.trades') }}</SkySegmentedButton
-          ><SkySegmentedButton
-            :active="activityFilter === 'wallet'"
-            @click="activityFilter = 'wallet'"
-            >{{ t('activity.filters.wallet') }}</SkySegmentedButton
-          ></SkySegmented
-        >
         <div class="heading activity-title">
           <h2>{{ t('activity.title') }}</h2>
           <em>{{ activities.length }}</em>
@@ -2388,36 +2405,109 @@ onMounted(() => void crypto.load())
   height: 43px;
   margin-top: 4px;
 }
+.activity-overview {
+  margin-bottom: 18px;
+  padding: 1px;
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    rgba(101, 251, 210, 0.3),
+    rgba(104, 167, 255, 0.17) 48%,
+    rgba(255, 255, 255, 0.06)
+  );
+  border-radius: 29px;
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.32);
+}
 .activity-dashboard {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
-  padding: 20px 18px;
+  min-height: 122px;
+  margin: 0;
+  padding: 21px 18px 17px;
+  overflow: hidden;
   text-align: left;
   background:
     radial-gradient(
-      circle at 90% 20%,
-      rgba(101, 251, 210, 0.16),
-      transparent 31%
+      circle at 91% 18%,
+      rgba(101, 251, 210, 0.21),
+      transparent 33%
     ),
-    linear-gradient(145deg, #17202b, #0b1017);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 26px;
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+    radial-gradient(
+      circle at 12% 105%,
+      rgba(104, 167, 255, 0.16),
+      transparent 42%
+    ),
+    linear-gradient(145deg, #18232f, #0b1119 68%);
+  border: 0;
+  border-radius: 28px 28px 18px 18px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08);
+}
+.activity-dashboard::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(
+    118deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.04) 48%,
+    transparent 64%
+  );
 }
 .activity-dashboard__copy {
+  position: relative;
+  z-index: 1;
   display: grid;
-  gap: 3px;
+  gap: 5px;
+}
+.activity-dashboard__copy p {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.activity-dashboard__copy p svg {
+  color: var(--vault-mint);
 }
 .activity-dashboard__copy strong {
-  font-size: 27px;
+  font-size: 29px;
   letter-spacing: -0.045em;
+}
+.activity-trade-count {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-self: start;
+  padding: 5px 8px;
+  color: rgba(255, 255, 255, 0.68) !important;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: var(--sky-radius-pill);
+}
+.activity-trade-count i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vault-mint);
+  box-shadow: 0 0 8px rgba(101, 251, 210, 0.68);
 }
 .activity-ring {
   position: relative;
-  width: 76px;
-  height: 76px;
+  z-index: 1;
+  width: 82px;
+  height: 82px;
+  flex: 0 0 auto;
+  padding: 3px;
+  background: rgba(3, 12, 14, 0.34);
+  border: 1px solid rgba(101, 251, 210, 0.13);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 18px rgba(101, 251, 210, 0.06),
+    0 10px 24px rgba(0, 0, 0, 0.2);
 }
 .activity-ring svg {
   width: 100%;
@@ -2450,8 +2540,64 @@ onMounted(() => void crypto.load())
   font-size: 10px;
   text-align: center;
 }
+.activity-filter-panel {
+  padding: 8px;
+  background: linear-gradient(180deg, #0b1118, #080d13);
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 0 0 28px 28px;
+}
+.activity-filters {
+  width: 100%;
+  height: 50px;
+  min-height: 50px;
+  gap: 4px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 17px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+:deep(.activity-filters.sky-segmented--strong .sky-segmented__highlight) {
+  top: 3px;
+  bottom: 3px;
+  inset-inline-start: 3px;
+  background: linear-gradient(
+    135deg,
+    rgba(101, 251, 210, 0.2),
+    rgba(104, 167, 255, 0.14)
+  );
+  border: 1px solid rgba(101, 251, 210, 0.35);
+  border-radius: 13px;
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.08),
+    0 7px 18px rgba(0, 0, 0, 0.22);
+}
+.activity-filters :deep(.sky-segmented-button) {
+  min-height: 42px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 13px;
+  transition:
+    color var(--sky-transition-normal) ease,
+    transform var(--sky-transition-fast) ease;
+}
+.activity-filters :deep(.sky-segmented-button svg) {
+  flex: 0 0 auto;
+}
+:deep(.activity-filters.sky-segmented--strong .sky-segmented-button--active) {
+  color: #fff;
+}
+.activity-filters :deep(.sky-segmented-button:active:not(:disabled)) {
+  transform: scale(0.98);
+}
 .activity-title {
-  margin-top: 22px;
+  margin-top: 0;
 }
 .activity-row {
   position: relative;
@@ -2871,7 +3017,9 @@ onMounted(() => void crypto.load())
 }
 .phone-app--performance .portfolio-shell,
 .phone-app--performance .featured-market,
-.phone-app--performance .profile-card {
+.phone-app--performance .profile-card,
+.phone-app--performance .activity-overview,
+.phone-app--performance .activity-ring {
   box-shadow: none;
 }
 </style>
