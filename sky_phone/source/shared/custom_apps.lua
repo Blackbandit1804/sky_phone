@@ -37,6 +37,7 @@ local ALLOWED_PERMISSIONS = {
 local RESERVED_APP_IDS = {
     ["app-store"] = true,
     banking = true,
+    crypto = true,
     billing = true,
     calculator = true,
     calendar = true,

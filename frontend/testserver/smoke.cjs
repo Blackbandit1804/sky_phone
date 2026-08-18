@@ -7,6 +7,8 @@ const browserDataRequests = [
   ['development:bootstrap', {}],
   ['account:devices', {}],
   ['banking:overview', {}],
+  ['crypto:bootstrap', {}],
+  ['crypto:quote', { marketId: 'aurora', quantity: '1', side: 'buy' }],
   ['health:overview', {}],
   ['billing:overview', {}],
   ['billing:list', { filter: 'all', limit: 20, offset: 0 }],

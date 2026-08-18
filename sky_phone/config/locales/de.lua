@@ -1049,6 +1049,22 @@ Locales["de"] = {
                     request_failed = "Die Funkanfrage ist fehlgeschlagen.", default = "Die Funkanfrage ist fehlgeschlagen.",
                 },
             },
+            crypto = {
+                name = "VaultX", subtitle = "Börse für fiktive Assets", loading = "Sichere Börse wird geöffnet…", logout = "Abmelden", refresh = "Portfolio aktualisieren", navigation = "VaultX Navigation",
+                auth = {
+                    eyebrow = "Charaktergebundene Börse", loginTitle = "Willkommen zurück", registerTitle = "Erstelle dein VaultX-Profil", body = "Handle fiktive digitale Assets mit dem Ingame-Geld deines Charakters.", login = "Einloggen", register = "Registrieren", handle = "VaultX-Benutzername", handlePlaceholder = "3–20 Buchstaben oder Zahlen", password = "Passwort", passwordPlaceholder = "8–72 Zeichen", showPassword = "Passwort anzeigen", hidePassword = "Passwort ausblenden", security = "Nutze ein In-Character-Passwort. Verwende niemals ein echtes Passwort erneut.", loginAction = "Portfolio öffnen", registerAction = "Sicheres Profil erstellen",
+                },
+                tabs = { portfolio = "Portfolio", markets = "Märkte", activity = "Aktivität" },
+                portfolio = { total = "Gesamtes Portfolio", cash = "Verfügbares Guthaben", holdings = "Deine Assets", empty = "Noch keine Assets", emptyBody = "Öffne Märkte und fordere ein geschütztes Angebot an.", avg = "Ø" },
+                actions = { deposit = "Einzahlen", withdraw = "Auszahlen" },
+                markets = { title = "Fiktive Märkte", live = "Serverpreise", noticeTitle = "Ingame-Börse", notice = "Die Kurse sind synthetisch und haben keinen realen Wert. Jeder Handel wird gegen die begrenzte Liquidität der Börse geprüft." },
+                trade = { buy = "Kaufen", sell = "Verkaufen", quantity = "Menge", available = "Verfügbar:", price = "Angebotspreis", gross = "Brutto", fee = "Börsengebühr", total = "Gesamt", quoteExpiry = "Dieses Serverangebot läuft nach 8 Sekunden ab und kann nur einmal genutzt werden.", getQuote = "Geschütztes Angebot", confirm = "Handel bestätigen" },
+                settlement = { depositBody = "Übertrage Bankguthaben in dein verbuchtes VaultX-Guthaben.", withdrawBody = "Zahle verbuchtes VaultX-Guthaben auf das Bankkonto deines Charakters aus.", amount = "Ganzer Bankbetrag", confirm = "Sicher bestätigen" },
+                activity = { title = "Finanzaktivität", empty = "Keine Aktivität", emptyBody = "Einzahlungen, Auszahlungen und Handel erscheinen hier." },
+                activityTypes = { buy = "Asset-Kauf", sell = "Asset-Verkauf", deposit = "Bankeinzahlung", withdrawal = "Bankauszahlung" },
+                statuses = { completed = "Abgeschlossen", pending = "Prüfung ausstehend", failed = "Fehlgeschlagen", manual_review = "Manuelle Prüfung" },
+                errors = { invalid_handle = "Nutze 3–20 Buchstaben, Zahlen, Punkte oder Unterstriche.", handle_taken = "Dieser VaultX-Benutzername ist bereits vergeben.", profile_exists = "Dieser Charakter besitzt bereits ein VaultX-Profil.", invalid_password = "Das Passwort muss 8–72 Zeichen lang sein.", invalid_credentials = "Das Passwort ist falsch.", locked = "Zu viele Versuche. Versuche es später erneut.", not_authenticated = "Logge dich zuerst bei VaultX ein.", invalid_amount = "Gib einen positiven ganzen Betrag ein.", invalid_quantity = "Gib eine Menge mit bis zu sechs Nachkommastellen ein.", insufficient_funds = "Dein verfügbares Guthaben reicht nicht aus.", insufficient_liquidity = "Die Börse kann diese Menge derzeit nicht ausführen.", quote_expired = "Das Angebot ist abgelaufen. Fordere ein neues an.", quote_unavailable = "Das Angebot ist nicht mehr verfügbar.", market_unavailable = "Dieser Markt ist vorübergehend pausiert.", limit_exceeded = "Die Anfrage überschreitet ein Börsenlimit.", duplicate_request = "Diese Anfrage wurde bereits verarbeitet.", rate_limited = "Zu viele Anfragen. Versuche es gleich erneut.", settlement_pending = "Eine Geldbewegung wartet bereits auf Prüfung.", service_unavailable = "VaultX ist vorübergehend nicht verfügbar.", request_failed = "Die sichere Börsenanfrage ist fehlgeschlagen.", default = "VaultX konnte die Anfrage nicht abschließen." },
+            },
             banking = {
                 name = "Banking", welcome = "Willkommen zurück", totalBalance = "Gesamtsaldo", recentPeriod = "in jüngster Zeit",
                 actions = "Bankgeschäfte", send = "Senden",

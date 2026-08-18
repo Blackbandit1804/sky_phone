@@ -197,6 +197,90 @@ async function fetchYoutubeMetadata(videoId) {
   }
 }
 let mockBankBalance = 24787
+let cryptoAuthenticated = true
+let cryptoCashBalance = 18420
+let cryptoQuote = null
+let nextCryptoActivityId = 5
+const cryptoPassword = 'VaultX123!'
+const cryptoMarkets = [
+  {
+    id: 'aurora',
+    symbol: 'AUR',
+    name: 'Aurora',
+    color: '#25d9ad',
+    price: '128.50',
+    changePercent: 4.82,
+    enabled: true,
+    sparkline: [0.12, 0.24, 0.2, 0.38, 0.51, 0.46, 0.68, 0.62, 0.81, 0.92],
+  },
+  {
+    id: 'vertex',
+    symbol: 'VTX',
+    name: 'Vertex',
+    color: '#4d8cff',
+    price: '42.75',
+    changePercent: -1.37,
+    enabled: true,
+    sparkline: [0.84, 0.72, 0.76, 0.61, 0.69, 0.52, 0.46, 0.41, 0.35, 0.39],
+  },
+  {
+    id: 'ember',
+    symbol: 'EMB',
+    name: 'Ember',
+    color: '#ff9d54',
+    price: '9.80',
+    changePercent: 7.21,
+    enabled: true,
+    sparkline: [0.08, 0.11, 0.18, 0.26, 0.23, 0.4, 0.55, 0.64, 0.79, 0.93],
+  },
+]
+let cryptoHoldings = [
+  {
+    assetId: 'aurora',
+    averagePrice: '112.30',
+    quantity: '32.500000',
+    value: '4176.25',
+  },
+  {
+    assetId: 'vertex',
+    averagePrice: '46.10',
+    quantity: '85.250000',
+    value: '3644.44',
+  },
+]
+let cryptoActivity = [
+  {
+    id: 'crypto-4',
+    type: 'buy',
+    amount: '3650',
+    marketId: 'vertex',
+    status: 'completed',
+    createdAt: Date.now() - 2 * 3600000,
+  },
+  {
+    id: 'crypto-3',
+    type: 'sell',
+    amount: '920',
+    marketId: 'ember',
+    status: 'completed',
+    createdAt: Date.now() - 26 * 3600000,
+  },
+  {
+    id: 'crypto-2',
+    type: 'buy',
+    amount: '4020',
+    marketId: 'aurora',
+    status: 'completed',
+    createdAt: Date.now() - 3 * 86400000,
+  },
+  {
+    id: 'crypto-1',
+    type: 'deposit',
+    amount: '25000',
+    status: 'completed',
+    createdAt: Date.now() - 4 * 86400000,
+  },
+]
 let mockCashBalance = 2350
 let nextBankTransactionId = 7
 let mockMapMarkers = [
@@ -6447,6 +6531,23 @@ app.post('/api/:endpoint', (request, response) => {
     playerName: 'Alex Morgan',
     transactions: mockBankTransactions,
   })
+  const cryptoOverview = () => ({
+    activity: cryptoActivity,
+    authenticated: cryptoAuthenticated,
+    cashBalance: String(cryptoCashBalance),
+    holdings: cryptoHoldings,
+    markets: cryptoMarkets,
+    portfolioValue: String(
+      cryptoCashBalance +
+        cryptoHoldings.reduce(
+          (total, holding) => total + Number(holding.value),
+          0,
+        ),
+    ),
+    profile: cryptoAuthenticated
+      ? { handle: 'skyline', id: 'crypto-profile-demo', status: 'active' }
+      : null,
+  })
   const billingInvoice = (invoice) => ({
     ...invoice,
     canDispute: invoice.direction === 'inbox' && invoice.status === 'open',
@@ -7918,6 +8019,169 @@ app.post('/api/:endpoint', (request, response) => {
     response.json({ success: true, data: bankingOverview() })
     return
   }
+  if (endpoint === 'crypto:bootstrap') {
+    response.json({ success: true, data: cryptoOverview() })
+    return
+  }
+  if (endpoint === 'crypto:login') {
+    if (request.body.password !== cryptoPassword) {
+      response.json({ success: false, error: 'invalid_credentials' })
+      return
+    }
+    cryptoAuthenticated = true
+    response.json({ success: true, data: cryptoOverview() })
+    return
+  }
+  if (endpoint === 'crypto:register') {
+    const handle = String(request.body.handle ?? '').trim()
+    const password = String(request.body.password ?? '')
+    if (!/^[A-Za-z0-9][A-Za-z0-9._]{1,18}[A-Za-z0-9]$/.test(handle)) {
+      response.json({ success: false, error: 'invalid_handle' })
+      return
+    }
+    if (password.length < 8 || password.length > 72) {
+      response.json({ success: false, error: 'invalid_password' })
+      return
+    }
+    cryptoAuthenticated = true
+    response.json({
+      success: true,
+      data: {
+        ...cryptoOverview(),
+        profile: { handle, id: 'crypto-profile-new', status: 'active' },
+      },
+    })
+    return
+  }
+  if (endpoint === 'crypto:logout') {
+    cryptoAuthenticated = false
+    cryptoQuote = null
+    response.json({ success: true })
+    return
+  }
+  if (endpoint === 'crypto:deposit' || endpoint === 'crypto:withdraw') {
+    const amount = Number(request.body.amount)
+    if (!Number.isSafeInteger(amount) || amount < 10) {
+      response.json({ success: false, error: 'invalid_amount' })
+      return
+    }
+    if (request.body.password !== cryptoPassword) {
+      response.json({ success: false, error: 'invalid_credentials' })
+      return
+    }
+    if (endpoint === 'crypto:deposit') {
+      if (mockBankBalance < amount) {
+        response.json({ success: false, error: 'insufficient_funds' })
+        return
+      }
+      mockBankBalance -= amount
+      cryptoCashBalance += amount
+    } else {
+      if (cryptoCashBalance < amount) {
+        response.json({ success: false, error: 'insufficient_funds' })
+        return
+      }
+      cryptoCashBalance -= amount
+      mockBankBalance += amount
+    }
+    cryptoActivity.unshift({
+      amount: String(amount),
+      createdAt: Date.now(),
+      id: `crypto-${nextCryptoActivityId++}`,
+      status: 'completed',
+      type: endpoint === 'crypto:deposit' ? 'deposit' : 'withdrawal',
+    })
+    response.json({ success: true, data: cryptoOverview() })
+    return
+  }
+  if (endpoint === 'crypto:quote') {
+    const market = cryptoMarkets.find(
+      (item) => item.id === request.body.marketId,
+    )
+    const quantity = Number(request.body.quantity)
+    if (!market || !Number.isFinite(quantity) || quantity <= 0) {
+      response.json({ success: false, error: 'invalid_quantity' })
+      return
+    }
+    const side = request.body.side === 'sell' ? 'sell' : 'buy'
+    const gross = quantity * Number(market.price)
+    const fee = Math.max(0.01, Math.ceil(gross * 0.0075 * 100) / 100)
+    const net = side === 'buy' ? gross + fee : gross - fee
+    cryptoQuote = {
+      expiresAt: Date.now() + 8000,
+      fee: fee.toFixed(2),
+      gross: gross.toFixed(2),
+      id: `crypto-quote-${Date.now()}`,
+      marketId: market.id,
+      net: net.toFixed(2),
+      price: market.price,
+      quantity: quantity.toFixed(6),
+      side,
+    }
+    response.json({ success: true, data: cryptoQuote })
+    return
+  }
+  if (endpoint === 'crypto:execute') {
+    if (
+      !cryptoQuote ||
+      cryptoQuote.id !== request.body.quoteId ||
+      cryptoQuote.expiresAt < Date.now()
+    ) {
+      response.json({ success: false, error: 'quote_expired' })
+      return
+    }
+    const market = cryptoMarkets.find(
+      (item) => item.id === cryptoQuote.marketId,
+    )
+    const holding = cryptoHoldings.find(
+      (item) => item.assetId === cryptoQuote.marketId,
+    )
+    const quantity = Number(cryptoQuote.quantity)
+    const net = Number(cryptoQuote.net)
+    if (cryptoQuote.side === 'buy') {
+      if (cryptoCashBalance < net) {
+        response.json({ success: false, error: 'insufficient_funds' })
+        return
+      }
+      cryptoCashBalance -= net
+      if (holding)
+        holding.quantity = (Number(holding.quantity) + quantity).toFixed(6)
+      else
+        cryptoHoldings.push({
+          assetId: market.id,
+          averagePrice: market.price,
+          quantity: quantity.toFixed(6),
+          value: '0',
+        })
+    } else {
+      if (!holding || Number(holding.quantity) < quantity) {
+        response.json({ success: false, error: 'insufficient_funds' })
+        return
+      }
+      holding.quantity = (Number(holding.quantity) - quantity).toFixed(6)
+      cryptoCashBalance += net
+      cryptoHoldings = cryptoHoldings.filter(
+        (item) => Number(item.quantity) > 0,
+      )
+    }
+    for (const item of cryptoHoldings) {
+      const itemMarket = cryptoMarkets.find(
+        (marketItem) => marketItem.id === item.assetId,
+      )
+      item.value = (Number(item.quantity) * Number(itemMarket.price)).toFixed(2)
+    }
+    cryptoActivity.unshift({
+      amount: String(Math.round(net)),
+      createdAt: Date.now(),
+      id: `crypto-${nextCryptoActivityId++}`,
+      marketId: cryptoQuote.marketId,
+      status: 'completed',
+      type: cryptoQuote.side,
+    })
+    cryptoQuote = null
+    response.json({ success: true, data: cryptoOverview() })
+    return
+  }
   if (endpoint === 'health:overview') {
     response.json({ success: true, data: healthOverview() })
     return
@@ -8610,10 +8874,12 @@ app.post('/api/:endpoint', (request, response) => {
     return
   }
   if (endpoint === 'development:bootstrap') {
-    crewLinkAuthenticated = ![
-      'crewlink-login',
-      'crewlink-register',
-    ].includes(testScenario)
+    cryptoAuthenticated = !['crypto-login', 'crypto-register'].includes(
+      testScenario,
+    )
+    crewLinkAuthenticated = !['crewlink-login', 'crewlink-register'].includes(
+      testScenario,
+    )
     authenticated = testScenario !== 'setup-account-unlinked'
     linkedAccount = authenticated
       ? {

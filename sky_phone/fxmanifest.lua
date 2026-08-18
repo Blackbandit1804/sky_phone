@@ -1,6 +1,7 @@
 fx_version 'cerulean'
 game 'gta5'
 lua54 'yes'
+node_version '22'
 use_experimental_fxv2_oal 'yes'
 
 author 'Sky-Systems'
@@ -49,6 +50,7 @@ client_scripts {
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
+    'source/server/crypto_password.js',
     'config/config.lua',
     'config/media.lua',
     'config/locales/en.lua',
@@ -87,6 +89,7 @@ server_scripts {
     'source/server/notes.lua',
     'source/server/mail.lua',
     'source/server/banking.lua',
+    'source/server/crypto.lua',
     'source/server/health.lua',
     'source/server/billing.lua',
     'source/server/garage.lua',
