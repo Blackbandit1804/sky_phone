@@ -1482,6 +1482,11 @@ CreateThread(function()
                         * Config.Crypto.MaximumMovementMultiplier
                     local movement = impulse + dynamics.momentum + global_market_trend + reversion + shock
                     movement = math.max(-maximum_movement, math.min(maximum_movement, movement))
+                    if movement > 0 then
+                        movement = math.floor(movement / Config.Crypto.TickMovementDivisor)
+                    elseif movement < 0 then
+                        movement = math.ceil(movement / Config.Crypto.TickMovementDivisor)
+                    end
                     local next_price = math.floor(price * (10000 + movement) / 10000)
                     if next_price == price and movement ~= 0 then
                         next_price = price + (movement > 0 and 1 or -1)

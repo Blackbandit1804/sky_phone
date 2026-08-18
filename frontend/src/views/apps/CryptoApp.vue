@@ -24,7 +24,7 @@ import {
   WalletCards,
   X,
 } from 'lucide-vue-next'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import cryptoHeaderLogo from '@/assets/img/app-icons/crypto-header-logo.png'
 import CryptoLogo from '@/components/crypto/CryptoLogo.vue'
 import { useCryptoStore } from '@/stores/crypto'
@@ -86,6 +86,7 @@ const CHART_PERIOD_CONFIG: Record<
 const crypto = useCryptoStore()
 const easyShare = useEasyShareStore()
 const phone = usePhoneStore()
+let marketPreviewTimer: number | undefined
 const tab = ref<Tab>('portfolio')
 const authMode = ref<'login' | 'register'>('login')
 const activityFilter = ref<'all' | 'trades' | 'wallet'>('all')
@@ -348,11 +349,14 @@ function t(key: string) {
   return phone.t(`Apps.crypto.${key}`)
 }
 function money(value: string | number) {
+  const numericValue = Number(value) || 0
+  const absolute = Math.abs(numericValue)
   return new Intl.NumberFormat(locale.value, {
     currency: 'USD',
-    maximumFractionDigits: 2,
+    maximumFractionDigits: absolute > 0 && absolute < 1 ? 4 : 2,
+    minimumFractionDigits: 2,
     style: 'currency',
-  }).format(Number(value) || 0)
+  }).format(numericValue)
 }
 function signedMoney(value: number) {
   const formatted = money(Math.abs(value))
@@ -666,7 +670,23 @@ watch(markets, (value) => {
       value.find((market) => market.id === selectedMarket.value?.id) ?? null
   }
 })
-onMounted(() => void crypto.load())
+function scheduleDevelopmentMarketTick() {
+  if (!import.meta.env.DEV) return
+  marketPreviewTimer = window.setTimeout(
+    async () => {
+      await crypto.previewMarketTick()
+      scheduleDevelopmentMarketTick()
+    },
+    1600 + Math.random() * 1800,
+  )
+}
+onMounted(async () => {
+  await crypto.load()
+  scheduleDevelopmentMarketTick()
+})
+onUnmounted(() => {
+  if (marketPreviewTimer !== undefined) window.clearTimeout(marketPreviewTimer)
+})
 </script>
 
 <template>

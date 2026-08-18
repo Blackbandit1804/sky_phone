@@ -105,6 +105,50 @@ describe('crypto store', () => {
     expect(crypto.pendingQuote).toBeNull()
   })
 
+  it('applies a browser preview tick without replacing account state', async () => {
+    const crypto = useCryptoStore()
+    crypto.data = {
+      ...bootstrap,
+      cashBalance: '100.00',
+      holdings: [
+        {
+          assetId: 'aurora',
+          averagePrice: '100.00',
+          quantity: '2.000000',
+          value: '200.00',
+        },
+      ],
+      markets: [
+        {
+          changePercent: 0,
+          color: '#25d9ad',
+          enabled: true,
+          high24h: '100.00',
+          id: 'aurora',
+          issuedSupply: '1000000.000000',
+          logo: '◈',
+          low24h: '100.00',
+          name: 'Aurora',
+          price: '100.00',
+          sparkline: [0, 1],
+          symbol: 'AUR',
+          treasuryAvailable: '850000.000000',
+        },
+      ],
+      portfolioValue: '300.00',
+    }
+    mockNuiCall.mockResolvedValueOnce({
+      data: [{ ...crypto.data.markets[0], price: '101.25' }],
+      success: true,
+    })
+
+    expect(await crypto.previewMarketTick()).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledWith('crypto:market-tick', {})
+    expect(crypto.data.holdings[0].value).toBe('202.50')
+    expect(crypto.data.portfolioValue).toBe('302.50')
+    expect(crypto.data.cashBalance).toBe('100.00')
+  })
+
   it('sends only market, side and quantity when requesting a quote', async () => {
     mockNuiCall.mockResolvedValueOnce({ data: quote, success: true })
     const crypto = useCryptoStore()

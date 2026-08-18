@@ -54,6 +54,12 @@ export const useCryptoStore = defineStore('crypto', {
         this.pendingQuote = null
       }
     },
+    async previewMarketTick(): Promise<boolean> {
+      const response = await nuiCall<CryptoMarket[]>('crypto:market-tick', {})
+      if (!response.success || !response.data) return false
+      this.applyMarketUpdate(response.data)
+      return true
+    },
     async call<T>(endpoint: string, payload: Record<string, unknown> = {}) {
       this.isLoading = true
       this.error = ''

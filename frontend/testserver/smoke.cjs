@@ -8,6 +8,7 @@ const browserDataRequests = [
   ['account:devices', {}],
   ['banking:overview', {}],
   ['crypto:bootstrap', {}],
+  ['crypto:market-tick', {}],
   ['crypto:recipient', { walletKey: 'VX-DEAD-BEEF-C0DE-2026' }],
   ['crypto:quote', { marketId: 'aurora', quantity: '1', side: 'buy' }],
   ['health:overview', {}],
@@ -135,6 +136,15 @@ function verifyBrowserTestData(dataByEndpoint) {
   )
   assert(
     Math.min(...crypto.markets.map((market) => Number(market.price))) <= 0.01,
+  )
+  const cryptoTick = dataByEndpoint.get('crypto:market-tick')
+  expectItems(cryptoTick, 'live crypto market tick', 24)
+  assert(
+    cryptoTick.every(
+      (market) =>
+        typeof market.updatedAt === 'number' &&
+        market.priceHistory.at(-1) === market.price,
+    ),
   )
   expectItems(
     dataByEndpoint.get('billing:list').invoices,

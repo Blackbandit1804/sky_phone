@@ -496,6 +496,55 @@ const cryptoMarkets = [
     supply: 1200000000,
   }),
 ]
+function advanceCryptoMarkets() {
+  const updatedAt = Date.now()
+  for (const market of cryptoMarkets) {
+    const currentPrice = Number(market.price)
+    const fractionDigits = currentPrice < 1 ? 4 : 2
+    const minimumStep = 10 ** -fractionDigits
+    const volatility =
+      currentPrice >= 100_000
+        ? 0.00018
+        : currentPrice >= 100
+          ? 0.00055
+          : currentPrice >= 1
+            ? 0.0012
+            : 0.004
+    const direction = Math.random() < 0.49 ? -1 : 1
+    const movement = direction * volatility * (0.25 + Math.random() * 0.75)
+    let nextPrice = Number(
+      Math.max(minimumStep, currentPrice * (1 + movement)).toFixed(
+        fractionDigits,
+      ),
+    )
+    if (nextPrice === currentPrice) {
+      nextPrice = Math.max(minimumStep, currentPrice + direction * minimumStep)
+    }
+
+    const formattedPrice = nextPrice.toFixed(fractionDigits)
+    const priceHistory = [...(market.priceHistory ?? []), formattedPrice].slice(
+      -48,
+    )
+    const numericHistory = priceHistory.map(Number)
+    const minimum = Math.min(...numericHistory)
+    const maximum = Math.max(...numericHistory)
+    const span = Math.max(minimumStep, maximum - minimum)
+
+    market.changePercent =
+      ((nextPrice - numericHistory[0]) / numericHistory[0]) * 100
+    market.high24h = Math.max(Number(market.high24h), nextPrice).toFixed(
+      fractionDigits,
+    )
+    market.low24h = Math.min(Number(market.low24h), nextPrice).toFixed(
+      fractionDigits,
+    )
+    market.price = formattedPrice
+    market.priceHistory = priceHistory
+    market.sparkline = numericHistory.map((price) => (price - minimum) / span)
+    market.updatedAt = updatedAt
+  }
+  return cryptoMarkets
+}
 let cryptoProfile = {
   createdAt: Date.now() - 42 * 86400000,
   handle: 'skyline',
@@ -6809,22 +6858,33 @@ app.post('/api/:endpoint', (request, response) => {
     playerName: 'Alex Morgan',
     transactions: mockBankTransactions,
   })
-  const cryptoOverview = () => ({
-    activity: cryptoActivity,
-    authenticated: cryptoAuthenticated,
-    cashBalance: String(cryptoCashBalance),
-    holdings: cryptoHoldings,
-    markets: cryptoMarkets,
-    portfolioValue: String(
-      cryptoCashBalance +
-        cryptoHoldings.reduce(
-          (total, holding) => total + Number(holding.value),
-          0,
+  const cryptoOverview = () => {
+    const currentHoldings = cryptoHoldings.map((holding) => {
+      const market = cryptoMarkets.find((item) => item.id === holding.assetId)
+      return {
+        ...holding,
+        value: (Number(holding.quantity) * Number(market?.price ?? 0)).toFixed(
+          2,
         ),
-    ),
-    profile: cryptoAuthenticated ? cryptoProfile : null,
-    registered: true,
-  })
+      }
+    })
+    return {
+      activity: cryptoActivity,
+      authenticated: cryptoAuthenticated,
+      cashBalance: String(cryptoCashBalance),
+      holdings: currentHoldings,
+      markets: cryptoMarkets,
+      portfolioValue: String(
+        cryptoCashBalance +
+          currentHoldings.reduce(
+            (total, holding) => total + Number(holding.value),
+            0,
+          ),
+      ),
+      profile: cryptoAuthenticated ? cryptoProfile : null,
+      registered: true,
+    }
+  }
   const billingInvoice = (invoice) => ({
     ...invoice,
     canDispute: invoice.direction === 'inbox' && invoice.status === 'open',
@@ -8298,6 +8358,10 @@ app.post('/api/:endpoint', (request, response) => {
   }
   if (endpoint === 'crypto:bootstrap') {
     response.json({ success: true, data: cryptoOverview() })
+    return
+  }
+  if (endpoint === 'crypto:market-tick') {
+    response.json({ success: true, data: advanceCryptoMarkets() })
     return
   }
   if (endpoint === 'crypto:login') {

@@ -230,6 +230,7 @@ describe('VaultX crypto app contracts', () => {
   it('streams server-driven market movement into live portfolio values', () => {
     expect(config).toContain('PriceTickMinimumSeconds')
     expect(config).toContain('MarketsPerTickMaximum')
+    expect(config).toContain('TickMovementDivisor')
     expect(config).toContain('MarketShockChanceBasisPoints')
     expect(server).toContain('local market_dynamics = {}')
     expect(server).toContain('global_market_trend')
