@@ -125,7 +125,7 @@ describe('VaultX crypto app contracts', () => {
   it('uses the premium dashboard hierarchy without manual refresh controls', () => {
     expect(source).toContain('class="portfolio-shell"')
     expect(source).toContain('class="featured-market"')
-    expect(source).toContain('class="activity-ring"')
+    expect(source).toContain('class="activity-status"')
     expect(source).toContain('class="profile-card"')
     expect(source).not.toContain('RefreshCw')
     expect(source).not.toContain(':aria-label="t(\'refresh\')"')
@@ -182,6 +182,7 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('class="activity-overview"')
     expect(source).toContain('class="activity-filter-panel"')
     expect(source).toContain('class="activity-filters"')
+    expect(source).toContain('class="activity-status__icon"')
     expect(source).toContain('<WalletCards :size="15" />')
   })
 

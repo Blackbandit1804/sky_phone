@@ -1337,16 +1337,11 @@ onUnmounted(() => {
                 {{ t('activity.completedTrades') }}</span
               >
             </div>
-            <div class="activity-ring">
-              <svg viewBox="0 0 72 72">
-                <circle cx="36" cy="36" r="29" />
-                <circle class="activity-ring__value" cx="36" cy="36" r="29" />
-              </svg>
-              <span
-                ><ShieldCheck :size="15" /><small>{{
-                  t('statuses.completed')
-                }}</small></span
-              >
+            <div class="activity-status">
+              <span class="activity-status__icon">
+                <ShieldCheck :size="19" />
+              </span>
+              <b>{{ t('statuses.completed') }}</b>
             </div>
           </div>
           <div class="activity-filter-panel">
@@ -3428,50 +3423,43 @@ onUnmounted(() => {
   background: var(--vault-mint);
   box-shadow: 0 0 8px rgba(101, 251, 210, 0.68);
 }
-.activity-ring {
+.activity-status {
   position: relative;
   z-index: 1;
-  width: 82px;
-  height: 82px;
-  flex: 0 0 auto;
-  padding: 3px;
-  background: rgba(3, 12, 14, 0.34);
-  border: 1px solid rgba(101, 251, 210, 0.13);
-  border-radius: 50%;
-  box-shadow:
-    inset 0 0 18px rgba(101, 251, 210, 0.06),
-    0 10px 24px rgba(0, 0, 0, 0.2);
-}
-.activity-ring svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-.activity-ring circle {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.08);
-  stroke-width: 6;
-}
-.activity-ring .activity-ring__value {
-  stroke: var(--vault-mint);
-  stroke-linecap: round;
-  stroke-dasharray: 168 182;
-  filter: drop-shadow(0 0 5px rgba(101, 251, 210, 0.45));
-}
-.activity-ring > span {
-  position: absolute;
-  inset: 0;
   display: grid;
-  place-content: center;
-  justify-items: center;
-  color: var(--vault-mint);
+  place-items: center;
+  gap: 5px;
+  width: 72px;
+  min-height: 66px;
+  flex: 0 0 auto;
+  padding: 7px;
+  background: linear-gradient(
+    145deg,
+    rgba(101, 251, 210, 0.13),
+    rgba(8, 17, 24, 0.7)
+  );
+  border: 1px solid rgba(101, 251, 210, 0.18);
+  border-radius: 17px;
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.07),
+    0 10px 24px rgba(0, 0, 0, 0.18);
 }
-.activity-ring small {
-  max-width: 52px;
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 10px;
+.activity-status__icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: #07130f;
+  background: linear-gradient(145deg, #91ffe1, #40d6b0);
+  border-radius: 10px;
+  box-shadow: 0 7px 16px rgba(101, 251, 210, 0.18);
+}
+.activity-status b {
+  color: var(--vault-mint);
+  font-size: 9px;
+  line-height: 1.1;
   text-align: center;
+  white-space: nowrap;
 }
 .activity-filter-panel {
   padding: 8px;
@@ -3508,20 +3496,33 @@ onUnmounted(() => {
 .activity-filters :deep(.sky-segmented-button) {
   min-height: 42px;
   display: flex;
-  gap: 6px;
   align-items: center;
   justify-content: center;
   padding: 0 7px;
   color: rgba(255, 255, 255, 0.5);
   font-size: 11px;
   font-weight: 700;
+  line-height: 1;
   border-radius: 13px;
   transition:
     color var(--sky-transition-normal) ease,
     transform var(--sky-transition-fast) ease;
 }
 .activity-filters :deep(.sky-segmented-button svg) {
+  position: absolute;
+  inset-inline-start: 10px;
+  display: block;
   flex: 0 0 auto;
+}
+.activity-filters :deep(.sky-segmented-button > span) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 15px;
+  line-height: 15px;
+  text-align: center;
+  white-space: nowrap;
 }
 :deep(.activity-filters.sky-segmented--strong .sky-segmented-button--active) {
   color: #fff;
@@ -4418,7 +4419,7 @@ onUnmounted(() => {
 .phone-app--performance .featured-market,
 .phone-app--performance .profile-card,
 .phone-app--performance .activity-overview,
-.phone-app--performance .activity-ring {
+.phone-app--performance .activity-status {
   box-shadow: none;
 }
 </style>
