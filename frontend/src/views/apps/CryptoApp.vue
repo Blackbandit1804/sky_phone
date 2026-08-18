@@ -2,7 +2,6 @@
 import {
   ArrowDownLeft,
   ArrowLeft,
-  ArrowLeftRight,
   ArrowUpRight,
   BellRing,
   ChartCandlestick,
@@ -14,7 +13,6 @@ import {
   History,
   LockKeyhole,
   LogOut,
-  RefreshCw,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -89,6 +87,25 @@ const portfolioChange = computed(() =>
       markets.value.length
     : 0,
 )
+const investedValue = computed(() =>
+  Math.max(
+    0,
+    Number(crypto.data?.portfolioValue ?? 0) -
+      Number(crypto.data?.cashBalance ?? 0),
+  ),
+)
+const cashShare = computed(() => {
+  const total = Number(crypto.data?.portfolioValue ?? 0)
+  return total > 0
+    ? Math.min(100, (Number(crypto.data?.cashBalance ?? 0) / total) * 100)
+    : 0
+})
+const topMover = computed(
+  () =>
+    [...markets.value].sort(
+      (first, second) => second.changePercent - first.changePercent,
+    )[0],
+)
 const detailHolding = computed(() =>
   holdings.value.find((item) => item.assetId === detail.value?.id),
 )
@@ -130,6 +147,10 @@ function points(values: number[], width = 320, height = 110) {
 }
 function market(id?: string) {
   return markets.value.find((item) => item.id === id)
+}
+function allocation(value: string) {
+  const total = Number(crypto.data?.portfolioValue ?? 0)
+  return total > 0 ? Math.min(100, (Number(value) / total) * 100) : 0
 }
 function errorText(code: string) {
   const value = t(`errors.${code}`)
@@ -246,10 +267,6 @@ onMounted(() => void crypto.load())
       <template v-if="detail" #left
         ><SkyLink :aria-label="t('marketDetail.back')" @click="detail = null"
           ><ArrowLeft :size="19" /></SkyLink
-      ></template>
-      <template v-else-if="authenticated" #right
-        ><SkyLink :aria-label="t('refresh')" @click="crypto.load()"
-          ><RefreshCw :size="18" /></SkyLink
       ></template>
     </SkyNavbar>
 
@@ -424,40 +441,88 @@ onMounted(() => void crypto.load())
 
     <SkyScrollArea v-else with-tabbar padded>
       <template v-if="tab === 'portfolio'">
-        <section class="portfolio">
-          <p>{{ t('portfolio.total') }} <ShieldCheck :size="14" /></p>
-          <strong>{{ privateMoney(crypto.data?.portfolioValue ?? '0') }}</strong
-          ><em :class="portfolioChange >= 0 ? 'up' : 'down'"
-            >{{ portfolioChange >= 0 ? '▲' : '▼' }}
-            {{ Math.abs(portfolioChange).toFixed(2) }}% ·
-            {{ t('marketDetail.today') }}</em
-          ><svg viewBox="0 0 320 100" preserveAspectRatio="none">
-            <polyline :points="points(portfolioLine, 320, 96)" />
-          </svg>
+        <section class="portfolio-shell">
+          <div class="portfolio-glow" />
+          <div class="portfolio-topline">
+            <span><ShieldCheck :size="13" />{{ t('portfolio.total') }}</span>
+            <span class="live-pill"><i />{{ t('markets.live') }}</span>
+          </div>
+          <div class="portfolio-value">
+            <strong>{{
+              privateMoney(crypto.data?.portfolioValue ?? '0')
+            }}</strong>
+            <span :class="portfolioChange >= 0 ? 'up' : 'down'">
+              {{ portfolioChange >= 0 ? '↗' : '↘' }}
+              {{ Math.abs(portfolioChange).toFixed(2) }}%
+              <small>{{ t('marketDetail.today') }}</small>
+            </span>
+          </div>
+          <div class="portfolio-chart">
+            <svg viewBox="0 0 320 112" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="portfolio-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#65fbd2" stop-opacity=".32" />
+                  <stop offset="1" stop-color="#65fbd2" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              <polygon
+                :points="`0,112 ${points(portfolioLine, 320, 106)} 320,112`"
+                fill="url(#portfolio-fill)"
+              />
+              <polyline :points="points(portfolioLine, 320, 106)" />
+            </svg>
+            <span class="chart-orb" />
+          </div>
+          <div class="portfolio-metrics">
+            <div>
+              <small>{{ t('portfolio.cash') }}</small>
+              <b>{{ privateMoney(crypto.data?.cashBalance ?? '0') }}</b>
+            </div>
+            <i />
+            <div>
+              <small>{{ t('portfolio.invested') }}</small>
+              <b>{{ privateMoney(investedValue) }}</b>
+            </div>
+          </div>
         </section>
         <div class="quick">
           <button @click="setTab('markets')">
-            <span><ChartNoAxesCombined :size="21" /></span
-            >{{ t('quick.trade') }}</button
+            <span><ChartNoAxesCombined :size="20" /></span>
+            <b>{{ t('quick.trade') }}</b>
+            <small>{{ t('markets.live') }}</small></button
           ><button @click="openSettlement('deposit')">
-            <span><ArrowDownLeft :size="21" /></span
-            >{{ t('actions.deposit') }}</button
+            <span><ArrowDownLeft :size="20" /></span>
+            <b>{{ t('actions.deposit') }}</b>
+            <small>{{ t('activity.cash') }}</small></button
           ><button @click="openSettlement('withdraw')">
-            <span><ArrowUpRight :size="21" /></span
-            >{{ t('actions.withdraw') }}</button
+            <span><ArrowUpRight :size="20" /></span>
+            <b>{{ t('actions.withdraw') }}</b>
+            <small>{{ t('activity.cash') }}</small></button
           ><button @click="setTab('profile')">
-            <span><Settings2 :size="21" /></span>{{ t('quick.more') }}
+            <span><Settings2 :size="20" /></span>
+            <b>{{ t('quick.more') }}</b>
+            <small>{{ t('profile.preferences') }}</small>
           </button>
         </div>
-        <SkyCard class="cash"
-          ><WalletCards :size="20" /><span
-            ><small>{{ t('portfolio.cash') }}</small
-            ><b>{{ privateMoney(crypto.data?.cashBalance ?? '0') }}</b></span
-          ><ChevronRight :size="18"
-        /></SkyCard>
+        <SkyCard class="allocation-card">
+          <div class="allocation-copy">
+            <span><WalletCards :size="19" /></span>
+            <div>
+              <small>{{ t('portfolio.allocation') }}</small>
+              <b
+                >{{ Math.round(100 - cashShare) }}%
+                {{ t('portfolio.inMarket') }}</b
+              >
+            </div>
+            <strong>{{ Math.round(cashShare) }}%</strong>
+          </div>
+          <div class="allocation-track">
+            <i :style="{ width: `${Math.max(3, 100 - cashShare)}%` }" />
+          </div>
+        </SkyCard>
         <div class="heading">
           <h2>{{ t('portfolio.holdings') }}</h2>
-          <button @click="crypto.load()"><RefreshCw :size="17" /></button>
+          <em>{{ holdings.length }} {{ t('portfolio.assets') }}</em>
         </div>
         <SkyEmptyState
           v-if="!holdings.length"
@@ -467,7 +532,7 @@ onMounted(() => void crypto.load())
           v-for="holding in holdings"
           v-else
           :key="holding.assetId"
-          class="row"
+          class="row asset-row"
           @click="openMarket(market(holding.assetId)!)"
         >
           <span
@@ -479,7 +544,9 @@ onMounted(() => void crypto.load())
             ><small
               >{{ quantity(holding.quantity) }}
               {{ market(holding.assetId)?.symbol }}</small
-            ></span
+            ><i class="asset-allocation"
+              ><i
+                :style="{ width: `${allocation(holding.value)}%` }" /></i></span
           ><span
             ><b>{{ privateMoney(holding.value) }}</b
             ><small
@@ -507,22 +574,72 @@ onMounted(() => void crypto.load())
             <h2>{{ t('markets.title') }}</h2></span
           ><em>{{ t('markets.live') }}</em>
         </div>
-        <div class="market-grid">
+        <button
+          v-if="topMover"
+          class="featured-market"
+          @click="openMarket(topMover)"
+        >
+          <div class="featured-market__top">
+            <span class="coin large" :style="{ background: topMover.color }">{{
+              topMover.symbol[0]
+            }}</span>
+            <span>
+              <small>{{ t('markets.movers') }}</small>
+              <b>{{ topMover.name }}</b>
+              <em>{{ topMover.symbol }}</em>
+            </span>
+            <ChevronRight :size="18" />
+          </div>
+          <div class="featured-market__quote">
+            <strong>{{ money(topMover.price) }}</strong>
+            <span :class="topMover.changePercent >= 0 ? 'up' : 'down'">
+              {{ topMover.changePercent >= 0 ? '↗' : '↘' }}
+              {{ Math.abs(topMover.changePercent).toFixed(2) }}%
+            </span>
+          </div>
+          <svg viewBox="0 0 320 74" preserveAspectRatio="none">
+            <polyline :points="points(topMover.sparkline, 320, 70)" />
+          </svg>
+          <div class="featured-market__stats">
+            <span
+              ><small>{{ t('marketDetail.high24h') }}</small
+              ><b>{{ money(topMover.high24h) }}</b></span
+            >
+            <span
+              ><small>{{ t('marketDetail.low24h') }}</small
+              ><b>{{ money(topMover.low24h) }}</b></span
+            >
+          </div>
+        </button>
+        <div class="heading market-list-heading">
+          <h2>{{ t('portfolio.assets') }}</h2>
+          <em>{{ markets.length }} {{ t('markets.live') }}</em>
+        </div>
+        <div class="market-grid market-grid--advanced">
           <button
-            v-for="item in markets.slice(0, 2)"
+            v-for="item in markets"
             :key="item.id"
             @click="openMarket(item)"
           >
-            <span class="coin" :style="{ background: item.color }">{{
-              item.symbol[0]
-            }}</span
-            ><small>{{ item.symbol }}</small
-            ><b>{{ money(item.price) }}</b
-            ><em :class="item.changePercent >= 0 ? 'up' : 'down'"
-              >{{ item.changePercent >= 0 ? '▲' : '▼' }}
-              {{ Math.abs(item.changePercent).toFixed(2) }}%</em
-            ><svg viewBox="0 0 120 48" preserveAspectRatio="none">
-              <polyline :points="points(item.sparkline, 120, 46)" />
+            <div class="market-tile__top">
+              <span class="coin" :style="{ background: item.color }">{{
+                item.symbol[0]
+              }}</span>
+              <span
+                ><b>{{ item.symbol }}</b
+                ><small>{{ item.name }}</small></span
+              >
+              <em :class="item.changePercent >= 0 ? 'up' : 'down'">
+                {{ item.changePercent >= 0 ? '+' : ''
+                }}{{ item.changePercent.toFixed(2) }}%
+              </em>
+            </div>
+            <div class="market-tile__price">
+              <b>{{ money(item.price) }}</b>
+              <small>{{ t('markets.today') }}</small>
+            </div>
+            <svg viewBox="0 0 150 52" preserveAspectRatio="none">
+              <polyline :points="points(item.sparkline, 150, 50)" />
             </svg>
           </button>
         </div>
@@ -543,11 +660,12 @@ onMounted(() => void crypto.load())
             }}</span
             ><span
               ><b>{{ item.name }}</b
-              ><small>{{ item.symbol }}</small></span
+              ><small>{{ item.symbol }} · {{ t('markets.today') }}</small></span
             ><span
               ><b>{{ money(item.price) }}</b
               ><small :class="item.changePercent >= 0 ? 'up' : 'down'"
-                >{{ item.changePercent.toFixed(2) }}%</small
+                >{{ item.changePercent >= 0 ? '+' : ''
+                }}{{ item.changePercent.toFixed(2) }}%</small
               ></span
             >
           </button></SkyCard
@@ -560,13 +678,26 @@ onMounted(() => void crypto.load())
       </template>
 
       <template v-else-if="tab === 'activity'">
-        <section class="activity-head">
-          <p>{{ t('activity.volume') }}</p>
-          <strong>{{ privateMoney(profile?.totalVolume ?? '0') }}</strong
-          ><span
-            >{{ profile?.totalTrades }}
-            {{ t('activity.completedTrades') }}</span
-          >
+        <section class="activity-head activity-dashboard">
+          <div class="activity-dashboard__copy">
+            <p>{{ t('activity.volume') }}</p>
+            <strong>{{ privateMoney(profile?.totalVolume ?? '0') }}</strong>
+            <span
+              >{{ profile?.totalTrades }}
+              {{ t('activity.completedTrades') }}</span
+            >
+          </div>
+          <div class="activity-ring">
+            <svg viewBox="0 0 72 72">
+              <circle cx="36" cy="36" r="29" />
+              <circle class="activity-ring__value" cx="36" cy="36" r="29" />
+            </svg>
+            <span
+              ><ShieldCheck :size="15" /><small>{{
+                t('statuses.completed')
+              }}</small></span
+            >
+          </div>
         </section>
         <SkySegmented
           strong
@@ -588,7 +719,10 @@ onMounted(() => void crypto.load())
             >{{ t('activity.filters.wallet') }}</SkySegmentedButton
           ></SkySegmented
         >
-        <h2 class="title">{{ t('activity.title') }}</h2>
+        <div class="heading activity-title">
+          <h2>{{ t('activity.title') }}</h2>
+          <em>{{ activities.length }}</em>
+        </div>
         <SkyEmptyState
           v-if="!activities.length"
           :title="t('activity.empty')"
@@ -598,9 +732,12 @@ onMounted(() => void crypto.load())
           v-for="item in activities"
           v-else
           :key="item.id"
-          class="row static"
+          class="row static activity-row"
         >
-          <span class="activity-icon"><ArrowLeftRight :size="18" /></span
+          <span :class="['activity-icon', `activity-icon--${item.type}`]">
+            <ArrowDownLeft v-if="item.type === 'deposit'" :size="18" />
+            <ArrowUpRight v-else-if="item.type === 'withdrawal'" :size="18" />
+            <ChartNoAxesCombined v-else :size="18" /> </span
           ><span
             ><b>{{ t(`activityTypes.${item.type}`) }}</b
             ><small
@@ -619,16 +756,28 @@ onMounted(() => void crypto.load())
               }}{{ privateMoney(item.amount) }}</b
             ><small>{{ t(`statuses.${item.status}`) }}</small></span
           >
+          <i class="timeline-dot" />
         </div>
       </template>
 
       <template v-else>
-        <section class="profile-head">
-          <span>{{ profile?.handle.slice(0, 2).toUpperCase() }}</span>
+        <section class="profile-card">
+          <div class="profile-card__mesh" />
+          <div class="profile-card__top">
+            <span class="profile-avatar">{{
+              profile?.handle.slice(0, 2).toUpperCase()
+            }}</span>
+            <span class="profile-status"><i />{{ t('profile.verified') }}</span>
+          </div>
           <h2>@{{ profile?.handle }}</h2>
           <p><ShieldCheck :size="15" />{{ t('profile.verified') }}</p>
+          <div class="profile-card__id">
+            <small>VAULTX ID</small>
+            <b>{{ profile?.id.slice(0, 8).toUpperCase() }}</b>
+            <Fingerprint :size="26" />
+          </div>
         </section>
-        <div class="profile-stats">
+        <div class="profile-stats profile-stats--premium">
           <div>
             <b>{{ profile?.totalTrades }}</b
             ><small>{{ t('profile.trades') }}</small>
@@ -645,10 +794,20 @@ onMounted(() => void crypto.load())
                     year: 'numeric',
                   }).format(profile.createdAt)
                 : '—'
-            }}</b
-            ><small>{{ t('profile.memberSince') }}</small>
+            }}</b>
+            <small>{{ t('profile.memberSince') }}</small>
           </div>
         </div>
+        <SkyCard class="security-overview">
+          <div class="security-score">
+            <ShieldCheck :size="22" /><b>100</b><small>/100</small>
+          </div>
+          <span
+            ><small>{{ t('profile.securityTitle') }}</small
+            ><b>{{ t('profile.verified') }}</b
+            ><em>{{ t('profile.securityBody') }}</em></span
+          >
+        </SkyCard>
         <h2 class="title">{{ t('profile.preferences') }}</h2>
         <SkyCard class="settings"
           ><label
@@ -1381,5 +1540,869 @@ onMounted(() => void crypto.load())
 .quote small {
   color: var(--muted);
   font-size: 9px;
+}
+
+/* VaultX owns a dense trading surface while shared phone geometry stays in Sky UI. */
+.crypto-app {
+  --card: #10151d;
+  --card-strong: #151c26;
+  --muted: rgba(220, 231, 238, 0.57);
+  --vault-mint: #65fbd2;
+  --vault-blue: #68a7ff;
+  background:
+    radial-gradient(
+      circle at 88% 9%,
+      rgba(71, 133, 175, 0.16),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 0% 34%,
+      rgba(51, 219, 176, 0.09),
+      transparent 28%
+    ),
+    linear-gradient(180deg, #070b11 0%, #030509 74%);
+}
+.crypto-app::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  background-image: linear-gradient(
+    rgba(255, 255, 255, 0.018) 1px,
+    transparent 1px
+  );
+  background-size: 100% 48px;
+  mask-image: linear-gradient(to bottom, #000, transparent 58%);
+}
+.crypto-app :deep(.sky-navbar) {
+  background: linear-gradient(
+    180deg,
+    rgba(5, 8, 13, 0.98),
+    rgba(5, 8, 13, 0.78)
+  );
+}
+.crypto-app :deep(.sky-scroll-area__content) {
+  position: relative;
+}
+.crypto-app :deep(.sky-pill-navigation) {
+  --sky-glass-solid: rgba(14, 19, 27, 0.97);
+}
+.crypto-app :deep(.sky-segmented-button--active) {
+  color: #07100e;
+}
+.auth-hero > span {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 26px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.8), transparent 42%),
+    linear-gradient(145deg, #7dffe0, #3977ff);
+  box-shadow:
+    0 22px 70px rgba(60, 224, 184, 0.22),
+    inset 0 0 24px rgba(255, 255, 255, 0.3);
+}
+.auth-hero > span::after {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 18px;
+  height: 18px;
+  border: 4px solid #070b11;
+  border-radius: 50%;
+  content: '';
+  background: var(--vault-mint);
+}
+.portfolio-shell {
+  position: relative;
+  min-height: 294px;
+  margin-bottom: 12px;
+  padding: 18px 17px 15px;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 80% 12%,
+      rgba(91, 159, 255, 0.2),
+      transparent 27%
+    ),
+    radial-gradient(
+      circle at 24% 82%,
+      rgba(101, 251, 210, 0.16),
+      transparent 35%
+    ),
+    linear-gradient(145deg, #151d28, #0a0f16 66%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 30px;
+  box-shadow:
+    0 22px 50px rgba(0, 0, 0, 0.36),
+    inset 0 1px rgba(255, 255, 255, 0.08);
+}
+.portfolio-shell::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(
+    112deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.045) 49%,
+    transparent 60%
+  );
+}
+.portfolio-glow {
+  position: absolute;
+  top: -64px;
+  right: -50px;
+  width: 190px;
+  height: 190px;
+  border: 1px solid rgba(101, 251, 210, 0.1);
+  border-radius: 50%;
+  box-shadow: 0 0 65px rgba(101, 251, 210, 0.08);
+}
+.portfolio-glow::before,
+.portfolio-glow::after {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: inherit;
+  content: '';
+}
+.portfolio-glow::before {
+  inset: 22px;
+}
+.portfolio-glow::after {
+  inset: 47px;
+}
+.portfolio-topline,
+.portfolio-value,
+.portfolio-metrics,
+.allocation-copy,
+.market-tile__top,
+.featured-market__top,
+.featured-market__quote,
+.featured-market__stats {
+  display: flex;
+  align-items: center;
+}
+.portfolio-topline {
+  position: relative;
+  z-index: 1;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.portfolio-topline > span:first-child {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.portfolio-topline svg {
+  color: var(--vault-mint);
+}
+.live-pill,
+.profile-status {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 9px;
+  color: rgba(255, 255, 255, 0.76);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--sky-radius-pill);
+}
+.live-pill i,
+.profile-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vault-mint);
+  box-shadow: 0 0 9px var(--vault-mint);
+}
+.portfolio-value {
+  position: relative;
+  z-index: 1;
+  justify-content: space-between;
+  margin-top: 15px;
+}
+.portfolio-value strong {
+  font-size: 35px;
+  letter-spacing: -0.055em;
+}
+.portfolio-value > span {
+  display: grid;
+  justify-items: end;
+  font-size: 12px;
+  font-weight: 800;
+}
+.portfolio-value small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 600;
+}
+.portfolio-chart {
+  position: relative;
+  height: 112px;
+  margin: 2px -17px 0;
+}
+.portfolio-chart svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.portfolio-chart polyline,
+.featured-market polyline {
+  fill: none;
+  stroke: #dffff6;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 8px rgba(101, 251, 210, 0.5));
+}
+.chart-orb {
+  position: absolute;
+  right: 11%;
+  top: 28%;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--vault-mint);
+  box-shadow:
+    0 0 0 5px rgba(101, 251, 210, 0.12),
+    0 0 17px var(--vault-mint);
+}
+.portfolio-metrics {
+  position: relative;
+  z-index: 1;
+  justify-content: space-around;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.portfolio-metrics div {
+  display: grid;
+  gap: 2px;
+  min-width: 40%;
+}
+.portfolio-metrics div:last-child {
+  text-align: right;
+}
+.portfolio-metrics small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.portfolio-metrics b {
+  font-size: 12px;
+}
+.portfolio-metrics > i {
+  width: 1px;
+  height: 27px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.quick {
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.quick button {
+  align-content: start;
+  min-height: 94px;
+  padding: 10px 5px 8px;
+  background: linear-gradient(
+    160deg,
+    rgba(30, 39, 51, 0.94),
+    rgba(12, 17, 24, 0.94)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 19px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.045);
+}
+.quick button span {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(101, 251, 210, 0.14);
+  border-radius: 14px;
+  color: var(--vault-mint);
+  background: rgba(101, 251, 210, 0.08);
+}
+.quick button b {
+  font-size: 9px;
+}
+.quick button small {
+  max-width: 62px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.allocation-card {
+  margin-bottom: 21px;
+  padding: 14px;
+  background: linear-gradient(
+    125deg,
+    rgba(21, 29, 39, 0.98),
+    rgba(12, 17, 23, 0.98)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.allocation-copy {
+  gap: 10px;
+}
+.allocation-copy > span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  color: var(--vault-mint);
+  background: rgba(101, 251, 210, 0.1);
+  border-radius: 13px;
+}
+.allocation-copy > div {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+}
+.allocation-copy small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.allocation-copy b {
+  font-size: 11px;
+}
+.allocation-copy > strong {
+  color: var(--vault-mint);
+  font-size: 14px;
+}
+.allocation-track,
+.asset-allocation {
+  display: block;
+  height: 4px;
+  margin-top: 11px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: var(--sky-radius-pill);
+}
+.allocation-track i,
+.asset-allocation i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--vault-mint), var(--vault-blue));
+  border-radius: inherit;
+}
+.asset-row {
+  min-height: 72px;
+  margin-bottom: 9px;
+  padding: 12px;
+  background: linear-gradient(
+    145deg,
+    rgba(19, 26, 35, 0.97),
+    rgba(10, 14, 20, 0.97)
+  );
+  border-color: rgba(255, 255, 255, 0.07);
+  border-radius: 20px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+.asset-allocation {
+  width: 72px;
+  height: 3px;
+  margin-top: 7px;
+}
+.featured-market {
+  position: relative;
+  width: 100%;
+  margin-bottom: 20px;
+  padding: 16px;
+  overflow: hidden;
+  color: #fff;
+  text-align: left;
+  background:
+    radial-gradient(
+      circle at 88% 12%,
+      rgba(101, 251, 210, 0.16),
+      transparent 28%
+    ),
+    linear-gradient(145deg, #18212d, #0a0f16 68%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 26px;
+  box-shadow:
+    0 20px 45px rgba(0, 0, 0, 0.28),
+    inset 0 1px rgba(255, 255, 255, 0.07);
+}
+.featured-market__top {
+  gap: 11px;
+}
+.featured-market__top > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+}
+.featured-market__top small {
+  color: var(--vault-mint);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.featured-market__top b {
+  margin-top: 2px;
+  font-size: 16px;
+}
+.featured-market__top em {
+  color: var(--muted);
+  font-size: 8px;
+  font-style: normal;
+}
+.featured-market__quote {
+  justify-content: space-between;
+  margin-top: 17px;
+}
+.featured-market__quote strong {
+  font-size: 28px;
+  letter-spacing: -0.04em;
+}
+.featured-market__quote span {
+  font-size: 11px;
+  font-weight: 800;
+}
+.featured-market > svg {
+  width: calc(100% + 32px);
+  height: 74px;
+  margin: 2px -16px 6px;
+}
+.featured-market__stats {
+  gap: 8px;
+}
+.featured-market__stats > span {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+.featured-market__stats small {
+  color: var(--muted);
+  font-size: 7px;
+}
+.featured-market__stats b {
+  font-size: 10px;
+}
+.market-list-heading {
+  margin-top: 2px;
+}
+.market-grid--advanced {
+  grid-template-columns: 1fr;
+  gap: 9px;
+}
+.market-grid--advanced button {
+  display: block;
+  min-height: 154px;
+  padding: 14px;
+  background: linear-gradient(
+    145deg,
+    rgba(19, 26, 35, 0.96),
+    rgba(10, 14, 20, 0.96)
+  );
+  border-radius: 20px;
+}
+.market-tile__top {
+  gap: 10px;
+}
+.market-tile__top > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+}
+.market-tile__top b {
+  font-size: 12px;
+}
+.market-tile__top small {
+  margin: 1px 0 0 !important;
+  font-size: 8px !important;
+}
+.market-tile__top em {
+  padding: 5px 7px;
+  font-size: 9px;
+  background: rgba(101, 251, 210, 0.08);
+  border-radius: var(--sky-radius-pill);
+}
+.market-tile__price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 11px;
+}
+.market-tile__price b {
+  font-size: 20px;
+}
+.market-tile__price small {
+  margin: 0 !important;
+}
+.market-grid--advanced svg {
+  height: 43px;
+  margin-top: 4px;
+}
+.activity-dashboard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 20px 18px;
+  text-align: left;
+  background:
+    radial-gradient(
+      circle at 90% 20%,
+      rgba(101, 251, 210, 0.16),
+      transparent 31%
+    ),
+    linear-gradient(145deg, #17202b, #0b1017);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 26px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+}
+.activity-dashboard__copy {
+  display: grid;
+  gap: 3px;
+}
+.activity-dashboard__copy strong {
+  font-size: 27px;
+  letter-spacing: -0.045em;
+}
+.activity-ring {
+  position: relative;
+  width: 76px;
+  height: 76px;
+}
+.activity-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.activity-ring circle {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 6;
+}
+.activity-ring .activity-ring__value {
+  stroke: var(--vault-mint);
+  stroke-linecap: round;
+  stroke-dasharray: 168 182;
+  filter: drop-shadow(0 0 5px rgba(101, 251, 210, 0.45));
+}
+.activity-ring > span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  color: var(--vault-mint);
+}
+.activity-ring small {
+  max-width: 52px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 6px;
+  text-align: center;
+}
+.activity-title {
+  margin-top: 22px;
+}
+.activity-row {
+  position: relative;
+  min-height: 70px;
+  margin-left: 10px;
+  width: calc(100% - 10px);
+  overflow: visible;
+  background: linear-gradient(
+    145deg,
+    rgba(19, 26, 35, 0.95),
+    rgba(9, 13, 18, 0.95)
+  );
+}
+.activity-row::before {
+  position: absolute;
+  top: -13px;
+  bottom: -13px;
+  left: -11px;
+  width: 1px;
+  content: '';
+  background: rgba(255, 255, 255, 0.09);
+}
+.timeline-dot {
+  position: absolute;
+  top: 31px;
+  left: -14px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid #070b11;
+  border-radius: 50%;
+  background: var(--vault-mint);
+  box-shadow: 0 0 7px var(--vault-mint);
+}
+.activity-icon--withdrawal {
+  color: #ff7588;
+  background: rgba(255, 92, 112, 0.1);
+}
+.activity-icon--deposit {
+  color: var(--vault-blue);
+  background: rgba(104, 167, 255, 0.1);
+}
+.profile-card {
+  position: relative;
+  min-height: 225px;
+  padding: 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 82% 14%,
+      rgba(104, 167, 255, 0.28),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 16% 90%,
+      rgba(101, 251, 210, 0.2),
+      transparent 30%
+    ),
+    linear-gradient(145deg, #1a2532, #0b1119 70%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 29px;
+  box-shadow:
+    0 22px 55px rgba(0, 0, 0, 0.35),
+    inset 0 1px rgba(255, 255, 255, 0.08);
+}
+.profile-card__mesh {
+  position: absolute;
+  right: -35px;
+  bottom: -50px;
+  width: 190px;
+  height: 190px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 24px rgba(255, 255, 255, 0.015),
+    inset 0 0 0 48px rgba(255, 255, 255, 0.012);
+}
+.profile-card__top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  color: #07100e;
+  font-size: 17px;
+  font-weight: 900;
+  background: linear-gradient(145deg, #b8ffea, #4b94ff);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 19px;
+  box-shadow: 0 12px 30px rgba(101, 251, 210, 0.18);
+}
+.profile-status {
+  max-width: 150px;
+  color: var(--vault-mint);
+  font-size: 7px;
+}
+.profile-card h2 {
+  position: relative;
+  margin: 14px 0 2px;
+  font-size: 24px;
+}
+.profile-card > p {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+  color: var(--muted);
+  font-size: 9px;
+}
+.profile-card > p svg {
+  color: var(--vault-mint);
+}
+.profile-card__id {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.profile-card__id small {
+  color: var(--muted);
+  font-size: 7px;
+  letter-spacing: 0.14em;
+}
+.profile-card__id b {
+  grid-column: 1;
+  margin-top: 2px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+.profile-card__id svg {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: rgba(255, 255, 255, 0.45);
+}
+.profile-stats--premium {
+  margin-top: 10px;
+}
+.profile-stats--premium div {
+  min-height: 66px;
+  align-content: center;
+  background: linear-gradient(145deg, #151c25, #0b1016);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.security-overview {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  margin-top: 11px;
+  padding: 13px;
+  background: linear-gradient(
+    135deg,
+    rgba(101, 251, 210, 0.09),
+    rgba(104, 167, 255, 0.06)
+  );
+  border: 1px solid rgba(101, 251, 210, 0.14);
+}
+.security-score {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  flex: 0 0 auto;
+  color: var(--vault-mint);
+  border: 4px solid rgba(101, 251, 210, 0.2);
+  border-top-color: var(--vault-mint);
+  border-radius: 50%;
+}
+.security-score svg {
+  position: absolute;
+  opacity: 0.16;
+}
+.security-score b {
+  font-size: 14px;
+  line-height: 1;
+}
+.security-score small {
+  font-size: 6px;
+}
+.security-overview > span {
+  display: grid;
+  gap: 2px;
+}
+.security-overview > span small {
+  color: var(--vault-mint);
+  font-size: 8px;
+}
+.security-overview > span b {
+  font-size: 11px;
+}
+.security-overview > span em {
+  color: var(--muted);
+  font-size: 7px;
+  font-style: normal;
+  line-height: 1.35;
+}
+.settings,
+.profile-form,
+.security,
+.stats,
+.investment,
+.movers {
+  background: linear-gradient(
+    145deg,
+    rgba(20, 27, 36, 0.97),
+    rgba(9, 13, 18, 0.97)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+.settings label > span > svg {
+  color: var(--vault-mint);
+}
+.detail-head {
+  position: relative;
+  margin-bottom: 10px;
+  padding: 18px 0 10px;
+}
+.detail-head::before {
+  position: absolute;
+  top: -65px;
+  width: 230px;
+  height: 230px;
+  border-radius: 50%;
+  content: '';
+  background: radial-gradient(
+    circle,
+    rgba(101, 251, 210, 0.13),
+    transparent 65%
+  );
+}
+.detail-head > * {
+  position: relative;
+}
+.big-chart {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(145deg, #101720, #070b10);
+  background-size:
+    100% 40px,
+    53px 100%,
+    auto;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 24px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+}
+.periods {
+  margin: 0 7px 7px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 14px;
+}
+.periods button.active {
+  color: #07100e;
+  background: var(--vault-mint);
+  box-shadow: 0 5px 18px rgba(101, 251, 210, 0.18);
+}
+.dual {
+  position: sticky;
+  bottom: calc(var(--sky-safe-area-bottom) + 4px);
+  z-index: 3;
+  padding: 6px;
+  background: rgba(7, 10, 14, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.55);
+}
+.sheet {
+  background: radial-gradient(
+    circle at 90% 0%,
+    rgba(101, 251, 210, 0.09),
+    transparent 28%
+  );
+}
+.quote {
+  background: linear-gradient(145deg, #151d27, #0c1117);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+@media (prefers-reduced-motion: reduce) {
+  .portfolio-shell::after,
+  .chart-orb {
+    display: none;
+  }
+}
+.phone-app--performance .portfolio-shell,
+.phone-app--performance .featured-market,
+.phone-app--performance .profile-card {
+  box-shadow: none;
 }
 </style>

@@ -449,6 +449,10 @@ const cryptoFallbackLocales = {
   portfolio: {
     total: 'Total portfolio',
     cash: 'Available cash',
+    invested: 'Invested assets',
+    allocation: 'Portfolio allocation',
+    inMarket: 'in markets',
+    assets: 'assets',
     holdings: 'Your assets',
     empty: 'No assets yet',
     emptyBody: 'Open Markets to request a protected quote.',

@@ -47,6 +47,15 @@ describe('VaultX crypto app contracts', () => {
     expect(server).toContain('`price_alerts`')
   })
 
+  it('uses the premium dashboard hierarchy without manual refresh controls', () => {
+    expect(source).toContain('class="portfolio-shell"')
+    expect(source).toContain('class="featured-market"')
+    expect(source).toContain('class="activity-ring"')
+    expect(source).toContain('class="profile-card"')
+    expect(source).not.toContain('RefreshCw')
+    expect(source).not.toContain(':aria-label="t(\'refresh\')"')
+  })
+
   it('keeps all consequential calculations and state transitions on the server', () => {
     expect(server).toContain(
       'Bridge.Callbacks.Register("sky_phone:crypto:quote"',
