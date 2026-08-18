@@ -33,6 +33,7 @@ import { useClockStore } from '@/stores/clock'
 import { useGamesStore } from '@/features/games/store'
 import { useCallsStore } from '@/stores/calls'
 import { useBankingStore } from '@/stores/banking'
+import { useCryptoStore } from '@/stores/crypto'
 import { useBillingStore } from '@/stores/billing'
 import { useCompaniesStore } from '@/stores/companies'
 import { useAccountStore } from '@/stores/account'
@@ -69,6 +70,7 @@ import type {
 } from '@/types/companies'
 import type { PhoneCall } from '@/types/phone'
 import type { EasyShareEvent } from '@/types/easyshare'
+import type { CryptoMarketChangedData } from '@/types/crypto'
 import { nuiCall } from '@/utils/nui'
 import { formatTimer } from '@/utils/clock'
 import { parsePhonePreferences } from '@/utils/preferences'
@@ -92,6 +94,7 @@ type AppMessage = {
     | PicstagramNotificationData
     | FeatherNotificationData
     | BankingChangedData
+    | CryptoMarketChangedData
     | BillingNotificationData
     | EasyShareEvent
     | PhoneCall
@@ -274,6 +277,7 @@ const clock = useClockStore()
 const games = useGamesStore()
 const calls = useCallsStore()
 const banking = useBankingStore()
+const crypto = useCryptoStore()
 const billing = useBillingStore()
 const companies = useCompaniesStore()
 const mail = useMailStore()
@@ -1024,6 +1028,9 @@ function onMessage(event: MessageEvent<AppMessage>): void {
         title: phone.t('Apps.banking.notifications.receivedTitle'),
       })
     }
+  } else if (event.data?.type === 'crypto:changed' && event.data.data) {
+    const data = event.data.data as CryptoMarketChangedData
+    crypto.applyMarketUpdate(data.markets)
   } else if (event.data?.type === 'billing:changed') {
     void billing.loadOverview()
   } else if (event.data?.type === 'billing:new' && event.data.data) {

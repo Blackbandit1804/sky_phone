@@ -927,6 +927,14 @@ RegisterNetEvent("sky_phone:banking:changed", function(data)
     SendNUIMessage({ type = "banking:changed", data = data })
 end)
 
+RegisterNetEvent("sky_phone:crypto:changed", function(data)
+    if type(data) ~= "table" or type(data.markets) ~= "table" then
+        Bridge.Debug("error", "[sky_phone] Rejected invalid crypto market data.")
+        return
+    end
+    SendNUIMessage({ type = "crypto:changed", data = data })
+end)
+
 RegisterNetEvent("sky_phone:billing:changed", function()
     SendNUIMessage({ type = "billing:changed" })
 end)

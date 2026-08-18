@@ -50,32 +50,24 @@ type ChartPeriod = '1D' | '1W' | '1M' | '6M' | '1Y'
 const CHART_PERIODS: ChartPeriod[] = ['1D', '1W', '1M', '6M', '1Y']
 const CHART_PERIOD_CONFIG: Record<
   ChartPeriod,
-  { duration: number; multiplier: number; noise: number; samples: number }
+  { duration: number; samples: number }
 > = {
-  '1D': { duration: 86_400_000, multiplier: 1, noise: 0.025, samples: 16 },
+  '1D': { duration: 86_400_000, samples: 16 },
   '1W': {
     duration: 7 * 86_400_000,
-    multiplier: 1.4,
-    noise: 0.05,
-    samples: 18,
+    samples: 24,
   },
   '1M': {
     duration: 30 * 86_400_000,
-    multiplier: 2.2,
-    noise: 0.09,
-    samples: 20,
+    samples: 32,
   },
   '6M': {
     duration: 183 * 86_400_000,
-    multiplier: 3.5,
-    noise: 0.16,
-    samples: 22,
+    samples: 40,
   },
   '1Y': {
     duration: 365 * 86_400_000,
-    multiplier: 5,
-    noise: 0.24,
-    samples: 24,
+    samples: 48,
   },
 }
 const crypto = useCryptoStore()
@@ -264,38 +256,14 @@ const detailChart = computed(() => {
   }
 
   const currentPrice = Number(selected.price)
-  const seed = [...selected.id].reduce(
-    (total, character) => total + character.charCodeAt(0),
-    0,
-  )
-  const periodBias = ((seed % 13) - 6) * (config.multiplier - 1) * 0.24
-  const periodReturn = Math.max(
-    -72,
-    Math.min(180, selected.changePercent * config.multiplier + periodBias),
-  )
-  const startPrice = currentPrice / (1 + periodReturn / 100)
-  const sparkline = selected.sparkline.length ? selected.sparkline : [0.5, 0.5]
-  const values = Array.from({ length: config.samples }, (_, index) => {
-    const ratio = index / (config.samples - 1)
-    const sourcePosition = ratio * (sparkline.length - 1)
-    const sourceIndex = Math.floor(sourcePosition)
-    const sourceRatio = sourcePosition - sourceIndex
-    const sourceValue =
-      (sparkline[sourceIndex] ?? 0.5) * (1 - sourceRatio) +
-      (sparkline[Math.min(sourceIndex + 1, sparkline.length - 1)] ?? 0.5) *
-        sourceRatio
-    const trend = startPrice + (currentPrice - startPrice) * ratio
-    const wave =
-      (sourceValue - 0.5) * 0.72 +
-      Math.sin((ratio * (1.4 + config.multiplier * 0.28) + seed) * Math.PI) *
-        0.2
-
-    return Math.max(
-      currentPrice * 0.01,
-      trend + currentPrice * config.noise * wave * Math.sin(Math.PI * ratio),
-    )
-  })
-  values[0] = startPrice
+  const history = (selected.priceHistory ?? [])
+    .map(Number)
+    .filter((value) => Number.isFinite(value) && value > 0)
+  const values = (
+    history.length ? history : [currentPrice, currentPrice]
+  ).slice(-config.samples)
+  if (values.length === 1) values.unshift(values[0])
+  const startPrice = values[0] ?? currentPrice
   values[values.length - 1] = currentPrice
 
   const minimum = Math.min(...values)
@@ -549,6 +517,16 @@ watch(amount, () => {
   if (sheet.value === 'trade' && crypto.pendingQuote) {
     crypto.pendingQuote = null
     formError.value = ''
+  }
+})
+watch(markets, (value) => {
+  if (detail.value) {
+    detail.value =
+      value.find((market) => market.id === detail.value?.id) ?? null
+  }
+  if (selectedMarket.value) {
+    selectedMarket.value =
+      value.find((market) => market.id === selectedMarket.value?.id) ?? null
   }
 })
 onMounted(() => void crypto.load())

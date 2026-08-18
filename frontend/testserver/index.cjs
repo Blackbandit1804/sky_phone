@@ -221,6 +221,18 @@ function createCryptoMarket({
   const minimum = Math.min(...rawSparkline)
   const maximum = Math.max(...rawSparkline)
   const span = Math.max(0.01, maximum - minimum)
+  const normalizedSparkline = rawSparkline.map(
+    (value) => (value - minimum) / span,
+  )
+  const startPrice = numericPrice / (1 + changePercent / 100)
+  const priceHistory = normalizedSparkline.map((value, index) => {
+    const progress = index / (normalizedSparkline.length - 1)
+    const trend = startPrice + (numericPrice - startPrice) * progress
+    const fluctuation =
+      numericPrice * 0.018 * (value - 0.5) * Math.sin(Math.PI * progress)
+    return Math.max(0.01, trend + fluctuation).toFixed(2)
+  })
+  priceHistory[priceHistory.length - 1] = numericPrice.toFixed(2)
   return {
     changePercent,
     color,
@@ -236,7 +248,8 @@ function createCryptoMarket({
     ).toFixed(2),
     name,
     price,
-    sparkline: rawSparkline.map((value) => (value - minimum) / span),
+    priceHistory,
+    sparkline: normalizedSparkline,
     symbol,
     treasuryAvailable: String(Math.floor(supply * 0.82)),
   }

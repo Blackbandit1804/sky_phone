@@ -120,6 +120,14 @@ function verifyBrowserTestData(dataByEndpoint) {
   assert.equal(typeof crypto.markets[0].issuedSupply, 'string')
   assert(crypto.markets.every((market) => typeof market.logo === 'string'))
   assert(
+    crypto.markets.every(
+      (market) =>
+        Array.isArray(market.priceHistory) &&
+        market.priceHistory.length >= 2 &&
+        market.priceHistory.at(-1) === Number(market.price).toFixed(2),
+    ),
+  )
+  assert(
     Math.max(...crypto.markets.map((market) => Number(market.price))) >=
       1000000,
   )

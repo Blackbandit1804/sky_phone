@@ -11,9 +11,16 @@ export type CryptoMarket = {
   low24h: string
   name: string
   price: string
+  priceHistory?: string[]
   sparkline: number[]
   symbol: string
   treasuryAvailable: string
+  updatedAt?: number
+}
+
+export type CryptoMarketChangedData = {
+  markets: CryptoMarket[]
+  updatedAt: number
 }
 
 export type CryptoHolding = {

@@ -54,6 +54,56 @@ describe('crypto store', () => {
     expect(mockNuiCall).toHaveBeenCalledWith('crypto:bootstrap', {})
   })
 
+  it('applies live server prices to holdings and portfolio profit or loss', () => {
+    const crypto = useCryptoStore()
+    crypto.data = {
+      ...bootstrap,
+      cashBalance: '100.00',
+      holdings: [
+        {
+          assetId: 'aurora',
+          averagePrice: '100.00',
+          quantity: '2.000000',
+          value: '200.00',
+        },
+      ],
+      markets: [
+        {
+          changePercent: 0,
+          color: '#25d9ad',
+          enabled: true,
+          high24h: '100.00',
+          id: 'aurora',
+          issuedSupply: '1000000.000000',
+          logo: '◈',
+          low24h: '100.00',
+          name: 'Aurora',
+          price: '100.00',
+          sparkline: [0, 1],
+          symbol: 'AUR',
+          treasuryAvailable: '850000.000000',
+        },
+      ],
+      portfolioValue: '300.00',
+    }
+    crypto.pendingQuote = quote
+
+    crypto.applyMarketUpdate([
+      {
+        ...crypto.data.markets[0],
+        changePercent: 25,
+        high24h: '125.00',
+        price: '125.00',
+        priceHistory: ['100.00', '125.00'],
+      },
+    ])
+
+    expect(crypto.data.holdings[0].value).toBe('250.00')
+    expect(crypto.data.portfolioValue).toBe('350.00')
+    expect(crypto.data.markets[0].priceHistory).toEqual(['100.00', '125.00'])
+    expect(crypto.pendingQuote).toBeNull()
+  })
+
   it('sends only market, side and quantity when requesting a quote', async () => {
     mockNuiCall.mockResolvedValueOnce({ data: quote, success: true })
     const crypto = useCryptoStore()

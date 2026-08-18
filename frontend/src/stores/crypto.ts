@@ -1,6 +1,11 @@
 import { defineStore } from 'pinia'
 
-import type { CryptoBootstrap, CryptoQuote, CryptoSide } from '@/types/crypto'
+import type {
+  CryptoBootstrap,
+  CryptoMarket,
+  CryptoQuote,
+  CryptoSide,
+} from '@/types/crypto'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
 
 function requestKey(prefix: string): string {
@@ -16,6 +21,38 @@ export const useCryptoStore = defineStore('crypto', {
     pendingQuote: null as CryptoQuote | null,
   }),
   actions: {
+    applyMarketUpdate(markets: CryptoMarket[]): void {
+      if (!this.data || markets.length === 0) return
+      const changed = new Map(markets.map((market) => [market.id, market]))
+      const nextMarkets = this.data.markets.map(
+        (market) => changed.get(market.id) ?? market,
+      )
+      const prices = new Map(
+        nextMarkets.map((market) => [market.id, Number(market.price)]),
+      )
+      const holdings = this.data.holdings.map((holding) => ({
+        ...holding,
+        value: (
+          Number(holding.quantity) * (prices.get(holding.assetId) ?? 0)
+        ).toFixed(2),
+      }))
+      const portfolioValue = holdings
+        .reduce(
+          (total, holding) => total + Number(holding.value),
+          Number(this.data.cashBalance),
+        )
+        .toFixed(2)
+
+      this.data = {
+        ...this.data,
+        holdings,
+        markets: nextMarkets,
+        portfolioValue,
+      }
+      if (this.pendingQuote && changed.has(this.pendingQuote.marketId)) {
+        this.pendingQuote = null
+      }
+    },
     async call<T>(endpoint: string, payload: Record<string, unknown> = {}) {
       this.isLoading = true
       this.error = ''

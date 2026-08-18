@@ -51,7 +51,7 @@ describe('VaultX crypto app contracts', () => {
   })
 
   it('includes advanced market detail and persistent profile controls', () => {
-    expect(source).toContain('selected.sparkline')
+    expect(source).toContain('selected.priceHistory')
     expect(source).toContain('const detailChart = computed')
     expect(source).toContain('CHART_PERIOD_CONFIG[period.value]')
     expect(source).toContain('class="detail-chart__marker"')
@@ -185,6 +185,18 @@ describe('VaultX crypto app contracts', () => {
     expect(server).toContain('local function with_exchange_lock')
     expect(server).toContain('local function reconcile_settlements')
     expect(server).toContain('settlement_ledger_queries')
+  })
+
+  it('streams server-driven market movement into live portfolio values', () => {
+    expect(config).toContain('PriceTickMinimumSeconds')
+    expect(config).toContain('MarketsPerTickMaximum')
+    expect(config).toContain('MarketShockChanceBasisPoints')
+    expect(server).toContain('local market_dynamics = {}')
+    expect(server).toContain('global_market_trend')
+    expect(server).toContain('Config.Crypto.MeanReversionBasisPoints')
+    expect(server).toContain('TriggerClientEvent("sky_phone:crypto:changed"')
+    expect(server).toContain('priceHistory = price_history')
+    expect(source).toContain('selected.priceHistory')
   })
 
   it('stores cash in price-scale minor units throughout the ledger', () => {
