@@ -80,13 +80,6 @@ const activities = computed(() =>
         : ['deposit', 'withdrawal'].includes(item.type)),
   ),
 )
-const portfolioLine = computed(() => markets.value[0]?.sparkline ?? [])
-const portfolioChange = computed(() =>
-  markets.value.length
-    ? markets.value.reduce((sum, market) => sum + market.changePercent, 0) /
-      markets.value.length
-    : 0,
-)
 const investedValue = computed(() =>
   Math.max(
     0,
@@ -94,6 +87,109 @@ const investedValue = computed(() =>
       Number(crypto.data?.cashBalance ?? 0),
   ),
 )
+const portfolioCostBasis = computed(() =>
+  holdings.value.reduce(
+    (sum, holding) =>
+      sum + Number(holding.quantity) * Number(holding.averagePrice),
+    0,
+  ),
+)
+const portfolioProfitLoss = computed(
+  () => investedValue.value - portfolioCostBasis.value,
+)
+const portfolioProfitPercent = computed(() =>
+  portfolioCostBasis.value > 0
+    ? (portfolioProfitLoss.value / portfolioCostBasis.value) * 100
+    : 0,
+)
+const portfolioChart = computed(() => {
+  const width = 320
+  const height = 126
+  const startX = 18
+  const currentX = 224
+  const forecastEndX = 306
+  const sampleCount = 10
+  const weightedMarkets = holdings.value
+    .map((holding) => ({
+      cost: Number(holding.quantity) * Number(holding.averagePrice),
+      market: markets.value.find((item) => item.id === holding.assetId),
+    }))
+    .filter((item): item is { cost: number; market: CryptoMarket } =>
+      Boolean(item.market?.sparkline.length),
+    )
+  const totalWeight =
+    weightedMarkets.reduce((sum, item) => sum + item.cost, 0) || 1
+  const reference = Array.from({ length: sampleCount }, (_, index) =>
+    weightedMarkets.reduce((sum, item) => {
+      const sourceIndex = Math.round(
+        (index / (sampleCount - 1)) * (item.market.sparkline.length - 1),
+      )
+      return (
+        sum + item.market.sparkline[sourceIndex] * (item.cost / totalWeight)
+      )
+    }, 0),
+  )
+  const currentProfit = portfolioProfitLoss.value
+  const referenceEnd = reference[reference.length - 1] ?? 0.5
+  const amplitude = Math.max(
+    portfolioCostBasis.value * 0.045,
+    Math.abs(currentProfit) * 0.38,
+    40,
+  )
+  const historyValues = reference.map(
+    (value) => currentProfit + (value - referenceEnd) * amplitude,
+  )
+  historyValues[historyValues.length - 1] = currentProfit
+
+  const recentMomentum =
+    currentProfit - (historyValues[historyValues.length - 3] ?? currentProfit)
+  const forecastValues = [
+    currentProfit,
+    currentProfit + recentMomentum * 0.42,
+    currentProfit + recentMomentum * 0.58 + amplitude * 0.035,
+    currentProfit + recentMomentum * 0.48 - amplitude * 0.018,
+  ]
+  const extent = Math.max(
+    50,
+    ...historyValues.map((value) => Math.abs(value)),
+    ...forecastValues.map((value) => Math.abs(value)),
+  )
+  const scale = Math.ceil((extent * 1.18) / 50) * 50
+  const chartTop = 15
+  const chartBottom = height - 16
+  const chartRange = chartBottom - chartTop
+  const y = (value: number) =>
+    chartTop + ((scale - value) / (scale * 2)) * chartRange
+  const historyPoints = historyValues
+    .map(
+      (value, index) =>
+        `${
+          startX + index * ((currentX - startX) / (historyValues.length - 1))
+        },${y(value)}`,
+    )
+    .join(' ')
+  const forecastPoints = forecastValues
+    .map(
+      (value, index) =>
+        `${
+          currentX +
+          index * ((forecastEndX - currentX) / (forecastValues.length - 1))
+        },${y(value)}`,
+    )
+    .join(' ')
+
+  return {
+    currentX,
+    currentY: y(currentProfit),
+    forecastPoints,
+    height,
+    historyPoints,
+    labelY: Math.max(3, Math.min(height - 29, y(currentProfit) - 27)),
+    scale,
+    width,
+    zeroY: y(0),
+  }
+})
 const cashShare = computed(() => {
   const total = Number(crypto.data?.portfolioValue ?? 0)
   return total > 0
@@ -123,8 +219,17 @@ function money(value: string | number) {
     style: 'currency',
   }).format(Number(value) || 0)
 }
+function signedMoney(value: number) {
+  const formatted = money(Math.abs(value))
+  if (value > 0) return `+${formatted}`
+  if (value < 0) return `−${formatted}`
+  return formatted
+}
 function privateMoney(value: string | number) {
   return profile.value?.hideBalances ? '••••••' : money(value)
+}
+function privateSignedMoney(value: number) {
+  return profile.value?.hideBalances ? '••••••' : signedMoney(value)
 }
 function quantity(value: string) {
   return new Intl.NumberFormat(locale.value, {
@@ -515,34 +620,105 @@ onMounted(() => void crypto.load())
         <section class="portfolio-shell">
           <div class="portfolio-glow" />
           <div class="portfolio-topline">
-            <span><ShieldCheck :size="13" />{{ t('portfolio.total') }}</span>
-            <span class="live-pill"><i />{{ t('markets.live') }}</span>
+            <span
+              ><ShieldCheck :size="13" />{{ t('portfolio.performance') }}</span
+            >
+            <span class="forecast-pill">{{ t('portfolio.forecast') }}</span>
           </div>
           <div class="portfolio-value">
-            <strong>{{
-              privateMoney(crypto.data?.portfolioValue ?? '0')
-            }}</strong>
-            <span :class="portfolioChange >= 0 ? 'up' : 'down'">
-              {{ portfolioChange >= 0 ? '↗' : '↘' }}
-              {{ Math.abs(portfolioChange).toFixed(2) }}%
-              <small>{{ t('marketDetail.today') }}</small>
+            <strong :class="portfolioProfitLoss >= 0 ? 'up' : 'down'">
+              {{ privateSignedMoney(portfolioProfitLoss) }}
+            </strong>
+            <span :class="portfolioProfitPercent >= 0 ? 'up' : 'down'">
+              {{ portfolioProfitPercent >= 0 ? '↗' : '↘' }}
+              {{ Math.abs(portfolioProfitPercent).toFixed(2) }}%
+              <small>{{ t('portfolio.return') }}</small>
             </span>
           </div>
-          <div class="portfolio-chart">
-            <svg viewBox="0 0 320 112" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="portfolio-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#65fbd2" stop-opacity=".32" />
-                  <stop offset="1" stop-color="#65fbd2" stop-opacity="0" />
-                </linearGradient>
-              </defs>
-              <polygon
-                :points="`0,112 ${points(portfolioLine, 320, 106)} 320,112`"
-                fill="url(#portfolio-fill)"
+          <div
+            class="portfolio-chart"
+            role="img"
+            :aria-label="t('portfolio.chartLabel')"
+          >
+            <div class="portfolio-chart__legend">
+              <span><i />{{ t('portfolio.history') }}</span>
+              <span
+                ><i class="is-forecast" />{{ t('portfolio.forecast') }}</span
+              >
+            </div>
+            <svg
+              :viewBox="`0 0 ${portfolioChart.width} ${portfolioChart.height}`"
+              aria-hidden="true"
+            >
+              <rect
+                class="portfolio-chart__forecast-zone"
+                :x="portfolioChart.currentX"
+                y="0"
+                :width="portfolioChart.width - portfolioChart.currentX"
+                :height="portfolioChart.height"
               />
-              <polyline :points="points(portfolioLine, 320, 106)" />
+              <line
+                class="portfolio-chart__grid"
+                x1="18"
+                y1="15"
+                x2="306"
+                y2="15"
+              />
+              <line
+                class="portfolio-chart__zero"
+                x1="18"
+                :y1="portfolioChart.zeroY"
+                x2="306"
+                :y2="portfolioChart.zeroY"
+              />
+              <line
+                class="portfolio-chart__grid"
+                x1="18"
+                :y1="portfolioChart.height - 16"
+                x2="306"
+                :y2="portfolioChart.height - 16"
+              />
+              <line
+                class="portfolio-chart__boundary"
+                :x1="portfolioChart.currentX"
+                y1="4"
+                :x2="portfolioChart.currentX"
+                :y2="portfolioChart.height - 8"
+              />
+              <polyline
+                class="portfolio-history"
+                :points="portfolioChart.historyPoints"
+              />
+              <polyline
+                class="portfolio-forecast"
+                :points="portfolioChart.forecastPoints"
+              />
+              <circle
+                class="portfolio-current-dot"
+                :cx="portfolioChart.currentX"
+                :cy="portfolioChart.currentY"
+                r="4.5"
+              />
+              <g
+                class="portfolio-current-label"
+                :transform="`translate(${portfolioChart.currentX - 48} ${portfolioChart.labelY})`"
+              >
+                <rect width="96" height="20" rx="10" />
+                <text x="48" y="13" text-anchor="middle">
+                  {{ t('portfolio.current') }}
+                </text>
+              </g>
+              <text class="portfolio-scale-label" x="18" y="10">
+                {{ privateSignedMoney(portfolioChart.scale) }}
+              </text>
+              <text
+                class="portfolio-scale-label"
+                x="18"
+                :y="portfolioChart.height - 3"
+              >
+                {{ privateSignedMoney(-portfolioChart.scale) }}
+              </text>
             </svg>
-            <span class="chart-orb" />
           </div>
           <div class="portfolio-metrics">
             <div>
@@ -1846,6 +2022,15 @@ onMounted(() => void crypto.load())
 .portfolio-topline svg {
   color: var(--vault-mint);
 }
+.forecast-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+  color: #b9c8ff;
+  background: rgba(112, 143, 255, 0.09);
+  border: 1px solid rgba(140, 169, 255, 0.18);
+  border-radius: var(--sky-radius-pill);
+}
 .live-pill,
 .profile-status {
   display: inline-flex;
@@ -1889,15 +2074,67 @@ onMounted(() => void crypto.load())
 }
 .portfolio-chart {
   position: relative;
-  height: 112px;
-  margin: 2px -17px 0;
+  height: 148px;
+  margin: 8px -8px 0;
 }
 .portfolio-chart svg {
+  display: block;
   width: 100%;
-  height: 100%;
+  height: 126px;
   overflow: visible;
 }
-.portfolio-chart polyline,
+.portfolio-chart__legend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  height: 22px;
+  padding-right: 7px;
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 700;
+}
+.portfolio-chart__legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.portfolio-chart__legend i {
+  width: 13px;
+  height: 2px;
+  border-radius: 4px;
+  background: var(--vault-mint);
+}
+.portfolio-chart__legend i.is-forecast {
+  background: repeating-linear-gradient(
+    90deg,
+    #8ca9ff 0 4px,
+    transparent 4px 7px
+  );
+}
+.portfolio-chart__forecast-zone {
+  fill: rgba(112, 143, 255, 0.055);
+}
+.portfolio-chart__grid,
+.portfolio-chart__zero,
+.portfolio-chart__boundary {
+  vector-effect: non-scaling-stroke;
+}
+.portfolio-chart__grid {
+  stroke: rgba(255, 255, 255, 0.055);
+  stroke-width: 1;
+}
+.portfolio-chart__zero {
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+}
+.portfolio-chart__boundary {
+  stroke: rgba(140, 169, 255, 0.22);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+.portfolio-history,
+.portfolio-forecast,
 .featured-market polyline {
   fill: none;
   stroke: #dffff6;
@@ -1907,18 +2144,34 @@ onMounted(() => void crypto.load())
   vector-effect: non-scaling-stroke;
   filter: drop-shadow(0 0 8px rgba(101, 251, 210, 0.5));
 }
-.chart-orb {
-  position: absolute;
-  right: 11%;
-  top: 28%;
-  width: 9px;
-  height: 9px;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: var(--vault-mint);
-  box-shadow:
-    0 0 0 5px rgba(101, 251, 210, 0.12),
-    0 0 17px var(--vault-mint);
+.portfolio-forecast {
+  stroke: #8ca9ff;
+  stroke-dasharray: 7 7;
+  filter: drop-shadow(0 0 7px rgba(112, 143, 255, 0.4));
+}
+.portfolio-current-dot {
+  fill: var(--vault-mint);
+  stroke: #fff;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 6px var(--vault-mint));
+}
+.portfolio-current-label rect {
+  fill: #101923;
+  stroke: rgba(101, 251, 210, 0.45);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.portfolio-current-label text {
+  fill: #fff;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.portfolio-scale-label {
+  fill: rgba(255, 255, 255, 0.46);
+  font-size: 7px;
+  font-weight: 700;
 }
 .portfolio-metrics {
   position: relative;
@@ -2654,8 +2907,7 @@ onMounted(() => void crypto.load())
   border: 1px solid rgba(255, 255, 255, 0.07);
 }
 @media (prefers-reduced-motion: reduce) {
-  .portfolio-shell::after,
-  .chart-orb {
+  .portfolio-shell::after {
     display: none;
   }
   .vault-view {

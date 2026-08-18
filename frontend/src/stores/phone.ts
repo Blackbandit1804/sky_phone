@@ -448,6 +448,12 @@ const cryptoFallbackLocales = {
   },
   portfolio: {
     total: 'Total portfolio',
+    performance: 'Profit / loss',
+    return: 'Total return',
+    current: 'Current position',
+    history: 'Performance',
+    forecast: 'Forecast',
+    chartLabel: 'Profit and loss performance with dashed forecast',
     cash: 'Available cash',
     invested: 'Invested assets',
     allocation: 'Portfolio allocation',

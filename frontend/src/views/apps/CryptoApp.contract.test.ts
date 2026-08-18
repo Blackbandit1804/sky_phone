@@ -63,6 +63,16 @@ describe('VaultX crypto app contracts', () => {
     expect(source).not.toContain(':aria-label="t(\'refresh\')"')
   })
 
+  it('anchors portfolio performance history and forecast at the current position', () => {
+    expect(source).toContain('const portfolioProfitLoss = computed')
+    expect(source).toContain('class="portfolio-history"')
+    expect(source).toContain('class="portfolio-forecast"')
+    expect(source).toContain(':cx="portfolioChart.currentX"')
+    expect(source).toContain(':cy="portfolioChart.currentY"')
+    expect(source).toContain("t('portfolio.current')")
+    expect(source).toContain('stroke-dasharray: 7 7')
+  })
+
   it('uses the compact Flare-style navigation and polished overlay transitions', () => {
     expect(source).toContain('class="vault-navbar"')
     expect(source).toContain('class="vault-header-logo"')
