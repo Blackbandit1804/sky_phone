@@ -44,7 +44,7 @@ import {
 } from '@/ui'
 
 type Tab = 'portfolio' | 'markets' | 'activity' | 'profile'
-type Sheet = 'trade' | 'deposit' | 'withdraw' | null
+type Sheet = 'trade' | 'deposit' | 'withdraw' | 'profile' | null
 const crypto = useCryptoStore()
 const phone = usePhoneStore()
 const tab = ref<Tab>('portfolio')
@@ -61,7 +61,8 @@ const financialPassword = ref('')
 const showPassword = ref(false)
 const formError = ref('')
 const profileHandle = ref('')
-const profilePassword = ref('')
+const profileCurrentPassword = ref('')
+const profileNewPassword = ref('')
 const priceAlerts = ref(true)
 const confirmations = ref(true)
 const hideBalances = ref(false)
@@ -285,9 +286,19 @@ function openSettlement(next: 'deposit' | 'withdraw') {
   financialPassword.value = ''
   formError.value = ''
 }
+function openProfileEditor() {
+  profileHandle.value = profile.value?.handle ?? ''
+  profileCurrentPassword.value = ''
+  profileNewPassword.value = ''
+  formError.value = ''
+  saved.value = false
+  sheet.value = 'profile'
+}
 function closeSheet() {
   sheet.value = null
   crypto.pendingQuote = null
+  profileCurrentPassword.value = ''
+  profileNewPassword.value = ''
 }
 
 async function submitAuth() {
@@ -332,15 +343,35 @@ async function saveProfile() {
   const success = await crypto.updateProfile({
     handle: profileHandle.value.trim(),
     hideBalances: hideBalances.value,
-    password: profilePassword.value,
+    currentPassword: profileCurrentPassword.value,
+    newPassword: profileNewPassword.value,
     priceAlerts: priceAlerts.value,
     tradeConfirmations: confirmations.value,
   })
   if (!success) formError.value = errorText(crypto.error)
   else {
-    profilePassword.value = ''
+    closeSheet()
     saved.value = true
   }
+}
+async function savePreferences() {
+  saved.value = false
+  formError.value = ''
+  const success = await crypto.updateProfile({
+    handle: profile.value?.handle ?? '',
+    hideBalances: hideBalances.value,
+    currentPassword: '',
+    newPassword: '',
+    priceAlerts: priceAlerts.value,
+    tradeConfirmations: confirmations.value,
+  })
+  if (!success) formError.value = errorText(crypto.error)
+  else saved.value = true
+}
+async function signOut() {
+  closeSheet()
+  await crypto.logout()
+  tab.value = 'portfolio'
 }
 
 watch(
@@ -393,6 +424,18 @@ onMounted(() => void crypto.load())
         <strong v-else class="vault-section-title">
           {{ t(`tabs.${tab}`) }}
         </strong>
+      </template>
+      <template v-if="authenticated && tab === 'profile' && !detail" #right>
+        <SkyLink
+          component="button"
+          icon-only
+          class="profile-signout"
+          :aria-label="t('logout')"
+          :title="t('logout')"
+          @click="signOut"
+        >
+          <LogOut :size="15" />
+        </SkyLink>
       </template>
     </SkyNavbar>
 
@@ -990,8 +1033,20 @@ onMounted(() => void crypto.load())
             }}</span>
             <span class="profile-status"><i />{{ t('profile.verified') }}</span>
           </div>
-          <h2>@{{ profile?.handle }}</h2>
-          <p><ShieldCheck :size="15" />{{ t('profile.verified') }}</p>
+          <div class="profile-card__identity">
+            <span>
+              <h2>@{{ profile?.handle }}</h2>
+              <p><ShieldCheck :size="15" />{{ t('profile.verified') }}</p>
+            </span>
+            <SkyButton
+              class="profile-edit-button"
+              rounded
+              small
+              @click="openProfileEditor"
+            >
+              <Settings2 :size="15" />{{ t('profile.edit') }}
+            </SkyButton>
+          </div>
           <div class="profile-card__id">
             <small>VAULTX ID</small>
             <b>{{ profile?.id.slice(0, 8).toUpperCase() }}</b>
@@ -1037,52 +1092,32 @@ onMounted(() => void crypto.load())
                 ><b>{{ t('profile.priceAlerts') }}</b
                 ><small>{{ t('profile.priceAlertsBody') }}</small></span
               ></span
-            ><SkyToggle v-model="priceAlerts" /></label
+            ><SkyToggle
+              v-model="priceAlerts"
+              @change="savePreferences" /></label
           ><label
             ><span
               ><Fingerprint :size="18" /><span
                 ><b>{{ t('profile.confirmations') }}</b
                 ><small>{{ t('profile.confirmationsBody') }}</small></span
               ></span
-            ><SkyToggle v-model="confirmations" /></label
+            ><SkyToggle
+              v-model="confirmations"
+              @change="savePreferences" /></label
           ><label
             ><span
               ><EyeOff :size="18" /><span
                 ><b>{{ t('profile.hideBalances') }}</b
                 ><small>{{ t('profile.hideBalancesBody') }}</small></span
               ></span
-            ><SkyToggle v-model="hideBalances" /></label
+            ><SkyToggle
+              v-model="hideBalances"
+              @change="savePreferences" /></label
         ></SkyCard>
-        <h2 class="title">{{ t('profile.identity') }}</h2>
-        <form class="form profile-form" @submit.prevent="saveProfile">
-          <SkyField
-            v-model="profileHandle"
-            :label="t('auth.handle')"
-            maxlength="20"
-            outline
-            ><template #leading><UserRound :size="18" /></template></SkyField
-          ><SkyField
-            v-model="profilePassword"
-            :label="t('profile.passwordForChange')"
-            :placeholder="t('profile.passwordOptional')"
-            type="password"
-            outline
-            ><template #leading><LockKeyhole :size="18" /></template
-          ></SkyField>
-          <p v-if="saved" class="success">
-            <ShieldCheck :size="15" />{{ t('profile.saved') }}
-          </p>
-          <p v-if="formError" class="error">{{ formError }}</p>
-          <SkyButton block type="submit">{{ t('profile.save') }}</SkyButton>
-        </form>
-        <SkyCard class="security"
-          ><ShieldCheck :size="22" /><span
-            ><b>{{ t('profile.securityTitle') }}</b
-            ><small>{{ t('profile.securityBody') }}</small></span
-          ></SkyCard
-        ><SkyButton block variant="danger" @click="crypto.logout()"
-          ><LogOut :size="18" />{{ t('logout') }}</SkyButton
-        >
+        <p v-if="saved" class="profile-feedback success">
+          <ShieldCheck :size="15" />{{ t('profile.saved') }}
+        </p>
+        <p v-if="formError" class="profile-feedback error">{{ formError }}</p>
       </template>
     </SkyScrollArea>
 
@@ -1140,19 +1175,24 @@ onMounted(() => void crypto.load())
                 :market="selectedMarket"
               />
               <ArrowDownLeft v-else-if="sheet === 'deposit'" :size="19" />
-              <ArrowUpRight v-else :size="19" />
+              <ArrowUpRight v-else-if="sheet === 'withdraw'" :size="19" />
+              <UserRound v-else :size="19" />
             </span>
             <span>
               <small>{{
                 sheet === 'trade' && selectedMarket
                   ? selectedMarket.name
-                  : t('activity.cash')
+                  : sheet === 'profile'
+                    ? t('profile.account')
+                    : t('activity.cash')
               }}</small>
               <h2>
                 {{
                   sheet === 'trade'
                     ? `${t(`trade.${side}`)} ${selectedMarket?.symbol}`
-                    : t(`actions.${sheet}`)
+                    : sheet === 'profile'
+                      ? t('profile.editTitle')
+                      : t(`actions.${sheet}`)
                 }}
               </h2>
             </span>
@@ -1222,7 +1262,43 @@ onMounted(() => void crypto.load())
               t(crypto.pendingQuote ? 'trade.confirm' : 'trade.getQuote')
             }}</SkyButton
           ></template
-        ><template v-else
+        ><template v-else-if="sheet === 'profile'">
+          <p class="sheet-copy">{{ t('profile.editBody') }}</p>
+          <form class="profile-edit-sheet" @submit.prevent="saveProfile">
+            <SkyField
+              v-model="profileHandle"
+              :label="t('auth.handle')"
+              maxlength="20"
+              outline
+              ><template #leading><UserRound :size="18" /></template
+            ></SkyField>
+            <SkyField
+              v-model="profileCurrentPassword"
+              :label="t('profile.currentPassword')"
+              :placeholder="t('profile.currentPasswordPlaceholder')"
+              type="password"
+              outline
+              ><template #leading><LockKeyhole :size="18" /></template
+            ></SkyField>
+            <SkyField
+              v-model="profileNewPassword"
+              :label="t('profile.newPassword')"
+              :placeholder="t('profile.newPasswordPlaceholder')"
+              type="password"
+              outline
+              ><template #leading><Fingerprint :size="18" /></template
+            ></SkyField>
+            <div class="profile-edit-note">
+              <ShieldCheck :size="17" />
+              <span>{{ t('profile.passwordSecurity') }}</span>
+            </div>
+            <p v-if="formError" class="error">{{ formError }}</p>
+            <SkyButton block type="submit">{{
+              t('profile.saveChanges')
+            }}</SkyButton>
+          </form>
+        </template>
+        <template v-else
           ><p class="sheet-copy">
             {{
               t(
@@ -1743,27 +1819,6 @@ onMounted(() => void crypto.load())
   color: var(--muted);
   font-size: 11px;
 }
-.profile-form {
-  padding: 15px;
-  background: var(--card);
-  border-radius: 20px;
-}
-.security {
-  display: flex;
-  gap: 11px;
-  align-items: center;
-  margin: 15px 0;
-  padding: 15px;
-  color: #49e4b2;
-  background: rgba(49, 214, 170, 0.08);
-}
-.security span {
-  display: grid;
-}
-.security small {
-  color: var(--muted);
-  font-size: 11px;
-}
 .sheet {
   display: grid;
   gap: 13px;
@@ -1844,6 +1899,19 @@ onMounted(() => void crypto.load())
 .vault-section-title {
   font-size: 17px;
   letter-spacing: -0.02em;
+}
+.profile-signout {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  color: #fff;
+  background: rgba(255, 92, 112, 0.1);
+  border: 1px solid rgba(255, 117, 136, 0.18);
+  border-radius: 50%;
+}
+.profile-signout svg {
+  color: #ff7588;
 }
 .vault-detail-title {
   display: inline-flex;
@@ -2641,7 +2709,7 @@ onMounted(() => void crypto.load())
 }
 .profile-card {
   position: relative;
-  min-height: 225px;
+  min-height: 244px;
   padding: 18px;
   overflow: hidden;
   background:
@@ -2698,13 +2766,26 @@ onMounted(() => void crypto.load())
   color: var(--vault-mint);
   font-size: 11px;
 }
-.profile-card h2 {
+.profile-card__identity {
   position: relative;
-  margin: 14px 0 2px;
-  font-size: 24px;
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  justify-content: space-between;
+  margin-top: 15px;
 }
-.profile-card > p {
-  position: relative;
+.profile-card__identity > span {
+  min-width: 0;
+  flex: 1;
+}
+.profile-card h2 {
+  margin: 0 0 3px;
+  font-size: 24px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-card__identity p {
   display: flex;
   gap: 6px;
   align-items: center;
@@ -2712,8 +2793,19 @@ onMounted(() => void crypto.load())
   color: var(--muted);
   font-size: 11px;
 }
-.profile-card > p svg {
+.profile-card__identity p svg {
   color: var(--vault-mint);
+}
+.profile-edit-button {
+  width: auto;
+  min-width: auto;
+  min-height: 36px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  color: #fff;
+  background: rgba(101, 251, 210, 0.1);
+  border: 1px solid rgba(101, 251, 210, 0.2);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06);
 }
 .profile-card__id {
   position: relative;
@@ -2747,6 +2839,9 @@ onMounted(() => void crypto.load())
   align-content: center;
   background: linear-gradient(145deg, #151c25, #0b1016);
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.profile-feedback {
+  margin: 10px 3px 0;
 }
 .security-overview {
   display: flex;
@@ -2802,8 +2897,6 @@ onMounted(() => void crypto.load())
   line-height: 1.35;
 }
 .settings,
-.profile-form,
-.security,
 .stats,
 .investment,
 .movers {
@@ -3002,6 +3095,26 @@ onMounted(() => void crypto.load())
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
+}
+.profile-edit-sheet {
+  display: grid;
+  gap: 12px;
+}
+.profile-edit-note {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 11px 12px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  line-height: 1.4;
+  background: rgba(101, 251, 210, 0.06);
+  border: 1px solid rgba(101, 251, 210, 0.12);
+  border-radius: 14px;
+}
+.profile-edit-note svg {
+  flex: 0 0 auto;
+  color: var(--vault-mint);
 }
 .quote {
   background: linear-gradient(145deg, #151d27, #0c1117);

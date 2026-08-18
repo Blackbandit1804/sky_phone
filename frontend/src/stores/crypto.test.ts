@@ -130,7 +130,8 @@ describe('crypto store', () => {
       await crypto.updateProfile({
         handle: 'skyline',
         hideBalances: true,
-        password: '',
+        currentPassword: '',
+        newPassword: '',
         priceAlerts: false,
         tradeConfirmations: true,
       }),
@@ -138,7 +139,8 @@ describe('crypto store', () => {
     expect(mockNuiCall).toHaveBeenCalledWith('crypto:update-profile', {
       handle: 'skyline',
       hideBalances: true,
-      password: '',
+      currentPassword: '',
+      newPassword: '',
       priceAlerts: false,
       tradeConfirmations: true,
     })

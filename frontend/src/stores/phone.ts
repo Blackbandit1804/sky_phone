@@ -535,10 +535,20 @@ const cryptoFallbackLocales = {
     hideBalances: 'Privacy mode',
     hideBalancesBody: 'Hide balances across VaultX.',
     identity: 'Profile identity',
-    passwordForChange: 'Password for handle change',
-    passwordOptional: 'Only required when changing handle',
+    edit: 'Edit',
+    account: 'Account & security',
+    editTitle: 'Edit profile',
+    editBody:
+      'Update your handle or set a new password. Your current password confirms identity changes.',
+    currentPassword: 'Current password',
+    currentPasswordPlaceholder: 'Required for handle or password changes',
+    newPassword: 'New password',
+    newPasswordPlaceholder: 'Leave blank to keep your current password',
+    passwordSecurity:
+      'Passwords use memory-hard hashing and are never shown again.',
     saved: 'Profile saved securely.',
     save: 'Save profile',
+    saveChanges: 'Save changes',
     securityTitle: 'Protected profile',
     securityBody:
       'Your profile stays bound to this framework character and financial session.',

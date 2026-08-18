@@ -113,7 +113,8 @@ export const useCryptoStore = defineStore('crypto', {
     async updateProfile(payload: {
       handle: string
       hideBalances: boolean
-      password: string
+      currentPassword: string
+      newPassword: string
       priceAlerts: boolean
       tradeConfirmations: boolean
     }): Promise<boolean> {

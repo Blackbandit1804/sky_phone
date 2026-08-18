@@ -58,6 +58,18 @@ describe('VaultX crypto app contracts', () => {
     expect(server).toContain('`price_alerts`')
   })
 
+  it('supports secure profile editing and header sign out', () => {
+    expect(source).toContain('class="profile-signout"')
+    expect(source).toContain('class="profile-edit-button"')
+    expect(source).toContain("sheet.value = 'profile'")
+    expect(source).toContain('v-model="profileCurrentPassword"')
+    expect(source).toContain('v-model="profileNewPassword"')
+    expect(server).toContain(
+      'verify_password(profile.id, data.currentPassword)',
+    )
+    expect(server).toContain('CryptoHashPassword(new_password)')
+  })
+
   it('uses the premium dashboard hierarchy without manual refresh controls', () => {
     expect(source).toContain('class="portfolio-shell"')
     expect(source).toContain('class="featured-market"')

@@ -671,11 +671,20 @@ Bridge.Callbacks.Register("sky_phone:crypto:update-profile", function(source, da
     then
         return { success = false, error = "invalid_profile" }
     end
-    if handle:lower() ~= profile.handle:lower() then
-        if not verify_password(profile.id, data.password) then
+    local handle_changed = handle:lower() ~= profile.handle:lower()
+    local new_password = type(data.newPassword) == "string" and data.newPassword or ""
+    local password_changed = new_password ~= ""
+    if password_changed and not valid_password(new_password) then
+        return { success = false, error = "invalid_password" }
+    end
+    if handle_changed or password_changed then
+        if not verify_password(profile.id, data.currentPassword) then
             audit(profile.id, profile.owner_identifier, "profile_update_reauth_failed", "")
             return { success = false, error = "invalid_credentials" }
         end
+        sessions[source].recently_authenticated_at = os.time()
+    end
+    if handle_changed then
         local duplicate = Bridge.Database.Query(
             "SELECT 1 FROM `sky_phone_crypto_profiles` WHERE `handle` = ? AND `id` <> ? LIMIT 1",
             { handle, profile.id }
@@ -684,18 +693,43 @@ Bridge.Callbacks.Register("sky_phone:crypto:update-profile", function(source, da
             return { success = false, error = "handle_taken" }
         end
     end
-    Bridge.Database.Query([[
-        UPDATE `sky_phone_crypto_profiles`
-        SET `handle` = ?, `price_alerts` = ?, `trade_confirmations` = ?, `hide_balances` = ?
-        WHERE `id` = ?
-    ]], {
-        handle,
-        data.priceAlerts and 1 or 0,
-        data.tradeConfirmations and 1 or 0,
-        data.hideBalances and 1 or 0,
+    if password_changed then
+        local password_hash = exports[GetCurrentResourceName()]:CryptoHashPassword(new_password)
+        if type(password_hash) ~= "string" then
+            return { success = false, error = "service_unavailable" }
+        end
+        Bridge.Database.Query([[
+            UPDATE `sky_phone_crypto_profiles`
+            SET `handle` = ?, `password_hash` = ?, `price_alerts` = ?,
+                `trade_confirmations` = ?, `hide_balances` = ?
+            WHERE `id` = ?
+        ]], {
+            handle,
+            password_hash,
+            data.priceAlerts and 1 or 0,
+            data.tradeConfirmations and 1 or 0,
+            data.hideBalances and 1 or 0,
+            profile.id,
+        })
+    else
+        Bridge.Database.Query([[
+            UPDATE `sky_phone_crypto_profiles`
+            SET `handle` = ?, `price_alerts` = ?, `trade_confirmations` = ?, `hide_balances` = ?
+            WHERE `id` = ?
+        ]], {
+            handle,
+            data.priceAlerts and 1 or 0,
+            data.tradeConfirmations and 1 or 0,
+            data.hideBalances and 1 or 0,
+            profile.id,
+        })
+    end
+    audit(
         profile.id,
-    })
-    audit(profile.id, profile.owner_identifier, "profile_updated", handle)
+        profile.owner_identifier,
+        "profile_updated",
+        (handle_changed and "handle" or "preferences") .. (password_changed and ",password" or "")
+    )
     return { success = true, data = bootstrap(profile_by_owner(profile.owner_identifier)) }
 end)
 
