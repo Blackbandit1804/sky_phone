@@ -76,6 +76,7 @@ function Bridge.Framework.GetJob(source)
         label = job and job.label or "",
         grade = type(grade) == "table" and tonumber(grade.level) or tonumber(grade) or 0,
         gradeLabel = type(grade) == "table" and (grade.name or job.label) or (job and job.label or ""),
+        onDuty = job ~= nil and job.onduty ~= false,
     }
 end
 

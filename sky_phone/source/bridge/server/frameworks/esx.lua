@@ -127,13 +127,14 @@ function Bridge.Framework.GetJob(source)
     local player = get_player(source)
     local job = player and player.getJob()
     if not job then
-        return { name = "", label = "", grade = 0, gradeLabel = "" }
+        return { name = "", label = "", grade = 0, gradeLabel = "", onDuty = false }
     end
     return {
         name = job.name or "",
         label = job.label or "",
         grade = tonumber(job.grade) or 0,
         gradeLabel = job.grade_label or job.label or "",
+        onDuty = true,
     }
 end
 

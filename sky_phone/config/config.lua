@@ -1350,6 +1350,56 @@ if IsDuplicityVersion() then
     }
 
     -- -------------------------------------------------------------------------
+    -- CityWarn population warnings
+    -- -------------------------------------------------------------------------
+
+    Config.CityWarn = {
+        Enabled = true,
+        PageSize = 30,
+        MaximumActiveAlerts = 20,
+        TitleMaxLength = 120,
+        BodyMaxLength = 2000,
+        InstructionsMaxLength = 2000,
+        UpdateMaxLength = 2000,
+        AreaLabelMaxLength = 120,
+        MinimumRadius = 100,
+        MaximumRadius = 10000,
+        DefaultDurationMinutes = 60,
+        MaximumDurationMinutes = 1440,
+        RequireDuty = true,
+        RateLimits = {
+            Read = 180,
+            Write = 20,
+        },
+        Publishers = {
+            police = {
+                MinimumGrade = 2,
+                MaximumSeverity = "extreme",
+                CityWide = true,
+                Categories = { "public_safety", "police", "infrastructure", "evacuation" },
+            },
+            fire = {
+                MinimumGrade = 2,
+                MaximumSeverity = "extreme",
+                CityWide = true,
+                Categories = { "public_safety", "fire", "infrastructure", "evacuation" },
+            },
+            ambulance = {
+                MinimumGrade = 2,
+                MaximumSeverity = "danger",
+                CityWide = false,
+                Categories = { "public_safety", "medical", "evacuation" },
+            },
+            government = {
+                MinimumGrade = 2,
+                MaximumSeverity = "extreme",
+                CityWide = true,
+                Categories = { "public_safety", "police", "fire", "medical", "infrastructure", "evacuation" },
+            },
+        },
+    }
+
+    -- -------------------------------------------------------------------------
     -- Database migrations
     -- -------------------------------------------------------------------------
 

@@ -81,6 +81,7 @@ server_scripts {
     'source/server/media_import/manifest.lua',
     'source/server/media.lua',
     'source/server/weazel_news.lua',
+    'source/server/citywarn.lua',
     'source/server/messages.lua',
     'source/server/memos.lua',
     'source/server/easyshare.lua',
