@@ -496,8 +496,43 @@ const cryptoMarkets = [
     supply: 1200000000,
   }),
 ]
+const cryptoMarketDynamics = new Map()
+const cryptoGlobalCycle = {
+  bias: 0,
+  direction: 0,
+  remainingTicks: 0,
+  target: 0,
+}
+function advanceCryptoCycle(
+  cycle,
+  minimumTicks,
+  maximumTicks,
+  minimumStrength,
+  maximumStrength,
+) {
+  if (cycle.remainingTicks <= 0) {
+    cycle.direction =
+      cycle.direction === 0 ? (Math.random() < 0.5 ? -1 : 1) : -cycle.direction
+    cycle.remainingTicks = Math.floor(
+      minimumTicks + Math.random() * (maximumTicks - minimumTicks + 1),
+    )
+    cycle.target =
+      cycle.direction *
+      (minimumStrength + Math.random() * (maximumStrength - minimumStrength))
+  }
+  cycle.bias += (cycle.target - cycle.bias) * 0.18
+  cycle.remainingTicks -= 1
+  return cycle.bias
+}
 function advanceCryptoMarkets() {
   const updatedAt = Date.now()
+  const globalBias = advanceCryptoCycle(
+    cryptoGlobalCycle,
+    24,
+    54,
+    0.00008,
+    0.00024,
+  )
   for (const market of cryptoMarkets) {
     const currentPrice = Number(market.price)
     const fractionDigits = currentPrice < 1 ? 4 : 2
@@ -510,8 +545,31 @@ function advanceCryptoMarkets() {
           : currentPrice >= 1
             ? 0.0012
             : 0.004
-    const direction = Math.random() < 0.49 ? -1 : 1
-    const movement = direction * volatility * (0.25 + Math.random() * 0.75)
+    const dynamics = cryptoMarketDynamics.get(market.id) ?? {
+      bias: 0,
+      direction: 0,
+      momentum: 0,
+      remainingTicks: 0,
+      target: 0,
+    }
+    const cycleBias = advanceCryptoCycle(
+      dynamics,
+      14,
+      30,
+      volatility * 0.28,
+      volatility * 0.52,
+    )
+    const impulse = (Math.random() * 2 - 1) * volatility * 0.2
+    dynamics.momentum = dynamics.momentum * 0.8 + impulse * 0.2
+    cryptoMarketDynamics.set(market.id, dynamics)
+    const movement = Math.max(
+      -volatility * 0.9,
+      Math.min(
+        volatility * 0.9,
+        cycleBias + globalBias + dynamics.momentum + impulse,
+      ),
+    )
+    const direction = movement < 0 ? -1 : 1
     let nextPrice = Number(
       Math.max(minimumStep, currentPrice * (1 + movement)).toFixed(
         fractionDigits,

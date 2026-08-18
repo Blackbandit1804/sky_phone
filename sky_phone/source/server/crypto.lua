@@ -8,6 +8,11 @@ local market_order = {}
 local market_dynamics = {}
 local market_cursor = 1
 local global_market_trend = 0
+local global_market_cycle = {
+    direction = 0,
+    remaining_ticks = 0,
+    target = 0,
+}
 
 local function ensure_schema()
     local statements = {
@@ -1400,6 +1405,88 @@ end
 
 reconcile_settlements(true)
 
+local function crypto_random_int(minimum, maximum, failure_message)
+    local value = exports[GetCurrentResourceName()]:CryptoRandomInt(minimum, maximum)
+    if type(value) ~= "number" then
+        error(failure_message)
+    end
+    return value
+end
+
+local function truncate_integer(value)
+    if value > 0 then
+        return math.floor(value)
+    elseif value < 0 then
+        return math.ceil(value)
+    end
+    return 0
+end
+
+local function advance_global_market_cycle()
+    if global_market_cycle.remaining_ticks <= 0 then
+        if global_market_cycle.direction == 0 then
+            global_market_cycle.direction = crypto_random_int(
+                0,
+                2,
+                "[sky_phone] Crypto entropy provider did not return a global market direction."
+            ) == 0 and -1 or 1
+        else
+            global_market_cycle.direction = -global_market_cycle.direction
+        end
+        global_market_cycle.remaining_ticks = crypto_random_int(
+            Config.Crypto.GlobalCycleMinimumTicks,
+            Config.Crypto.GlobalCycleMaximumTicks + 1,
+            "[sky_phone] Crypto entropy provider did not return a global market cycle duration."
+        )
+        global_market_cycle.target = global_market_cycle.direction * crypto_random_int(
+            Config.Crypto.GlobalTrendMinimumBasisPoints,
+            Config.Crypto.GlobalTrendMaximumBasisPoints + 1,
+            "[sky_phone] Crypto entropy provider did not return a global market trend."
+        )
+    end
+
+    global_market_trend = truncate_integer((
+        global_market_trend * (10000 - Config.Crypto.CycleTransitionBasisPoints)
+        + global_market_cycle.target * Config.Crypto.CycleTransitionBasisPoints
+    ) / 10000)
+    global_market_cycle.remaining_ticks = global_market_cycle.remaining_ticks - 1
+end
+
+local function advance_market_cycle(config, dynamics)
+    if dynamics.cycle_remaining_ticks <= 0 then
+        if dynamics.cycle_direction == 0 then
+            dynamics.cycle_direction = crypto_random_int(
+                0,
+                2,
+                "[sky_phone] Crypto entropy provider did not return a market cycle direction."
+            ) == 0 and -1 or 1
+        else
+            dynamics.cycle_direction = -dynamics.cycle_direction
+        end
+        dynamics.cycle_remaining_ticks = crypto_random_int(
+            Config.Crypto.CycleDurationMinimumTicks,
+            Config.Crypto.CycleDurationMaximumTicks + 1,
+            "[sky_phone] Crypto entropy provider did not return a market cycle duration."
+        )
+        local strength = crypto_random_int(
+            Config.Crypto.CycleStrengthMinimumBasisPoints,
+            Config.Crypto.CycleStrengthMaximumBasisPoints + 1,
+            "[sky_phone] Crypto entropy provider did not return a market cycle strength."
+        )
+        dynamics.cycle_target = dynamics.cycle_direction * math.max(
+            1,
+            math.floor(config.VolatilityBasisPoints * strength / 10000)
+        )
+    end
+
+    dynamics.cycle_bias = truncate_integer((
+        dynamics.cycle_bias * (10000 - Config.Crypto.CycleTransitionBasisPoints)
+        + dynamics.cycle_target * Config.Crypto.CycleTransitionBasisPoints
+    ) / 10000)
+    dynamics.cycle_remaining_ticks = dynamics.cycle_remaining_ticks - 1
+    return dynamics.cycle_bias
+end
+
 CreateThread(function()
     while true do
         Wait(5 * 60 * 1000)
@@ -1409,27 +1496,19 @@ end)
 
 CreateThread(function()
     while true do
-        local tick_seconds = exports[GetCurrentResourceName()]:CryptoRandomInt(
+        local tick_seconds = crypto_random_int(
             Config.Crypto.PriceTickMinimumSeconds,
-            Config.Crypto.PriceTickMaximumSeconds + 1
+            Config.Crypto.PriceTickMaximumSeconds + 1,
+            "[sky_phone] Crypto entropy provider did not return a market tick interval."
         )
-        if type(tick_seconds) ~= "number" then
-            error("[sky_phone] Crypto entropy provider did not return a market tick interval.")
-        end
         Wait(tick_seconds * 1000)
         with_exchange_lock(function()
-            local market_count = exports[GetCurrentResourceName()]:CryptoRandomInt(
+            local market_count = crypto_random_int(
                 Config.Crypto.MarketsPerTickMinimum,
-                Config.Crypto.MarketsPerTickMaximum + 1
+                Config.Crypto.MarketsPerTickMaximum + 1,
+                "[sky_phone] Crypto entropy provider did not return a market count."
             )
-            local trend_impulse = exports[GetCurrentResourceName()]:CryptoRandomInt(
-                -Config.Crypto.GlobalTrendMaximumBasisPoints,
-                Config.Crypto.GlobalTrendMaximumBasisPoints + 1
-            )
-            if type(market_count) ~= "number" or type(trend_impulse) ~= "number" then
-                error("[sky_phone] Crypto entropy provider did not return valid market dynamics.")
-            end
-            global_market_trend = math.floor((global_market_trend * 7800 + trend_impulse * 2200) / 10000)
+            advance_global_market_cycle()
             local changed_markets = {}
             market_count = math.min(market_count, #market_order)
 
@@ -1443,44 +1522,61 @@ CreateThread(function()
                 )[1]
                 if row and row.status == "active" then
                     local price = tonumber(row.price) or config.InitialPrice
-                    local impulse = exports[GetCurrentResourceName()]:CryptoRandomInt(
+                    local impulse = crypto_random_int(
                         -config.VolatilityBasisPoints,
-                        config.VolatilityBasisPoints + 1
+                        config.VolatilityBasisPoints + 1,
+                        "[sky_phone] Crypto entropy provider did not return a market movement."
                     )
-                    local shock_roll = exports[GetCurrentResourceName()]:CryptoRandomInt(0, 10000)
-                    if type(impulse) ~= "number" or type(shock_roll) ~= "number" then
-                        error("[sky_phone] Crypto entropy provider did not return a market movement.")
+                    if impulse > 0 then
+                        impulse = math.floor(impulse / Config.Crypto.RandomImpulseDivisor)
+                    elseif impulse < 0 then
+                        impulse = math.ceil(impulse / Config.Crypto.RandomImpulseDivisor)
                     end
-                    local dynamics = market_dynamics[market_id] or { momentum = 0 }
-                    dynamics.momentum = math.floor((
+                    local shock_roll = crypto_random_int(
+                        0,
+                        10000,
+                        "[sky_phone] Crypto entropy provider did not return a market shock roll."
+                    )
+                    local dynamics = market_dynamics[market_id] or {
+                        momentum = 0,
+                        cycle_bias = 0,
+                        cycle_direction = 0,
+                        cycle_remaining_ticks = 0,
+                        cycle_target = 0,
+                    }
+                    dynamics.momentum = truncate_integer((
                         dynamics.momentum * Config.Crypto.MomentumDecayBasisPoints
                         + impulse * Config.Crypto.MomentumImpulseBasisPoints
                     ) / 10000)
+                    local cycle_bias = advance_market_cycle(config, dynamics)
                     market_dynamics[market_id] = dynamics
 
                     local deviation = math.floor(
                         (config.InitialPrice - price) * 10000 / config.InitialPrice
                     )
-                    local reversion = math.floor(
+                    local reversion = truncate_integer(
                         deviation * Config.Crypto.MeanReversionBasisPoints / 10000
                     )
                     local shock = 0
                     if shock_roll < Config.Crypto.MarketShockChanceBasisPoints then
-                        local multiplier = exports[GetCurrentResourceName()]:CryptoRandomInt(
+                        local multiplier = crypto_random_int(
                             Config.Crypto.MarketShockMinimumMultiplier,
-                            Config.Crypto.MarketShockMaximumMultiplier + 1
+                            Config.Crypto.MarketShockMaximumMultiplier + 1,
+                            "[sky_phone] Crypto entropy provider did not return a market shock multiplier."
                         )
-                        local direction_roll = exports[GetCurrentResourceName()]:CryptoRandomInt(0, 2)
-                        if type(multiplier) ~= "number" or type(direction_roll) ~= "number" then
-                            error("[sky_phone] Crypto entropy provider did not return valid shock dynamics.")
-                        end
+                        local direction_roll = crypto_random_int(
+                            0,
+                            2,
+                            "[sky_phone] Crypto entropy provider did not return a market shock direction."
+                        )
                         local direction = direction_roll == 0 and -1 or 1
                         shock = direction * config.VolatilityBasisPoints * multiplier
                     end
 
                     local maximum_movement = config.VolatilityBasisPoints
                         * Config.Crypto.MaximumMovementMultiplier
-                    local movement = impulse + dynamics.momentum + global_market_trend + reversion + shock
+                    local movement = impulse + dynamics.momentum + cycle_bias
+                        + global_market_trend + reversion + shock
                     movement = math.max(-maximum_movement, math.min(maximum_movement, movement))
                     if movement > 0 then
                         movement = math.floor(movement / Config.Crypto.TickMovementDivisor)

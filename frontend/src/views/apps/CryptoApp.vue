@@ -677,7 +677,7 @@ function scheduleDevelopmentMarketTick() {
       await crypto.previewMarketTick()
       scheduleDevelopmentMarketTick()
     },
-    1600 + Math.random() * 1800,
+    4500 + Math.random() * 2500,
   )
 }
 onMounted(async () => {

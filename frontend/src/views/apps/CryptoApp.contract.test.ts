@@ -22,6 +22,10 @@ const config = readFileSync(
   new URL('../../../../sky_phone/config/config.lua', import.meta.url),
   'utf8',
 )
+const testServer = readFileSync(
+  new URL('../../../testserver/index.cjs', import.meta.url),
+  'utf8',
+)
 
 describe('VaultX crypto app contracts', () => {
   it('uses Sky UI without introducing Konsta components', () => {
@@ -247,13 +251,24 @@ describe('VaultX crypto app contracts', () => {
     expect(config).toContain('PriceTickMinimumSeconds')
     expect(config).toContain('MarketsPerTickMaximum')
     expect(config).toContain('TickMovementDivisor')
+    expect(config).toContain('CycleDurationMinimumTicks')
+    expect(config).toContain('CycleStrengthMaximumBasisPoints')
+    expect(config).toContain('GlobalCycleMinimumTicks')
     expect(config).toContain('MarketShockChanceBasisPoints')
     expect(server).toContain('local market_dynamics = {}')
     expect(server).toContain('global_market_trend')
+    expect(server).toContain('local function advance_market_cycle')
+    expect(server).toContain(
+      'dynamics.cycle_direction = -dynamics.cycle_direction',
+    )
+    expect(server).toContain('local function advance_global_market_cycle')
     expect(server).toContain('Config.Crypto.MeanReversionBasisPoints')
     expect(server).toContain('TriggerClientEvent("sky_phone:crypto:changed"')
     expect(server).toContain('priceHistory = price_history')
     expect(source).toContain('selected.priceHistory')
+    expect(source).toContain('4500 + Math.random() * 2500')
+    expect(testServer).toContain('const cryptoMarketDynamics = new Map()')
+    expect(testServer).toContain('function advanceCryptoCycle(')
   })
 
   it('stores cash in price-scale minor units throughout the ledger', () => {
