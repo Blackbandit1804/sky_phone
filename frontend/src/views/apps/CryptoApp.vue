@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
+import cryptoHeaderLogo from '@/assets/img/app-icons/crypto-header-logo.png'
 import CryptoLogo from '@/components/crypto/CryptoLogo.vue'
 import { useCryptoStore } from '@/stores/crypto'
 import { usePhoneStore } from '@/stores/phone'
@@ -379,38 +380,7 @@ onMounted(() => void crypto.load())
           v-if="!detail && (!authenticated || tab === 'portfolio')"
           class="vault-header-brand"
         >
-          <svg class="vault-header-logo" aria-hidden="true" viewBox="0 0 32 32">
-            <defs>
-              <linearGradient id="vault-logo-top" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#79e8ff" />
-                <stop offset="1" stop-color="#2677ff" />
-              </linearGradient>
-              <linearGradient
-                id="vault-logo-bottom"
-                x1="0"
-                y1="0"
-                x2="1"
-                y2="1"
-              >
-                <stop offset="0" stop-color="#164dce" />
-                <stop offset="1" stop-color="#31d6aa" />
-              </linearGradient>
-            </defs>
-            <path d="M16 2 28 16 16 14 4 16Z" fill="url(#vault-logo-top)" />
-            <path d="m4 16 12-2 12 2-12 14Z" fill="url(#vault-logo-bottom)" />
-            <path
-              d="m16 2 12 14-12 14L4 16Z"
-              fill="none"
-              stroke="#f5cf6a"
-              stroke-width="1.4"
-            />
-            <path
-              d="m16 2v12L4 16m12-2 12 2"
-              fill="none"
-              stroke="rgba(255,255,255,.58)"
-              stroke-width=".8"
-            />
-          </svg>
+          <img class="vault-header-logo" :src="cryptoHeaderLogo" alt="" />
           <span>{{ t('name') }}</span>
         </span>
         <span v-else-if="detail" class="vault-detail-title">
@@ -1847,11 +1817,12 @@ onMounted(() => void crypto.load())
   align-items: center;
 }
 .vault-header-logo {
-  width: 27px;
-  height: 27px;
+  width: 30px;
+  height: 30px;
   flex: 0 0 auto;
-  overflow: visible;
-  filter: drop-shadow(0 4px 6px rgba(49, 214, 170, 0.24));
+  object-fit: contain;
+  filter: drop-shadow(0 4px 6px rgba(49, 214, 170, 0.22))
+    drop-shadow(0 1px 2px rgba(246, 196, 83, 0.24));
 }
 .vault-section-title {
   font-size: 17px;
