@@ -27,7 +27,12 @@ const launchStyle = computed(() => {
 </script>
 
 <template>
-  <div v-if="app" class="app-window" :style="launchStyle">
+  <div
+    v-if="app"
+    class="app-window"
+    :class="{ 'app-window--citywarn': app.id === 'citywarn' }"
+    :style="launchStyle"
+  >
     <CustomAppFrame
       v-if="isExternalPhoneApp(app)"
       :key="getCustomAppFrameKey(app)"
