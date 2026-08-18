@@ -2792,7 +2792,7 @@ onUnmounted(() => {
   height: 30px;
   border-radius: 11px;
 }
-.vault-detail-title > span {
+.vault-detail-title > span:last-child {
   display: grid;
   justify-items: start;
   line-height: 1.05;

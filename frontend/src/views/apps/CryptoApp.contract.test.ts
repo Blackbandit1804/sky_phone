@@ -163,6 +163,8 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain(
       '<CryptoLogo class="vault-detail-logo" :market="detail" />',
     )
+    expect(source).toContain('.vault-detail-title > span:last-child')
+    expect(source).not.toMatch(/\.vault-detail-title > span\s*\{/)
     expect(source).not.toContain('vault-header-logo--detail')
     expect(source).not.toContain('class="coin-detail-logo"')
     expect(source).not.toContain('.vault-header-brand > i')
