@@ -72,6 +72,8 @@ describe('VaultX crypto app contracts', () => {
 
   it('supports secure profile editing and header sign out', () => {
     expect(source).toContain('class="profile-signout"')
+    expect(source).toContain("<span>{{ t('logout') }}</span>")
+    expect(source).not.toMatch(/icon-only\s+class="profile-signout"/)
     expect(source).toContain('class="profile-edit-button"')
     expect(source).toContain("sheet.value = 'profile'")
     expect(source).toContain('v-model="profileCurrentPassword"')

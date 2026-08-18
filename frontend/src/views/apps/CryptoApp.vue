@@ -729,13 +729,14 @@ onUnmounted(() => {
       <template v-if="authenticated && tab === 'profile' && !detail" #right>
         <SkyLink
           component="button"
-          icon-only
           class="profile-signout"
+          type="button"
           :aria-label="t('logout')"
           :title="t('logout')"
           @click="signOut"
         >
-          <LogOut :size="15" />
+          <LogOut :size="14" />
+          <span>{{ t('logout') }}</span>
         </SkyLink>
       </template>
     </SkyNavbar>
@@ -2740,17 +2741,46 @@ onUnmounted(() => {
   letter-spacing: -0.02em;
 }
 .profile-signout {
-  width: 34px;
   height: 34px;
   min-height: 34px;
-  padding: 0;
-  color: #fff;
-  background: rgba(255, 92, 112, 0.1);
-  border: 1px solid rgba(255, 117, 136, 0.18);
-  border-radius: 50%;
+  gap: 6px;
+  padding: 0 10px;
+  color: #ff9aa8;
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 117, 136, 0.15),
+    rgba(255, 82, 106, 0.08)
+  );
+  border: 1px solid rgba(255, 117, 136, 0.25);
+  border-radius: var(--sky-radius-pill);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.045),
+    0 7px 18px rgba(255, 82, 106, 0.09);
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
 }
 .profile-signout svg {
+  flex: 0 0 auto;
   color: #ff7588;
+}
+.profile-signout:hover {
+  color: #fff;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 117, 136, 0.24),
+    rgba(255, 82, 106, 0.14)
+  );
+  border-color: rgba(255, 135, 151, 0.4);
+}
+.profile-signout:active:not(:disabled) {
+  opacity: 1;
+  transform: translateY(1px) scale(0.98);
 }
 .vault-detail-title {
   display: inline-flex;
