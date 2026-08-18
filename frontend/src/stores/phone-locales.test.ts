@@ -82,6 +82,133 @@ describe('phone locale fallback', () => {
     expect(phone.t('Apps.crypto.profile.shareKey')).toBe('Share')
   })
 
+  it('keeps CityWarn copy translated with a partial server locale', () => {
+    const phone = usePhoneStore()
+    phone.open({ locales: { Apps: { citywarn: { name: 'CityWarn' } } } })
+
+    const cityWarnKeys = [
+      'name',
+      'navigation',
+      'loading',
+      'issuedBy',
+      'updated',
+      'expires',
+      'affectedArea',
+      'currentLocation',
+      'details',
+      'instructions',
+      'timeline',
+      'publishedBy',
+      'radius',
+      'emptyArchive',
+      'emptyArchiveBody',
+      'emptyFiltered',
+      'emptyFilteredBody',
+      'mapTitle',
+      'mapBody',
+      ...['active', 'map', 'archive', 'settings'].map((key) => `tabs.${key}`),
+      ...['safe', 'safeBody', 'active', 'activeBody'].map(
+        (key) => `hero.${key}`,
+      ),
+      ...['active', 'resolved', 'expired'].map((key) => `status.${key}`),
+      ...['information', 'warning', 'danger', 'extreme'].map(
+        (key) => `severity.${key}`,
+      ),
+      ...[
+        'public_safety',
+        'police',
+        'fire',
+        'medical',
+        'infrastructure',
+        'evacuation',
+      ].map((key) => `categories.${key}`),
+      ...['title', 'body', 'offDuty', 'unavailable'].map(
+        (key) => `publisher.${key}`,
+      ),
+      ...[
+        'new',
+        'step',
+        'categoryTitle',
+        'categoryBody',
+        'severityTitle',
+        'areaTitle',
+        'areaBody',
+        'areaTypes.radius',
+        'areaTypes.district',
+        'areaTypes.city',
+        'areaLabel',
+        'areaPlaceholder',
+        'radius',
+        'useLocation',
+        'locationSet',
+        'contentTitle',
+        'title',
+        'titlePlaceholder',
+        'body',
+        'bodyPlaceholder',
+        'instructions',
+        'instructionsPlaceholder',
+        'duration',
+        'durationMinutes',
+        'previewTitle',
+        'recipients',
+        'legal',
+        'back',
+        'next',
+        'publish',
+        'publishing',
+        'success',
+      ].map((key) => `compose.${key}`),
+      ...[
+        'update',
+        'resolve',
+        'updateTitle',
+        'resolveTitle',
+        'updatePlaceholder',
+        'resolvePlaceholder',
+        'send',
+        'confirm',
+        'success',
+        'resolved',
+      ].map((key) => `manage.${key}`),
+      ...[
+        'locationTitle',
+        'locationBody',
+        'levelTitle',
+        'levelBody',
+        'categoryTitle',
+        'categoryBody',
+        'notificationHint',
+      ].map((key) => `settings.${key}`),
+      ...['published', 'update', 'resolved'].map(
+        (key) => `notifications.${key}`,
+      ),
+      ...[
+        'feature_disabled',
+        'not_authorized',
+        'invalid_warning',
+        'invalid_update',
+        'active_limit',
+        'revision_conflict',
+        'rate_limited',
+        'request_failed',
+        'not_found',
+        'device_not_open',
+        'device_not_owned',
+        'device_locked',
+        'default',
+      ].map((key) => `errors.${key}`),
+    ]
+
+    for (const key of cityWarnKeys) {
+      const path = `Apps.citywarn.${key}`
+      expect(phone.t(path), path).not.toBe(path)
+    }
+    expect(phone.t('Apps.citywarn.compose.recipients', { count: '42' })).toBe(
+      'About 42 people are currently reachable.',
+    )
+  })
+
   it('uses the English Lua payload before the bundled emergency fallback', () => {
     const phone = usePhoneStore()
     phone.open({
