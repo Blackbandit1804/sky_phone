@@ -36,6 +36,7 @@ import {
   Building2,
   Newspaper,
   HeartPulse,
+  ChartCandlestick,
 } from 'lucide-vue-next'
 import { defineAsyncComponent, markRaw, shallowReactive } from 'vue'
 
@@ -64,6 +65,7 @@ import neonDropIcon from '@/assets/img/app-icons/neon-drop.webp'
 import weatherIcon from '@/assets/img/app-icons/weather.webp'
 import healthIcon from '@/assets/img/app-icons/health.webp'
 import bankingIcon from '@/assets/img/app-icons/banking.webp'
+import cryptoIcon from '@/assets/img/app-icons/crypto.webp'
 import billingIcon from '@/assets/img/app-icons/billing.svg'
 import garageIcon from '@/assets/img/app-icons/garage.webp'
 import houseIcon from '@/assets/img/app-icons/house.svg'
@@ -89,6 +91,20 @@ import type {
 } from '@/types/apps'
 
 export const PHONE_APPS = shallowReactive<PhoneAppDefinition[]>([
+  {
+    category: 'utilities',
+    component: markRaw(
+      defineAsyncComponent(() => import('@/views/apps/CryptoApp.vue')),
+    ),
+    dockOrder: null,
+    gridOrder: 7,
+    icon: markRaw(ChartCandlestick),
+    iconClass: 'app-icon--crypto',
+    iconImage: cryptoIcon,
+    id: 'crypto',
+    labelKey: 'Apps.crypto.name',
+    route: '/apps/crypto',
+  },
   {
     category: 'utilities',
     component: markRaw(

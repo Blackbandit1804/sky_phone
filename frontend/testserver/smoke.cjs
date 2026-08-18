@@ -7,6 +7,10 @@ const browserDataRequests = [
   ['development:bootstrap', {}],
   ['account:devices', {}],
   ['banking:overview', {}],
+  ['crypto:bootstrap', {}],
+  ['crypto:market-tick', {}],
+  ['crypto:recipient', { walletKey: 'VX-DEAD-BEEF-C0DE-2026' }],
+  ['crypto:quote', { marketId: 'aurora', quantity: '1', side: 'buy' }],
   ['health:overview', {}],
   ['billing:overview', {}],
   ['billing:list', { filter: 'all', limit: 20, offset: 0 }],
@@ -112,6 +116,36 @@ function verifyBrowserTestData(dataByEndpoint) {
   )
 
   expectItems(dataByEndpoint.get('health:overview').days, 'health history', 7)
+  const crypto = dataByEndpoint.get('crypto:bootstrap')
+  expectItems(crypto.markets, 'crypto markets', 24)
+  assert.equal(typeof crypto.profile.priceAlerts, 'boolean')
+  assert.match(crypto.profile.walletKey, /^VX-(?:[A-F0-9]{4}-){3}[A-F0-9]{4}$/)
+  assert.equal(typeof crypto.markets[0].issuedSupply, 'string')
+  assert(crypto.markets.every((market) => typeof market.logo === 'string'))
+  assert(
+    crypto.markets.every(
+      (market) =>
+        Array.isArray(market.priceHistory) &&
+        market.priceHistory.length >= 2 &&
+        market.priceHistory.at(-1) === Number(market.price).toFixed(2),
+    ),
+  )
+  assert(
+    Math.max(...crypto.markets.map((market) => Number(market.price))) >=
+      1000000,
+  )
+  assert(
+    Math.min(...crypto.markets.map((market) => Number(market.price))) <= 0.01,
+  )
+  const cryptoTick = dataByEndpoint.get('crypto:market-tick')
+  expectItems(cryptoTick, 'live crypto market tick', 24)
+  assert(
+    cryptoTick.every(
+      (market) =>
+        typeof market.updatedAt === 'number' &&
+        market.priceHistory.at(-1) === market.price,
+    ),
+  )
   expectItems(
     dataByEndpoint.get('billing:list').invoices,
     'billing invoices',
@@ -190,6 +224,40 @@ function verifyBrowserTestData(dataByEndpoint) {
 }
 
 async function verifyStatefulActions(baseUrl) {
+  const cryptoBeforeTransfer = await expectSuccess(
+    baseUrl,
+    'crypto:bootstrap',
+    {},
+    true,
+  )
+  const auroraBeforeTransfer = cryptoBeforeTransfer.holdings.find(
+    (holding) => holding.assetId === 'aurora',
+  )
+  const cryptoAfterTransfer = await expectSuccess(
+    baseUrl,
+    'crypto:transfer',
+    {
+      idempotencyKey: 'smoke-transfer-1',
+      marketId: 'aurora',
+      password: 'VaultX123!',
+      quantity: '0.5',
+      walletKey: 'VX-DEAD-BEEF-C0DE-2026',
+    },
+    true,
+  )
+  const auroraAfterTransfer = cryptoAfterTransfer.holdings.find(
+    (holding) => holding.assetId === 'aurora',
+  )
+  assert.equal(
+    Number(auroraAfterTransfer.quantity),
+    Number(auroraBeforeTransfer.quantity) - 0.5,
+  )
+  assert.equal(cryptoAfterTransfer.activity[0].type, 'transfer_out')
+  assert.equal(
+    cryptoAfterTransfer.activity[0].counterpartyKey,
+    'VX-DEAD-BEEF-C0DE-2026',
+  )
+
   const companyCall = await expectSuccess(
     baseUrl,
     'companies:dial-service-line',

@@ -224,6 +224,24 @@ describe('phone locale contract', () => {
     expect(missing).toEqual([])
   })
 
+  it('keeps the VaultX browser fallback complete for auth and transfers', () => {
+    const fallbackPaths = collectDefaultLocalePaths(phoneStoreSource)
+
+    for (const path of [
+      'Apps.crypto.auth.network',
+      'Apps.crypto.auth.confirmPassword',
+      'Apps.crypto.quick.send',
+      'Apps.crypto.transfer.walletKey',
+      'Apps.crypto.profile.copyKey',
+      'Apps.crypto.profile.shareKey',
+      'Apps.crypto.activityTypes.transfer_in',
+      'Apps.crypto.activityTypes.transfer_out',
+      'Apps.crypto.errors.invalid_wallet_key',
+    ]) {
+      expect(fallbackPaths.has(path), path).toBe(true)
+    }
+  })
+
   it('keeps German structurally aligned with English', () => {
     const germanPaths = collectLuaLocalePaths(germanLocaleSource)
 

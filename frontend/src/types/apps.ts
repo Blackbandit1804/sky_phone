@@ -11,6 +11,7 @@ export type BuiltinPhoneAppId =
   | 'weather'
   | 'health'
   | 'banking'
+  | 'crypto'
   | 'billing'
   | 'garage'
   | 'house'

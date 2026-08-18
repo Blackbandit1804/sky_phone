@@ -242,6 +242,17 @@ local server_callbacks = {
     "calls:block",
     "banking:overview",
     "banking:transfer",
+    "crypto:bootstrap",
+    "crypto:register",
+    "crypto:login",
+    "crypto:logout",
+    "crypto:quote",
+    "crypto:execute",
+    "crypto:deposit",
+    "crypto:withdraw",
+    "crypto:update-profile",
+    "crypto:recipient",
+    "crypto:transfer",
     "billing:overview",
     "billing:list",
     "billing:detail",
@@ -916,6 +927,18 @@ end)
 
 RegisterNetEvent("sky_phone:banking:changed", function(data)
     SendNUIMessage({ type = "banking:changed", data = data })
+end)
+
+RegisterNetEvent("sky_phone:crypto:changed", function(data)
+    if type(data) ~= "table" or type(data.markets) ~= "table" then
+        Bridge.Debug("error", "[sky_phone] Rejected invalid crypto market data.")
+        return
+    end
+    SendNUIMessage({ type = "crypto:changed", data = data })
+end)
+
+RegisterNetEvent("sky_phone:crypto:account-changed", function()
+    SendNUIMessage({ type = "crypto:account-changed" })
 end)
 
 RegisterNetEvent("sky_phone:billing:changed", function()

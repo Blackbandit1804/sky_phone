@@ -1344,3 +1344,142 @@ CREATE TABLE IF NOT EXISTS `sky_phone_weazel_article_media` (
     FOREIGN KEY (`article_id`) REFERENCES `sky_phone_weazel_articles` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`media_id`) REFERENCES `sky_phone_media` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crypto_profiles` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `owner_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `account_id` BIGINT UNSIGNED NULL,
+    `handle` VARCHAR(20) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    `password_hash` VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `price_alerts` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
+    `trade_confirmations` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
+    `hide_balances` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0,
+    `status` ENUM('active','frozen','closed') NOT NULL DEFAULT 'active',
+    `failed_logins` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    `locked_until` DATETIME NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_crypto_owner` (`owner_identifier`),
+    UNIQUE KEY `uniq_sky_phone_crypto_handle` (`handle`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crypto_markets` (
+    `id` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `asset_scale` BIGINT UNSIGNED NOT NULL,
+    `price_scale` BIGINT UNSIGNED NOT NULL,
+    `issued_supply` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `price` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `version` BIGINT UNSIGNED NOT NULL DEFAULT 1,
+    `status` ENUM('active','halted','stale') NOT NULL DEFAULT 'active',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crypto_market_ticks` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `market_id` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `version` BIGINT UNSIGNED NOT NULL,
+    `price` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_crypto_tick` (`market_id`,`version`),
+    KEY `idx_sky_phone_crypto_ticks` (`market_id`,`created_at`,`id`)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crypto_balances` (
+    `account_id` VARCHAR(48) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `asset_id` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `available` DECIMAL(36,0) UNSIGNED NOT NULL DEFAULT 0,
+    `locked` DECIMAL(36,0) UNSIGNED NOT NULL DEFAULT 0,
+    `version` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`account_id`,`asset_id`)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crypto_operations` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `type` ENUM('buy','sell','deposit','withdrawal') NOT NULL,
+    `idempotency_key` VARCHAR(96) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `request_hash` CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `status` ENUM('prepared','external_pending','external_applied','ledger_applied','completed','failed','compensation_pending','manual_review','cancelled') NOT NULL,
+    `amount` DECIMAL(36,0) UNSIGNED NOT NULL DEFAULT 0,
+    `market_id` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `detail` VARCHAR(255) NOT NULL DEFAULT '',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_crypto_operation` (`profile_id`,`type`,`idempotency_key`),
+    KEY `idx_sky_phone_crypto_activity` (`profile_id`,`created_at`,`id`)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crypto_ledger_entries` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `operation_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `account_id` VARCHAR(48) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `asset_id` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `delta` DECIMAL(36,0) NOT NULL,
+    `balance_after` DECIMAL(36,0) NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_crypto_ledger_operation` (`operation_id`,`id`),
+    KEY `idx_sky_phone_crypto_ledger_account` (`account_id`,`created_at`,`id`)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crypto_quotes` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `market_id` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `side` ENUM('buy','sell') NOT NULL,
+    `quantity` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `price` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `gross` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `fee` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `net` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `market_version` BIGINT UNSIGNED NOT NULL,
+    `expires_at` DATETIME NOT NULL,
+    `consumed_operation_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_crypto_quote_profile` (`profile_id`,`expires_at`)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crypto_fills` (
+    `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `operation_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `quote_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `market_id` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `side` ENUM('buy','sell') NOT NULL,
+    `quantity` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `price` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `gross` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `fee` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `net` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_sky_phone_crypto_fill_quote` (`quote_id`)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crypto_settlements` (
+    `operation_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `owner_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `framework_account` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `amount` DECIMAL(36,0) UNSIGNED NOT NULL,
+    `state` ENUM('prepared','external_pending','external_applied','ledger_applied','completed','failed','compensation_pending','manual_review','cancelled') NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`operation_id`),
+    KEY `idx_sky_phone_crypto_settlement_state` (`state`,`updated_at`)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `sky_phone_crypto_audit_events` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `owner_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    `event_type` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `detail` VARCHAR(255) NOT NULL DEFAULT '',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_sky_phone_crypto_audit` (`profile_id`,`created_at`,`id`)
+) ENGINE=InnoDB;

@@ -125,6 +125,7 @@ const DEFAULT_APP_NOTIFICATIONS: Record<
   calendar: { enabled: true, sounds: true },
   weather: { enabled: true, sounds: true },
   banking: { enabled: true, sounds: true },
+  crypto: { enabled: true, sounds: true },
   billing: { enabled: true, sounds: true },
   garage: { enabled: true, sounds: true },
   skyride: { enabled: true, sounds: true },
