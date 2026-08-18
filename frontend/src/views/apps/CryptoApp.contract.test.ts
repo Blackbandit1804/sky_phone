@@ -41,6 +41,9 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('<ChartNoAxesCombined')
     expect(source).toContain('<History')
     expect(source).toContain('<UserRound')
+    expect(source).toMatch(
+      /\.sky-pill-navigation \.sky-segmented-button--active\)\s*\{\s*color:\s*#fff;/,
+    )
   })
 
   it('includes advanced market detail and persistent profile controls', () => {

@@ -1705,8 +1705,8 @@ onMounted(() => void crypto.load())
 .crypto-app :deep(.sky-pill-navigation) {
   --sky-glass-solid: rgba(14, 19, 27, 0.97);
 }
-.crypto-app :deep(.sky-segmented-button--active) {
-  color: #07100e;
+.crypto-app :deep(.sky-pill-navigation .sky-segmented-button--active) {
+  color: #fff;
 }
 .auth-hero > span {
   position: relative;
