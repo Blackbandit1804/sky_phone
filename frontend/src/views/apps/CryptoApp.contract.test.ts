@@ -215,7 +215,8 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('class="activity-status__icon"')
     expect(source).toContain('<WalletCards :size="15" />')
     expect(source).toContain('top: 50%;')
-    expect(source).toContain('transform: translateY(-50%);')
+    expect(source).toContain('transform: translateY(calc(-50% - 1px));')
+    expect(source).toContain('transform: translateY(-1px);')
   })
 
   it('exposes a broad fictional market with dedicated logo marks', () => {

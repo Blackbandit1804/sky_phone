@@ -3581,7 +3581,7 @@ onUnmounted(() => {
   inset-inline-start: 10px;
   display: block;
   flex: 0 0 auto;
-  transform: translateY(-50%);
+  transform: translateY(calc(-50% - 1px));
 }
 .activity-filters :deep(.sky-segmented-button > span) {
   display: flex;
@@ -3592,6 +3592,7 @@ onUnmounted(() => {
   line-height: 1;
   text-align: center;
   white-space: nowrap;
+  transform: translateY(-1px);
 }
 :deep(.activity-filters.sky-segmented--strong .sky-segmented-button--active) {
   color: #fff;
