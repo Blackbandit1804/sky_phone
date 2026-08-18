@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./CryptoApp.vue', import.meta.url), 'utf8')
+const logoSource = readFileSync(
+  new URL('../../components/crypto/CryptoLogo.vue', import.meta.url),
+  'utf8',
+)
 const server = readFileSync(
   new URL('../../../../sky_phone/source/server/crypto.lua', import.meta.url),
   'utf8',
@@ -94,7 +98,21 @@ describe('VaultX crypto app contracts', () => {
     expect(cryptoConfig.match(/\n\s+Id = "/g)).toHaveLength(24)
     expect(cryptoConfig.match(/\n\s+Logo = "/g)).toHaveLength(24)
     expect(server).toContain('logo = config.Logo')
-    expect(source).toContain('detail.logo')
+    expect(source).toContain('<CryptoLogo')
+    expect(logoSource.match(/^  [a-z]+: \[/gm)).toHaveLength(24)
+    for (const mark of [
+      'ember',
+      'crown',
+      'orbit',
+      'quantum',
+      'moss',
+      'flux',
+      'tide',
+      'shard',
+      'pixel',
+    ]) {
+      expect(logoSource).toContain(`  ${mark}: [`)
+    }
   })
 
   it('keeps all consequential calculations and state transitions on the server', () => {

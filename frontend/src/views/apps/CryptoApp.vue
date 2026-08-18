@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
+import CryptoLogo from '@/components/crypto/CryptoLogo.vue'
 import { useCryptoStore } from '@/stores/crypto'
 import { usePhoneStore } from '@/stores/phone'
 import type { CryptoMarket, CryptoSide } from '@/types/crypto'
@@ -413,7 +414,7 @@ onMounted(() => void crypto.load())
           <span>{{ t('name') }}</span>
         </span>
         <span v-else-if="detail" class="vault-detail-title">
-          <i :style="{ background: detail.color }">{{ detail.logo }}</i>
+          <CryptoLogo class="coin-detail-logo" :market="detail" />
           <span>
             <b>{{ detail.symbol }}</b>
             <small>{{ detail.name }}</small>
@@ -507,9 +508,7 @@ onMounted(() => void crypto.load())
       padded
     >
       <section class="detail-head">
-        <span class="coin large" :style="{ background: detail.color }">{{
-          detail.logo
-        }}</span>
+        <CryptoLogo class="coin large" :market="detail" />
         <p>{{ detail.symbol }} · {{ detail.name }}</p>
         <strong>{{ money(detail.price) }}</strong
         ><em :class="detail.changePercent >= 0 ? 'up' : 'down'"
@@ -559,10 +558,7 @@ onMounted(() => void crypto.load())
         ><small>{{ t('marketDetail.totalValue') }}</small
         ><strong>{{ privateMoney(detailHolding?.value ?? '0') }}</strong>
         <div>
-          <span class="coin" :style="{ background: detail.color }">{{
-            detail.logo
-          }}</span
-          ><span
+          <CryptoLogo class="coin" :market="detail" /><span
             ><b>{{ detail.name }}</b
             ><small
               >{{ quantity(detailHolding?.quantity ?? '0') }}
@@ -782,11 +778,7 @@ onMounted(() => void crypto.load())
           class="row asset-row"
           @click="openMarket(market(holding.assetId)!)"
         >
-          <span
-            class="coin"
-            :style="{ background: market(holding.assetId)?.color }"
-            >{{ market(holding.assetId)?.logo }}</span
-          ><span
+          <CryptoLogo class="coin" :market="market(holding.assetId)!" /><span
             ><b>{{ market(holding.assetId)?.name }}</b
             ><small
               >{{ quantity(holding.quantity) }}
@@ -829,9 +821,7 @@ onMounted(() => void crypto.load())
           @click="openMarket(topMover)"
         >
           <div class="featured-market__top">
-            <span class="coin large" :style="{ background: topMover.color }">{{
-              topMover.logo
-            }}</span>
+            <CryptoLogo class="coin large" :market="topMover" />
             <span>
               <small>{{ t('markets.movers') }}</small>
               <b>{{ topMover.name }}</b>
@@ -871,9 +861,7 @@ onMounted(() => void crypto.load())
             @click="openMarket(item)"
           >
             <div class="market-tile__top">
-              <span class="coin" :style="{ background: item.color }">{{
-                item.logo
-              }}</span>
+              <CryptoLogo class="coin" :market="item" />
               <span
                 ><b>{{ item.symbol }}</b
                 ><small>{{ item.name }}</small></span
@@ -904,10 +892,7 @@ onMounted(() => void crypto.load())
             :key="item.id"
             @click="openMarket(item)"
           >
-            <span class="coin" :style="{ background: item.color }">{{
-              item.logo
-            }}</span
-            ><span
+            <CryptoLogo class="coin" :market="item" /><span
               ><b>{{ item.name }}</b
               ><small>{{ item.symbol }} · {{ t('markets.today') }}</small></span
             ><span
@@ -1158,15 +1143,15 @@ onMounted(() => void crypto.load())
           <div class="sheet-heading">
             <span
               class="sheet-icon"
-              :style="
-                sheet === 'trade' && selectedMarket
-                  ? { background: selectedMarket.color }
-                  : undefined
-              "
+              :class="{
+                'sheet-icon--crypto': sheet === 'trade' && selectedMarket,
+              }"
             >
-              <template v-if="sheet === 'trade' && selectedMarket">{{
-                selectedMarket.logo
-              }}</template>
+              <CryptoLogo
+                v-if="sheet === 'trade' && selectedMarket"
+                class="sheet-crypto-logo"
+                :market="selectedMarket"
+              />
               <ArrowDownLeft v-else-if="sheet === 'deposit'" :size="19" />
               <ArrowUpRight v-else :size="19" />
             </span>
@@ -1877,15 +1862,11 @@ onMounted(() => void crypto.load())
   gap: 8px;
   align-items: center;
 }
-.vault-detail-title > i {
+.coin-detail-logo {
   display: grid;
   place-items: center;
   width: 28px;
   height: 28px;
-  color: #fff;
-  font-size: 11px;
-  font-style: normal;
-  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 10px;
 }
 .vault-detail-title > span {
@@ -2857,6 +2838,15 @@ onMounted(() => void crypto.load())
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 14px;
   box-shadow: 0 9px 24px rgba(101, 251, 210, 0.12);
+}
+.sheet-icon--crypto {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.sheet-crypto-logo {
+  width: 40px;
+  height: 40px;
 }
 .sheet-header :deep(.sheet-close) {
   display: grid;
