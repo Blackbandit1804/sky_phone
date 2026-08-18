@@ -15,6 +15,7 @@ import {
   KeyRound,
   LockKeyhole,
   LogOut,
+  Mail,
   Settings2,
   Send,
   Share2,
@@ -26,6 +27,7 @@ import {
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import cryptoHeaderLogo from '@/assets/img/app-icons/crypto-header-logo.png'
 import CryptoLogo from '@/components/crypto/CryptoLogo.vue'
+import { useAccountStore } from '@/stores/account'
 import { useCryptoStore } from '@/stores/crypto'
 import { useEasyShareStore } from '@/stores/easyshare'
 import { usePhoneStore } from '@/stores/phone'
@@ -39,7 +41,8 @@ import {
   SkyAppPage,
   SkyButton,
   SkyCard,
-  SkyCheckbox,
+  SkyDialog,
+  SkyDialogButton,
   SkyEmptyState,
   SkyField,
   SkyLink,
@@ -83,6 +86,7 @@ const CHART_PERIOD_CONFIG: Record<
   },
 }
 const crypto = useCryptoStore()
+const account = useAccountStore()
 const easyShare = useEasyShareStore()
 const phone = usePhoneStore()
 let marketPreviewTimer: number | undefined
@@ -95,8 +99,6 @@ const selectedMarket = ref<CryptoMarket | null>(null)
 const side = ref<CryptoSide>('buy')
 const handle = ref('')
 const password = ref('')
-const confirmPassword = ref('')
-const acceptedTerms = ref(false)
 const amount = ref('')
 const financialPassword = ref('')
 const showPassword = ref(false)
@@ -115,6 +117,8 @@ const transferQuantity = ref('')
 const transferPassword = ref('')
 const transferRecipient = ref<CryptoRecipient | null>(null)
 const walletKeyCopied = ref(false)
+const logoutDialogOpen = ref(false)
+const logoutSubmitting = ref(false)
 
 const locale = computed(() => phone.lang || 'de')
 const authenticated = computed(() => crypto.data?.authenticated === true)
@@ -131,15 +135,6 @@ const activities = computed(() =>
             item.type,
           )),
   ),
-)
-const passwordChecks = computed(() => ({
-  length: password.value.length >= 8,
-  mixed: /[a-z]/.test(password.value) && /[A-Z]/.test(password.value),
-  number: /\d/.test(password.value),
-  special: /[^A-Za-z0-9]/.test(password.value),
-}))
-const passwordStrength = computed(
-  () => Object.values(passwordChecks.value).filter(Boolean).length,
 )
 const transferMarket = computed(() => market(transferMarketId.value))
 const transferHolding = computed(() =>
@@ -482,30 +477,12 @@ function closeSheet() {
 
 async function submitAuth() {
   formError.value = ''
-  if (
-    authMode.value === 'register' &&
-    (passwordStrength.value < 4 ||
-      password.value !== confirmPassword.value ||
-      !acceptedTerms.value)
-  ) {
-    formError.value = t(
-      passwordStrength.value < 4
-        ? 'errors.invalid_password'
-        : password.value !== confirmPassword.value
-          ? 'errors.password_mismatch'
-          : 'errors.accept_terms',
-    )
-    return
-  }
   const success =
     authMode.value === 'register'
       ? await crypto.register(handle.value.trim(), password.value)
       : await crypto.login(password.value)
   if (!success) formError.value = errorText(crypto.error)
-  else {
-    password.value = ''
-    confirmPassword.value = ''
-  }
+  else password.value = ''
 }
 async function resolveTransferRecipient() {
   formError.value = ''
@@ -623,11 +600,30 @@ async function savePreferences() {
   else saved.value = true
 }
 async function signOut() {
+  if (logoutSubmitting.value) return
+  logoutSubmitting.value = true
   closeSheet()
-  await crypto.logout()
-  tab.value = 'portfolio'
+  try {
+    await crypto.logout()
+    if (!authenticated.value) {
+      logoutDialogOpen.value = false
+      tab.value = 'portfolio'
+    }
+  } finally {
+    logoutSubmitting.value = false
+  }
 }
 
+watch(
+  () => account.email,
+  (email) => {
+    if (!email || handle.value) return
+    handle.value = (email.split('@')[0] ?? '')
+      .replace(/[^a-zA-Z0-9._]/g, '')
+      .slice(0, 20)
+  },
+  { immediate: true },
+)
 watch(
   profile,
   (value) => {
@@ -696,6 +692,7 @@ onUnmounted(() => {
     dark
   >
     <SkyNavbar
+      v-if="authenticated"
       :key="
         detail ? `detail-${detail.id}` : `page-${authenticated ? tab : 'auth'}`
       "
@@ -735,7 +732,7 @@ onUnmounted(() => {
           type="button"
           :aria-label="t('logout')"
           :title="t('logout')"
-          @click="signOut"
+          @click="logoutDialogOpen = true"
         >
           <LogOut :size="14" />
           <span>{{ t('logout') }}</span>
@@ -753,142 +750,92 @@ onUnmounted(() => {
     >
     <template v-else-if="!authenticated">
       <SkyScrollArea key="auth" class="auth vault-view" padded>
-        <div class="auth-hero">
-          <span class="auth-hero__mark"><ChartCandlestick :size="30" /></span>
-          <p>{{ t('auth.eyebrow') }}</p>
-          <h2>
-            {{
-              t(authMode === 'login' ? 'auth.loginTitle' : 'auth.registerTitle')
-            }}
-          </h2>
-          <small>{{ t('auth.body') }}</small>
-          <div class="auth-benefits">
-            <span><ShieldCheck :size="16" />{{ t('auth.serverSecured') }}</span>
-            <span><KeyRound :size="16" />{{ t('auth.personalKey') }}</span>
-            <span
-              ><Fingerprint :size="16" />{{ t('auth.characterBound') }}</span
+        <div class="auth-shell">
+          <div class="auth-hero">
+            <span class="auth-hero__mark">
+              <img :src="cryptoHeaderLogo" alt="" />
+            </span>
+            <h2>
+              {{
+                t(
+                  authMode === 'login'
+                    ? 'auth.loginTitle'
+                    : 'auth.registerTitle',
+                )
+              }}
+            </h2>
+          </div>
+          <section class="auth-panel">
+            <SkySegmented
+              class="auth-mode"
+              strong
+              :active-index="authMode === 'login' ? 0 : 1"
+              :item-count="2"
+              ><SkySegmentedButton
+                :active="authMode === 'login'"
+                @click="authMode = 'login'"
+                >{{ t('auth.login') }}</SkySegmentedButton
+              ><SkySegmentedButton
+                :active="authMode === 'register'"
+                @click="authMode = 'register'"
+                >{{ t('auth.register') }}</SkySegmentedButton
+              ></SkySegmented
             >
-          </div>
-        </div>
-        <section class="auth-panel">
-          <SkySegmented
-            class="auth-mode"
-            strong
-            :active-index="authMode === 'login' ? 0 : 1"
-            :item-count="2"
-            ><SkySegmentedButton
-              :active="authMode === 'login'"
-              @click="authMode = 'login'"
-              >{{ t('auth.login') }}</SkySegmentedButton
-            ><SkySegmentedButton
-              :active="authMode === 'register'"
-              @click="authMode = 'register'"
-              >{{ t('auth.register') }}</SkySegmentedButton
-            ></SkySegmented
-          >
-          <div class="auth-panel__heading">
-            <span>{{ authMode === 'login' ? '01' : '02' }}</span>
-            <div>
-              <b>{{ t(`auth.${authMode}PanelTitle`) }}</b>
-              <small>{{ t(`auth.${authMode}PanelBody`) }}</small>
+            <div class="auth-account">
+              <span><Mail :size="20" /></span>
+              <div>
+                <small>{{ t('auth.accountEmail') }}</small>
+                <strong>{{ account.email || t('auth.accountMissing') }}</strong>
+              </div>
+              <ShieldCheck :size="17" />
             </div>
-          </div>
-          <form
-            id="vault-auth-form"
-            class="form auth-form"
-            @submit.prevent="submitAuth"
-          >
-            <SkyField
-              v-if="authMode === 'register'"
-              v-model="handle"
-              :label="t('auth.handle')"
-              :placeholder="t('auth.handlePlaceholder')"
-              maxlength="20"
-              outline
-              ><template #leading><UserRound :size="18" /></template
-            ></SkyField>
-            <SkyField
-              v-model="password"
-              :label="t('auth.password')"
-              :type="showPassword ? 'text' : 'password'"
-              :placeholder="t('auth.passwordPlaceholder')"
-              maxlength="72"
-              outline
-              ><template #leading><LockKeyhole :size="18" /></template
-              ><template #trailing
-                ><button
-                  class="visibility"
-                  type="button"
-                  @click="showPassword = !showPassword"
-                >
-                  <EyeOff v-if="showPassword" :size="18" /><Eye
-                    v-else
-                    :size="18"
-                  /></button></template
-            ></SkyField>
-            <template v-if="authMode === 'register'">
+            <form class="form auth-form" @submit.prevent="submitAuth">
               <SkyField
-                v-model="confirmPassword"
-                :label="t('auth.confirmPassword')"
+                v-if="authMode === 'register'"
+                v-model="handle"
+                class="auth-field"
+                :label="t('auth.handle')"
+                :placeholder="t('auth.handlePlaceholder')"
+                autocomplete="username"
+                maxlength="20"
+                outline
+                ><template #leading><UserRound :size="18" /></template
+              ></SkyField>
+              <SkyField
+                v-model="password"
+                class="auth-field"
+                :label="t('auth.password')"
                 :type="showPassword ? 'text' : 'password'"
-                :placeholder="t('auth.confirmPasswordPlaceholder')"
+                :placeholder="t('auth.passwordPlaceholder')"
+                :autocomplete="
+                  authMode === 'login' ? 'current-password' : 'new-password'
+                "
                 maxlength="72"
                 outline
-                ><template #leading><Fingerprint :size="18" /></template
+                ><template #leading><LockKeyhole :size="18" /></template
+                ><template #trailing
+                  ><button
+                    class="visibility"
+                    type="button"
+                    @click="showPassword = !showPassword"
+                  >
+                    <EyeOff v-if="showPassword" :size="18" /><Eye
+                      v-else
+                      :size="18"
+                    /></button></template
               ></SkyField>
-              <div class="password-strength">
-                <div>
-                  <i
-                    v-for="index in 4"
-                    :key="index"
-                    :class="{ active: passwordStrength >= index }"
-                  />
-                </div>
-                <span>{{ t(`auth.strength${passwordStrength}`) }}</span>
-              </div>
-              <div class="password-rules">
-                <span :class="{ done: passwordChecks.length }"
-                  ><CheckCircle2 :size="13" />{{ t('auth.ruleLength') }}</span
-                >
-                <span :class="{ done: passwordChecks.mixed }"
-                  ><CheckCircle2 :size="13" />{{ t('auth.ruleMixed') }}</span
-                >
-                <span :class="{ done: passwordChecks.number }"
-                  ><CheckCircle2 :size="13" />{{ t('auth.ruleNumber') }}</span
-                >
-                <span :class="{ done: passwordChecks.special }"
-                  ><CheckCircle2 :size="13" />{{ t('auth.ruleSpecial') }}</span
-                >
-              </div>
-              <SkyCheckbox v-model="acceptedTerms" class="auth-consent">
-                <span
-                  ><b>{{ t('auth.acceptTitle') }}</b
-                  ><small>{{ t('auth.acceptBody') }}</small></span
-                >
-              </SkyCheckbox>
-            </template>
-            <p class="hint">
-              <ShieldCheck :size="15" />{{ t('auth.security') }}
-            </p>
-            <p v-if="formError" class="error">{{ formError }}</p>
-          </form>
-          <div class="auth-footer">
-            <LockKeyhole :size="13" />{{ t('auth.footer') }}
-          </div>
-        </section>
+              <p v-if="formError" class="error">{{ formError }}</p>
+              <SkyButton block large class="auth-submit" type="submit">{{
+                t(
+                  authMode === 'login'
+                    ? 'auth.loginAction'
+                    : 'auth.registerAction',
+                )
+              }}</SkyButton>
+            </form>
+          </section>
+        </div>
       </SkyScrollArea>
-      <div class="auth-action-dock">
-        <SkyButton
-          block
-          large
-          class="auth-submit"
-          type="submit"
-          form="vault-auth-form"
-          >{{
-            t(authMode === 'login' ? 'auth.loginAction' : 'auth.registerAction')
-          }}</SkyButton
-        >
-      </div>
     </template>
 
     <SkyScrollArea
@@ -1982,6 +1929,37 @@ onUnmounted(() => {
         </template>
       </div></SkySheet
     >
+    <SkyDialog
+      :opened="logoutDialogOpen"
+      role="alertdialog"
+      @backdropclick="!logoutSubmitting && (logoutDialogOpen = false)"
+      @escape="!logoutSubmitting && (logoutDialogOpen = false)"
+    >
+      <template #title>{{ t('logoutConfirm.title') }}</template>
+      <p>{{ t('logoutConfirm.body') }}</p>
+      <template #buttons>
+        <SkyDialogButton
+          :disabled="logoutSubmitting"
+          @click="logoutDialogOpen = false"
+        >
+          {{ t('logoutConfirm.cancel') }}
+        </SkyDialogButton>
+        <SkyDialogButton
+          strong
+          class="vault-logout-confirm"
+          :disabled="logoutSubmitting"
+          @click="signOut"
+        >
+          {{
+            t(
+              logoutSubmitting
+                ? 'logoutConfirm.signingOut'
+                : 'logoutConfirm.confirm',
+            )
+          }}
+        </SkyDialogButton>
+      </template>
+    </SkyDialog>
   </SkyAppPage>
 </template>
 
@@ -1998,6 +1976,10 @@ onUnmounted(() => {
     ),
     #05070b;
 }
+.vault-logout-confirm {
+  color: #fff;
+  background: #c4475c;
+}
 .state,
 .auth {
   display: grid;
@@ -2009,9 +1991,8 @@ onUnmounted(() => {
 .auth-hero {
   display: grid;
   justify-items: center;
-  gap: 7px;
+  gap: 6px;
 }
-.auth-hero__mark,
 .profile-head > span {
   display: grid;
   place-items: center;
@@ -2022,199 +2003,180 @@ onUnmounted(() => {
   background: linear-gradient(145deg, #6ff5cd, #3d8fff);
   box-shadow: 0 18px 45px rgba(49, 214, 170, 0.18);
 }
-.auth-hero p,
 .auth-hero h2,
 .auth-hero small {
   margin: 0;
 }
-.auth-hero p {
-  color: #49e4b2;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.auth-hero h2 {
+  font-size: 23px;
+  line-height: 1.15;
 }
 .auth-hero small {
-  max-width: 280px;
+  max-width: 260px;
   color: var(--muted);
+  font-size: 11px;
   line-height: 1.45;
 }
 .auth {
-  align-content: start;
-  gap: 14px;
+  align-content: center;
+  justify-items: center;
   min-height: 0;
   flex: 1 1 auto;
-  padding-top: 12px !important;
-  padding-bottom: 28px !important;
+  padding-top: 18px !important;
+  padding-bottom: 22px !important;
 }
-.auth-benefits {
+.auth-shell {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: 18px;
   width: 100%;
-  margin-top: 8px;
-}
-.auth-benefits span {
-  display: grid;
-  min-height: 57px;
-  place-content: center;
-  justify-items: center;
-  gap: 5px;
-  padding: 7px 4px;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 10px;
-  line-height: 1.15;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.055);
-  border-radius: 13px;
-}
-.auth-benefits svg {
-  color: var(--vault-mint);
+  max-width: 338px;
 }
 .auth-panel {
-  padding: 9px;
+  padding: 14px;
   text-align: left;
-  background: linear-gradient(145deg, #111923, #080d13);
+  background: #0b1118;
   border: 1px solid rgba(255, 255, 255, 0.075);
-  border-radius: 25px;
+  border-radius: 22px;
   box-shadow:
-    0 24px 54px rgba(0, 0, 0, 0.34),
-    inset 0 1px rgba(255, 255, 255, 0.045);
+    0 20px 46px rgba(0, 0, 0, 0.3),
+    inset 0 1px rgba(255, 255, 255, 0.04);
 }
 .auth-mode {
-  min-height: 46px;
-  margin-bottom: 13px;
+  min-height: 48px;
+  margin-bottom: 14px;
   padding: 3px;
   background: rgba(255, 255, 255, 0.045);
-  border-radius: 15px;
+  border-radius: 14px;
 }
 .auth-mode :deep(.sky-segmented-button) {
-  min-height: 40px;
+  min-height: 42px;
   color: rgba(255, 255, 255, 0.52);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
 }
 .auth-mode :deep(.sky-segmented-button--active) {
   color: #fff;
 }
-.auth-panel__heading {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin: 0 4px 12px;
-}
-.auth-panel__heading > span {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  color: #07100e;
-  font-size: 11px;
-  font-weight: 900;
-  background: linear-gradient(145deg, var(--vault-mint), var(--vault-blue));
-  border-radius: 11px;
-}
-.auth-panel__heading > div {
-  display: grid;
-  gap: 2px;
-}
-.auth-panel__heading b {
-  font-size: 13px;
-}
-.auth-panel__heading small {
-  color: var(--muted);
-  font-size: 11px;
-}
 .auth-form {
-  padding: 0 4px 4px;
+  gap: 12px;
 }
-.password-strength > div {
+.auth-account {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-}
-.password-strength i {
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
-}
-.password-strength i.active {
-  background: var(--vault-mint);
-}
-.password-strength span {
-  display: block;
-  margin-top: 5px;
-  color: var(--muted);
-  font-size: 11px;
-}
-.password-rules {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 6px;
-}
-.password-rules span {
-  display: flex;
-  gap: 6px;
+  grid-template-columns: 40px minmax(0, 1fr) 18px;
+  gap: 11px;
   align-items: center;
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 10.5px;
+  min-height: 64px;
+  margin-bottom: 12px;
+  padding: 10px 13px;
+  color: #f8fbfd;
+  background: rgba(101, 251, 210, 0.055);
+  border: 1px solid rgba(101, 251, 210, 0.15);
+  border-radius: 17px;
+}
+.auth-account > span {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: var(--vault-mint);
+  background: rgba(101, 251, 210, 0.09);
+  border-radius: 12px;
+}
+.auth-account > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.auth-account small {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 11px;
+  font-weight: 750;
+}
+.auth-account strong {
+  overflow: hidden;
+  font-size: 14px;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.password-rules svg {
-  width: 15px;
-  height: 15px;
-  flex: 0 0 15px;
-}
-.password-rules span.done {
+.auth-account > svg {
   color: var(--vault-mint);
 }
-.auth-consent {
-  display: flex;
-  gap: 9px;
-  align-items: flex-start;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.055);
-  border-radius: 13px;
+.auth-field {
+  min-height: 68px;
+  margin: 0;
+  padding: 0 14px;
+  color: #f8fbfd;
+  background: #080d13;
+  border-radius: 17px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
 }
-.auth-consent span {
+.auth-field:focus-within {
+  background: #091119;
+  box-shadow:
+    0 0 0 3px rgba(101, 251, 210, 0.06),
+    inset 0 1px rgba(255, 255, 255, 0.05);
+}
+.auth-field :deep(.sky-field__media) {
   display: grid;
-  gap: 2px;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  justify-content: center;
+  margin-right: 11px;
+  padding: 0;
+  color: var(--vault-mint);
+  background: rgba(101, 251, 210, 0.07);
+  border: 1px solid rgba(101, 251, 210, 0.12);
+  border-radius: 11px;
 }
-.auth-consent b {
-  font-size: 10px;
+.auth-field :deep(.sky-field__inner) {
+  padding: 11px 0 9px;
 }
-.auth-consent small {
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.35;
+.auth-field :deep(.sky-field__label) {
+  margin-top: 0;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 11px;
+  font-weight: 750;
 }
-.auth-action-dock {
-  flex: 0 0 auto;
-  padding: 9px calc(var(--sky-page-gutter) + var(--sky-safe-area-right))
-    calc(var(--sky-safe-area-bottom) + 9px)
-    calc(var(--sky-page-gutter) + var(--sky-safe-area-left));
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  background: #05080d;
+.auth-field :deep(.sky-field__label-text) {
+  top: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+.auth-field :deep(.sky-field__control) {
+  margin: -2px 0 0;
+}
+.auth-field :deep(.sky-field__input) {
+  height: 33px;
+  min-height: 33px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 21px;
+}
+.auth-field :deep(.sky-field__input::placeholder) {
+  color: rgba(255, 255, 255, 0.28);
+}
+.auth-field :deep(.sky-field__border) {
+  inset: 0;
+  border-color: rgba(255, 255, 255, 0.12);
+  border-radius: 17px;
+}
+.auth-field:focus-within :deep(.sky-field__border) {
+  border-color: rgba(101, 251, 210, 0.56);
 }
 .auth-submit {
-  min-height: 50px;
+  min-height: 54px;
+  margin-top: 3px;
   color: #06110e;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
   border: 1px solid rgba(101, 251, 210, 0.48);
   border-radius: 12px;
   background: var(--vault-mint);
   box-shadow: none;
-}
-.auth-footer {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: center;
-  padding: 9px 4px 2px;
-  color: rgba(255, 255, 255, 0.36);
-  font-size: 10px;
 }
 .form {
   display: grid;
@@ -2880,28 +2842,17 @@ onUnmounted(() => {
   color: #fff;
 }
 .auth-hero__mark {
-  position: relative;
-  width: 76px;
-  height: 76px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 26px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.8), transparent 42%),
-    linear-gradient(145deg, #7dffe0, #3977ff);
-  box-shadow:
-    0 22px 70px rgba(60, 224, 184, 0.22),
-    inset 0 0 24px rgba(255, 255, 255, 0.3);
+  display: grid;
+  width: 66px;
+  height: 66px;
+  place-items: center;
 }
-.auth-hero__mark::after {
-  position: absolute;
-  right: -5px;
-  bottom: -5px;
-  width: 18px;
-  height: 18px;
-  border: 4px solid #070b11;
-  border-radius: 50%;
-  content: '';
-  background: var(--vault-mint);
+.auth-hero__mark img {
+  display: block;
+  width: 66px;
+  height: 66px;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 22px rgba(49, 214, 170, 0.18));
 }
 .portfolio-shell {
   position: relative;

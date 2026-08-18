@@ -77,6 +77,12 @@ describe('VaultX crypto app contracts', () => {
   it('supports secure profile editing and header sign out', () => {
     expect(source).toContain('class="profile-signout"')
     expect(source).toContain("<span>{{ t('logout') }}</span>")
+    expect(source).toContain('@click="logoutDialogOpen = true"')
+    expect(source).toContain(':opened="logoutDialogOpen"')
+    expect(source).toContain("t('logoutConfirm.title')")
+    expect(source).toContain("t('logoutConfirm.cancel')")
+    expect(source).toContain("'logoutConfirm.confirm'")
+    expect(source).toContain('@click="signOut"')
     expect(source).not.toMatch(/icon-only\s+class="profile-signout"/)
     expect(source).toContain('class="profile-edit-button"')
     expect(source).toContain("sheet.value = 'profile'")
@@ -88,21 +94,39 @@ describe('VaultX crypto app contracts', () => {
     expect(server).toContain('CryptoHashPassword(new_password)')
   })
 
-  it('provides detailed registration and server-authoritative crypto-key transfers', () => {
+  it('keeps registration focused and crypto-key transfers server-authoritative', () => {
     const transferServer = server.slice(
       server.indexOf('local function execute_transfer'),
       server.indexOf('Bridge.Callbacks.Register("sky_phone:crypto:quote"'),
     )
 
-    expect(source).toContain('class="password-strength"')
+    expect(source).toContain('class="auth-account"')
+    expect(source).toContain('<img :src="cryptoHeaderLogo" alt="" />')
+    expect(source).not.toContain(
+      '<span class="auth-hero__mark"><ChartCandlestick',
+    )
+    expect(source).toContain(
+      "import { useAccountStore } from '@/stores/account'",
+    )
+    expect(source).toContain("account.email || t('auth.accountMissing')")
+    expect(source).not.toContain('v-model="confirmPassword"')
+    expect(source).not.toContain('v-model="acceptedTerms"')
+    expect(source).not.toContain('class="password-strength"')
     expect(source).not.toContain('class="auth-status"')
-    expect(source).toContain('class="auth-action-dock"')
-    expect(source).toContain('form="vault-auth-form"')
+    expect(source).toContain('class="auth-shell"')
+    expect(source).toMatch(/<SkyNavbar\s+v-if="authenticated"/)
+    expect(source).not.toContain('class="auth-benefits"')
+    expect(source).not.toContain('class="auth-panel__heading"')
+    expect(source).not.toContain('class="auth-action-dock"')
+    expect(source).not.toContain('class="password-rules"')
     expect(source).toMatch(
-      /\.auth-action-dock\s*\{[^}]*flex:\s*0 0 auto;[^}]*border-top:[^}]*background:\s*#05080d;/s,
+      /\.auth-shell\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*338px;/s,
     )
     expect(source).toMatch(
-      /\.auth\s*\{[^}]*min-height:\s*0;[^}]*flex:\s*1 1 auto;/s,
+      /\.auth-field\s*\{[^}]*min-height:\s*68px;[^}]*border-radius:\s*17px;/s,
+    )
+    expect(source).toMatch(
+      /\.auth-field :deep\(\.sky-field__input\)\s*\{[^}]*font-size:\s*16px;/s,
     )
     expect(source).toMatch(
       /\.auth-submit\s*\{[^}]*background:\s*var\(--vault-mint\);[^}]*box-shadow:\s*none;/s,
@@ -131,23 +155,14 @@ describe('VaultX crypto app contracts', () => {
       expect(rule?.[1]).not.toContain('linear-gradient')
       expect(rule?.[1]).toContain('box-shadow: none')
     }
-    expect(source).toMatch(
-      /\.password-rules span\s*\{[^}]*font-size:\s*10\.5px;/s,
-    )
-    expect(source).toMatch(
-      /\.password-strength i\.active\s*\{[^}]*background:\s*var\(--vault-mint\);/s,
-    )
-    expect(source).not.toMatch(
-      /\.password-strength i\.active\s*\{[^}]*linear-gradient/s,
-    )
     expect(testServer).toContain('let cryptoRegistered = true')
     expect(testServer).toContain('registered: cryptoRegistered')
     expect(testServer).toContain(
       "cryptoRegistered = testScenario !== 'crypto-register'",
     )
     expect(testServer).toContain('cryptoPassword = password')
-    expect(source).toContain('v-model="confirmPassword"')
-    expect(source).toContain('<SkyCheckbox')
+    expect(source).not.toContain('v-model="confirmPassword"')
+    expect(source).not.toContain('<SkyCheckbox')
     expect(source).toContain("sheet.value = 'send'")
     expect(source).toContain('v-model="transferWalletKey"')
     expect(source).toContain('profile?.walletKey')

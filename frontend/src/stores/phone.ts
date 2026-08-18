@@ -421,6 +421,13 @@ const cryptoFallbackLocales = {
   subtitle: 'Fictional asset exchange',
   loading: 'Opening secure exchange…',
   logout: 'Sign out',
+  logoutConfirm: {
+    title: 'Sign out of VaultX?',
+    body: 'You will need your VaultX password to unlock this profile again.',
+    cancel: 'Cancel',
+    confirm: 'Sign out',
+    signingOut: 'Signing out…',
+  },
   refresh: 'Refresh portfolio',
   navigation: 'VaultX navigation',
   auth: {
@@ -434,6 +441,8 @@ const cryptoFallbackLocales = {
     characterBound: 'Character bound',
     login: 'Log in',
     register: 'Register',
+    accountEmail: 'Sky Cloud email',
+    accountMissing: 'No Sky Cloud account',
     loginPanelTitle: 'Secure account access',
     loginPanelBody: 'Your character identity is detected automatically.',
     registerPanelTitle: 'Set up your private vault',
