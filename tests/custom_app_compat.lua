@@ -6,6 +6,7 @@ local lb_definition = assert(SkyPhoneCompatibility.BuildLbDefinition("lb_app", {
     description = "Dispatch terminal",
     ui = "ui/index.html",
     defaultApp = true,
+    fixBlur = true,
     landscape = true,
     onUse = function() end,
 }))
@@ -14,6 +15,7 @@ assert(lb_definition.ui == "ui/index.html", "LB relative UI must remain owner-re
 assert(lb_definition.orientation == "landscape", "LB landscape flag must be preserved")
 assert(type(lb_definition.onOpen) == "function", "LB onUse must map to the open lifecycle")
 assert(lb_definition.compatibility.resourceName == "lb_app", "LB callbacks must target the registering resource")
+assert(lb_definition.compatibility.fixBlur, "LB fixBlur must be preserved")
 
 local bridged_lb_definition = assert(SkyPhoneCompatibility.BuildLbDefinition("phone_adapter", {
     identifier = "bridged",

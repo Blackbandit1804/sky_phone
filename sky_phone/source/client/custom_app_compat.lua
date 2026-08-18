@@ -1,6 +1,7 @@
 local RESOURCE_NAME = GetCurrentResourceName()
 local providers = SkyPhoneCompatibility.Providers
 local core = SkyPhoneApps.CompatibilityCore
+local debug_custom_app = SkyPhoneApps.Debug or function() end
 local provider_apps = {}
 local high_client_apps = {}
 local high_server_apps = {}
@@ -33,7 +34,24 @@ end
 local function register_provider_app(provider, owner_resource, definition, vendor_data)
     local app_id = definition.id
     local existing = provider_apps[app_id]
+    debug_custom_app(
+        "provider",
+        "registration requested provider=%s id=%s owner=%s operation=%s",
+        tostring(provider),
+        tostring(app_id),
+        tostring(owner_resource),
+        existing and "update" or "add"
+    )
     if existing and (existing.owner_resource ~= owner_resource or existing.provider ~= provider) then
+        debug_custom_app(
+            "provider",
+            "registration rejected provider=%s id=%s owner=%s existing_provider=%s existing_owner=%s error=duplicate_app_id",
+            tostring(provider),
+            tostring(app_id),
+            tostring(owner_resource),
+            tostring(existing.provider),
+            tostring(existing.owner_resource)
+        )
         return false, "duplicate_app_id"
     end
 
@@ -51,6 +69,15 @@ local function register_provider_app(provider, owner_resource, definition, vendo
             vendor_data = vendor_data,
         }
     end
+    debug_custom_app(
+        "provider",
+        "registration result provider=%s id=%s owner=%s success=%s error=%s",
+        tostring(provider),
+        tostring(app_id),
+        tostring(owner_resource),
+        tostring(success),
+        tostring(error_message)
+    )
     return success, error_message
 end
 
@@ -82,6 +109,14 @@ local function remove_provider_app(owner_resource, app_id, allowed_providers)
 end
 
 function SkyPhoneApps.RegisterCompatibilityExport(owner_resource, app_data)
+    debug_custom_app(
+        "provider",
+        "compatibility export received owner=%s identifier=%s key=%s data_type=%s",
+        tostring(owner_resource),
+        type(app_data) == "table" and tostring(app_data.identifier) or "nil",
+        type(app_data) == "table" and tostring(app_data.key) or "nil",
+        type(app_data)
+    )
     local provider
     local definition
     local definition_error
@@ -92,10 +127,22 @@ function SkyPhoneApps.RegisterCompatibilityExport(owner_resource, app_data)
         provider = providers.yseries
         definition, definition_error = SkyPhoneCompatibility.BuildYSeriesDefinition(app_data)
     else
+        debug_custom_app(
+            "provider",
+            "compatibility export rejected owner=%s error=unknown_app_provider",
+            tostring(owner_resource)
+        )
         return false, "unknown_app_provider"
     end
 
     if not definition then
+        debug_custom_app(
+            "provider",
+            "definition rejected provider=%s owner=%s error=%s",
+            tostring(provider),
+            tostring(owner_resource),
+            tostring(definition_error)
+        )
         Bridge.Debug("warn", "[%s] %s registration rejected for %s: %s.",
             RESOURCE_NAME,
             provider,
@@ -104,6 +151,17 @@ function SkyPhoneApps.RegisterCompatibilityExport(owner_resource, app_data)
         )
         return false, definition_error
     end
+    debug_custom_app(
+        "provider",
+        "definition built provider=%s id=%s owner=%s ui=%s icon=%s default_installed=%s fix_blur=%s",
+        tostring(provider),
+        tostring(definition.id),
+        tostring(owner_resource),
+        tostring(definition.ui),
+        tostring(definition.icon),
+        tostring(definition.defaultInstalled),
+        definition.compatibility and tostring(definition.compatibility.fixBlur) or "nil"
+    )
     return register_provider_app(provider, owner_resource, definition, copy_record_data(app_data))
 end
 
@@ -666,6 +724,7 @@ SkyPhoneCompatibility.RegisterExportAlias("yseries", "GetDataLoaded", function()
 end)
 
 CreateThread(function()
+    debug_custom_app("provider", "requesting provider snapshots and emitting compatibility ready signals")
     TriggerServerEvent("sky_phone:compat:high:server:requestSnapshot")
     TriggerEvent("17mov_Phone:Client:Ready")
 
@@ -677,6 +736,12 @@ CreateThread(function()
         "yseries",
     }
     for index = 1, #provider_resources do
+        debug_custom_app(
+            "provider",
+            "emitting onResourceStart compatibility signal for %s (state=%s)",
+            provider_resources[index],
+            tostring(GetResourceState(provider_resources[index]))
+        )
         TriggerEvent("onResourceStart", provider_resources[index])
     end
 end)

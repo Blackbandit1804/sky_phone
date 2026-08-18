@@ -650,6 +650,18 @@ function onMessage(event: MessageEvent<AppMessage>): void {
 
   if (event.data?.type === 'custom-apps:catalog') {
     appCatalog.replaceCatalog(event.data.data)
+    const catalogPayload = event.data.data as
+      | { apps?: unknown; debug?: unknown }
+      | undefined
+    if (catalogPayload?.debug === true) {
+      void nuiCall('custom-app:catalog-debug', {
+        acceptedCount: appCatalog.externalApps.length,
+        acceptedIds: appCatalog.externalApps.map((app) => app.id),
+        receivedCount: Array.isArray(catalogPayload.apps)
+          ? catalogPayload.apps.length
+          : -1,
+      })
+    }
     const activeAppId = route.params.appId
     if (typeof activeAppId === 'string' && !isPhoneAppId(activeAppId)) {
       void router.push('/')

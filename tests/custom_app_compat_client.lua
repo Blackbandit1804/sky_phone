@@ -12,6 +12,7 @@ Config = {
     CustomApps = {
         AllowRemoteOrigins = {},
         BundledApps = false,
+        Debug = true,
         Enabled = true,
         ExternalApps = true,
         MaximumMessageBytes = 65536,
@@ -23,17 +24,19 @@ Config = {
     },
 }
 
+local encoded_json_value = nil
 json = {
     decode = function(encoded)
         if encoded == "null" then
             return nil, 5
         end
-        return {}
+        return encoded_json_value
     end,
     encode = function(value)
         if value == nil then
             return "null"
         end
+        encoded_json_value = value
         return "{}"
     end,
 }
@@ -83,6 +86,7 @@ function CreateThread(handler)
     handler()
 end
 
+dofile("sky_phone/source/bridge/shared.lua")
 dofile("sky_phone/source/shared/custom_apps.lua")
 dofile("sky_phone/source/shared/custom_app_compat.lua")
 dofile("sky_phone/source/client/custom_apps.lua")
@@ -186,6 +190,8 @@ local lb_definition = {
     identifier = "dispatch",
     name = "Dispatch",
     description = "Dispatch terminal",
+    defaultApp = false,
+    fixBlur = true,
     ui = "ui/index.html",
     onInstall = make_cfx_function_reference("install-hook", function()
         install_hook_after_response = lifecycle_response_delivered
@@ -214,6 +220,17 @@ for index = 1, #retry_catalog.data.apps do
     end
 end
 assert(retried_app and retried_app.name == "Dispatch Updated", "same-owner retry must publish the updated app")
+assert(not retried_app.defaultInstalled, "LB defaultApp=false must keep the app available for App Store installation")
+assert(retried_app.compatibility.fixBlur, "LB fixBlur must be preserved for every provider app")
+local catalog_debug_response
+assert(registered_nui_callbacks["custom-app:catalog-debug"])({
+    acceptedCount = 1,
+    acceptedIds = { "dispatch" },
+    receivedCount = 1,
+}, function(response)
+    catalog_debug_response = response
+end)
+assert(catalog_debug_response.success, "the NUI catalog acknowledgement must be accepted")
 lifecycle_response_delivered = false
 lifecycle_callback({ appId = "dispatch", event = "install" }, function(response)
     lifecycle_response = response

@@ -28,6 +28,21 @@ local phone_open = false
 local queued_messages = {}
 local default_icon_url = ("https://cfx-nui-%s/img/custom-app.svg"):format(current_resource)
 
+local function debug_custom_app(area, message, ...)
+    if Config.CustomApps.Debug ~= true then
+        return
+    end
+
+    local formatted = select("#", ...) > 0 and message:format(...) or message
+    Bridge.Debug(
+        "debug",
+        ("[sky_phone][custom-apps][%s] %s"):format(area, formatted),
+        { notice = true }
+    )
+end
+
+SkyPhoneApps.Debug = debug_custom_app
+
 local function trim(value)
     return value:match("^%s*(.-)%s*$")
 end
@@ -300,7 +315,7 @@ local function validate_optional_text(value, error_code, maximum_length)
     return normalized
 end
 
-local function normalize_external_definition(owner_resource, adapter_resource, definition)
+local function normalize_external_definition_value(owner_resource, adapter_resource, definition)
     if type(definition) ~= "table" then
         return nil, "invalid_definition"
     end
@@ -476,6 +491,43 @@ local function normalize_external_definition(owner_resource, adapter_resource, d
     }
 end
 
+local function normalize_external_definition(owner_resource, adapter_resource, definition)
+    local requested_id = type(definition) == "table" and definition.id or "<invalid>"
+    debug_custom_app(
+        "normalize",
+        "begin id=%s owner=%s adapter=%s definition_type=%s",
+        tostring(requested_id),
+        tostring(owner_resource),
+        tostring(adapter_resource),
+        type(definition)
+    )
+
+    local app, definition_error = normalize_external_definition_value(owner_resource, adapter_resource, definition)
+    if not app then
+        debug_custom_app(
+            "normalize",
+            "rejected id=%s owner=%s error=%s",
+            tostring(requested_id),
+            tostring(owner_resource),
+            tostring(definition_error)
+        )
+        return nil, definition_error
+    end
+
+    debug_custom_app(
+        "normalize",
+        "accepted id=%s owner=%s provider=%s ui=%s icon=%s default_installed=%s removable=%s",
+        app.catalog.id,
+        app.ownerResource,
+        app.catalog.compatibility and tostring(app.catalog.compatibility.provider) or "native",
+        app.catalog.ui,
+        app.catalog.icon,
+        tostring(app.catalog.defaultInstalled),
+        tostring(app.catalog.removable)
+    )
+    return app
+end
+
 local function normalize_bundled_manifest(manifest)
     local resource_base_path = ("custom_apps/%s/"):format(manifest.folder)
     local base_url = ("https://cfx-nui-%s/%s"):format(current_resource, resource_base_path)
@@ -539,17 +591,37 @@ local function get_catalog()
 end
 
 local function send_catalog()
+    local catalog = get_catalog()
+    local entries = {}
+    for index = 1, #catalog do
+        local app = catalog[index]
+        entries[index] = ("%s(owner=%s,default=%s)"):format(
+            app.id,
+            app.ownerResource,
+            tostring(app.defaultInstalled)
+        )
+    end
+    debug_custom_app(
+        "catalog",
+        "sending %s app(s) to NUI: %s",
+        #catalog,
+        #entries > 0 and table.concat(entries, ", ") or "<empty>"
+    )
     SendNUIMessage({
         type = "custom-apps:catalog",
         data = {
-            apps = get_catalog(),
+            apps = catalog,
+            debug = Config.CustomApps.Debug == true,
         },
     })
 end
 
 local function sync_catalog_if_open()
     if phone_open then
+        debug_custom_app("catalog", "phone is open; synchronizing catalog")
         send_catalog()
+    else
+        debug_custom_app("catalog", "phone is closed; catalog sync deferred")
     end
 end
 
@@ -578,6 +650,13 @@ local function register_app(app)
     local app_id = app.catalog.id
     local existing = apps_by_id[app_id]
     if existing then
+        debug_custom_app(
+            "register",
+            "duplicate id=%s requested_owner=%s existing_owner=%s",
+            app_id,
+            app.ownerResource,
+            existing.ownerResource
+        )
         Bridge.Debug(
             "warn",
             "[sky_phone] Rejected duplicate custom app '%s' from '%s'; it is already owned by '%s'.",
@@ -593,6 +672,16 @@ local function register_app(app)
     if app.adapterResource then
         add_owner_index(app_ids_by_adapter, app.adapterResource, app_id)
     end
+    debug_custom_app(
+        "register",
+        "success id=%s owner=%s adapter=%s provider=%s default_installed=%s phone_open=%s",
+        app_id,
+        app.ownerResource,
+        tostring(app.adapterResource),
+        app.catalog.compatibility and tostring(app.catalog.compatibility.provider) or "native",
+        tostring(app.catalog.defaultInstalled),
+        tostring(phone_open)
+    )
     sync_catalog_if_open()
     return true
 end
@@ -661,6 +750,7 @@ end
 local function remove_registered_app(app_id, invoke_close_hook, synchronize)
     local app = apps_by_id[app_id]
     if not app then
+        debug_custom_app("remove", "rejected id=%s error=app_not_found", tostring(app_id))
         return false, "app_not_found"
     end
 
@@ -680,20 +770,41 @@ local function remove_registered_app(app_id, invoke_close_hook, synchronize)
     if synchronize then
         sync_catalog_if_open()
     end
+    debug_custom_app(
+        "remove",
+        "success id=%s owner=%s synchronize=%s",
+        app_id,
+        app.ownerResource,
+        tostring(synchronize)
+    )
     return true
 end
 
 local function get_direct_owner()
     local owner_resource = GetInvokingResource()
     if not owner_resource then
+        debug_custom_app("owner", "rejected export call: GetInvokingResource returned nil")
         return nil, "missing_invoking_resource"
     end
 
     local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
     if not valid_owner then
+        debug_custom_app(
+            "owner",
+            "rejected invoking_resource=%s state=%s error=%s",
+            owner_resource,
+            tostring(GetResourceState(owner_resource)),
+            tostring(owner_error)
+        )
         return nil, owner_error
     end
 
+    debug_custom_app(
+        "owner",
+        "accepted invoking_resource=%s state=%s",
+        owner_resource,
+        tostring(GetResourceState(owner_resource))
+    )
     return owner_resource
 end
 
@@ -772,21 +883,53 @@ local function add_custom_app_from_adapter(owner_resource, definition)
 end
 
 local function add_compatibility_app(owner_resource, definition)
+    local app_id = type(definition) == "table" and definition.id or "<invalid>"
+    debug_custom_app(
+        "compat-core",
+        "add requested id=%s owner=%s",
+        tostring(app_id),
+        tostring(owner_resource)
+    )
     if not Config.CustomApps.Enabled or not Config.CustomApps.ExternalApps then
+        debug_custom_app("compat-core", "add rejected id=%s error=external_apps_disabled", tostring(app_id))
         return false, "external_apps_disabled"
     end
 
     local valid_owner, owner_error = validate_owner_resource(owner_resource, false)
     if not valid_owner then
+        debug_custom_app(
+            "compat-core",
+            "add rejected id=%s owner=%s state=%s error=%s",
+            tostring(app_id),
+            tostring(owner_resource),
+            tostring(GetResourceState(owner_resource)),
+            tostring(owner_error)
+        )
         return false, owner_error
     end
 
     local app, definition_error = normalize_external_definition(owner_resource, nil, definition)
     if not app then
+        debug_custom_app(
+            "compat-core",
+            "add rejected id=%s owner=%s error=%s",
+            tostring(app_id),
+            tostring(owner_resource),
+            tostring(definition_error)
+        )
         return false, definition_error
     end
 
-    return register_app(app)
+    local success, register_error = register_app(app)
+    debug_custom_app(
+        "compat-core",
+        "add result id=%s owner=%s success=%s error=%s",
+        tostring(app_id),
+        tostring(owner_resource),
+        tostring(success),
+        tostring(register_error)
+    )
+    return success, register_error
 end
 
 local function replace_registered_app(app, adapter_resource)
@@ -806,6 +949,14 @@ local function replace_registered_app(app, adapter_resource)
     end
 
     apps_by_id[app_id] = app
+    debug_custom_app(
+        "update",
+        "success id=%s owner=%s adapter=%s default_installed=%s",
+        app_id,
+        app.ownerResource,
+        tostring(adapter_resource),
+        tostring(app.catalog.defaultInstalled)
+    )
     sync_catalog_if_open()
     return true
 end
@@ -849,6 +1000,13 @@ local function update_custom_app_from_adapter(owner_resource, definition)
 end
 
 local function update_compatibility_app(owner_resource, definition)
+    local app_id = type(definition) == "table" and definition.id or "<invalid>"
+    debug_custom_app(
+        "compat-core",
+        "update requested id=%s owner=%s",
+        tostring(app_id),
+        tostring(owner_resource)
+    )
     if not Config.CustomApps.Enabled or not Config.CustomApps.ExternalApps then
         return false, "external_apps_disabled"
     end
@@ -860,9 +1018,25 @@ local function update_compatibility_app(owner_resource, definition)
 
     local app, definition_error = normalize_external_definition(owner_resource, nil, definition)
     if not app then
+        debug_custom_app(
+            "compat-core",
+            "update rejected id=%s owner=%s error=%s",
+            tostring(app_id),
+            tostring(owner_resource),
+            tostring(definition_error)
+        )
         return false, definition_error
     end
-    return replace_registered_app(app, nil)
+    local success, update_error = replace_registered_app(app, nil)
+    debug_custom_app(
+        "compat-core",
+        "update result id=%s owner=%s success=%s error=%s",
+        tostring(app_id),
+        tostring(owner_resource),
+        tostring(success),
+        tostring(update_error)
+    )
+    return success, update_error
 end
 
 local function remove_custom_app(app_id)
@@ -1252,6 +1426,13 @@ end
 
 local function set_phone_open(is_open)
     phone_open = is_open
+    debug_custom_app(
+        "phone",
+        "state changed open=%s active_app=%s registered_apps=%s",
+        tostring(phone_open),
+        tostring(active_app_id),
+        #get_catalog()
+    )
     if phone_open then
         send_catalog()
         return
@@ -1307,6 +1488,15 @@ if Config.CustomApps.Enabled and Config.CustomApps.BundledApps then
 end
 
 local function add_custom_app_export(definition)
+    debug_custom_app(
+        "dispatch",
+        "AddCustomApp received type=%s id=%s identifier=%s key=%s invoking_resource=%s",
+        type(definition),
+        type(definition) == "table" and tostring(definition.id) or "nil",
+        type(definition) == "table" and tostring(definition.identifier) or "nil",
+        type(definition) == "table" and tostring(definition.key) or "nil",
+        tostring(GetInvokingResource())
+    )
     if type(definition) ~= "table" then
         return add_custom_app(definition)
     end
@@ -1322,19 +1512,32 @@ local function add_custom_app_export(definition)
         provider_markers = provider_markers + 1
     end
     if provider_markers > 1 then
+        debug_custom_app("dispatch", "AddCustomApp rejected error=ambiguous_app_provider")
         return false, "ambiguous_app_provider"
     end
     if definition.identifier == nil and definition.key == nil then
+        debug_custom_app("dispatch", "routing AddCustomApp through native sky_phone registration")
         return add_custom_app(definition)
     end
 
     local owner_resource, owner_error = get_direct_owner()
     if not owner_resource then
+        debug_custom_app(
+            "dispatch",
+            "compatibility AddCustomApp rejected error=%s",
+            tostring(owner_error)
+        )
         return false, owner_error
     end
     if not SkyPhoneApps.RegisterCompatibilityExport then
+        debug_custom_app("dispatch", "compatibility AddCustomApp rejected error=compatibility_not_ready")
         return false, "compatibility_not_ready"
     end
+    debug_custom_app(
+        "dispatch",
+        "routing AddCustomApp through compatibility provider owner=%s",
+        owner_resource
+    )
     return SkyPhoneApps.RegisterCompatibilityExport(owner_resource, definition)
 end
 
@@ -1371,15 +1574,66 @@ SkyPhoneCompatibility.RegisterExportAlias("lb-phone", "SendCustomAppMessage", se
 SkyPhoneCompatibility.RegisterExportAlias("yseries", "AddCustomApp", add_custom_app_export)
 SkyPhoneCompatibility.RegisterExportAlias("yseries", "RemoveCustomApp", remove_custom_app)
 
+RegisterNUICallback("custom-app:catalog-debug", function(data, cb)
+    local accepted_ids = type(data) == "table" and data.acceptedIds or nil
+    local ids = {}
+    if type(accepted_ids) == "table" then
+        for index = 1, #accepted_ids do
+            if type(accepted_ids[index]) == "string" then
+                ids[#ids + 1] = accepted_ids[index]
+            end
+        end
+    end
+
+    debug_custom_app(
+        "nui",
+        "catalog applied received=%s accepted=%s ids=%s",
+        type(data) == "table" and tostring(data.receivedCount) or "invalid",
+        type(data) == "table" and tostring(data.acceptedCount) or "invalid",
+        #ids > 0 and table.concat(ids, ", ") or "<empty>"
+    )
+    cb({ success = true })
+end)
+
 RegisterNUICallback("custom-app:lifecycle", function(data, cb)
+    local requested_app_id = type(data) == "table" and data.appId or nil
+    local requested_event = type(data) == "table" and data.event or nil
+    local function respond(success, error_message)
+        debug_custom_app(
+            "lifecycle",
+            "result app=%s event=%s success=%s error=%s active_app=%s ready=%s phone_open=%s",
+            tostring(requested_app_id),
+            tostring(requested_event),
+            tostring(success),
+            tostring(error_message),
+            tostring(active_app_id),
+            tostring(active_app_ready),
+            tostring(phone_open)
+        )
+        local response = { success = success }
+        if error_message then
+            response.error = error_message
+        end
+        cb(response)
+    end
+
+    debug_custom_app(
+        "lifecycle",
+        "request app=%s event=%s phone_open=%s active_app=%s ready=%s",
+        tostring(requested_app_id),
+        tostring(requested_event),
+        tostring(phone_open),
+        tostring(active_app_id),
+        tostring(active_app_ready)
+    )
     if type(data) ~= "table" then
-        cb({ success = false, error = "invalid_lifecycle_request" })
+        respond(false, "invalid_lifecycle_request")
         return
     end
 
     local valid_id, id_error = SkyPhoneApps.ValidateAppId(data.appId)
     if not valid_id then
-        cb({ success = false, error = id_error })
+        respond(false, id_error)
         return
     end
 
@@ -1389,7 +1643,7 @@ RegisterNUICallback("custom-app:lifecycle", function(data, cb)
         and lifecycle_event ~= "ready"
         and lifecycle_event ~= "close"
     then
-        cb({ success = false, error = "invalid_lifecycle_event" })
+        respond(false, "invalid_lifecycle_event")
         return
     end
 
@@ -1397,15 +1651,15 @@ RegisterNUICallback("custom-app:lifecycle", function(data, cb)
     if lifecycle_event == "close"
         and (not phone_open or not app or active_app_id ~= data.appId)
     then
-        cb({ success = true })
+        respond(true)
         return
     end
     if not phone_open then
-        cb({ success = false, error = "phone_closed" })
+        respond(false, "phone_closed")
         return
     end
     if not app then
-        cb({ success = false, error = "app_not_found" })
+        respond(false, "app_not_found")
         return
     end
 
@@ -1414,7 +1668,7 @@ RegisterNUICallback("custom-app:lifecycle", function(data, cb)
         Config.CustomApps.MaximumMessageBytes
     )
     if payload_error then
-        cb({ success = false, error = payload_error })
+        respond(false, payload_error)
         return
     end
 
@@ -1431,11 +1685,11 @@ RegisterNUICallback("custom-app:lifecycle", function(data, cb)
         queued_messages[data.appId] = {}
         hook_success = invoke_or_defer_hook(app, "onOpen", lifecycle_payload, deferred_hooks)
     elseif active_app_id ~= data.appId then
-        cb({ success = false, error = "app_not_active" })
+        respond(false, "app_not_active")
         return
     elseif lifecycle_event == "ready" then
         if active_app_ready then
-            cb({ success = true })
+            respond(true)
             return
         end
         active_app_ready = true
@@ -1451,10 +1705,10 @@ RegisterNUICallback("custom-app:lifecycle", function(data, cb)
     end
 
     if not hook_success then
-        cb({ success = false, error = "hook_failed" })
+        respond(false, "hook_failed")
         return
     end
-    cb({ success = true })
+    respond(true)
     invoke_deferred_hooks(deferred_hooks)
 end)
 
@@ -1462,6 +1716,14 @@ AddEventHandler("onClientResourceStop", function(resource_name)
     if resource_name == current_resource then
         return
     end
+
+    debug_custom_app(
+        "resource",
+        "stop detected resource=%s owner_apps=%s adapter_apps=%s",
+        tostring(resource_name),
+        tostring(app_ids_by_owner[resource_name] ~= nil),
+        tostring(app_ids_by_adapter[resource_name] ~= nil)
+    )
 
     local app_ids = {}
     local owner_apps = app_ids_by_owner[resource_name]
@@ -1486,4 +1748,10 @@ AddEventHandler("onClientResourceStop", function(resource_name)
     if removed then
         sync_catalog_if_open()
     end
+    debug_custom_app(
+        "resource",
+        "stop cleanup resource=%s removed_any=%s",
+        tostring(resource_name),
+        tostring(removed)
+    )
 end)

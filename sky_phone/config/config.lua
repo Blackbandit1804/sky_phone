@@ -44,6 +44,7 @@ Config.CustomApps = {
     Enabled = true,
     BundledApps = true,
     ExternalApps = true,
+    Debug = true, -- detailed client traces for exports, registration, catalog sync and lifecycle events
     ReadyTimeoutMs = 8000,
     MaximumMessageBytes = 65536,
     MaximumStorageBytesPerApp = 262144,

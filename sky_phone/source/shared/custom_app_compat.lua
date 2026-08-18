@@ -6,7 +6,34 @@ function SkyPhoneCompatibility.RegisterExportAlias(resource_name, export_name, h
     assert(type(handler) == "function", "Export alias handler must be a function")
 
     AddEventHandler(("__cfx_export_%s_%s"):format(resource_name, export_name), function(set_callback)
-        set_callback(handler)
+        set_callback(function(...)
+            local debug_custom_app = SkyPhoneApps and SkyPhoneApps.Debug
+            local invoking_resource = GetInvokingResource and GetInvokingResource() or nil
+            if debug_custom_app then
+                debug_custom_app(
+                    "export",
+                    "call provider=%s export=%s invoking_resource=%s argument_count=%s",
+                    resource_name,
+                    export_name,
+                    tostring(invoking_resource),
+                    select("#", ...)
+                )
+            end
+
+            local results = table.pack(handler(...))
+            if debug_custom_app then
+                debug_custom_app(
+                    "export",
+                    "result provider=%s export=%s invoking_resource=%s success=%s error=%s",
+                    resource_name,
+                    export_name,
+                    tostring(invoking_resource),
+                    tostring(results[1]),
+                    tostring(results[2])
+                )
+            end
+            return table.unpack(results, 1, results.n)
+        end)
     end)
 end
 
@@ -137,6 +164,7 @@ function SkyPhoneCompatibility.BuildLbDefinition(owner_resource, app_data)
         compatibility = {
             provider = SkyPhoneCompatibility.Providers.lb,
             apiVersion = 1,
+            fixBlur = app_data.fixBlur == true,
             resourceName = type(app_data.resource) == "string" and app_data.resource or owner_resource,
         },
     }
