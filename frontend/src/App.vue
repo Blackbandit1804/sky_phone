@@ -36,6 +36,7 @@ import { useBankingStore } from '@/stores/banking'
 import { useCryptoStore } from '@/stores/crypto'
 import { useBillingStore } from '@/stores/billing'
 import { useCompaniesStore } from '@/stores/companies'
+import { useCityWarnStore } from '@/stores/citywarn'
 import { useAccountStore } from '@/stores/account'
 import { useAppAuthStore } from '@/stores/app-auth'
 import { useMailStore } from '@/stores/mail'
@@ -71,6 +72,7 @@ import type {
 import type { PhoneCall } from '@/types/phone'
 import type { EasyShareEvent } from '@/types/easyshare'
 import type { CryptoMarketChangedData } from '@/types/crypto'
+import type { CityWarnEventData } from '@/types/citywarn'
 import { nuiCall } from '@/utils/nui'
 import { formatTimer } from '@/utils/clock'
 import { parsePhonePreferences } from '@/utils/preferences'
@@ -85,6 +87,7 @@ type AppMessage = {
     | MailEventData
     | MarketplaceEventData
     | CompaniesEventData
+    | CityWarnEventData
     | MessagesEventData
     | DarkChatEventData
     | FlareEventData
@@ -280,6 +283,7 @@ const banking = useBankingStore()
 const crypto = useCryptoStore()
 const billing = useBillingStore()
 const companies = useCompaniesStore()
+const citywarn = useCityWarnStore()
 const mail = useMailStore()
 const messages = useMessagesStore()
 const darkchat = useDarkChatStore()
@@ -769,6 +773,25 @@ function onMessage(event: MessageEvent<AppMessage>): void {
       }
     }
     notifications.show(notification)
+  } else if (event.data?.type === 'citywarn:changed' && event.data.data) {
+    const data = event.data.data as CityWarnEventData
+    if (data.alert) citywarn.applyEvent(data)
+    if (phone.isOpen && citywarn.initialized) void citywarn.refresh()
+
+    const alert = data.alert
+    if (alert && citywarn.accepts(alert)) {
+      notifications.show({
+        appId: 'citywarn',
+        critical: alert.severity === 'danger' || alert.severity === 'extreme',
+        persistent: alert.severity === 'extreme',
+        route: `/apps/citywarn?alertId=${encodeURIComponent(alert.id)}`,
+        subtitle: data.sourceLabel ?? alert.sourceLabel,
+        text:
+          data.text ??
+          phone.t(`Apps.citywarn.notifications.${data.kind ?? 'update'}`),
+        title: data.title ?? phone.t('Apps.citywarn.name'),
+      })
+    }
   } else if (
     event.data?.type === 'fliptok:verification-changed' &&
     event.data.data

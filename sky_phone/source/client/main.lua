@@ -93,6 +93,10 @@ local server_callbacks = {
     "weazel-news:create",
     "weazel-news:update",
     "weazel-news:delete",
+    "citywarn:bootstrap",
+    "citywarn:publish",
+    "citywarn:update",
+    "citywarn:resolve",
     "fliptok:register",
     "fliptok:login",
     "fliptok:logout",
@@ -807,6 +811,16 @@ end)
 
 RegisterNetEvent("sky_phone:companies:changed", function(data)
     SendNUIMessage({ type = "companies:changed", data = data })
+end)
+
+RegisterNetEvent("sky_phone:citywarn:changed", function(data)
+    if type(data) ~= "table" then
+        return
+    end
+    local citywarn_locale = locale.Nui.Apps.citywarn
+    data.title = citywarn_locale.name
+    data.text = citywarn_locale.notifications[data.kind] or citywarn_locale.notifications.update
+    SendNUIMessage({ type = "citywarn:changed", data = data })
 end)
 
 RegisterNetEvent("sky_phone:companies:notification", function(data)
