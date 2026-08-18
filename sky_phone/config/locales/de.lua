@@ -1717,7 +1717,8 @@ Locales["de"] = {
                 untitled = "Unbenannt", noText = "Kein zusätzlicher Text", emptyBadge = "ON DEVICE", emptyTitle = "Keine Anmerkungen",
                 emptyBody = "Erstelle eine Notiz, um wichtige Details nahe bei der Hand zu halten.", noResults = "Keine Ergebnisse",
                 noResultsBody = "Versuch nach einem anderen Wort oder Satz zu suchen.", pin = "Hinweis zum Stift", unpin = "Anmerkung zum Öffnen",
-                deleteNote = "Anmerkung löschen",
+                deleteNote = "Anmerkung löschen", deleteTitle = "Notiz löschen?",
+                deleteBody = "Diese Notiz wird dauerhaft gelöscht.",
                 tools = {
                     bold = "Mutig", bulletList = "Liste der Kugeln", decreaseText = "Kleinerer Text", increaseText = "Größerer Text",
                     italic = "kursiv", numberedList = "Nummerierte Liste", quote = "Zitat", redo = "Wiederherstellen",

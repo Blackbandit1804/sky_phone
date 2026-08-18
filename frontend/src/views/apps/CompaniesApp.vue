@@ -364,12 +364,7 @@ function relativeTime(value: string): string {
 }
 
 function companyInitials(company: CompanySummary): string {
-  return company.name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => word[0] ?? '')
-    .join('')
-    .toUpperCase()
+  return company.name.trim().charAt(0).toUpperCase()
 }
 
 function companySubtitle(company: CompanySummary): string {

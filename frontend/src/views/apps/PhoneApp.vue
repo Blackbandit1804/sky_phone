@@ -82,7 +82,6 @@ const recentFilter = ref<RecentFilter>('all')
 const selectedNumber = ref('')
 const viewingOwnCard = ref(false)
 const phoneContent = ref<HTMLElement | null>(null)
-const contactDetailCompact = ref(false)
 const keypad = ref('')
 const editorOpened = ref(false)
 const editingContact = ref<PhoneContact | null>(null)
@@ -245,10 +244,7 @@ const activeCallContact = computed(
     ) ?? null,
 )
 const contactEditorInitials = computed(() =>
-  [contactFirstName.value, contactLastName.value]
-    .map((part) => part.trim().charAt(0).toUpperCase())
-    .filter(Boolean)
-    .join(''),
+  contactFirstName.value.trim().charAt(0).toUpperCase(),
 )
 
 function eventValue(event: Event): string {
@@ -301,7 +297,6 @@ function removeContactPhoto(): void {
 function openRecentDetail(number: string): void {
   viewingOwnCard.value = false
   selectedNumber.value = number
-  contactDetailCompact.value = false
   error.value = ''
   void nextTick(() => phoneContent.value?.scrollTo({ top: 0 }))
 }
@@ -310,7 +305,6 @@ function openMyCard(): void {
   if (!phone.device?.sim) return
   viewingOwnCard.value = true
   selectedNumber.value = phone.device.sim.number
-  contactDetailCompact.value = false
   error.value = ''
   void nextTick(() => phoneContent.value?.scrollTo({ top: 0 }))
 }
@@ -318,25 +312,12 @@ function openMyCard(): void {
 function closeRecentDetail(): void {
   viewingOwnCard.value = false
   selectedNumber.value = ''
-  contactDetailCompact.value = false
 }
 
 function selectTab(nextTab: PhoneTab): void {
   viewingOwnCard.value = false
   selectedNumber.value = ''
-  contactDetailCompact.value = false
   tab.value = nextTab
-}
-
-function handlePhoneContentScroll(): void {
-  if (!selectedNumber.value) {
-    contactDetailCompact.value = false
-    return
-  }
-  const scrollTop = phoneContent.value?.scrollTop ?? 0
-  contactDetailCompact.value = contactDetailCompact.value
-    ? scrollTop > 110
-    : scrollTop > 165
 }
 
 function scrollToContactGroup(letter: string): void {
@@ -424,7 +405,6 @@ async function saveContact(): Promise<void> {
   editorOpened.value = false
   viewingOwnCard.value = false
   selectedNumber.value = number
-  contactDetailCompact.value = false
   void nextTick(() => phoneContent.value?.scrollTo({ top: 0 }))
 }
 
@@ -588,6 +568,48 @@ function addDigit(digit: string): void {
   if (keypad.value.length < 10) keypad.value += digit
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return (
+    target.isContentEditable ||
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement
+  )
+}
+
+function handleKeypadKeyboard(event: KeyboardEvent): void {
+  if (
+    tab.value !== 'keypad' ||
+    selectedNumber.value ||
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    isEditableTarget(event.target)
+  ) {
+    return
+  }
+
+  if (/^[0-9*#]$/.test(event.key)) {
+    event.preventDefault()
+    addDigit(event.key)
+    return
+  }
+
+  if (event.key === 'Backspace' || event.key === 'Delete') {
+    event.preventDefault()
+    keypad.value = keypad.value.slice(0, -1)
+    return
+  }
+
+  if (event.key === 'Enter' && keypad.value && !event.repeat) {
+    event.preventDefault()
+    void startCall(keypad.value)
+  }
+}
+
 function chooseKeypadSuggestion(contact: PhoneContact): void {
   keypad.value = contact.phone_number.replace(/\D/g, '').slice(0, 10)
 }
@@ -611,12 +633,7 @@ function recentSubtitle(recent: RecentCall): string {
 function contactInitials(number: string): string {
   const contact = calls.contacts.find((entry) => entry.phone_number === number)
   if (!contact) return ''
-  return contact.name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('')
+  return contact.name.trim().charAt(0).toUpperCase()
 }
 
 function formatRecentDate(value: string): string {
@@ -648,6 +665,7 @@ function formatRecentDate(value: string): string {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeypadKeyboard)
   await calls.bootstrap()
   const photoSelection = mediaPicker.consumeMany<ContactPhotoContext>(
     'phone:contact-photo',
@@ -690,6 +708,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeypadKeyboard)
   if (callClock !== null) window.clearInterval(callClock)
 })
 </script>
@@ -903,7 +922,6 @@ onBeforeUnmount(() => {
         ref="phoneContent"
         class="phone-call-content"
         :class="{ 'phone-call-content--profile': selectedNumber }"
-        @scroll.passive="handlePhoneContentScroll"
       >
         <sky-block v-if="!phone.device?.sim" class="text-center">
           <h2>{{ phone.t('Apps.phone.noSim') }}</h2>
@@ -911,10 +929,7 @@ onBeforeUnmount(() => {
         </sky-block>
 
         <template v-else-if="selectedNumber">
-          <section
-            class="phone-contact-detail"
-            :class="{ 'phone-contact-detail--compact': contactDetailCompact }"
-          >
+          <section class="phone-contact-detail">
             <header class="phone-detail-header">
               <sky-button
                 rounded
@@ -925,35 +940,7 @@ onBeforeUnmount(() => {
                 <ChevronLeft :size="29" :stroke-width="2.4" />
               </sky-button>
 
-              <div class="phone-detail-compact-center">
-                <h2 class="phone-detail-compact-title">
-                  {{ selectedDisplayName }}
-                </h2>
-                <div class="phone-detail-compact-actions">
-                  <sky-button
-                    v-for="action in contactProfileActions"
-                    :key="action.id"
-                    rounded
-                    class="phone-profile-action phone-profile-action--compact"
-                    :disabled="
-                      viewingOwnCard ||
-                      ['video', 'mail'].includes(action.id) ||
-                      (action.id === 'call' &&
-                        selectedContact?.canCall === false) ||
-                      (action.id === 'message' &&
-                        selectedContact?.canMessage === false)
-                    "
-                    :aria-label="phone.t(`Apps.phone.${action.id}`)"
-                    @click="triggerContactAction(action.id)"
-                  >
-                    <component
-                      :is="action.icon"
-                      :size="24"
-                      fill="currentColor"
-                    />
-                  </sky-button>
-                </div>
-              </div>
+              <span class="phone-detail-header-spacer" />
 
               <sky-button
                 v-if="!viewingOwnCard"
@@ -3024,30 +3011,6 @@ onBeforeUnmount(() => {
   margin: 0 -15px;
   padding: 7px 15px;
   overflow: visible;
-  transition:
-    height 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    background 260ms ease,
-    border-color 260ms ease,
-    border-radius 260ms ease,
-    box-shadow 260ms ease,
-    backdrop-filter 260ms ease;
-}
-
-.phone-contact-detail--compact .phone-detail-header {
-  height: 156px;
-  border-bottom: 1px solid rgba(100, 168, 255, 0.2);
-  border-radius: 0 0 22px 22px;
-  background: linear-gradient(
-    180deg,
-    rgba(32, 41, 51, 0.97) 0%,
-    rgba(31, 34, 51, 0.96) 56%,
-    rgba(19, 47, 78, 0.94) 100%
-  );
-  box-shadow:
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
-    0 14px 30px rgba(9, 7, 25, 0.28);
-  backdrop-filter: blur(30px) saturate(155%);
-  -webkit-backdrop-filter: blur(30px) saturate(155%);
 }
 
 .phone-detail-header-button,
@@ -3078,63 +3041,8 @@ onBeforeUnmount(() => {
   width: 44px;
 }
 
-.phone-detail-compact-center {
-  position: static;
+.phone-detail-header-spacer {
   min-width: 0;
-  height: 44px;
-}
-
-.phone-detail-compact-title {
-  display: -webkit-box;
-  max-width: 190px;
-  margin: 1px auto 0;
-  overflow: hidden;
-  color: #fff;
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.25px;
-  line-height: 1.12;
-  opacity: 0;
-  text-align: center;
-  text-overflow: ellipsis;
-  text-shadow: 0 1px 3px rgba(20, 25, 35, 0.12);
-  transform: translateY(-10px) scale(0.94);
-  transition:
-    opacity 180ms ease,
-    transform 340ms cubic-bezier(0.22, 1, 0.36, 1);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.phone-contact-detail--compact .phone-detail-compact-title {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  transition-delay: 55ms;
-}
-
-.phone-detail-compact-actions {
-  position: absolute;
-  top: 60px;
-  left: 50%;
-  display: grid;
-  width: max-content;
-  grid-template-columns: repeat(4, 62px);
-  justify-content: center;
-  gap: 12px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, -18px) scale(0.9);
-  transform-origin: top center;
-  transition:
-    opacity 180ms ease,
-    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.phone-contact-detail--compact .phone-detail-compact-actions {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translate(-50%, 0) scale(1);
-  transition-delay: 80ms;
 }
 
 .phone-contact-hero {
@@ -3181,6 +3089,7 @@ onBeforeUnmount(() => {
   min-height: 62px;
   padding: 0;
   border: 1px solid rgba(10, 132, 255, 0.58);
+  border-radius: 50%;
   color: #fff;
   background: rgba(18, 82, 145, 0.72);
   box-shadow:
@@ -3191,26 +3100,6 @@ onBeforeUnmount(() => {
 .phone-profile-action:disabled {
   color: rgba(255, 255, 255, 0.32);
   opacity: 1;
-}
-
-.phone-profile-action--compact {
-  width: 62px;
-  min-width: 62px;
-  height: 62px;
-  min-height: 62px;
-  border-color: rgba(255, 255, 255, 0.26);
-  background: rgba(24, 35, 45, 0.82);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 5px 15px rgba(20, 24, 37, 0.16);
-  transition:
-    background-color 140ms ease,
-    transform 140ms ease;
-}
-
-.phone-profile-action--compact:active {
-  background: rgba(40, 55, 67, 0.9);
-  transform: scale(0.92);
 }
 
 .phone-profile-content {
@@ -3642,28 +3531,12 @@ onBeforeUnmount(() => {
     font-size: 14px;
   }
 
-  .phone-profile-action--compact {
-    width: 54px;
-    min-width: 54px;
-    height: 54px;
-    min-height: 54px;
-  }
-
-  .phone-detail-compact-actions {
-    grid-template-columns: repeat(4, 54px);
-    gap: 9px;
-  }
-
-  .phone-detail-compact-title {
-    max-width: 150px;
-  }
-
   .phone-contact-actions {
     grid-template-columns: repeat(4, 56px);
     gap: 9px;
   }
 
-  .phone-profile-action:not(.phone-profile-action--compact) {
+  .phone-profile-action {
     width: 56px;
     min-width: 56px;
     height: 56px;
@@ -3882,9 +3755,6 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .phone-detail-header,
-  .phone-detail-compact-title,
-  .phone-detail-compact-actions,
-  .phone-profile-action--compact,
   .phone-calls-app button,
   .phone-contact-editor button {
     transition-duration: 1ms;

@@ -1717,7 +1717,8 @@ Locales["en"] = {
                 untitled = "Untitled", noText = "No additional text", emptyBadge = "ON DEVICE", emptyTitle = "No Notes",
                 emptyBody = "Create a note to keep important details close at hand.", noResults = "No Results",
                 noResultsBody = "Try searching for a different word or phrase.", pin = "Pin note", unpin = "Unpin note",
-                deleteNote = "Delete note",
+                deleteNote = "Delete note", deleteTitle = "Delete Note?",
+                deleteBody = "This note will be permanently deleted.",
                 tools = {
                     bold = "Bold", bulletList = "Bullet list", decreaseText = "Smaller text", increaseText = "Larger text",
                     italic = "Italic", numberedList = "Numbered list", quote = "Quote", redo = "Redo",
