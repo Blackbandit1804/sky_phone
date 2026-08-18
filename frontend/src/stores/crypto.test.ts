@@ -81,6 +81,33 @@ describe('crypto store', () => {
     expect(crypto.pendingQuote).toBeNull()
   })
 
+  it('removes an expired quote so the trade form can request a new one', async () => {
+    vi.useFakeTimers()
+    const expiringQuote = { ...quote, expiresAt: Date.now() + 1000 }
+    mockNuiCall.mockResolvedValueOnce({ data: expiringQuote, success: true })
+    const crypto = useCryptoStore()
+
+    await crypto.quote('aurora', 'buy', '1')
+    expect(crypto.pendingQuote).toEqual(expiringQuote)
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(crypto.pendingQuote).toBeNull()
+    vi.useRealTimers()
+  })
+
+  it('clears a rejected execution so a fresh quote can be requested', async () => {
+    mockNuiCall.mockResolvedValueOnce({
+      error: 'quote_expired',
+      success: false,
+    })
+    const crypto = useCryptoStore()
+    crypto.pendingQuote = quote
+
+    expect(await crypto.executeQuote()).toBe(false)
+    expect(crypto.pendingQuote).toBeNull()
+    expect(crypto.error).toBe('quote_expired')
+  })
+
   it('keeps server errors and does not replace portfolio state', async () => {
     mockNuiCall.mockResolvedValueOnce({
       error: 'quote_expired',

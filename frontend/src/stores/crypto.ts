@@ -82,6 +82,21 @@ export const useCryptoStore = defineStore('crypto', {
         side,
       })
       this.pendingQuote = response.success ? (response.data ?? null) : null
+      if (this.pendingQuote) {
+        const quoteId = this.pendingQuote.id
+        const expiresAt = this.pendingQuote.expiresAt
+        globalThis.setTimeout(
+          () => {
+            if (
+              this.pendingQuote?.id === quoteId &&
+              this.pendingQuote.expiresAt <= Date.now()
+            ) {
+              this.pendingQuote = null
+            }
+          },
+          Math.max(0, expiresAt - Date.now()),
+        )
+      }
       return response
     },
     async executeQuote(): Promise<boolean> {
@@ -90,9 +105,9 @@ export const useCryptoStore = defineStore('crypto', {
         idempotencyKey: requestKey('trade'),
         quoteId: this.pendingQuote.id,
       })
+      this.pendingQuote = null
       if (!response.success || !response.data) return false
       this.data = response.data
-      this.pendingQuote = null
       return true
     },
     async updateProfile(payload: {
