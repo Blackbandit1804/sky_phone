@@ -3554,17 +3554,19 @@ onUnmounted(() => {
 }
 .activity-filters :deep(.sky-segmented-button svg) {
   position: absolute;
+  top: 50%;
   inset-inline-start: 10px;
   display: block;
   flex: 0 0 auto;
+  transform: translateY(-50%);
 }
 .activity-filters :deep(.sky-segmented-button > span) {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 15px;
-  line-height: 15px;
+  min-height: 15px;
+  line-height: 1;
   text-align: center;
   white-space: nowrap;
 }
