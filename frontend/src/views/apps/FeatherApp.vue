@@ -33,10 +33,6 @@ import {
   X,
 } from 'lucide-vue-next'
 import {
-  SkyActionButton,
-  SkyActionGroup,
-  SkyActionSheet,
-  SkyActionsLabel,
   SkyBlock,
   SkyButton,
   SkyFab,
@@ -984,6 +980,7 @@ onMounted(async () => {
         </SkyLink>
         <SkyNavbarBackLink
           v-else
+          :class="{ 'feather-edit__navbar-back': screen === 'edit' }"
           :text="t('back')"
           :show-text="false"
           @click="goBack"
@@ -1005,8 +1002,7 @@ onMounted(async () => {
           v-else-if="screen === 'edit'"
           icon-only
           rounded
-          small
-          variant="secondary"
+          variant="plain"
           :disabled="!canSaveProfile"
           class="feather-edit__navbar-save"
           :aria-label="busy ? t('loading') : t('saveProfile')"
@@ -2220,44 +2216,60 @@ onMounted(async () => {
       </SkyBlock>
     </SkySheet>
 
-    <SkyActionSheet
-      :opened="menuPost !== null && !reportOpen"
-      :label="t('moreActions')"
-      @backdropclick="closePostMenu"
-      @escape="closePostMenu"
-    >
-      <SkyActionGroup class="feather-post-actions">
-        <SkyActionsLabel v-if="menuPost">
-          @{{ menuPost.handle }}
-        </SkyActionsLabel>
-        <SkyActionButton
-          v-if="menuPost?.is_owner"
-          class="feather-post-actions__danger"
-          @click="deletePost"
-        >
-          <Trash2 :size="18" />
-          {{ t('delete') }}
-        </SkyActionButton>
-        <template v-else>
-          <SkyActionButton @click="openPostReport">
-            <Flag :size="18" />
-            <span>{{ t('report') }}</span>
-          </SkyActionButton>
-          <SkyActionButton
-            class="feather-post-actions__danger"
-            @click="blockPostAuthor"
-          >
-            <Ban :size="18" />
-            <span>{{ t('block', { handle: menuPost?.handle ?? '' }) }}</span>
-          </SkyActionButton>
-        </template>
-      </SkyActionGroup>
-      <SkyActionGroup>
-        <SkyActionButton bold @click="closePostMenu">
-          {{ t('cancel') }}
-        </SkyActionButton>
-      </SkyActionGroup>
-    </SkyActionSheet>
+    <div class="feather-post-menu">
+      <SkySheet
+        :opened="menuPost !== null && !reportOpen"
+        :aria-label="t('moreActions')"
+        swipe-to-close
+        grabber-clickable
+        :grabber-label="t('cancel')"
+        @backdropclick="closePostMenu"
+        @escape="closePostMenu"
+        @grabberclick="closePostMenu"
+        @swipeclose="closePostMenu"
+      >
+        <section v-if="menuPost" class="feather-post-menu__content">
+          <header class="feather-post-menu__header" data-sky-sheet-drag-handle>
+            <span>@{{ menuPost.handle }}</span>
+            <h2>{{ t('moreActions') }}</h2>
+          </header>
+          <div class="feather-post-menu__group">
+            <SkyButton
+              v-if="menuPost?.is_owner"
+              block
+              clear
+              class="feather-post-menu__action feather-post-menu__action--danger"
+              @click="deletePost"
+            >
+              <Trash2 :size="18" />
+              <span>{{ t('delete') }}</span>
+            </SkyButton>
+            <template v-else>
+              <SkyButton
+                block
+                clear
+                class="feather-post-menu__action"
+                @click="openPostReport"
+              >
+                <Flag :size="18" />
+                <span>{{ t('report') }}</span>
+              </SkyButton>
+              <SkyButton
+                block
+                clear
+                class="feather-post-menu__action feather-post-menu__action--danger"
+                @click="blockPostAuthor"
+              >
+                <Ban :size="18" />
+                <span>{{
+                  t('block', { handle: menuPost?.handle ?? '' })
+                }}</span>
+              </SkyButton>
+            </template>
+          </div>
+        </section>
+      </SkySheet>
+    </div>
 
     <SkySheet :opened="reportOpen" @backdropclick="closePostReport">
       <SkyBlock strong inset class="feather-report">
@@ -4799,15 +4811,25 @@ onMounted(async () => {
   font-weight: 800;
 }
 .feather-edit__navbar-save {
-  --sky-surface-muted: #2c3035;
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  min-height: 32px;
-  border-color: rgb(255 255 255 / 14%);
+  display: grid;
+  width: 44px !important;
+  min-width: 44px;
+  height: 44px !important;
+  min-height: 44px;
+  flex: 0 0 44px;
+  place-items: center;
+  border-color: transparent;
+  border-radius: 50% !important;
   padding: 0;
+  background: transparent !important;
   color: #fff;
-  box-shadow: 0 5px 14px rgb(0 0 0 / 18%);
+  box-shadow: none;
+}
+.feather-edit__navbar-save :deep(svg) {
+  display: block;
+}
+.feather-edit__navbar-back :deep(.sky-navbar-back-link__icon) {
+  transform: translateX(2px);
 }
 .feather-composer-card {
   flex: none;
@@ -5252,13 +5274,48 @@ onMounted(async () => {
   color: inherit;
   background: var(--feather-panel);
 }
-.feather-post-actions__danger {
+.feather-post-menu__content {
+  padding: 0 14px calc(var(--sky-safe-area-bottom) + 14px);
+}
+.feather-post-menu__header {
+  padding: 0 2px 11px;
+  touch-action: none;
+}
+.feather-post-menu__header span {
+  display: block;
+  color: var(--feather-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.feather-post-menu__header h2 {
+  margin: 2px 0 0;
+  font-size: 17px;
+  letter-spacing: -0.25px;
+}
+.feather-post-menu__group {
+  overflow: hidden;
+  border: 1px solid var(--feather-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+.feather-post-menu__action {
+  min-height: 46px;
+  justify-content: flex-start;
+  gap: 9px;
+  border-radius: 0;
+  padding: 9px 13px;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+.feather-post-menu__action + .feather-post-menu__action {
+  border-top: 1px solid var(--feather-border);
+}
+.feather-post-menu__action--danger {
   color: var(--sky-danger);
 }
-.feather-post-actions :deep(.sky-action-button) {
-  gap: 8px;
-}
-.feather-post-actions__danger svg {
+.feather-post-menu__action svg {
   flex: none;
 }
 @supports not (color: color-mix(in srgb, white, black)) {
