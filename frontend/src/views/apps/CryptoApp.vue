@@ -1365,21 +1365,27 @@ onUnmounted(() => {
               ><SkySegmentedButton
                 :active="activityFilter === 'all'"
                 @click="activityFilter = 'all'"
-                ><History :size="15" /><span>{{
-                  t('activity.filters.all')
-                }}</span></SkySegmentedButton
+                ><span class="activity-filter-content"
+                  ><History :size="15" /><span>{{
+                    t('activity.filters.all')
+                  }}</span></span
+                ></SkySegmentedButton
               ><SkySegmentedButton
                 :active="activityFilter === 'trades'"
                 @click="activityFilter = 'trades'"
-                ><ChartNoAxesCombined :size="15" /><span>{{
-                  t('activity.filters.trades')
-                }}</span></SkySegmentedButton
+                ><span class="activity-filter-content"
+                  ><ChartNoAxesCombined :size="15" /><span>{{
+                    t('activity.filters.trades')
+                  }}</span></span
+                ></SkySegmentedButton
               ><SkySegmentedButton
                 :active="activityFilter === 'wallet'"
                 @click="activityFilter = 'wallet'"
-                ><WalletCards :size="15" /><span>{{
-                  t('activity.filters.wallet')
-                }}</span></SkySegmentedButton
+                ><span class="activity-filter-content"
+                  ><WalletCards :size="15" /><span>{{
+                    t('activity.filters.wallet')
+                  }}</span></span
+                ></SkySegmentedButton
               ></SkySegmented
             >
           </div>
@@ -3575,24 +3581,20 @@ onUnmounted(() => {
     color var(--sky-transition-normal) ease,
     transform var(--sky-transition-fast) ease;
 }
-.activity-filters :deep(.sky-segmented-button svg) {
-  position: absolute;
-  top: 50%;
-  inset-inline-start: 10px;
-  display: block;
-  flex: 0 0 auto;
-  transform: translateY(calc(-50% - 1px));
-}
-.activity-filters :deep(.sky-segmented-button > span) {
-  display: flex;
+.activity-filters :deep(.activity-filter-content) {
+  display: inline-flex;
+  max-width: 100%;
+  gap: 6px;
   align-items: center;
   justify-content: center;
-  width: 100%;
   min-height: 15px;
   line-height: 1;
-  text-align: center;
   white-space: nowrap;
   transform: translateY(-1px);
+}
+.activity-filters :deep(.activity-filter-content svg) {
+  display: block;
+  flex: 0 0 auto;
 }
 :deep(.activity-filters.sky-segmented--strong .sky-segmented-button--active) {
   color: #fff;

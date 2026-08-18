@@ -213,9 +213,9 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('class="activity-filter-panel"')
     expect(source).toContain('class="activity-filters"')
     expect(source).toContain('class="activity-status__icon"')
+    expect(source.match(/class="activity-filter-content"/g)).toHaveLength(3)
     expect(source).toContain('<WalletCards :size="15" />')
-    expect(source).toContain('top: 50%;')
-    expect(source).toContain('transform: translateY(calc(-50% - 1px));')
+    expect(source).not.toContain('inset-inline-start: 10px;')
     expect(source).toContain('transform: translateY(-1px);')
   })
 
