@@ -430,11 +430,7 @@ onMounted(() => void crypto.load())
           <span>{{ t('name') }}</span>
         </span>
         <span v-else-if="detail" class="vault-detail-title">
-          <img
-            class="vault-header-logo vault-header-logo--detail"
-            :src="cryptoHeaderLogo"
-            alt=""
-          />
+          <CryptoLogo class="vault-detail-logo" :market="detail" />
           <span>
             <b>{{ detail.symbol }}</b>
             <small>{{ detail.name }}</small>
@@ -2001,9 +1997,10 @@ onMounted(() => void crypto.load())
   gap: 8px;
   align-items: center;
 }
-.vault-header-logo--detail {
-  width: 28px;
-  height: 28px;
+.vault-detail-logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 11px;
 }
 .vault-detail-title > span {
   display: grid;

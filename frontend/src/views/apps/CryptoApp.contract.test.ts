@@ -113,8 +113,9 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('class="vault-navbar"')
     expect(source).toContain('class="vault-header-logo"')
     expect(source).toContain(
-      'class="vault-header-logo vault-header-logo--detail"',
+      '<CryptoLogo class="vault-detail-logo" :market="detail" />',
     )
+    expect(source).not.toContain('vault-header-logo--detail')
     expect(source).not.toContain('class="coin-detail-logo"')
     expect(source).not.toContain('.vault-header-brand > i')
     expect(source).toContain(':show-back="Boolean(detail)"')
