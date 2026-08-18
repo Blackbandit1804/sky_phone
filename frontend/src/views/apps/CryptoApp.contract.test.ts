@@ -178,8 +178,19 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('@keyframes vault-view-in')
     expect(source).toContain('class="sheet-header"')
     expect(source).toContain('class="sheet-close"')
-    expect(source).toContain('v-if="sheet !== \'profile\'"')
+    expect(source).toContain("v-if=\"sheet === 'trade' || sheet === 'send'\"")
     expect(source).toContain('class="sheet-market-summary"')
+  })
+
+  it('uses a wide close-free settlement form with composed fields', () => {
+    expect(source).toContain(
+      "'sheet--settlement': sheet === 'deposit' || sheet === 'withdraw'",
+    )
+    expect(source).toContain('class="settlement-form"')
+    expect(source.match(/class="settlement-field"/g)).toHaveLength(2)
+    expect(source).toContain('class="settlement-submit"')
+    expect(source).toContain('.settlement-field :deep(.sky-field__border)')
+    expect(source).toContain('.sheet--settlement .sheet-heading')
   })
 
   it('gives profile editing a full-width field and save treatment', () => {

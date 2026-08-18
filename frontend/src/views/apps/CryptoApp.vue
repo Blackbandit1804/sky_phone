@@ -1624,7 +1624,10 @@ onUnmounted(() => {
       ><div
         v-if="sheet"
         class="sheet"
-        :class="{ 'sheet--profile': sheet === 'profile' }"
+        :class="{
+          'sheet--profile': sheet === 'profile',
+          'sheet--settlement': sheet === 'deposit' || sheet === 'withdraw',
+        }"
       >
         <header class="sheet-header" data-sky-sheet-drag-handle>
           <div class="sheet-heading">
@@ -1668,7 +1671,7 @@ onUnmounted(() => {
             </span>
           </div>
           <SkyLink
-            v-if="sheet !== 'profile'"
+            v-if="sheet === 'trade' || sheet === 'send'"
             component="button"
             icon-only
             class="sheet-close"
@@ -1918,32 +1921,51 @@ onUnmounted(() => {
             </SkyButton>
           </form>
         </template>
-        <template v-else
-          ><p class="sheet-copy">
-            {{
-              t(
-                sheet === 'deposit'
-                  ? 'settlement.depositBody'
-                  : 'settlement.withdrawBody',
-              )
-            }}
-          </p>
-          <SkyField
-            v-model="amount"
-            :label="t('settlement.amount')"
-            inputmode="numeric"
-            outline
-          /><SkyField
-            v-model="financialPassword"
-            :label="t('auth.password')"
-            type="password"
-            outline
-          />
-          <p v-if="formError" class="error">{{ formError }}</p>
-          <SkyButton block @click="submitSettlement">{{
-            t('settlement.confirm')
-          }}</SkyButton></template
-        >
+        <template v-else>
+          <form class="settlement-form" @submit.prevent="submitSettlement">
+            <div class="settlement-intro">
+              <span><ShieldCheck :size="18" /></span>
+              <p class="sheet-copy settlement-copy">
+                {{
+                  t(
+                    sheet === 'deposit'
+                      ? 'settlement.depositBody'
+                      : 'settlement.withdrawBody',
+                  )
+                }}
+              </p>
+            </div>
+            <div class="settlement-fields">
+              <SkyField
+                v-model="amount"
+                class="settlement-field"
+                :error="Boolean(formError)"
+                :label="t('settlement.amount')"
+                placeholder="0"
+                inputmode="numeric"
+                outline
+                ><template #leading><WalletCards :size="18" /></template
+              ></SkyField>
+              <SkyField
+                v-model="financialPassword"
+                class="settlement-field"
+                :error="Boolean(formError)"
+                :label="t('auth.password')"
+                type="password"
+                autocomplete="current-password"
+                outline
+                ><template #leading><LockKeyhole :size="18" /></template
+              ></SkyField>
+            </div>
+            <p v-if="formError" class="error settlement-error">
+              {{ formError }}
+            </p>
+            <SkyButton block large class="settlement-submit" type="submit">
+              <ShieldCheck :size="18" />
+              <span>{{ t('settlement.confirm') }}</span>
+            </SkyButton>
+          </form>
+        </template>
       </div></SkySheet
     >
   </SkyAppPage>
@@ -4413,6 +4435,153 @@ onUnmounted(() => {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
+}
+.sheet--settlement {
+  gap: 14px;
+  padding-right: 12px;
+  padding-left: 12px;
+}
+.sheet--settlement .sheet-header {
+  min-height: 58px;
+  padding: 0 2px 12px;
+}
+.sheet--settlement .sheet-heading {
+  width: 100%;
+}
+.settlement-form {
+  display: grid;
+  width: 100%;
+  gap: 13px;
+}
+.settlement-intro {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 12px 13px;
+  background:
+    radial-gradient(
+      circle at 0% 0%,
+      rgba(101, 251, 210, 0.08),
+      transparent 52%
+    ),
+    rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 16px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+.settlement-intro > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--vault-mint);
+  background: rgba(101, 251, 210, 0.08);
+  border: 1px solid rgba(101, 251, 210, 0.14);
+  border-radius: 11px;
+}
+.settlement-copy {
+  padding-top: 1px;
+  color: rgba(238, 245, 248, 0.66);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.settlement-fields {
+  display: grid;
+  gap: 10px;
+}
+.settlement-field {
+  min-height: 64px;
+  margin: 0;
+  padding: 0 15px;
+  color: #f8fbfd;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent), #090f16;
+  border-radius: 17px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
+}
+.settlement-field:focus-within {
+  background:
+    linear-gradient(145deg, rgba(101, 251, 210, 0.07), transparent), #090f16;
+  box-shadow:
+    0 0 0 3px rgba(101, 251, 210, 0.065),
+    inset 0 1px rgba(255, 255, 255, 0.05);
+}
+.settlement-field :deep(.sky-field__media) {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  justify-content: center;
+  margin-right: 12px;
+  padding: 0;
+  place-items: center;
+  color: var(--vault-mint);
+  background: rgba(101, 251, 210, 0.07);
+  border: 1px solid rgba(101, 251, 210, 0.13);
+  border-radius: 12px;
+}
+.settlement-field :deep(.sky-field__inner) {
+  padding: 12px 0 10px;
+}
+.settlement-field :deep(.sky-field__label) {
+  margin-top: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 10px;
+  font-weight: 750;
+}
+.settlement-field :deep(.sky-field__label-text) {
+  top: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+.settlement-field :deep(.sky-field__control) {
+  margin: -2px 0 0;
+}
+.settlement-field :deep(.sky-field__input) {
+  height: 31px;
+  min-height: 31px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 21px;
+}
+.settlement-field :deep(.sky-field__input::placeholder) {
+  color: rgba(255, 255, 255, 0.24);
+}
+.settlement-field :deep(.sky-field__border) {
+  inset: 0;
+  border-color: rgba(255, 255, 255, 0.12);
+  border-radius: 17px;
+}
+.settlement-field:focus-within :deep(.sky-field__border) {
+  border-color: rgba(101, 251, 210, 0.58);
+}
+.settlement-field.sky-field--error :deep(.sky-field__border) {
+  border-color: rgba(255, 117, 136, 0.6);
+}
+.settlement-error {
+  margin: -3px 2px 0;
+}
+.settlement-submit {
+  min-height: 54px;
+  gap: 8px;
+  color: #06110e;
+  font-size: 13px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #78f8d5, #4fd9ba 55%, #5aa7ff);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 17px;
+  box-shadow: 0 14px 30px rgba(54, 220, 178, 0.18);
+}
+.settlement-submit:active {
+  box-shadow: 0 7px 18px rgba(54, 220, 178, 0.13);
+  transform: translateY(1px);
+}
+@media (hover: hover) {
+  .settlement-submit:hover {
+    filter: brightness(1.06);
+  }
 }
 .sheet--profile {
   gap: 14px;
