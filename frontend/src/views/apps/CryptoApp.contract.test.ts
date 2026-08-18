@@ -180,6 +180,9 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('class="sheet-close"')
     expect(source).toContain("v-if=\"sheet === 'trade' || sheet === 'send'\"")
     expect(source).toContain('class="sheet-market-summary"')
+    expect(source).toContain('grabber-clickable')
+    expect(source).toContain('@grabberclick="closeSheet"')
+    expect(source).toContain('.crypto-app :deep(.sky-sheet__grabber::after)')
   })
 
   it('uses a wide close-free settlement form with composed fields', () => {

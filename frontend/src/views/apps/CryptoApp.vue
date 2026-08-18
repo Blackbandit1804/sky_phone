@@ -1618,8 +1618,11 @@ onUnmounted(() => {
     <SkySheet
       :opened="sheet !== null"
       swipe-to-close
+      grabber-clickable
+      :grabber-label="phone.t('Common.close')"
       @backdropclick="closeSheet"
       @escape="closeSheet"
+      @grabberclick="closeSheet"
       @swipeclose="closeSheet"
       ><div
         v-if="sheet"
@@ -4065,16 +4068,6 @@ onUnmounted(() => {
   max-height: calc(100% - var(--sky-safe-area-top) - 20px);
   overflow-y: auto;
   color: #f8fbfd;
-  background: #0d1219;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-bottom: 0;
-  border-radius: 28px 28px 0 0;
-  box-shadow: 0 -22px 70px rgba(0, 0, 0, 0.52);
-}
-.crypto-app :deep(.sky-sheet__grabber) {
-  background: rgba(255, 255, 255, 0.2);
-}
-.sheet {
   background:
     radial-gradient(
       circle at 92% 0%,
@@ -4082,6 +4075,19 @@ onUnmounted(() => {
       transparent 27%
     ),
     #0d1219;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 0;
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -22px 70px rgba(0, 0, 0, 0.52);
+}
+.crypto-app :deep(.sky-sheet__grabber) {
+  background: transparent;
+}
+.crypto-app :deep(.sky-sheet__grabber::after) {
+  background: rgba(255, 255, 255, 0.2);
+}
+.sheet {
+  background: transparent;
 }
 .sheet-header,
 .sheet-heading,
