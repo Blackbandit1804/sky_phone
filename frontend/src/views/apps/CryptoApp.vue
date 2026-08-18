@@ -1973,26 +1973,20 @@ onMounted(() => void crypto.load())
 }
 .portfolio-glow {
   position: absolute;
-  top: -64px;
-  right: -50px;
-  width: 190px;
-  height: 190px;
-  border: 1px solid rgba(101, 251, 210, 0.1);
+  top: -38px;
+  right: -24px;
+  width: 150px;
+  height: 120px;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(91, 159, 255, 0.28) 0,
+    rgba(101, 251, 210, 0.13) 38%,
+    transparent 72%
+  );
+  border: 0;
   border-radius: 50%;
-  box-shadow: 0 0 65px rgba(101, 251, 210, 0.08);
-}
-.portfolio-glow::before,
-.portfolio-glow::after {
-  position: absolute;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: inherit;
-  content: '';
-}
-.portfolio-glow::before {
-  inset: 22px;
-}
-.portfolio-glow::after {
-  inset: 47px;
+  filter: blur(24px);
 }
 .portfolio-topline,
 .portfolio-value,
