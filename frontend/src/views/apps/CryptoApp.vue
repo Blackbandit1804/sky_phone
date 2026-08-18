@@ -1449,10 +1449,12 @@ onMounted(() => void crypto.load())
             <SkyButton variant="secondary" tonal @click="copyWalletKey">
               <CheckCircle2 v-if="walletKeyCopied" :size="16" />
               <Copy v-else :size="16" />
-              {{ t(walletKeyCopied ? 'profile.copied' : 'profile.copyKey') }}
+              <span>{{
+                t(walletKeyCopied ? 'profile.copied' : 'profile.copyKey')
+              }}</span>
             </SkyButton>
             <SkyButton @click="shareWalletKey">
-              <Share2 :size="16" />{{ t('profile.shareKey') }}
+              <Share2 :size="16" /><span>{{ t('profile.shareKey') }}</span>
             </SkyButton>
           </div>
         </SkyCard>
@@ -3730,12 +3732,21 @@ onMounted(() => void crypto.load())
   gap: 7px;
 }
 .wallet-key-card__actions :deep(.sky-button) {
+  width: 100%;
+  min-width: 0;
   min-height: 42px;
   gap: 6px;
   padding: 0 10px;
+  overflow: hidden;
   font-size: 11px;
   font-weight: 800;
   border-radius: 13px;
+}
+.wallet-key-card__actions :deep(.sky-button > span) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .profile-stats--premium {
   margin-top: 10px;

@@ -70,6 +70,18 @@ describe('phone locale fallback', () => {
     expect(phone.t('Apps.messages.seekAudio')).toBe('Seek Audio')
   })
 
+  it('keeps VaultX wallet key actions translated with a partial server locale', () => {
+    const phone = usePhoneStore()
+    phone.open({ locales: { Apps: { crypto: { name: 'VaultX' } } } })
+
+    expect(phone.t('Apps.crypto.profile.walletKey')).toBe('Public crypto key')
+    expect(phone.t('Apps.crypto.profile.walletKeyBody')).toBe(
+      'Share this key to receive crypto. It cannot access your account.',
+    )
+    expect(phone.t('Apps.crypto.profile.copyKey')).toBe('Copy')
+    expect(phone.t('Apps.crypto.profile.shareKey')).toBe('Share')
+  })
+
   it('uses the English Lua payload before the bundled emergency fallback', () => {
     const phone = usePhoneStore()
     phone.open({
