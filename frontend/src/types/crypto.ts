@@ -32,11 +32,19 @@ export type CryptoHolding = {
 
 export type CryptoActivity = {
   amount: string
+  counterpartyKey?: string
   createdAt: number
   id: string
   marketId?: string
+  quantity?: string
   status: string
-  type: 'buy' | 'sell' | 'deposit' | 'withdrawal'
+  type:
+    | 'buy'
+    | 'sell'
+    | 'deposit'
+    | 'withdrawal'
+    | 'transfer_in'
+    | 'transfer_out'
 }
 
 export type CryptoProfile = {
@@ -49,6 +57,7 @@ export type CryptoProfile = {
   totalTrades: number
   totalVolume: string
   tradeConfirmations: boolean
+  walletKey: string
 }
 
 export type CryptoBootstrap = {
@@ -59,6 +68,12 @@ export type CryptoBootstrap = {
   markets: CryptoMarket[]
   portfolioValue: string
   profile: CryptoProfile | null
+  registered?: boolean
+}
+
+export type CryptoRecipient = {
+  handle: string
+  walletKey: string
 }
 
 export type CryptoQuote = {

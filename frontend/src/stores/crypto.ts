@@ -4,6 +4,7 @@ import type {
   CryptoBootstrap,
   CryptoMarket,
   CryptoQuote,
+  CryptoRecipient,
   CryptoSide,
 } from '@/types/crypto'
 import { nuiCall, type NuiResponse } from '@/utils/nui'
@@ -93,6 +94,26 @@ export const useCryptoStore = defineStore('crypto', {
           : null
         this.pendingQuote = null
       }
+    },
+    async resolveRecipient(walletKey: string): Promise<CryptoRecipient | null> {
+      const response = await this.call<CryptoRecipient>('recipient', {
+        walletKey,
+      })
+      return response.success ? (response.data ?? null) : null
+    },
+    async transfer(payload: {
+      marketId: string
+      password: string
+      quantity: string
+      walletKey: string
+    }): Promise<boolean> {
+      const response = await this.call<CryptoBootstrap>('transfer', {
+        ...payload,
+        idempotencyKey: requestKey('transfer'),
+      })
+      if (!response.success || !response.data) return false
+      this.data = response.data
+      return true
     },
     async settle(
       kind: 'deposit' | 'withdraw',

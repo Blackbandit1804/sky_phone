@@ -5,14 +5,18 @@ import {
   BellRing,
   ChartCandlestick,
   ChartNoAxesCombined,
+  CheckCircle2,
   ChevronRight,
+  Copy,
   Eye,
   EyeOff,
   Fingerprint,
   History,
+  KeyRound,
   LockKeyhole,
   LogOut,
   Settings2,
+  Send,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -24,11 +28,17 @@ import cryptoHeaderLogo from '@/assets/img/app-icons/crypto-header-logo.png'
 import CryptoLogo from '@/components/crypto/CryptoLogo.vue'
 import { useCryptoStore } from '@/stores/crypto'
 import { usePhoneStore } from '@/stores/phone'
-import type { CryptoMarket, CryptoSide } from '@/types/crypto'
+import type {
+  CryptoActivity,
+  CryptoMarket,
+  CryptoRecipient,
+  CryptoSide,
+} from '@/types/crypto'
 import {
   SkyAppPage,
   SkyButton,
   SkyCard,
+  SkyCheckbox,
   SkyEmptyState,
   SkyField,
   SkyLink,
@@ -44,7 +54,7 @@ import {
 } from '@/ui'
 
 type Tab = 'portfolio' | 'markets' | 'activity' | 'profile'
-type Sheet = 'trade' | 'deposit' | 'withdraw' | 'profile' | null
+type Sheet = 'trade' | 'deposit' | 'withdraw' | 'profile' | 'send' | null
 type ChartPeriod = '1D' | '1W' | '1M' | '6M' | '1Y'
 
 const CHART_PERIODS: ChartPeriod[] = ['1D', '1W', '1M', '6M', '1Y']
@@ -81,6 +91,8 @@ const selectedMarket = ref<CryptoMarket | null>(null)
 const side = ref<CryptoSide>('buy')
 const handle = ref('')
 const password = ref('')
+const confirmPassword = ref('')
+const acceptedTerms = ref(false)
 const amount = ref('')
 const financialPassword = ref('')
 const showPassword = ref(false)
@@ -93,6 +105,12 @@ const confirmations = ref(true)
 const hideBalances = ref(false)
 const saved = ref(false)
 const period = ref<ChartPeriod>('1D')
+const transferWalletKey = ref('')
+const transferMarketId = ref('')
+const transferQuantity = ref('')
+const transferPassword = ref('')
+const transferRecipient = ref<CryptoRecipient | null>(null)
+const walletKeyCopied = ref(false)
 
 const locale = computed(() => phone.lang || 'de')
 const authenticated = computed(() => crypto.data?.authenticated === true)
@@ -105,8 +123,23 @@ const activities = computed(() =>
       activityFilter.value === 'all' ||
       (activityFilter.value === 'trades'
         ? ['buy', 'sell'].includes(item.type)
-        : ['deposit', 'withdrawal'].includes(item.type)),
+        : ['deposit', 'withdrawal', 'transfer_in', 'transfer_out'].includes(
+            item.type,
+          )),
   ),
+)
+const passwordChecks = computed(() => ({
+  length: password.value.length >= 8,
+  mixed: /[a-z]/.test(password.value) && /[A-Z]/.test(password.value),
+  number: /\d/.test(password.value),
+  special: /[^A-Za-z0-9]/.test(password.value),
+}))
+const passwordStrength = computed(
+  () => Object.values(passwordChecks.value).filter(Boolean).length,
+)
+const transferMarket = computed(() => market(transferMarketId.value))
+const transferHolding = computed(() =>
+  holdings.value.find((item) => item.assetId === transferMarketId.value),
 )
 const investedValue = computed(() =>
   Math.max(
@@ -414,6 +447,15 @@ function openSettlement(next: 'deposit' | 'withdraw') {
   financialPassword.value = ''
   formError.value = ''
 }
+function openSend() {
+  transferWalletKey.value = ''
+  transferMarketId.value = holdings.value[0]?.assetId ?? ''
+  transferQuantity.value = ''
+  transferPassword.value = ''
+  transferRecipient.value = null
+  formError.value = ''
+  sheet.value = 'send'
+}
 function openProfileEditor() {
   profileHandle.value = profile.value?.handle ?? ''
   profileCurrentPassword.value = ''
@@ -427,16 +469,85 @@ function closeSheet() {
   crypto.pendingQuote = null
   profileCurrentPassword.value = ''
   profileNewPassword.value = ''
+  transferRecipient.value = null
+  transferPassword.value = ''
 }
 
 async function submitAuth() {
   formError.value = ''
+  if (
+    authMode.value === 'register' &&
+    (passwordStrength.value < 4 ||
+      password.value !== confirmPassword.value ||
+      !acceptedTerms.value)
+  ) {
+    formError.value = t(
+      passwordStrength.value < 4
+        ? 'errors.invalid_password'
+        : password.value !== confirmPassword.value
+        ? 'errors.password_mismatch'
+        : 'errors.accept_terms',
+    )
+    return
+  }
   const success =
     authMode.value === 'register'
       ? await crypto.register(handle.value.trim(), password.value)
       : await crypto.login(password.value)
   if (!success) formError.value = errorText(crypto.error)
-  else password.value = ''
+  else {
+    password.value = ''
+    confirmPassword.value = ''
+  }
+}
+async function resolveTransferRecipient() {
+  formError.value = ''
+  transferRecipient.value = null
+  const recipient = await crypto.resolveRecipient(transferWalletKey.value)
+  if (!recipient) formError.value = errorText(crypto.error)
+  else {
+    transferWalletKey.value = recipient.walletKey
+    transferRecipient.value = recipient
+  }
+}
+async function submitTransfer() {
+  formError.value = ''
+  if (
+    !transferRecipient.value ||
+    transferRecipient.value.walletKey !== transferWalletKey.value ||
+    !transferMarket.value ||
+    !/^\d+(?:\.\d{1,6})?$/.test(transferQuantity.value)
+  ) {
+    formError.value = t('errors.invalid_transfer')
+    return
+  }
+  const success = await crypto.transfer({
+    marketId: transferMarket.value.id,
+    password: transferPassword.value,
+    quantity: transferQuantity.value,
+    walletKey: transferRecipient.value.walletKey,
+  })
+  if (!success) formError.value = errorText(crypto.error)
+  else closeSheet()
+}
+async function copyWalletKey() {
+  if (!profile.value?.walletKey) return
+  try {
+    await navigator.clipboard.writeText(profile.value.walletKey)
+    walletKeyCopied.value = true
+    globalThis.setTimeout(() => (walletKeyCopied.value = false), 1800)
+  } catch {
+    walletKeyCopied.value = false
+  }
+}
+function activityValue(item: CryptoActivity) {
+  if (item.type === 'transfer_in' || item.type === 'transfer_out') {
+    return `${quantity(item.quantity ?? '0')} ${market(item.marketId)?.symbol ?? ''}`
+  }
+  return privateMoney(item.amount)
+}
+function activityIsDebit(item: CryptoActivity) {
+  return ['buy', 'withdrawal', 'transfer_out'].includes(item.type)
 }
 async function submitSettlement() {
   if (sheet.value !== 'deposit' && sheet.value !== 'withdraw') return
@@ -519,6 +630,20 @@ watch(amount, () => {
     formError.value = ''
   }
 })
+watch(transferWalletKey, () => {
+  if (
+    transferRecipient.value?.walletKey !== transferWalletKey.value.toUpperCase()
+  ) {
+    transferRecipient.value = null
+  }
+})
+watch(
+  () => crypto.data?.registered,
+  (registered) => {
+    if (!authenticated.value) authMode.value = registered ? 'login' : 'register'
+  },
+  { immediate: true },
+)
 watch(markets, (value) => {
   if (detail.value) {
     detail.value =
@@ -598,7 +723,8 @@ onMounted(() => void crypto.load())
       padded
     >
       <div class="auth-hero">
-        <span><ChartCandlestick :size="32" /></span>
+        <span class="auth-hero__mark"><ChartCandlestick :size="30" /></span>
+        <span class="auth-status"><i />{{ t('auth.network') }}</span>
         <p>{{ t('auth.eyebrow') }}</p>
         <h2>
           {{
@@ -606,55 +732,115 @@ onMounted(() => void crypto.load())
           }}
         </h2>
         <small>{{ t('auth.body') }}</small>
+        <div class="auth-benefits">
+          <span><ShieldCheck :size="16" />{{ t('auth.serverSecured') }}</span>
+          <span><KeyRound :size="16" />{{ t('auth.personalKey') }}</span>
+          <span><Fingerprint :size="16" />{{ t('auth.characterBound') }}</span>
+        </div>
       </div>
-      <SkySegmented
-        strong
-        :active-index="authMode === 'login' ? 0 : 1"
-        :item-count="2"
-        ><SkySegmentedButton
-          :active="authMode === 'login'"
-          @click="authMode = 'login'"
-          >{{ t('auth.login') }}</SkySegmentedButton
-        ><SkySegmentedButton
-          :active="authMode === 'register'"
-          @click="authMode = 'register'"
-          >{{ t('auth.register') }}</SkySegmentedButton
-        ></SkySegmented
-      >
-      <form class="form" @submit.prevent="submitAuth">
-        <SkyField
-          v-if="authMode === 'register'"
-          v-model="handle"
-          :label="t('auth.handle')"
-          :placeholder="t('auth.handlePlaceholder')"
-          maxlength="20"
-          outline
-        />
-        <SkyField
-          v-model="password"
-          :label="t('auth.password')"
-          :type="showPassword ? 'text' : 'password'"
-          :placeholder="t('auth.passwordPlaceholder')"
-          maxlength="72"
-          outline
-          ><template #leading><LockKeyhole :size="18" /></template
-          ><template #trailing
-            ><button
-              class="visibility"
-              type="button"
-              @click="showPassword = !showPassword"
-            >
-              <EyeOff v-if="showPassword" :size="18" /><Eye
-                v-else
-                :size="18"
-              /></button></template
-        ></SkyField>
-        <p class="hint"><ShieldCheck :size="15" />{{ t('auth.security') }}</p>
-        <p v-if="formError" class="error">{{ formError }}</p>
-        <SkyButton block type="submit">{{
-          t(authMode === 'login' ? 'auth.loginAction' : 'auth.registerAction')
-        }}</SkyButton>
-      </form>
+      <section class="auth-panel">
+        <SkySegmented
+          class="auth-mode"
+          strong
+          :active-index="authMode === 'login' ? 0 : 1"
+          :item-count="2"
+          ><SkySegmentedButton
+            :active="authMode === 'login'"
+            @click="authMode = 'login'"
+            >{{ t('auth.login') }}</SkySegmentedButton
+          ><SkySegmentedButton
+            :active="authMode === 'register'"
+            @click="authMode = 'register'"
+            >{{ t('auth.register') }}</SkySegmentedButton
+          ></SkySegmented
+        >
+        <div class="auth-panel__heading">
+          <span>{{ authMode === 'login' ? '01' : '02' }}</span>
+          <div>
+            <b>{{ t(`auth.${authMode}PanelTitle`) }}</b>
+            <small>{{ t(`auth.${authMode}PanelBody`) }}</small>
+          </div>
+        </div>
+        <form class="form auth-form" @submit.prevent="submitAuth">
+          <SkyField
+            v-if="authMode === 'register'"
+            v-model="handle"
+            :label="t('auth.handle')"
+            :placeholder="t('auth.handlePlaceholder')"
+            maxlength="20"
+            outline
+            ><template #leading><UserRound :size="18" /></template
+          ></SkyField>
+          <SkyField
+            v-model="password"
+            :label="t('auth.password')"
+            :type="showPassword ? 'text' : 'password'"
+            :placeholder="t('auth.passwordPlaceholder')"
+            maxlength="72"
+            outline
+            ><template #leading><LockKeyhole :size="18" /></template
+            ><template #trailing
+              ><button
+                class="visibility"
+                type="button"
+                @click="showPassword = !showPassword"
+              >
+                <EyeOff v-if="showPassword" :size="18" /><Eye
+                  v-else
+                  :size="18"
+                /></button></template
+          ></SkyField>
+          <template v-if="authMode === 'register'">
+            <SkyField
+              v-model="confirmPassword"
+              :label="t('auth.confirmPassword')"
+              :type="showPassword ? 'text' : 'password'"
+              :placeholder="t('auth.confirmPasswordPlaceholder')"
+              maxlength="72"
+              outline
+              ><template #leading><Fingerprint :size="18" /></template
+            ></SkyField>
+            <div class="password-strength">
+              <div>
+                <i
+                  v-for="index in 4"
+                  :key="index"
+                  :class="{ active: passwordStrength >= index }"
+                />
+              </div>
+              <span>{{ t(`auth.strength${passwordStrength}`) }}</span>
+            </div>
+            <div class="password-rules">
+              <span :class="{ done: passwordChecks.length }"
+                ><CheckCircle2 :size="13" />{{ t('auth.ruleLength') }}</span
+              >
+              <span :class="{ done: passwordChecks.mixed }"
+                ><CheckCircle2 :size="13" />{{ t('auth.ruleMixed') }}</span
+              >
+              <span :class="{ done: passwordChecks.number }"
+                ><CheckCircle2 :size="13" />{{ t('auth.ruleNumber') }}</span
+              >
+              <span :class="{ done: passwordChecks.special }"
+                ><CheckCircle2 :size="13" />{{ t('auth.ruleSpecial') }}</span
+              >
+            </div>
+            <SkyCheckbox v-model="acceptedTerms" class="auth-consent">
+              <span
+                ><b>{{ t('auth.acceptTitle') }}</b
+                ><small>{{ t('auth.acceptBody') }}</small></span
+              >
+            </SkyCheckbox>
+          </template>
+          <p class="hint"><ShieldCheck :size="15" />{{ t('auth.security') }}</p>
+          <p v-if="formError" class="error">{{ formError }}</p>
+          <SkyButton block large class="auth-submit" type="submit">{{
+            t(authMode === 'login' ? 'auth.loginAction' : 'auth.registerAction')
+          }}</SkyButton>
+        </form>
+        <div class="auth-footer">
+          <LockKeyhole :size="13" />{{ t('auth.footer') }}
+        </div>
+      </section>
     </SkyScrollArea>
 
     <SkyScrollArea
@@ -939,9 +1125,9 @@ onMounted(() => void crypto.load())
           ><button @click="openSettlement('withdraw')">
             <span><ArrowUpRight :size="20" /></span>
             <b>{{ t('actions.withdraw') }}</b></button
-          ><button @click="setTab('profile')">
-            <span><Settings2 :size="20" /></span>
-            <b>{{ t('quick.more') }}</b>
+          ><button @click="openSend">
+            <span><Send :size="20" /></span>
+            <b>{{ t('quick.send') }}</b>
           </button>
         </div>
         <SkyCard class="allocation-card">
@@ -1185,6 +1371,8 @@ onMounted(() => void crypto.load())
           <span :class="['activity-icon', `activity-icon--${item.type}`]">
             <ArrowDownLeft v-if="item.type === 'deposit'" :size="18" />
             <ArrowUpRight v-else-if="item.type === 'withdrawal'" :size="18" />
+            <Send v-else-if="item.type === 'transfer_out'" :size="18" />
+            <KeyRound v-else-if="item.type === 'transfer_in'" :size="18" />
             <ChartNoAxesCombined v-else :size="18" /> </span
           ><span
             ><b>{{ t(`activityTypes.${item.type}`) }}</b
@@ -1198,10 +1386,9 @@ onMounted(() => void crypto.load())
               }}</small
             ></span
           ><span
-            ><b
-              :class="['buy', 'withdrawal'].includes(item.type) ? 'down' : 'up'"
-              >{{ ['buy', 'withdrawal'].includes(item.type) ? '−' : '+'
-              }}{{ privateMoney(item.amount) }}</b
+            ><b :class="activityIsDebit(item) ? 'down' : 'up'"
+              >{{ activityIsDebit(item) ? '−' : '+'
+              }}{{ activityValue(item) }}</b
             ><small>{{ t(`statuses.${item.status}`) }}</small></span
           >
           <i class="timeline-dot" />
@@ -1237,6 +1424,18 @@ onMounted(() => void crypto.load())
             <Fingerprint :size="26" />
           </div>
         </section>
+        <SkyCard class="wallet-key-card" :content-wrap="false">
+          <span class="wallet-key-card__icon"><KeyRound :size="20" /></span>
+          <span>
+            <small>{{ t('profile.walletKey') }}</small>
+            <b>{{ profile?.walletKey }}</b>
+            <em>{{ t('profile.walletKeyBody') }}</em>
+          </span>
+          <button :aria-label="t('profile.copyKey')" @click="copyWalletKey">
+            <CheckCircle2 v-if="walletKeyCopied" :size="17" />
+            <Copy v-else :size="17" />
+          </button>
+        </SkyCard>
         <div class="profile-stats profile-stats--premium">
           <div>
             <b>{{ profile?.totalTrades }}</b
@@ -1391,6 +1590,7 @@ onMounted(() => void crypto.load())
               />
               <ArrowDownLeft v-else-if="sheet === 'deposit'" :size="19" />
               <ArrowUpRight v-else-if="sheet === 'withdraw'" :size="19" />
+              <Send v-else-if="sheet === 'send'" :size="19" />
               <UserRound v-else :size="19" />
             </span>
             <span>
@@ -1399,7 +1599,9 @@ onMounted(() => void crypto.load())
                   ? selectedMarket.name
                   : sheet === 'profile'
                     ? t('profile.account')
-                    : t('activity.cash')
+                    : sheet === 'send'
+                      ? t('transfer.subtitle')
+                      : t('activity.cash')
               }}</small>
               <h2>
                 {{
@@ -1407,7 +1609,9 @@ onMounted(() => void crypto.load())
                     ? `${t(`trade.${side}`)} ${selectedMarket?.symbol}`
                     : sheet === 'profile'
                       ? t('profile.editTitle')
-                      : t(`actions.${sheet}`)
+                      : sheet === 'send'
+                        ? t('transfer.title')
+                        : t(`actions.${sheet}`)
                 }}
               </h2>
             </span>
@@ -1526,6 +1730,97 @@ onMounted(() => void crypto.load())
               t(crypto.pendingQuote ? 'trade.confirm' : 'trade.getQuote')
             }}</SkyButton
           > </template
+        ><template v-else-if="sheet === 'send'">
+          <div class="transfer-intro">
+            <span><KeyRound :size="19" /></span>
+            <div>
+              <b>{{ t('transfer.keyTitle') }}</b
+              ><small>{{ t('transfer.keyBody') }}</small>
+            </div>
+          </div>
+          <div class="transfer-key-entry">
+            <SkyField
+              v-model="transferWalletKey"
+              :label="t('transfer.walletKey')"
+              placeholder="VX-0000-0000-0000-0000"
+              maxlength="22"
+              autocomplete="off"
+              outline
+              ><template #leading><KeyRound :size="17" /></template
+            ></SkyField>
+            <SkyButton
+              class="transfer-resolve"
+              @click="resolveTransferRecipient"
+            >
+              {{ t('transfer.verify') }}
+            </SkyButton>
+          </div>
+          <div v-if="transferRecipient" class="transfer-recipient">
+            <span><CheckCircle2 :size="20" /></span>
+            <div>
+              <small>{{ t('transfer.verifiedRecipient') }}</small
+              ><b>@{{ transferRecipient.handle }}</b
+              ><em>{{ transferRecipient.walletKey }}</em>
+            </div>
+          </div>
+          <div class="transfer-assets">
+            <small>{{ t('transfer.asset') }}</small>
+            <div>
+              <button
+                v-for="holding in holdings"
+                :key="holding.assetId"
+                :class="{ active: transferMarketId === holding.assetId }"
+                @click="transferMarketId = holding.assetId"
+              >
+                <CryptoLogo :market="market(holding.assetId)!" />
+                <span
+                  ><b>{{ market(holding.assetId)?.symbol }}</b
+                  ><small>{{ quantity(holding.quantity) }}</small></span
+                >
+              </button>
+            </div>
+          </div>
+          <SkyField
+            v-model="transferQuantity"
+            :label="t('transfer.quantity')"
+            placeholder="0.000000"
+            inputmode="decimal"
+            outline
+            ><template #trailing
+              ><b>{{ transferMarket?.symbol }}</b></template
+            ></SkyField
+          >
+          <div class="transfer-balance">
+            <span>{{ t('transfer.available') }}</span>
+            <b
+              >{{ quantity(transferHolding?.quantity ?? '0') }}
+              {{ transferMarket?.symbol }}</b
+            >
+          </div>
+          <SkyField
+            v-model="transferPassword"
+            :label="t('transfer.password')"
+            type="password"
+            autocomplete="current-password"
+            outline
+            ><template #leading><LockKeyhole :size="17" /></template
+          ></SkyField>
+          <div class="trade-protection">
+            <ShieldCheck :size="17" />
+            <span
+              ><b>{{ t('transfer.protected') }}</b
+              ><small>{{ t('transfer.protectedBody') }}</small></span
+            >
+          </div>
+          <p v-if="formError" class="error">{{ formError }}</p>
+          <SkyButton
+            block
+            large
+            class="transfer-submit"
+            @click="submitTransfer"
+          >
+            <Send :size="17" />{{ t('transfer.confirm') }}
+          </SkyButton> </template
         ><template v-else-if="sheet === 'profile'">
           <p class="sheet-copy">{{ t('profile.editBody') }}</p>
           <form class="profile-edit-sheet" @submit.prevent="saveProfile">
@@ -1619,7 +1914,7 @@ onMounted(() => void crypto.load())
   justify-items: center;
   gap: 7px;
 }
-.auth-hero > span,
+.auth-hero__mark,
 .profile-head > span {
   display: grid;
   place-items: center;
@@ -1646,6 +1941,184 @@ onMounted(() => void crypto.load())
   max-width: 280px;
   color: var(--muted);
   line-height: 1.45;
+}
+.auth {
+  align-content: start;
+  gap: 14px;
+  padding-top: 12px !important;
+  padding-bottom: 28px !important;
+}
+.auth-status {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+  padding: 5px 9px;
+  color: var(--vault-mint);
+  font-size: 10px;
+  font-weight: 800;
+  background: rgba(101, 251, 210, 0.08);
+  border: 1px solid rgba(101, 251, 210, 0.16);
+  border-radius: var(--sky-radius-pill);
+}
+.auth-status i {
+  width: 5px;
+  height: 5px;
+  background: currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 7px currentColor;
+}
+.auth-benefits {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+}
+.auth-benefits span {
+  display: grid;
+  min-height: 57px;
+  place-content: center;
+  justify-items: center;
+  gap: 5px;
+  padding: 7px 4px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 9px;
+  line-height: 1.15;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 13px;
+}
+.auth-benefits svg {
+  color: var(--vault-mint);
+}
+.auth-panel {
+  padding: 9px;
+  text-align: left;
+  background: linear-gradient(145deg, #111923, #080d13);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 25px;
+  box-shadow:
+    0 24px 54px rgba(0, 0, 0, 0.34),
+    inset 0 1px rgba(255, 255, 255, 0.045);
+}
+.auth-mode {
+  min-height: 46px;
+  margin-bottom: 13px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: 15px;
+}
+.auth-mode :deep(.sky-segmented-button) {
+  min-height: 40px;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 12px;
+  font-weight: 800;
+}
+.auth-mode :deep(.sky-segmented-button--active) {
+  color: #fff;
+}
+.auth-panel__heading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 4px 12px;
+}
+.auth-panel__heading > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: #07100e;
+  font-size: 11px;
+  font-weight: 900;
+  background: linear-gradient(145deg, var(--vault-mint), var(--vault-blue));
+  border-radius: 11px;
+}
+.auth-panel__heading > div {
+  display: grid;
+  gap: 2px;
+}
+.auth-panel__heading b {
+  font-size: 13px;
+}
+.auth-panel__heading small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.auth-form {
+  padding: 0 4px 4px;
+}
+.password-strength > div {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.password-strength i {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+.password-strength i.active {
+  background: linear-gradient(90deg, var(--vault-mint), var(--vault-blue));
+}
+.password-strength span {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.password-rules {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+.password-rules span {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 9px;
+}
+.password-rules span.done {
+  color: var(--vault-mint);
+}
+.auth-consent {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 13px;
+}
+.auth-consent span {
+  display: grid;
+  gap: 2px;
+}
+.auth-consent b {
+  font-size: 10px;
+}
+.auth-consent small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+.auth-submit {
+  min-height: 50px;
+  color: #06110e;
+  font-weight: 900;
+  background: linear-gradient(135deg, #7dffe0, #4da3ff);
+  border-radius: 15px;
+}
+.auth-footer {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 4px 2px;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 9px;
 }
 .form {
   display: grid;
@@ -2261,7 +2734,7 @@ onMounted(() => void crypto.load())
 .crypto-app :deep(.sky-pill-navigation .sky-segmented-button--active) {
   color: #fff;
 }
-.auth-hero > span {
+.auth-hero__mark {
   position: relative;
   width: 76px;
   height: 76px;
@@ -2274,7 +2747,7 @@ onMounted(() => void crypto.load())
     0 22px 70px rgba(60, 224, 184, 0.22),
     inset 0 0 24px rgba(255, 255, 255, 0.3);
 }
-.auth-hero > span::after {
+.auth-hero__mark::after {
   position: absolute;
   right: -5px;
   bottom: -5px;
@@ -3176,6 +3649,62 @@ onMounted(() => void crypto.load())
   grid-row: 1 / span 2;
   color: rgba(255, 255, 255, 0.45);
 }
+.wallet-key-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  margin-top: 11px;
+  padding: 13px;
+  background:
+    radial-gradient(
+      circle at 92% 0%,
+      rgba(101, 251, 210, 0.14),
+      transparent 36%
+    ),
+    linear-gradient(145deg, #151e28, #0a1017);
+  border: 1px solid rgba(101, 251, 210, 0.13);
+  border-radius: 19px;
+}
+.wallet-key-card__icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: var(--vault-mint);
+  background: rgba(101, 251, 210, 0.09);
+  border: 1px solid rgba(101, 251, 210, 0.13);
+  border-radius: 14px;
+}
+.wallet-key-card > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.wallet-key-card small,
+.wallet-key-card em {
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
+}
+.wallet-key-card b {
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wallet-key-card button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--vault-mint);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+}
 .profile-stats--premium {
   margin-top: 10px;
 }
@@ -3605,6 +4134,144 @@ onMounted(() => void crypto.load())
 }
 .trade-submit--sell {
   background: linear-gradient(135deg, #d75268, #a9334b);
+}
+.transfer-intro,
+.transfer-recipient,
+.transfer-balance {
+  display: flex;
+  align-items: center;
+}
+.transfer-intro {
+  gap: 11px;
+  padding: 13px;
+  background: linear-gradient(
+    145deg,
+    rgba(101, 251, 210, 0.09),
+    rgba(104, 167, 255, 0.055)
+  );
+  border: 1px solid rgba(101, 251, 210, 0.13);
+  border-radius: 17px;
+}
+.transfer-intro > span,
+.transfer-recipient > span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  color: var(--vault-mint);
+  background: rgba(101, 251, 210, 0.09);
+  border-radius: 12px;
+}
+.transfer-intro > div,
+.transfer-recipient > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.transfer-intro b,
+.transfer-recipient b {
+  font-size: 12px;
+}
+.transfer-intro small,
+.transfer-recipient small,
+.transfer-recipient em {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1.35;
+}
+.transfer-key-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: end;
+}
+.transfer-resolve {
+  width: auto;
+  min-width: 72px;
+  min-height: 48px;
+  padding: 0 11px;
+  border-radius: 14px;
+}
+.transfer-recipient {
+  gap: 10px;
+  padding: 11px;
+  background: rgba(101, 251, 210, 0.055);
+  border: 1px solid rgba(101, 251, 210, 0.15);
+  border-radius: 15px;
+}
+.transfer-recipient em {
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.transfer-assets {
+  display: grid;
+  gap: 7px;
+}
+.transfer-assets > small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.transfer-assets > div {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.transfer-assets button {
+  display: flex;
+  min-width: 105px;
+  gap: 7px;
+  align-items: center;
+  padding: 8px;
+  color: rgba(255, 255, 255, 0.58);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+}
+.transfer-assets button.active {
+  color: #fff;
+  background: rgba(101, 251, 210, 0.09);
+  border-color: rgba(101, 251, 210, 0.27);
+}
+.transfer-assets button :deep(.crypto-logo) {
+  width: 31px;
+  height: 31px;
+}
+.transfer-assets button span {
+  display: grid;
+  gap: 1px;
+}
+.transfer-assets button b {
+  font-size: 11px;
+}
+.transfer-assets button small {
+  font-size: 9px;
+}
+.transfer-balance {
+  justify-content: space-between;
+  margin-top: -7px;
+  padding: 0 3px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.transfer-balance b {
+  color: #fff;
+}
+.transfer-submit {
+  min-height: 52px;
+  gap: 8px;
+  color: #06110e;
+  font-weight: 900;
+  background: linear-gradient(135deg, #70f7d2, #4b9eff);
+  border-radius: 16px;
 }
 .sheet-copy {
   color: var(--muted);

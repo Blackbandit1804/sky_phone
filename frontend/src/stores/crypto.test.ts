@@ -25,6 +25,7 @@ const bootstrap: CryptoBootstrap = {
     totalTrades: 12,
     totalVolume: '18462.80',
     tradeConfirmations: true,
+    walletKey: 'VX-7F3A-92C1-44BE-810D',
   },
 }
 const quote: CryptoQuote = {
@@ -194,5 +195,41 @@ describe('crypto store', () => {
       priceAlerts: false,
       tradeConfirmations: true,
     })
+  })
+
+  it('resolves a public key and sends only crypto with an idempotency key', async () => {
+    mockNuiCall
+      .mockResolvedValueOnce({
+        data: {
+          handle: 'receiver',
+          walletKey: 'VX-DEAD-BEEF-C0DE-2026',
+        },
+        success: true,
+      })
+      .mockResolvedValueOnce({ data: bootstrap, success: true })
+    const crypto = useCryptoStore()
+
+    expect(await crypto.resolveRecipient('VX-DEAD-BEEF-C0DE-2026')).toEqual({
+      handle: 'receiver',
+      walletKey: 'VX-DEAD-BEEF-C0DE-2026',
+    })
+    expect(
+      await crypto.transfer({
+        marketId: 'aurora',
+        password: 'VaultX123!',
+        quantity: '0.5',
+        walletKey: 'VX-DEAD-BEEF-C0DE-2026',
+      }),
+    ).toBe(true)
+    expect(mockNuiCall).toHaveBeenLastCalledWith(
+      'crypto:transfer',
+      expect.objectContaining({
+        marketId: 'aurora',
+        password: 'VaultX123!',
+        quantity: '0.5',
+        walletKey: 'VX-DEAD-BEEF-C0DE-2026',
+        idempotencyKey: expect.stringMatching(/^transfer-/),
+      }),
+    )
   })
 })

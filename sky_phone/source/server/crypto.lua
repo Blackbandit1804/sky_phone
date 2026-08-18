@@ -16,6 +16,7 @@ local function ensure_schema()
             `owner_identifier` VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
             `account_id` BIGINT UNSIGNED NULL,
             `handle` VARCHAR(20) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+            `crypto_key` CHAR(22) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
             `password_hash` VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
             `price_alerts` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
             `trade_confirmations` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
@@ -27,7 +28,8 @@ local function ensure_schema()
             `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
             UNIQUE KEY `uniq_sky_phone_crypto_owner` (`owner_identifier`),
-            UNIQUE KEY `uniq_sky_phone_crypto_handle` (`handle`)
+            UNIQUE KEY `uniq_sky_phone_crypto_handle` (`handle`),
+            UNIQUE KEY `uniq_sky_phone_crypto_key` (`crypto_key`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci]],
         [[CREATE TABLE IF NOT EXISTS `sky_phone_crypto_markets` (
             `id` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -62,12 +64,14 @@ local function ensure_schema()
         [[CREATE TABLE IF NOT EXISTS `sky_phone_crypto_operations` (
             `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
             `profile_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-            `type` ENUM('buy','sell','deposit','withdrawal') NOT NULL,
+            `type` ENUM('buy','sell','deposit','withdrawal','transfer_in','transfer_out') NOT NULL,
             `idempotency_key` VARCHAR(96) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
             `request_hash` CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
             `status` ENUM('prepared','external_pending','external_applied','ledger_applied','completed','failed','compensation_pending','manual_review','cancelled') NOT NULL,
             `amount` DECIMAL(36,0) UNSIGNED NOT NULL DEFAULT 0,
             `market_id` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL,
+            `quantity` DECIMAL(36,0) UNSIGNED NOT NULL DEFAULT 0,
+            `counterparty_key` CHAR(22) CHARACTER SET ascii COLLATE ascii_bin NULL,
             `detail` VARCHAR(255) NOT NULL DEFAULT '',
             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -147,6 +151,12 @@ local function ensure_schema()
     Bridge.Database.Query("ALTER TABLE `sky_phone_crypto_profiles` ADD COLUMN IF NOT EXISTS `price_alerts` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1 AFTER `password_hash`", {})
     Bridge.Database.Query("ALTER TABLE `sky_phone_crypto_profiles` ADD COLUMN IF NOT EXISTS `trade_confirmations` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1 AFTER `price_alerts`", {})
     Bridge.Database.Query("ALTER TABLE `sky_phone_crypto_profiles` ADD COLUMN IF NOT EXISTS `hide_balances` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0 AFTER `trade_confirmations`", {})
+    Bridge.Database.Query("ALTER TABLE `sky_phone_crypto_profiles` ADD COLUMN IF NOT EXISTS `crypto_key` CHAR(22) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER `handle`", {})
+    Bridge.Database.Query([[ALTER TABLE `sky_phone_crypto_operations`
+        MODIFY COLUMN `type` ENUM('buy','sell','deposit','withdrawal','transfer_in','transfer_out') NOT NULL]], {})
+    Bridge.Database.Query("ALTER TABLE `sky_phone_crypto_operations` ADD COLUMN IF NOT EXISTS `quantity` DECIMAL(36,0) UNSIGNED NOT NULL DEFAULT 0 AFTER `market_id`", {})
+    Bridge.Database.Query("ALTER TABLE `sky_phone_crypto_operations` ADD COLUMN IF NOT EXISTS `counterparty_key` CHAR(22) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER `quantity`", {})
+    Bridge.Database.Query("ALTER TABLE `sky_phone_crypto_operations` MODIFY COLUMN `counterparty_key` CHAR(22) CHARACTER SET ascii COLLATE ascii_bin NULL", {})
 end
 
 local function new_id()
@@ -155,6 +165,58 @@ local function new_id()
         error("[sky_phone] Database did not generate a Crypto id.")
     end
     return row.id
+end
+
+local function crypto_key_from_entropy(entropy)
+    local compact = entropy:gsub("-", ""):upper()
+    return ("VX-%s-%s-%s-%s"):format(
+        compact:sub(1, 4),
+        compact:sub(5, 8),
+        compact:sub(9, 12),
+        compact:sub(13, 16)
+    )
+end
+
+local function new_crypto_key()
+    for _ = 1, 5 do
+        local candidate = crypto_key_from_entropy(new_id())
+        local duplicate = Bridge.Database.Query(
+            "SELECT 1 FROM `sky_phone_crypto_profiles` WHERE `crypto_key` = ? LIMIT 1",
+            { candidate }
+        )[1]
+        if not duplicate then
+            return candidate
+        end
+    end
+    error("[sky_phone] Database did not generate a unique Crypto key.")
+end
+
+local function migrate_crypto_keys()
+    local rows = Bridge.Database.Query(
+        "SELECT `id` FROM `sky_phone_crypto_profiles` WHERE `crypto_key` IS NULL OR `crypto_key` = ''",
+        {}
+    )
+    for _, row in ipairs(rows) do
+        Bridge.Database.Query(
+            "UPDATE `sky_phone_crypto_profiles` SET `crypto_key` = ? WHERE `id` = ? AND (`crypto_key` IS NULL OR `crypto_key` = '')",
+            { new_crypto_key(), row.id }
+        )
+    end
+    Bridge.Database.Query(
+        "ALTER TABLE `sky_phone_crypto_profiles` MODIFY COLUMN `crypto_key` CHAR(22) CHARACTER SET ascii COLLATE ascii_bin NOT NULL",
+        {}
+    )
+    local index = Bridge.Database.Query([[
+        SELECT 1 FROM information_schema.statistics
+        WHERE table_schema = DATABASE() AND table_name = 'sky_phone_crypto_profiles'
+            AND index_name = 'uniq_sky_phone_crypto_key' LIMIT 1
+    ]], {})[1]
+    if not index then
+        Bridge.Database.Query(
+            "ALTER TABLE `sky_phone_crypto_profiles` ADD UNIQUE KEY `uniq_sky_phone_crypto_key` (`crypto_key`)",
+            {}
+        )
+    end
 end
 
 local function affected_rows(result)
@@ -186,6 +248,22 @@ local function valid_password(value)
     local length = type(value) == "string" and utf8.len(value) or nil
     return length and length >= Config.Crypto.PasswordMinLength
         and length <= Config.Crypto.PasswordMaxLength
+end
+
+local function valid_new_password(value)
+    return valid_password(value)
+        and value:match("%l")
+        and value:match("%u")
+        and value:match("%d")
+        and value:match("[^%w]")
+end
+
+local function valid_crypto_key(value)
+    if type(value) ~= "string" then
+        return nil
+    end
+    local key = value:upper():match("^%s*(.-)%s*$")
+    return key:match("^VX%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x$") and key or nil
 end
 
 local function parse_whole(value, minimum, maximum)
@@ -290,12 +368,19 @@ end
 
 local function profile_by_owner(identifier)
     return Bridge.Database.Query([[
-        SELECT `id`,`owner_identifier`,`account_id`,`handle`,`status`,`failed_logins`,
+        SELECT `id`,`owner_identifier`,`account_id`,`handle`,`crypto_key`,`status`,`failed_logins`,
             `price_alerts`,`trade_confirmations`,`hide_balances`,
             UNIX_TIMESTAMP(`created_at`) AS `created_at`,
             UNIX_TIMESTAMP(`locked_until`) AS `locked_until`
         FROM `sky_phone_crypto_profiles` WHERE `owner_identifier` = ? LIMIT 1
     ]], { identifier })[1]
+end
+
+local function profile_by_crypto_key(wallet_key)
+    return Bridge.Database.Query([[
+        SELECT `id`,`owner_identifier`,`handle`,`crypto_key`,`status`
+        FROM `sky_phone_crypto_profiles` WHERE `crypto_key` = ? LIMIT 1
+    ]], { wallet_key })[1]
 end
 
 local function authenticated_profile(source)
@@ -433,7 +518,8 @@ end
 
 local function activity(profile_id)
     local rows = Bridge.Database.Query([[
-        SELECT `id`,`type`,`amount`,`market_id`,`status`, UNIX_TIMESTAMP(`created_at`) AS `created_at`
+        SELECT `id`,`type`,`amount`,`market_id`,`quantity`,`counterparty_key`,`status`,
+            UNIX_TIMESTAMP(`created_at`) AS `created_at`
         FROM `sky_phone_crypto_operations` WHERE `profile_id` = ?
         ORDER BY `created_at` DESC, `id` DESC LIMIT 50
     ]], { profile_id })
@@ -443,6 +529,8 @@ local function activity(profile_id)
             id = row.id,
             type = row.type,
             amount = decimal_string(row.amount, Config.Crypto.PriceScale),
+            quantity = decimal_string(row.quantity, Config.Crypto.AssetScale),
+            counterpartyKey = row.counterparty_key,
             marketId = row.market_id,
             status = row.status,
             createdAt = (tonumber(row.created_at) or 0) * 1000,
@@ -496,6 +584,7 @@ local function bootstrap(profile)
         profile = {
             id = profile.id,
             handle = profile.handle,
+            walletKey = profile.crypto_key,
             status = profile.status,
             createdAt = (tonumber(profile.created_at) or 0) * 1000,
             hideBalances = tonumber(profile.hide_balances) == 1,
@@ -509,6 +598,7 @@ local function bootstrap(profile)
         holdings = holdings,
         markets = market_dtos(),
         activity = activity(profile.id),
+        registered = true,
     }
 end
 
@@ -599,7 +689,7 @@ Bridge.Callbacks.Register("sky_phone:crypto:register", function(source, data)
     if not handle then
         return { success = false, error = "invalid_handle" }
     end
-    if not valid_password(data.password) then
+    if not valid_new_password(data.password) then
         return { success = false, error = "invalid_password" }
     end
     if profile_by_owner(identifier) then
@@ -612,7 +702,8 @@ Bridge.Callbacks.Register("sky_phone:crypto:register", function(source, data)
     if duplicate[1] then
         return { success = false, error = "handle_taken" }
     end
-    local entropy = Bridge.Database.Query("SELECT UUID() AS `id`", {})[1]
+    local profile_id = new_id()
+    local wallet_key = new_crypto_key()
     local password_hash = exports[GetCurrentResourceName()]:CryptoHashPassword(data.password)
     if type(password_hash) ~= "string" then
         error("[sky_phone] Crypto password provider did not return a password hash.")
@@ -620,14 +711,14 @@ Bridge.Callbacks.Register("sky_phone:crypto:register", function(source, data)
     local queries = {
         {
             query = [[INSERT INTO `sky_phone_crypto_profiles`
-                (`id`,`owner_identifier`,`account_id`,`handle`,`password_hash`)
-                VALUES (?, ?, ?, ?, ?)]],
-            params = { entropy.id, identifier, account.id, handle, password_hash },
+                (`id`,`owner_identifier`,`account_id`,`handle`,`crypto_key`,`password_hash`)
+                VALUES (?, ?, ?, ?, ?, ?)]],
+            params = { profile_id, identifier, account.id, handle, wallet_key, password_hash },
         },
         {
             query = [[INSERT INTO `sky_phone_crypto_balances`
                 (`account_id`,`asset_id`,`available`) VALUES (?, 'CASH', 0)]],
-            params = { account_id(entropy.id) },
+            params = { account_id(profile_id) },
         },
     }
     if not Bridge.Database.Transaction(queries) then
@@ -701,7 +792,7 @@ Bridge.Callbacks.Register("sky_phone:crypto:update-profile", function(source, da
     local handle_changed = handle:lower() ~= profile.handle:lower()
     local new_password = type(data.newPassword) == "string" and data.newPassword or ""
     local password_changed = new_password ~= ""
-    if password_changed and not valid_password(new_password) then
+    if password_changed and not valid_new_password(new_password) then
         return { success = false, error = "invalid_password" }
     end
     if handle_changed or password_changed then
@@ -758,6 +849,168 @@ Bridge.Callbacks.Register("sky_phone:crypto:update-profile", function(source, da
         (handle_changed and "handle" or "preferences") .. (password_changed and ",password" or "")
     )
     return { success = true, data = bootstrap(profile_by_owner(profile.owner_identifier)) }
+end)
+
+Bridge.Callbacks.Register("sky_phone:crypto:recipient", function(source, data)
+    if not SkyPhone.AllowOperation(source, "crypto:recipient", 20, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local profile, error_response = authenticated_profile(source)
+    if not profile then
+        return error_response
+    end
+    local wallet_key = valid_crypto_key(type(data) == "table" and data.walletKey or nil)
+    if not wallet_key then
+        return { success = false, error = "invalid_wallet_key" }
+    end
+    local recipient = profile_by_crypto_key(wallet_key)
+    if not recipient or recipient.status ~= "active" then
+        return { success = false, error = "recipient_not_found" }
+    end
+    if recipient.id == profile.id then
+        return { success = false, error = "self_transfer" }
+    end
+    return {
+        success = true,
+        data = {
+            handle = recipient.handle,
+            walletKey = recipient.crypto_key,
+        },
+    }
+end)
+
+local function execute_transfer(profile, data)
+    local key = idempotency_key(data.idempotencyKey)
+    local wallet_key = valid_crypto_key(data.walletKey)
+    local quantity = parse_quantity(data.quantity)
+    local market = markets[data.marketId]
+    if not key or not wallet_key or not quantity or not market then
+        return { success = false, error = "invalid_transfer" }
+    end
+    if quantity > Config.Crypto.MaximumTransferQuantity * Config.Crypto.AssetScale then
+        return { success = false, error = "limit_exceeded" }
+    end
+    if not verify_password(profile.id, data.password) then
+        audit(profile.id, profile.owner_identifier, "transfer_reauth_failed", "")
+        return { success = false, error = "invalid_credentials" }
+    end
+    local recipient = profile_by_crypto_key(wallet_key)
+    if not recipient or recipient.status ~= "active" then
+        return { success = false, error = "recipient_not_found" }
+    end
+    if recipient.id == profile.id then
+        return { success = false, error = "self_transfer" }
+    end
+    local existing = Bridge.Database.Query([[
+        SELECT `status` FROM `sky_phone_crypto_operations`
+        WHERE `profile_id` = ? AND `type` = 'transfer_out' AND `idempotency_key` = ? LIMIT 1
+    ]], { profile.id, key })[1]
+    if existing then
+        return existing.status == "completed"
+            and { success = true, data = bootstrap(profile) }
+            or { success = false, error = "duplicate_request" }
+    end
+    local sender_account = account_id(profile.id)
+    local recipient_account = account_id(recipient.id)
+    if balance(sender_account, market.Id) < quantity then
+        return { success = false, error = "insufficient_funds" }
+    end
+    if balance(recipient_account, market.Id) + quantity
+        > Config.Crypto.MaximumPositionQuantity * Config.Crypto.AssetScale
+    then
+        return { success = false, error = "recipient_limit_exceeded" }
+    end
+    local sender_operation = new_id()
+    local recipient_operation = new_id()
+    local request_hash = Bridge.Database.Query(
+        "SELECT SHA2(CONCAT(?, ':', ?, ':', ?, ':', ?), 256) AS `hash`",
+        { profile.id, recipient.id, market.Id, quantity }
+    )[1].hash
+    local queries = {
+        {
+            query = [[INSERT INTO `sky_phone_crypto_operations`
+                (`id`,`profile_id`,`type`,`idempotency_key`,`request_hash`,`status`,`market_id`,`quantity`,`counterparty_key`)
+                VALUES (?, ?, 'transfer_out', ?, ?, 'completed', ?, ?, ?)]],
+            params = {
+                sender_operation,
+                profile.id,
+                key,
+                request_hash,
+                market.Id,
+                quantity,
+                recipient.crypto_key,
+            },
+        },
+        {
+            query = [[INSERT INTO `sky_phone_crypto_operations`
+                (`id`,`profile_id`,`type`,`idempotency_key`,`request_hash`,`status`,`market_id`,`quantity`,`counterparty_key`)
+                VALUES (?, ?, 'transfer_in', ?, ?, 'completed', ?, ?, ?)]],
+            params = {
+                recipient_operation,
+                recipient.id,
+                "incoming-" .. sender_operation,
+                request_hash,
+                market.Id,
+                quantity,
+                profile.crypto_key,
+            },
+        },
+        {
+            query = [[UPDATE `sky_phone_crypto_balances`
+                SET `available` = `available` - ?, `version` = `version` + 1
+                WHERE `account_id` = ? AND `asset_id` = ? AND `available` >= ?]],
+            params = { quantity, sender_account, market.Id, quantity },
+        },
+        {
+            query = [[INSERT INTO `sky_phone_crypto_balances`
+                (`account_id`,`asset_id`,`available`,`version`) VALUES (?, ?, ?, 1)
+                ON DUPLICATE KEY UPDATE `available` = `available` + VALUES(`available`),
+                    `version` = `version` + 1]],
+            params = { recipient_account, market.Id, quantity },
+        },
+        {
+            query = [[INSERT INTO `sky_phone_crypto_ledger_entries`
+                (`operation_id`,`account_id`,`asset_id`,`delta`)
+                VALUES (?, ?, ?, ?), (?, ?, ?, ?)]],
+            params = {
+                sender_operation,
+                sender_account,
+                market.Id,
+                -quantity,
+                sender_operation,
+                recipient_account,
+                market.Id,
+                quantity,
+            },
+        },
+    }
+    if not Bridge.Database.Transaction(queries) then
+        return { success = false, error = "request_failed" }
+    end
+    sessions[source].recently_authenticated_at = os.time()
+    audit(profile.id, profile.owner_identifier, "transfer_sent", sender_operation)
+    audit(recipient.id, recipient.owner_identifier, "transfer_received", sender_operation)
+    for target_source, session in pairs(sessions) do
+        if session.profile_id == recipient.id then
+            TriggerClientEvent("sky_phone:crypto:account-changed", target_source)
+        end
+    end
+    return { success = true, data = bootstrap(profile) }
+end
+
+Bridge.Callbacks.Register("sky_phone:crypto:transfer", function(source, data)
+    if not SkyPhone.AllowOperation(source, "crypto:transfer", 12, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local profile, error_response = authenticated_profile(source)
+    if not profile then
+        return error_response
+    end
+    return with_profile_lock(profile.id, function()
+        return with_exchange_lock(function()
+            return execute_transfer(profile, type(data) == "table" and data or {})
+        end)
+    end)
 end)
 
 Bridge.Callbacks.Register("sky_phone:crypto:quote", function(source, data)
@@ -1096,6 +1349,7 @@ AddEventHandler("playerDropped", function()
 end)
 
 ensure_schema()
+migrate_crypto_keys()
 initialize_markets()
 
 local function reconcile_settlements(include_recent)

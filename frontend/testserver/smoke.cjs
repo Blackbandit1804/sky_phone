@@ -8,6 +8,7 @@ const browserDataRequests = [
   ['account:devices', {}],
   ['banking:overview', {}],
   ['crypto:bootstrap', {}],
+  ['crypto:recipient', { walletKey: 'VX-DEAD-BEEF-C0DE-2026' }],
   ['crypto:quote', { marketId: 'aurora', quantity: '1', side: 'buy' }],
   ['health:overview', {}],
   ['billing:overview', {}],
@@ -117,6 +118,7 @@ function verifyBrowserTestData(dataByEndpoint) {
   const crypto = dataByEndpoint.get('crypto:bootstrap')
   expectItems(crypto.markets, 'crypto markets', 24)
   assert.equal(typeof crypto.profile.priceAlerts, 'boolean')
+  assert.match(crypto.profile.walletKey, /^VX-(?:[A-F0-9]{4}-){3}[A-F0-9]{4}$/)
   assert.equal(typeof crypto.markets[0].issuedSupply, 'string')
   assert(crypto.markets.every((market) => typeof market.logo === 'string'))
   assert(
@@ -212,6 +214,40 @@ function verifyBrowserTestData(dataByEndpoint) {
 }
 
 async function verifyStatefulActions(baseUrl) {
+  const cryptoBeforeTransfer = await expectSuccess(
+    baseUrl,
+    'crypto:bootstrap',
+    {},
+    true,
+  )
+  const auroraBeforeTransfer = cryptoBeforeTransfer.holdings.find(
+    (holding) => holding.assetId === 'aurora',
+  )
+  const cryptoAfterTransfer = await expectSuccess(
+    baseUrl,
+    'crypto:transfer',
+    {
+      idempotencyKey: 'smoke-transfer-1',
+      marketId: 'aurora',
+      password: 'VaultX123!',
+      quantity: '0.5',
+      walletKey: 'VX-DEAD-BEEF-C0DE-2026',
+    },
+    true,
+  )
+  const auroraAfterTransfer = cryptoAfterTransfer.holdings.find(
+    (holding) => holding.assetId === 'aurora',
+  )
+  assert.equal(
+    Number(auroraAfterTransfer.quantity),
+    Number(auroraBeforeTransfer.quantity) - 0.5,
+  )
+  assert.equal(cryptoAfterTransfer.activity[0].type, 'transfer_out')
+  assert.equal(
+    cryptoAfterTransfer.activity[0].counterpartyKey,
+    'VX-DEAD-BEEF-C0DE-2026',
+  )
+
   const companyCall = await expectSuccess(
     baseUrl,
     'companies:dial-service-line',

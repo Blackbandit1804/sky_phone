@@ -681,6 +681,7 @@ Config.Crypto = {
     MaximumSettlement = 250000,
     MaximumTradeNotional = 100000,
     MaximumPositionQuantity = 100000,
+    MaximumTransferQuantity = 100000,
     DailyDepositLimit = 500000,
     DailyWithdrawalLimit = 250000,
     DailyTradeLimit = 500000,

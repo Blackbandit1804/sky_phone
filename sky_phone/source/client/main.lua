@@ -251,6 +251,8 @@ local server_callbacks = {
     "crypto:deposit",
     "crypto:withdraw",
     "crypto:update-profile",
+    "crypto:recipient",
+    "crypto:transfer",
     "billing:overview",
     "billing:list",
     "billing:detail",
@@ -933,6 +935,10 @@ RegisterNetEvent("sky_phone:crypto:changed", function(data)
         return
     end
     SendNUIMessage({ type = "crypto:changed", data = data })
+end)
+
+RegisterNetEvent("sky_phone:crypto:account-changed", function()
+    SendNUIMessage({ type = "crypto:account-changed" })
 end)
 
 RegisterNetEvent("sky_phone:billing:changed", function()

@@ -506,6 +506,11 @@ let cryptoProfile = {
   totalTrades: 12,
   totalVolume: '18462.80',
   tradeConfirmations: true,
+  walletKey: 'VX-7F3A-92C1-44BE-810D',
+}
+const cryptoRecipient = {
+  handle: 'receiver',
+  walletKey: 'VX-DEAD-BEEF-C0DE-2026',
 }
 let cryptoHoldings = [
   {
@@ -6818,6 +6823,7 @@ app.post('/api/:endpoint', (request, response) => {
         ),
     ),
     profile: cryptoAuthenticated ? cryptoProfile : null,
+    registered: true,
   })
   const billingInvoice = (invoice) => ({
     ...invoice,
@@ -8325,6 +8331,7 @@ app.post('/api/:endpoint', (request, response) => {
       totalTrades: 0,
       totalVolume: '0',
       tradeConfirmations: true,
+      walletKey: 'VX-31AF-4D92-882E-C104',
     }
     response.json({ success: true, data: cryptoOverview() })
     return
@@ -8363,6 +8370,69 @@ app.post('/api/:endpoint', (request, response) => {
       priceAlerts: request.body.priceAlerts,
       tradeConfirmations: request.body.tradeConfirmations,
     }
+    response.json({ success: true, data: cryptoOverview() })
+    return
+  }
+  if (endpoint === 'crypto:recipient') {
+    const walletKey = String(request.body.walletKey ?? '')
+      .trim()
+      .toUpperCase()
+    if (!/^VX-(?:[A-F0-9]{4}-){3}[A-F0-9]{4}$/.test(walletKey)) {
+      response.json({ success: false, error: 'invalid_wallet_key' })
+      return
+    }
+    if (walletKey === cryptoProfile.walletKey) {
+      response.json({ success: false, error: 'self_transfer' })
+      return
+    }
+    if (walletKey !== cryptoRecipient.walletKey) {
+      response.json({ success: false, error: 'recipient_not_found' })
+      return
+    }
+    response.json({ success: true, data: cryptoRecipient })
+    return
+  }
+  if (endpoint === 'crypto:transfer') {
+    const walletKey = String(request.body.walletKey ?? '')
+      .trim()
+      .toUpperCase()
+    const market = cryptoMarkets.find(
+      (item) => item.id === request.body.marketId,
+    )
+    const holding = cryptoHoldings.find(
+      (item) => item.assetId === request.body.marketId,
+    )
+    const quantity = Number(request.body.quantity)
+    if (request.body.password !== cryptoPassword) {
+      response.json({ success: false, error: 'invalid_credentials' })
+      return
+    }
+    if (
+      walletKey !== cryptoRecipient.walletKey ||
+      !market ||
+      !holding ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
+      response.json({ success: false, error: 'invalid_transfer' })
+      return
+    }
+    if (Number(holding.quantity) < quantity) {
+      response.json({ success: false, error: 'insufficient_funds' })
+      return
+    }
+    holding.quantity = (Number(holding.quantity) - quantity).toFixed(6)
+    holding.value = (Number(holding.quantity) * Number(market.price)).toFixed(2)
+    cryptoActivity.unshift({
+      amount: '0',
+      counterpartyKey: walletKey,
+      createdAt: Date.now(),
+      id: `crypto-${nextCryptoActivityId++}`,
+      marketId: market.id,
+      quantity: quantity.toFixed(6),
+      status: 'completed',
+      type: 'transfer_out',
+    })
     response.json({ success: true, data: cryptoOverview() })
     return
   }

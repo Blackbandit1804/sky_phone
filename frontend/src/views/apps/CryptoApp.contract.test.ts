@@ -82,6 +82,34 @@ describe('VaultX crypto app contracts', () => {
     expect(server).toContain('CryptoHashPassword(new_password)')
   })
 
+  it('provides detailed registration and server-authoritative crypto-key transfers', () => {
+    const transferServer = server.slice(
+      server.indexOf('local function execute_transfer'),
+      server.indexOf('Bridge.Callbacks.Register("sky_phone:crypto:quote"'),
+    )
+
+    expect(source).toContain('class="password-strength"')
+    expect(source).toContain('v-model="confirmPassword"')
+    expect(source).toContain('<SkyCheckbox')
+    expect(source).toContain("sheet.value = 'send'")
+    expect(source).toContain('v-model="transferWalletKey"')
+    expect(source).toContain('profile?.walletKey')
+    expect(server).toContain('`crypto_key` CHAR(22)')
+    expect(server).toContain(
+      'Bridge.Callbacks.Register("sky_phone:crypto:recipient"',
+    )
+    expect(server).toContain(
+      'Bridge.Callbacks.Register("sky_phone:crypto:transfer"',
+    )
+    expect(server).toContain("'transfer_out'")
+    expect(server).toContain("'transfer_in'")
+    expect(server).toContain('Bridge.Database.Transaction(queries)')
+    expect(server).toContain('verify_password(profile.id, data.password)')
+    expect(transferServer).not.toContain('"CASH"')
+    expect(transferServer).not.toContain('Bridge.Framework.AddMoney')
+    expect(transferServer).not.toContain('Bridge.Framework.RemoveMoney')
+  })
+
   it('uses the premium dashboard hierarchy without manual refresh controls', () => {
     expect(source).toContain('class="portfolio-shell"')
     expect(source).toContain('class="featured-market"')

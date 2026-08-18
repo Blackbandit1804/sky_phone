@@ -1031,6 +1031,8 @@ function onMessage(event: MessageEvent<AppMessage>): void {
   } else if (event.data?.type === 'crypto:changed' && event.data.data) {
     const data = event.data.data as CryptoMarketChangedData
     crypto.applyMarketUpdate(data.markets)
+  } else if (event.data?.type === 'crypto:account-changed') {
+    if (crypto.data?.authenticated) void crypto.load()
   } else if (event.data?.type === 'billing:changed') {
     void billing.loadOverview()
   } else if (event.data?.type === 'billing:new' && event.data.data) {
