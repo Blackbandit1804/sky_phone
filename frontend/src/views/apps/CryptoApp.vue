@@ -752,20 +752,16 @@ onMounted(() => void crypto.load())
         <div class="quick">
           <button @click="setTab('markets')">
             <span><ChartNoAxesCombined :size="20" /></span>
-            <b>{{ t('quick.trade') }}</b>
-            <small>{{ t('markets.live') }}</small></button
+            <b>{{ t('quick.trade') }}</b></button
           ><button @click="openSettlement('deposit')">
             <span><ArrowDownLeft :size="20" /></span>
-            <b>{{ t('actions.deposit') }}</b>
-            <small>{{ t('activity.cash') }}</small></button
+            <b>{{ t('actions.deposit') }}</b></button
           ><button @click="openSettlement('withdraw')">
             <span><ArrowUpRight :size="20" /></span>
-            <b>{{ t('actions.withdraw') }}</b>
-            <small>{{ t('activity.cash') }}</small></button
+            <b>{{ t('actions.withdraw') }}</b></button
           ><button @click="setTab('profile')">
             <span><Settings2 :size="20" /></span>
             <b>{{ t('quick.more') }}</b>
-            <small>{{ t('profile.preferences') }}</small>
           </button>
         </div>
         <SkyCard class="allocation-card">
@@ -2320,9 +2316,10 @@ onMounted(() => void crypto.load())
   margin: 0 0 14px;
 }
 .quick button {
-  align-content: start;
-  min-height: 94px;
-  padding: 10px 5px 8px;
+  align-content: center;
+  min-height: 84px;
+  gap: 8px;
+  padding: 11px 5px;
   background: linear-gradient(
     160deg,
     rgba(30, 39, 51, 0.94),
@@ -2331,6 +2328,11 @@ onMounted(() => void crypto.load())
   border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: 19px;
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.045);
+  transition:
+    transform 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 .quick button span {
   width: 38px;
@@ -2339,17 +2341,43 @@ onMounted(() => void crypto.load())
   border-radius: 14px;
   color: var(--vault-mint);
   background: rgba(101, 251, 210, 0.08);
+  transition:
+    transform 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 .quick button b {
-  font-size: 11px;
+  font-size: 12px;
 }
-.quick button small {
-  max-width: 62px;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.quick button:focus-visible {
+  border-color: rgba(101, 251, 210, 0.5);
+  outline: 2px solid rgba(101, 251, 210, 0.78);
+  outline-offset: 2px;
+}
+.quick button:active {
+  transform: translateY(-1px) scale(0.98);
+}
+@media (hover: hover) and (pointer: fine) {
+  .quick button:hover {
+    background: linear-gradient(
+      160deg,
+      rgba(37, 52, 64, 0.98),
+      rgba(15, 23, 31, 0.98)
+    );
+    border-color: rgba(101, 251, 210, 0.28);
+    box-shadow:
+      0 14px 26px rgba(0, 0, 0, 0.3),
+      0 0 20px rgba(101, 251, 210, 0.06),
+      inset 0 1px rgba(255, 255, 255, 0.08);
+    transform: translateY(-3px);
+  }
+  .quick button:hover span {
+    background: rgba(101, 251, 210, 0.15);
+    border-color: rgba(101, 251, 210, 0.36);
+    box-shadow: 0 8px 18px rgba(101, 251, 210, 0.14);
+    transform: scale(1.05);
+  }
 }
 .allocation-card {
   margin-bottom: 21px;

@@ -85,6 +85,18 @@ describe('VaultX crypto app contracts', () => {
     expect(source).not.toContain(':aria-label="t(\'refresh\')"')
   })
 
+  it('keeps portfolio quick actions concise and interactive', () => {
+    const quickActions = source.slice(
+      source.indexOf('<div class="quick">'),
+      source.indexOf('<SkyCard class="allocation-card">'),
+    )
+
+    expect(quickActions).not.toContain('<small>')
+    expect(source).toContain('@media (hover: hover) and (pointer: fine)')
+    expect(source).toContain('.quick button:hover')
+    expect(source).toContain('.quick button:focus-visible')
+  })
+
   it('anchors portfolio performance history and forecast at the current position', () => {
     expect(source).toContain('const portfolioProfitLoss = computed')
     expect(source).toContain('class="portfolio-history"')
