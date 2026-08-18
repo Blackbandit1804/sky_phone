@@ -250,6 +250,7 @@ local server_callbacks = {
     "crypto:execute",
     "crypto:deposit",
     "crypto:withdraw",
+    "crypto:update-profile",
     "billing:overview",
     "billing:list",
     "billing:detail",

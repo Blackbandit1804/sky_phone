@@ -95,5 +95,20 @@ export const useCryptoStore = defineStore('crypto', {
       this.pendingQuote = null
       return true
     },
+    async updateProfile(payload: {
+      handle: string
+      hideBalances: boolean
+      password: string
+      priceAlerts: boolean
+      tradeConfirmations: boolean
+    }): Promise<boolean> {
+      const response = await this.call<CryptoBootstrap>(
+        'update-profile',
+        payload,
+      )
+      if (!response.success || !response.data) return false
+      this.data = response.data
+      return true
+    },
   },
 })

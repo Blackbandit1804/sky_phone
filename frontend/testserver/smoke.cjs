@@ -114,6 +114,10 @@ function verifyBrowserTestData(dataByEndpoint) {
   )
 
   expectItems(dataByEndpoint.get('health:overview').days, 'health history', 7)
+  const crypto = dataByEndpoint.get('crypto:bootstrap')
+  expectItems(crypto.markets, 'crypto markets', 3)
+  assert.equal(typeof crypto.profile.priceAlerts, 'boolean')
+  assert.equal(typeof crypto.markets[0].issuedSupply, 'string')
   expectItems(
     dataByEndpoint.get('billing:list').invoices,
     'billing invoices',

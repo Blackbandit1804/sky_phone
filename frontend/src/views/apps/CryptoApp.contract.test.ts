@@ -36,6 +36,15 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain('<WalletCards')
     expect(source).toContain('<ChartNoAxesCombined')
     expect(source).toContain('<History')
+    expect(source).toContain('<UserRound')
+  })
+
+  it('includes advanced market detail and persistent profile controls', () => {
+    expect(source).toContain('detail.sparkline')
+    expect(source).toContain("t('marketDetail.statistics')")
+    expect(source).toContain('<SkyToggle')
+    expect(server).toContain('sky_phone:crypto:update-profile')
+    expect(server).toContain('`price_alerts`')
   })
 
   it('keeps all consequential calculations and state transitions on the server', () => {
@@ -71,7 +80,7 @@ describe('VaultX crypto app contracts', () => {
     expect(passwordProvider).toContain('scryptSync')
     expect(passwordProvider).toContain('timingSafeEqual')
     expect(passwordProvider).toContain('randomBytes(16)')
-    expect(server).not.toContain('data.price')
-    expect(server).not.toContain('data.fee')
+    expect(server).not.toMatch(/data\.price\b/)
+    expect(server).not.toMatch(/data\.fee\b/)
   })
 })

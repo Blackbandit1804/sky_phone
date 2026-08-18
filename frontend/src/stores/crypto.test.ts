@@ -15,7 +15,17 @@ const bootstrap: CryptoBootstrap = {
   holdings: [],
   markets: [],
   portfolioValue: '25000',
-  profile: { handle: 'skyline', id: 'profile-1', status: 'active' },
+  profile: {
+    createdAt: Date.now() - 86_400_000,
+    handle: 'skyline',
+    hideBalances: false,
+    id: 'profile-1',
+    priceAlerts: true,
+    status: 'active',
+    totalTrades: 12,
+    totalVolume: '18462.80',
+    tradeConfirmations: true,
+  },
 }
 const quote: CryptoQuote = {
   expiresAt: Date.now() + 8000,
@@ -83,5 +93,27 @@ describe('crypto store', () => {
 
     expect(crypto.data).toEqual(bootstrap)
     expect(crypto.error).toBe('quote_expired')
+  })
+
+  it('updates profile preferences through the authenticated server endpoint', async () => {
+    mockNuiCall.mockResolvedValueOnce({ data: bootstrap, success: true })
+    const crypto = useCryptoStore()
+
+    expect(
+      await crypto.updateProfile({
+        handle: 'skyline',
+        hideBalances: true,
+        password: '',
+        priceAlerts: false,
+        tradeConfirmations: true,
+      }),
+    ).toBe(true)
+    expect(mockNuiCall).toHaveBeenCalledWith('crypto:update-profile', {
+      handle: 'skyline',
+      hideBalances: true,
+      password: '',
+      priceAlerts: false,
+      tradeConfirmations: true,
+    })
   })
 })

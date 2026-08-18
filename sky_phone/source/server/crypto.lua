@@ -14,6 +14,9 @@ local function ensure_schema()
             `account_id` BIGINT UNSIGNED NULL,
             `handle` VARCHAR(20) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
             `password_hash` VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+            `price_alerts` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
+            `trade_confirmations` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
+            `hide_balances` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0,
             `status` ENUM('active','frozen','closed') NOT NULL DEFAULT 'active',
             `failed_logins` TINYINT UNSIGNED NOT NULL DEFAULT 0,
             `locked_until` DATETIME NULL,
@@ -138,6 +141,9 @@ local function ensure_schema()
     for _, statement in ipairs(statements) do
         Bridge.Database.Query(statement, {})
     end
+    Bridge.Database.Query("ALTER TABLE `sky_phone_crypto_profiles` ADD COLUMN IF NOT EXISTS `price_alerts` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1 AFTER `password_hash`", {})
+    Bridge.Database.Query("ALTER TABLE `sky_phone_crypto_profiles` ADD COLUMN IF NOT EXISTS `trade_confirmations` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1 AFTER `price_alerts`", {})
+    Bridge.Database.Query("ALTER TABLE `sky_phone_crypto_profiles` ADD COLUMN IF NOT EXISTS `hide_balances` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0 AFTER `trade_confirmations`", {})
 end
 
 local function new_id()
@@ -282,6 +288,8 @@ end
 local function profile_by_owner(identifier)
     return Bridge.Database.Query([[
         SELECT `id`,`owner_identifier`,`account_id`,`handle`,`status`,`failed_logins`,
+            `price_alerts`,`trade_confirmations`,`hide_balances`,
+            UNIX_TIMESTAMP(`created_at`) AS `created_at`,
             UNIX_TIMESTAMP(`locked_until`) AS `locked_until`
         FROM `sky_phone_crypto_profiles` WHERE `owner_identifier` = ? LIMIT 1
     ]], { identifier })[1]
@@ -385,6 +393,10 @@ local function market_dtos()
             price = decimal_string(price, Config.Crypto.PriceScale),
             changePercent = first > 0 and ((price - first) / first) * 100 or 0,
             enabled = row.status == "active",
+            high24h = decimal_string(math.max(table.unpack(prices)), Config.Crypto.PriceScale),
+            low24h = decimal_string(math.min(table.unpack(prices)), Config.Crypto.PriceScale),
+            issuedSupply = decimal_string(config.IssuedSupply * Config.Crypto.AssetScale, Config.Crypto.AssetScale),
+            treasuryAvailable = decimal_string(balance("treasury", market_id), Config.Crypto.AssetScale),
             sparkline = sparkline,
         }
     end
@@ -446,9 +458,24 @@ local function bootstrap(profile)
             portfolio = portfolio + value
         end
     end
+    local metrics = Bridge.Database.Query([[
+        SELECT COUNT(*) AS `total_trades`, COALESCE(SUM(`amount`), 0) AS `total_volume`
+        FROM `sky_phone_crypto_operations`
+        WHERE `profile_id` = ? AND `type` IN ('buy','sell') AND `status` = 'completed'
+    ]], { profile.id })[1]
     return {
         authenticated = true,
-        profile = { id = profile.id, handle = profile.handle, status = profile.status },
+        profile = {
+            id = profile.id,
+            handle = profile.handle,
+            status = profile.status,
+            createdAt = (tonumber(profile.created_at) or 0) * 1000,
+            hideBalances = tonumber(profile.hide_balances) == 1,
+            priceAlerts = tonumber(profile.price_alerts) == 1,
+            tradeConfirmations = tonumber(profile.trade_confirmations) == 1,
+            totalTrades = tonumber(metrics and metrics.total_trades) or 0,
+            totalVolume = decimal_string(metrics and metrics.total_volume, Config.Crypto.PriceScale),
+        },
         cashBalance = decimal_string(cash, Config.Crypto.PriceScale),
         portfolioValue = decimal_string(portfolio, Config.Crypto.PriceScale),
         holdings = holdings,
@@ -626,6 +653,49 @@ Bridge.Callbacks.Register("sky_phone:crypto:logout", function(source)
     end
     sessions[source] = nil
     return { success = true }
+end)
+
+Bridge.Callbacks.Register("sky_phone:crypto:update-profile", function(source, data)
+    if not SkyPhone.AllowOperation(source, "crypto:update-profile", 8, 60) then
+        return { success = false, error = "rate_limited" }
+    end
+    local profile, error_response = authenticated_profile(source)
+    if not profile then
+        return error_response
+    end
+    data = type(data) == "table" and data or {}
+    local handle = valid_handle(data.handle)
+    if not handle or type(data.priceAlerts) ~= "boolean"
+        or type(data.tradeConfirmations) ~= "boolean" or type(data.hideBalances) ~= "boolean"
+    then
+        return { success = false, error = "invalid_profile" }
+    end
+    if handle:lower() ~= profile.handle:lower() then
+        if not verify_password(profile.id, data.password) then
+            audit(profile.id, profile.owner_identifier, "profile_update_reauth_failed", "")
+            return { success = false, error = "invalid_credentials" }
+        end
+        local duplicate = Bridge.Database.Query(
+            "SELECT 1 FROM `sky_phone_crypto_profiles` WHERE `handle` = ? AND `id` <> ? LIMIT 1",
+            { handle, profile.id }
+        )
+        if duplicate[1] then
+            return { success = false, error = "handle_taken" }
+        end
+    end
+    Bridge.Database.Query([[
+        UPDATE `sky_phone_crypto_profiles`
+        SET `handle` = ?, `price_alerts` = ?, `trade_confirmations` = ?, `hide_balances` = ?
+        WHERE `id` = ?
+    ]], {
+        handle,
+        data.priceAlerts and 1 or 0,
+        data.tradeConfirmations and 1 or 0,
+        data.hideBalances and 1 or 0,
+        profile.id,
+    })
+    audit(profile.id, profile.owner_identifier, "profile_updated", handle)
+    return { success = true, data = bootstrap(profile_by_owner(profile.owner_identifier)) }
 end)
 
 Bridge.Callbacks.Register("sky_phone:crypto:quote", function(source, data)

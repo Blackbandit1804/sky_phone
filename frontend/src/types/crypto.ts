@@ -4,11 +4,15 @@ export type CryptoMarket = {
   changePercent: number
   color: string
   enabled: boolean
+  high24h: string
   id: string
+  issuedSupply: string
+  low24h: string
   name: string
   price: string
   sparkline: number[]
   symbol: string
+  treasuryAvailable: string
 }
 
 export type CryptoHolding = {
@@ -28,9 +32,15 @@ export type CryptoActivity = {
 }
 
 export type CryptoProfile = {
+  createdAt: number
   handle: string
+  hideBalances: boolean
   id: string
+  priceAlerts: boolean
   status: 'active' | 'frozen' | 'closed'
+  totalTrades: number
+  totalVolume: string
+  tradeConfirmations: boolean
 }
 
 export type CryptoBootstrap = {

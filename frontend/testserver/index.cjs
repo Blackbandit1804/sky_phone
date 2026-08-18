@@ -211,6 +211,10 @@ const cryptoMarkets = [
     price: '128.50',
     changePercent: 4.82,
     enabled: true,
+    high24h: '132.80',
+    low24h: '119.40',
+    issuedSupply: '1000000',
+    treasuryAvailable: '849882.5',
     sparkline: [0.12, 0.24, 0.2, 0.38, 0.51, 0.46, 0.68, 0.62, 0.81, 0.92],
   },
   {
@@ -221,6 +225,10 @@ const cryptoMarkets = [
     price: '42.75',
     changePercent: -1.37,
     enabled: true,
+    high24h: '46.30',
+    low24h: '40.90',
+    issuedSupply: '2500000',
+    treasuryAvailable: '2099914.75',
     sparkline: [0.84, 0.72, 0.76, 0.61, 0.69, 0.52, 0.46, 0.41, 0.35, 0.39],
   },
   {
@@ -231,9 +239,24 @@ const cryptoMarkets = [
     price: '9.80',
     changePercent: 7.21,
     enabled: true,
+    high24h: '10.24',
+    low24h: '8.76',
+    issuedSupply: '8000000',
+    treasuryAvailable: '6800000',
     sparkline: [0.08, 0.11, 0.18, 0.26, 0.23, 0.4, 0.55, 0.64, 0.79, 0.93],
   },
 ]
+let cryptoProfile = {
+  createdAt: Date.now() - 42 * 86400000,
+  handle: 'skyline',
+  hideBalances: false,
+  id: 'crypto-profile-demo',
+  priceAlerts: true,
+  status: 'active',
+  totalTrades: 12,
+  totalVolume: '18462.80',
+  tradeConfirmations: true,
+}
 let cryptoHoldings = [
   {
     assetId: 'aurora',
@@ -6544,9 +6567,7 @@ app.post('/api/:endpoint', (request, response) => {
           0,
         ),
     ),
-    profile: cryptoAuthenticated
-      ? { handle: 'skyline', id: 'crypto-profile-demo', status: 'active' }
-      : null,
+    profile: cryptoAuthenticated ? cryptoProfile : null,
   })
   const billingInvoice = (invoice) => ({
     ...invoice,
@@ -8044,19 +8065,55 @@ app.post('/api/:endpoint', (request, response) => {
       return
     }
     cryptoAuthenticated = true
-    response.json({
-      success: true,
-      data: {
-        ...cryptoOverview(),
-        profile: { handle, id: 'crypto-profile-new', status: 'active' },
-      },
-    })
+    cryptoProfile = {
+      createdAt: Date.now(),
+      handle,
+      hideBalances: false,
+      id: 'crypto-profile-new',
+      priceAlerts: true,
+      status: 'active',
+      totalTrades: 0,
+      totalVolume: '0',
+      tradeConfirmations: true,
+    }
+    response.json({ success: true, data: cryptoOverview() })
     return
   }
   if (endpoint === 'crypto:logout') {
     cryptoAuthenticated = false
     cryptoQuote = null
     response.json({ success: true })
+    return
+  }
+  if (endpoint === 'crypto:update-profile') {
+    const handle = String(request.body.handle ?? '').trim()
+    if (!/^[A-Za-z0-9][A-Za-z0-9._]{1,18}[A-Za-z0-9]$/.test(handle)) {
+      response.json({ success: false, error: 'invalid_profile' })
+      return
+    }
+    if (
+      handle.toLowerCase() !== cryptoProfile.handle.toLowerCase() &&
+      request.body.password !== cryptoPassword
+    ) {
+      response.json({ success: false, error: 'invalid_credentials' })
+      return
+    }
+    if (
+      typeof request.body.priceAlerts !== 'boolean' ||
+      typeof request.body.tradeConfirmations !== 'boolean' ||
+      typeof request.body.hideBalances !== 'boolean'
+    ) {
+      response.json({ success: false, error: 'invalid_profile' })
+      return
+    }
+    cryptoProfile = {
+      ...cryptoProfile,
+      handle,
+      hideBalances: request.body.hideBalances,
+      priceAlerts: request.body.priceAlerts,
+      tradeConfirmations: request.body.tradeConfirmations,
+    }
+    response.json({ success: true, data: cryptoOverview() })
     return
   }
   if (endpoint === 'crypto:deposit' || endpoint === 'crypto:withdraw') {
