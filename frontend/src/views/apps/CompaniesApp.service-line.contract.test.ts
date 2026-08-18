@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 const source = readFileSync(
   new URL('./CompaniesApp.vue', import.meta.url),
   'utf8',
-)
+).replace(/\r\n/g, '\n')
 const apostrophe = String.fromCharCode(39)
 const quote = String.fromCharCode(34)
 

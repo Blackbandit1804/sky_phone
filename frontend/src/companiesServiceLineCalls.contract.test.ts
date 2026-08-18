@@ -5,19 +5,19 @@ import { describe, expect, it } from 'vitest'
 const client = readFileSync(
   new URL('../../sky_phone/source/client/main.lua', import.meta.url),
   'utf8',
-)
+).replace(/\r\n/g, '\n')
 const companiesServer = readFileSync(
   new URL('../../sky_phone/source/server/companies.lua', import.meta.url),
   'utf8',
-)
+).replace(/\r\n/g, '\n')
 const callsServer = readFileSync(
   new URL('../../sky_phone/source/server/calls.lua', import.meta.url),
   'utf8',
-)
+).replace(/\r\n/g, '\n')
 const companiesStore = readFileSync(
   new URL('./stores/companies.ts', import.meta.url),
   'utf8',
-)
+).replace(/\r\n/g, '\n')
 const apostrophe = String.fromCharCode(39)
 const quote = String.fromCharCode(34)
 

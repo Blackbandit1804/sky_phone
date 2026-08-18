@@ -10,10 +10,10 @@ const menuSource = source.slice(
   source.indexOf('<SkyActionSheet'),
   source.indexOf('</SkyActionSheet>') + '</SkyActionSheet>'.length,
 )
-const listSource = source.slice(
-  source.indexOf('<sky-app-page\n    v-if="!editorOpened"'),
-  source.indexOf('<sky-app-page v-else'),
+const listStart = source.search(
+  /<sky-app-page\r?\n\s+v-if="!editorOpened"/,
 )
+const listSource = source.slice(listStart, source.indexOf('<sky-app-page v-else'))
 
 describe('NotesApp list controls', () => {
   it('places the Sky searchbar and create action together at the bottom', () => {

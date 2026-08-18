@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 const source = readFileSync(
   new URL('./CompaniesApp.vue', import.meta.url),
   'utf8',
-)
+).replace(/\r\n/g, '\n')
 const scriptSource = source.slice(0, source.indexOf('</script>'))
 const requestBranchStart = source.indexOf(
   '<template v-else-if="screen === \'request\'">',
