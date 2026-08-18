@@ -138,7 +138,10 @@ describe('FlipTokApp Sky UI contract', () => {
       'video.is_following || followPendingIds.has(video.id)',
     )
     expect(source).toMatch(
-      /\.video-actions \.follow-dot\s*\{[^}]*min-width: 20px !important;[^}]*min-height: 20px !important;[^}]*place-items: center;/s,
+      /\.video-actions \.follow-dot\s*\{[^}]*bottom:\s*-2px;[^}]*min-width: 20px !important;[^}]*min-height: 20px !important;[^}]*place-items: center;/s,
+    )
+    expect(source).toMatch(
+      /\.video-profile-action\s*\{[^}]*width:\s*44px;[^}]*min-height:\s*48px;[^}]*justify-items:\s*center;/s,
     )
   })
 
@@ -162,13 +165,16 @@ describe('FlipTokApp Sky UI contract', () => {
     expect(source).toContain('@click="followConnection(profile)"')
   })
 
-  it('labels authentication modes and centers connection avatar fallbacks', () => {
+  it('hides authentication header names and centers avatar fallbacks', () => {
     expect(source).toContain(
+      ":aria-label=\"t(authMode === 'login' ? 'login' : 'register')\"",
+    )
+    expect(source).not.toContain(
       ":title=\"t(authMode === 'login' ? 'login' : 'register')\"",
     )
     expect(source).toContain('class="connection-avatar__fallback"')
     expect(source).toMatch(
-      /\.connections-list \.connection-avatar__fallback\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s,
+      /\.connections-list \.connection-avatar__fallback\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*display:\s*grid;[^}]*place-items:\s*center;/s,
     )
   })
 

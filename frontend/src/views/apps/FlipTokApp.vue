@@ -1777,7 +1777,7 @@ onBeforeUnmount(() => {
     >
       <SkyNavbar
         class="fliptok-auth__navbar"
-        :title="t(authMode === 'login' ? 'login' : 'register')"
+        :aria-label="t(authMode === 'login' ? 'login' : 'register')"
         :scroll-el="null"
         variant="medium"
       />
@@ -5461,8 +5461,8 @@ onBeforeUnmount(() => {
 
 .video-profile-action {
   position: relative;
-  width: 40px;
-  min-height: 44px;
+  width: 44px;
+  min-height: 48px;
   display: grid;
   justify-items: center;
 }
@@ -5905,6 +5905,7 @@ onBeforeUnmount(() => {
 
 /* The avatar follow control must not inherit the generic action height. */
 .video-actions .follow-dot {
+  bottom: -2px;
   width: 20px !important;
   height: 20px !important;
   min-width: 20px !important;
@@ -6061,7 +6062,8 @@ onBeforeUnmount(() => {
   place-items: center;
 }
 
-.connections-list .connection-avatar {
+.connections-list .connection-profile > .connection-avatar {
+  position: relative;
   display: grid;
   place-items: center;
   line-height: 1;
@@ -6069,12 +6071,12 @@ onBeforeUnmount(() => {
 }
 
 .connections-list .connection-avatar__fallback {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
   line-height: 1;
-  transform: translateY(-0.5px);
+  text-align: center;
 }
 
 .connections-list :deep(.sky-button:disabled) {
