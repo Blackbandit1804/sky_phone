@@ -35,6 +35,17 @@ describe('server startup contracts', () => {
     )
   })
 
+  it('initializes bootstrap data providers before phone startup', () => {
+    const phoneIndex = manifest.indexOf("'source/server/phone.lua'")
+
+    expect(manifest.indexOf("'source/server/notes.lua'")).toBeLessThan(
+      phoneIndex,
+    )
+    expect(manifest.indexOf("'source/server/memos.lua'")).toBeLessThan(
+      phoneIndex,
+    )
+  })
+
   it('queues early opens until the resource has fully started', () => {
     expect(phoneServer).toContain(
       'AddEventHandler("onServerResourceStart", function(resource_name)',
