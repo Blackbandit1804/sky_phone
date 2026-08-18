@@ -197,6 +197,12 @@ describe('VaultX crypto app contracts', () => {
     expect(source).toContain(':content-wrap="false"')
   })
 
+  it('keeps the profile sign-out action free of a second navbar surface', () => {
+    expect(source).toContain('.crypto-app :deep(.sky-navbar__right)')
+    expect(source).toContain('background: transparent;')
+    expect(source).toContain('backdrop-filter: none;')
+  })
+
   it('groups the activity summary and icon filters into one VaultX hub', () => {
     expect(source).toContain('class="activity-overview"')
     expect(source).toContain('class="activity-filter-panel"')

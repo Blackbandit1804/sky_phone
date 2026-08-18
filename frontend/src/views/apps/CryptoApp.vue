@@ -2723,6 +2723,12 @@ onUnmounted(() => {
   background: #070b11;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
+.crypto-app :deep(.sky-navbar__right) {
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 .vault-header-brand {
   display: inline-flex;
   gap: 8px;
