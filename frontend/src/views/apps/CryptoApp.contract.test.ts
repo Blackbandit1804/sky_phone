@@ -60,6 +60,17 @@ describe('VaultX crypto app contracts', () => {
     expect(source).not.toContain(':aria-label="t(\'refresh\')"')
   })
 
+  it('uses the compact Flare-style navigation and polished overlay transitions', () => {
+    expect(source).toContain('class="vault-navbar"')
+    expect(source).toContain(':show-back="Boolean(detail)"')
+    expect(source).not.toMatch(/<SkyNavbar[\s\S]*?\slarge(?:\s|>)/)
+    expect(source).toContain('class="vault-view"')
+    expect(source).toContain('@keyframes vault-view-in')
+    expect(source).toContain('class="sheet-header"')
+    expect(source).toContain('class="sheet-close"')
+    expect(source).toContain('class="sheet-market-summary"')
+  })
+
   it('exposes a broad fictional market with dedicated logo marks', () => {
     const cryptoConfig = config.slice(
       config.indexOf('Config.Crypto = {'),

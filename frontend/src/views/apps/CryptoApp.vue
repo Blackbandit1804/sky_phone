@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   ArrowDownLeft,
-  ArrowLeft,
   ArrowUpRight,
   BellRing,
   ChartCandlestick,
@@ -18,6 +17,7 @@ import {
   Sparkles,
   UserRound,
   WalletCards,
+  X,
 } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useCryptoStore } from '@/stores/crypto'
@@ -258,39 +258,51 @@ onMounted(() => void crypto.load())
     dark
   >
     <SkyNavbar
-      :title="detail?.symbol ?? t('name')"
-      :subtitle="
-        detail?.name ?? (authenticated ? `@${profile?.handle}` : t('subtitle'))
+      :key="
+        detail ? `detail-${detail.id}` : `page-${authenticated ? tab : 'auth'}`
       "
-      large
+      class="vault-navbar"
+      :title="detail?.symbol ?? (authenticated ? t(`tabs.${tab}`) : t('name'))"
+      :show-back="Boolean(detail)"
+      back-appearance="surface"
+      :back-label="t('marketDetail.back')"
+      @back="detail = null"
     >
       <template #title>
-        <span v-if="!detail" class="vault-header-brand">
-          <i><ChartCandlestick :size="15" /></i>
+        <span
+          v-if="!detail && (!authenticated || tab === 'portfolio')"
+          class="vault-header-brand"
+        >
+          <i><ChartCandlestick :size="16" /></i>
           <span>{{ t('name') }}</span>
         </span>
-        <span v-else>{{ detail.symbol }}</span>
-      </template>
-      <template #subtitle>
-        <span class="vault-header-subtitle">
-          <i v-if="authenticated && !detail" />
-          {{
-            detail?.name ??
-            (authenticated ? `@${profile?.handle}` : t('subtitle'))
-          }}
+        <span v-else-if="detail" class="vault-detail-title">
+          <i :style="{ background: detail.color }">{{ detail.logo }}</i>
+          <span>
+            <b>{{ detail.symbol }}</b>
+            <small>{{ detail.name }}</small>
+          </span>
         </span>
+        <strong v-else class="vault-section-title">
+          {{ t(`tabs.${tab}`) }}
+        </strong>
       </template>
-      <template v-if="detail" #left
-        ><SkyLink :aria-label="t('marketDetail.back')" @click="detail = null"
-          ><ArrowLeft :size="19" /></SkyLink
-      ></template>
     </SkyNavbar>
 
-    <SkyScrollArea v-if="crypto.isLoading && !crypto.data" class="state" padded
+    <SkyScrollArea
+      v-if="crypto.isLoading && !crypto.data"
+      key="loading"
+      class="state vault-view"
+      padded
       ><SkySpinner />
       <p>{{ t('loading') }}</p></SkyScrollArea
     >
-    <SkyScrollArea v-else-if="!authenticated" class="auth" padded>
+    <SkyScrollArea
+      v-else-if="!authenticated"
+      key="auth"
+      class="auth vault-view"
+      padded
+    >
       <div class="auth-hero">
         <span><ChartCandlestick :size="32" /></span>
         <p>{{ t('auth.eyebrow') }}</p>
@@ -351,7 +363,13 @@ onMounted(() => void crypto.load())
       </form>
     </SkyScrollArea>
 
-    <SkyScrollArea v-else-if="detail" with-tabbar padded>
+    <SkyScrollArea
+      v-else-if="detail"
+      :key="`detail-${detail.id}`"
+      class="vault-view"
+      with-tabbar
+      padded
+    >
       <section class="detail-head">
         <span class="coin large" :style="{ background: detail.color }">{{
           detail.logo
@@ -455,7 +473,13 @@ onMounted(() => void crypto.load())
       </div>
     </SkyScrollArea>
 
-    <SkyScrollArea v-else with-tabbar padded>
+    <SkyScrollArea
+      v-else
+      :key="`tab-${tab}`"
+      class="vault-view"
+      with-tabbar
+      padded
+    >
       <template v-if="tab === 'portfolio'">
         <section class="portfolio-shell">
           <div class="portfolio-glow" />
@@ -562,7 +586,9 @@ onMounted(() => void crypto.load())
               {{ market(holding.assetId)?.symbol }}</small
             ><i class="asset-allocation"
               ><i
-                :style="{ width: `${allocation(holding.value)}%` }" /></i></span
+                :style="{
+                  width: `${allocation(holding.value)}%`,
+                }" /></i></span
           ><span
             ><b>{{ privateMoney(holding.value) }}</b
             ><small
@@ -921,18 +947,56 @@ onMounted(() => void crypto.load())
       @escape="closeSheet"
       @swipeclose="closeSheet"
       ><div v-if="sheet" class="sheet">
-        <i />
-        <h2>
-          {{
-            sheet === 'trade'
-              ? `${t(`trade.${side}`)} ${selectedMarket?.symbol}`
-              : t(`actions.${sheet}`)
-          }}
-        </h2>
+        <header class="sheet-header" data-sky-sheet-drag-handle>
+          <div class="sheet-heading">
+            <span
+              class="sheet-icon"
+              :style="
+                sheet === 'trade' && selectedMarket
+                  ? { background: selectedMarket.color }
+                  : undefined
+              "
+            >
+              <template v-if="sheet === 'trade' && selectedMarket">{{
+                selectedMarket.logo
+              }}</template>
+              <ArrowDownLeft v-else-if="sheet === 'deposit'" :size="19" />
+              <ArrowUpRight v-else :size="19" />
+            </span>
+            <span>
+              <small>{{
+                sheet === 'trade' && selectedMarket
+                  ? selectedMarket.name
+                  : t('activity.cash')
+              }}</small>
+              <h2>
+                {{
+                  sheet === 'trade'
+                    ? `${t(`trade.${side}`)} ${selectedMarket?.symbol}`
+                    : t(`actions.${sheet}`)
+                }}
+              </h2>
+            </span>
+          </div>
+          <SkyLink
+            component="button"
+            icon-only
+            class="sheet-close"
+            :aria-label="phone.t('Common.close')"
+            @click="closeSheet"
+          >
+            <X :size="18" />
+          </SkyLink>
+        </header>
         <template v-if="sheet === 'trade' && selectedMarket"
-          ><p>
-            {{ selectedMarket.name }} <b>{{ money(selectedMarket.price) }}</b>
-          </p>
+          ><div class="sheet-market-summary">
+            <span>{{ selectedMarket.symbol }}</span>
+            <b>{{ money(selectedMarket.price) }}</b>
+            <em :class="selectedMarket.changePercent >= 0 ? 'up' : 'down'">
+              {{ selectedMarket.changePercent >= 0 ? '↗' : '↘' }}
+              {{ Math.abs(selectedMarket.changePercent).toFixed(2) }}%
+            </em>
+          </div>
           <SkySegmented
             strong
             :item-count="2"
@@ -980,7 +1044,7 @@ onMounted(() => void crypto.load())
             }}</SkyButton
           ></template
         ><template v-else
-          ><p>
+          ><p class="sheet-copy">
             {{
               t(
                 sheet === 'deposit'
@@ -1524,23 +1588,11 @@ onMounted(() => void crypto.load())
 .sheet {
   display: grid;
   gap: 13px;
-  padding: 4px 18px calc(var(--sky-safe-area-bottom) + 20px);
-}
-.sheet > i {
-  width: 38px;
-  height: 5px;
-  margin: auto;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.22);
+  padding: 2px 18px calc(var(--sky-safe-area-bottom) + 20px);
 }
 .sheet h2,
 .sheet p {
   margin: 0;
-}
-.sheet > p {
-  display: flex;
-  justify-content: space-between;
-  color: var(--muted);
 }
 .quote {
   display: grid;
@@ -1591,42 +1643,11 @@ onMounted(() => void crypto.load())
   mask-image: linear-gradient(to bottom, #000, transparent 58%);
 }
 .crypto-app :deep(.sky-navbar) {
-  --sky-navbar-safe-area-top: calc(var(--sky-safe-area-top) + 12px);
-  background: linear-gradient(
-    180deg,
-    rgba(5, 8, 13, 0.98),
-    rgba(5, 8, 13, 0.78)
-  );
-}
-.crypto-app :deep(.sky-navbar__title-container) {
-  align-items: flex-end;
-  padding-bottom: 5px;
-}
-.crypto-app :deep(.sky-navbar__title-container > div) {
-  position: relative;
-  width: 100%;
-  padding-left: 11px;
-}
-.crypto-app :deep(.sky-navbar__title-container > div)::before {
-  position: absolute;
-  top: 5px;
-  bottom: 4px;
-  left: 0;
-  width: 3px;
-  border-radius: var(--sky-radius-pill);
-  content: '';
-  background: linear-gradient(180deg, var(--vault-mint), var(--vault-blue));
-  box-shadow: 0 0 12px rgba(101, 251, 210, 0.35);
-}
-.crypto-app :deep(.sky-navbar__title-container .sky-navbar__title) {
-  font-size: 28px;
-  line-height: 32px;
-  letter-spacing: -0.045em;
-}
-.crypto-app :deep(.sky-navbar__title-container .sky-navbar__subtitle) {
-  margin-top: 1px;
-  font-size: 10px;
-  line-height: 14px;
+  --sky-navbar-glass: #070b11;
+  z-index: 12;
+  color: #f8fbfd;
+  background: #070b11;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 .vault-header-brand {
   display: inline-flex;
@@ -1644,17 +1665,39 @@ onMounted(() => void crypto.load())
   border-radius: 8px;
   box-shadow: 0 7px 18px rgba(101, 251, 210, 0.16);
 }
-.vault-header-subtitle {
+.vault-section-title {
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+.vault-detail-title {
   display: inline-flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
 }
-.vault-header-subtitle > i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--vault-mint);
-  box-shadow: 0 0 7px var(--vault-mint);
+.vault-detail-title > i {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+}
+.vault-detail-title > span {
+  display: grid;
+  justify-items: start;
+  line-height: 1.05;
+}
+.vault-detail-title b {
+  font-size: 13px;
+}
+.vault-detail-title small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 600;
 }
 .crypto-app :deep(.sky-scroll-area__content) {
   position: relative;
@@ -2458,12 +2501,126 @@ onMounted(() => void crypto.load())
   border-radius: 20px;
   box-shadow: 0 15px 40px rgba(0, 0, 0, 0.55);
 }
+.vault-view {
+  animation: vault-view-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes vault-view-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.crypto-app :deep(.sky-sheet__panel) {
+  max-height: calc(100% - var(--sky-safe-area-top) - 20px);
+  overflow-y: auto;
+  color: #f8fbfd;
+  background: #0d1219;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 0;
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -22px 70px rgba(0, 0, 0, 0.52);
+}
+.crypto-app :deep(.sky-sheet__grabber) {
+  background: rgba(255, 255, 255, 0.2);
+}
 .sheet {
-  background: radial-gradient(
-    circle at 90% 0%,
-    rgba(101, 251, 210, 0.09),
-    transparent 28%
-  );
+  background:
+    radial-gradient(
+      circle at 92% 0%,
+      rgba(101, 251, 210, 0.1),
+      transparent 27%
+    ),
+    #0d1219;
+}
+.sheet-header,
+.sheet-heading,
+.sheet-market-summary {
+  display: flex;
+  align-items: center;
+}
+.sheet-header {
+  min-height: 52px;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.sheet-heading {
+  min-width: 0;
+  gap: 10px;
+}
+.sheet-heading > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.sheet-heading small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sheet-heading h2 {
+  font-size: 18px;
+  letter-spacing: -0.025em;
+}
+.sheet-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  color: #07100e;
+  font-size: 15px;
+  font-weight: 900;
+  background: linear-gradient(145deg, var(--vault-mint), var(--vault-blue));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  box-shadow: 0 9px 24px rgba(101, 251, 210, 0.12);
+}
+.sheet-header :deep(.sheet-close) {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  color: #f8fbfd;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 50%;
+}
+.sheet-market-summary {
+  justify-content: space-between;
+  gap: 9px;
+  padding: 12px 13px;
+  background: linear-gradient(145deg, #151d27, #0b1016);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+}
+.sheet-market-summary span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+.sheet-market-summary b {
+  flex: 1;
+  font-size: 13px;
+}
+.sheet-market-summary em {
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+}
+.sheet-copy {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
 }
 .quote {
   background: linear-gradient(145deg, #151d27, #0c1117);
@@ -2473,6 +2630,9 @@ onMounted(() => void crypto.load())
   .portfolio-shell::after,
   .chart-orb {
     display: none;
+  }
+  .vault-view {
+    animation: none;
   }
 }
 .phone-app--performance .portfolio-shell,
