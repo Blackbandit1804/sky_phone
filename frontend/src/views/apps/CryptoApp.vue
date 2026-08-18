@@ -701,6 +701,9 @@ onUnmounted(() => {
         detail ? `detail-${detail.id}` : `page-${authenticated ? tab : 'auth'}`
       "
       class="vault-navbar"
+      :class="{
+        'vault-navbar--profile': authenticated && tab === 'profile' && !detail,
+      }"
       :title="detail?.symbol ?? (authenticated ? t(`tabs.${tab}`) : t('name'))"
       :show-back="Boolean(detail)"
       back-appearance="surface"
@@ -2728,6 +2731,20 @@ onUnmounted(() => {
   box-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+.crypto-app :deep(.vault-navbar--profile) {
+  --sky-navbar-glass: transparent;
+  background: transparent;
+  border-bottom-color: transparent;
+}
+.crypto-app :deep(.vault-navbar--profile .sky-navbar__blur) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.crypto-app :deep(.vault-navbar--profile .sky-navbar__background) {
+  background: transparent;
 }
 .vault-header-brand {
   display: inline-flex;

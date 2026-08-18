@@ -198,7 +198,12 @@ describe('VaultX crypto app contracts', () => {
   })
 
   it('keeps the profile sign-out action free of a second navbar surface', () => {
+    expect(source).toContain("'vault-navbar--profile'")
     expect(source).toContain('.crypto-app :deep(.sky-navbar__right)')
+    expect(source).toContain('.crypto-app :deep(.vault-navbar--profile)')
+    expect(source).toContain(
+      '.crypto-app :deep(.vault-navbar--profile .sky-navbar__background)',
+    )
     expect(source).toContain('background: transparent;')
     expect(source).toContain('backdrop-filter: none;')
   })
