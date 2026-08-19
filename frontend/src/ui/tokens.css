@@ -69,8 +69,10 @@
   --sky-shadow-thumb:
     0 0.5px 4px rgba(0, 0, 0, 0.12), 0 6px 13px rgba(0, 0, 0, 0.12);
   --sky-glass-highlight-color: rgba(255, 255, 255, 0.5);
+  --sky-home-label-font-size: 13px;
+  --sky-home-label-height: 16px;
   --sky-widget-label-gap: 5px;
-  --sky-widget-label-height: 15px;
+  --sky-widget-label-height: var(--sky-home-label-height);
   --sky-widget-radius-small: 23px;
   --sky-widget-radius-medium: 25px;
   --sky-widget-radius-large: 28px;
