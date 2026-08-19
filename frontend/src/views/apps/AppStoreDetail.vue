@@ -1,21 +1,20 @@
 <script setup lang="ts">
 import {
-  Activity,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
   Share2,
-  Sparkles,
   Star,
-  Users,
 } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import { getPhoneAppLabel, isExternalPhoneApp } from '@/config/apps'
 import { usePhoneStore } from '@/stores/phone'
 import type { LaunchablePhoneAppDefinition } from '@/types/apps'
+import { getAppStorePreviewImage } from '@/utils/appStorePreviewImages'
+import { getAppStorePreviewVisual } from '@/utils/appStorePreviews'
 
 import AppStoreAction from './AppStoreAction.vue'
+import AppStorePreviewCard from './AppStorePreviewCard.vue'
 
 const props = defineProps<{
   action: 'get' | 'installing' | 'open'
@@ -31,7 +30,8 @@ const emit = defineEmits<{
 const phone = usePhoneStore()
 const previews = ref<HTMLElement | null>(null)
 const activePreviewIndex = ref(0)
-const previewCount = 3
+const previewCount = 5
+const previewScreens = [0, 1, 2, 3, 4] as const
 const appName = computed(() => getPhoneAppLabel(props.app, phone.t))
 const developer = computed(() =>
   isExternalPhoneApp(props.app)
@@ -50,6 +50,29 @@ const ageRating = computed(() =>
 const chartRank = computed(() => `#${(props.app.gridOrder % 8) + 1}`)
 const version = computed(
   () => `1.${(props.app.gridOrder % 9) + 1}.${props.app.gridOrder % 5}`,
+)
+const detailCopyPrefix = computed(() =>
+  props.app.id === 'crypto'
+    ? 'Apps.appStore.details.crypto'
+    : 'Apps.appStore.details',
+)
+const previewVisual = computed(() => getAppStorePreviewVisual(props.app.id))
+const previewImage = computed(() => getAppStorePreviewImage(props.app.id))
+const previewFeatures = computed(() => {
+  if (isExternalPhoneApp(props.app)) {
+    return [props.app.name, props.app.developer, props.app.description]
+  }
+  const prefix = `Apps.appStore.previews.${props.app.id}`
+  return [
+    phone.t(`${prefix}.first`),
+    phone.t(`${prefix}.second`),
+    phone.t(`${prefix}.third`),
+  ]
+})
+const appTagline = computed(() =>
+  isExternalPhoneApp(props.app)
+    ? props.app.description.trim() || props.app.developer
+    : phone.t(`Apps.appStore.taglines.${props.app.id}`),
 )
 const detailStyle = computed(() => {
   const palettes = [
@@ -177,7 +200,7 @@ function updateActivePreview(): void {
       </div>
       <p>
         {{
-          phone.t('Apps.appStore.details.releaseNotes', {
+          phone.t(`${detailCopyPrefix}.releaseNotes`, {
             app: appName,
           })
         }}
@@ -212,69 +235,19 @@ function updateActivePreview(): void {
         class="store-detail__previews"
         @scroll.passive="updateActivePreview"
       >
-        <article
-          class="store-detail-preview store-detail-preview--overview phone-effect--expensive-shadow"
-        >
-          <div class="store-detail-preview__status">
-            <span>{{ phone.t('Apps.appStore.details.previewLive') }}</span>
-            <Activity :size="14" aria-hidden="true" />
-          </div>
-          <img :src="app.iconImage" alt="" draggable="false" />
-          <strong>{{ appName }}</strong>
-          <small>{{ phone.t('Apps.appStore.details.previewOverview') }}</small>
-          <div class="store-detail-preview__metrics">
-            <span><b>24</b>{{ phone.t('Apps.appStore.details.today') }}</span>
-            <span
-              ><b>87%</b>{{ phone.t('Apps.appStore.details.progress') }}</span
-            >
-          </div>
-          <div class="store-detail-preview__activity">
-            <span></span><span></span><span></span><span></span><span></span>
-          </div>
-        </article>
-
-        <article
-          class="store-detail-preview store-detail-preview--community phone-effect--expensive-shadow"
-        >
-          <div class="store-detail-preview__status">
-            <span>{{ phone.t('Apps.appStore.details.previewCommunity') }}</span>
-            <Users :size="14" aria-hidden="true" />
-          </div>
-          <div class="store-detail-preview__avatars">
-            <span>AM</span><span>JS</span><span>RK</span>
-          </div>
-          <strong>{{
-            phone.t('Apps.appStore.details.communityTitle', { app: appName })
-          }}</strong>
-          <small>{{ phone.t('Apps.appStore.details.communityBody') }}</small>
-          <div class="store-detail-preview__message">
-            <Sparkles :size="15" aria-hidden="true" />
-            <span>{{ phone.t('Apps.appStore.details.featuredMoment') }}</span>
-          </div>
-          <img :src="app.iconImage" alt="" draggable="false" />
-        </article>
-
-        <article
-          class="store-detail-preview store-detail-preview--insights phone-effect--expensive-shadow"
-        >
-          <div class="store-detail-preview__status">
-            <span>{{ phone.t('Apps.appStore.details.previewInsights') }}</span>
-            <BarChart3 :size="14" aria-hidden="true" />
-          </div>
-          <strong>{{ phone.t('Apps.appStore.details.weeklyActivity') }}</strong>
-          <div class="store-detail-preview__chart" aria-hidden="true">
-            <span
-              v-for="height in [38, 64, 48, 82, 56, 92, 73]"
-              :key="height"
-              :style="{ height: `${height}%` }"
-            ></span>
-          </div>
-          <div class="store-detail-preview__insight">
-            <b>+18%</b>
-            <span>{{ phone.t('Apps.appStore.details.fromLastWeek') }}</span>
-          </div>
-          <img :src="app.iconImage" alt="" draggable="false" />
-        </article>
+        <AppStorePreviewCard
+          v-for="screen in previewScreens"
+          :key="screen"
+          :app-name="appName"
+          :features="previewFeatures"
+          :icon-image="app.iconImage"
+          :category-label="phone.t(`Home.groups.${app.category}`)"
+          :developer="developer"
+          :preview-image="previewImage"
+          :screen="screen"
+          :tagline="appTagline"
+          :visual="previewVisual"
+        />
       </div>
     </section>
 
@@ -282,7 +255,7 @@ function updateActivePreview(): void {
       <h2>{{ phone.t('Apps.appStore.details.about') }}</h2>
       <p>
         {{
-          phone.t('Apps.appStore.details.description', {
+          phone.t(`${detailCopyPrefix}.description`, {
             app: appName,
             category: phone.t(`Home.groups.${app.category}`),
           })
@@ -544,218 +517,6 @@ function updateActivePreview(): void {
 
 .store-detail__previews::-webkit-scrollbar {
   display: none;
-}
-
-.store-detail-preview {
-  width: 224px;
-  height: 354px;
-  position: relative;
-  display: flex;
-  overflow: hidden;
-  flex: 0 0 224px;
-  flex-direction: column;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--sky-radius-card);
-  padding: var(--sky-space-4);
-  color: #fff;
-  background:
-    radial-gradient(
-      circle at 78% 12%,
-      var(--store-detail-glow),
-      transparent 32%
-    ),
-    linear-gradient(155deg, var(--store-detail-accent), #101523 118%);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
-  scroll-snap-align: start;
-}
-
-.store-detail-preview::after {
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    -35deg,
-    transparent 0 20px,
-    rgba(255, 255, 255, 0.025) 21px 22px
-  );
-  content: '';
-  pointer-events: none;
-}
-
-.store-detail-preview__status {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.store-detail-preview--overview > img {
-  width: 90px;
-  height: 90px;
-  z-index: 1;
-  align-self: center;
-  margin: 26px 0 16px;
-  border-radius: 24px;
-  object-fit: cover;
-  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.28);
-  transform: rotate(-4deg);
-}
-
-.store-detail-preview > strong,
-.store-detail-preview > small {
-  position: relative;
-  z-index: 1;
-}
-
-.store-detail-preview > strong {
-  font-size: 20px;
-  line-height: 1.08;
-}
-
-.store-detail-preview > small {
-  margin-top: 5px;
-  color: rgba(255, 255, 255, 0.68);
-  font-size: 11px;
-}
-
-.store-detail-preview__metrics {
-  z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--sky-space-2);
-  margin-top: auto;
-}
-
-.store-detail-preview__metrics span {
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--sky-radius-control);
-  padding: var(--sky-space-3);
-  background: rgba(255, 255, 255, 0.11);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 9px;
-}
-
-.store-detail-preview__metrics b {
-  color: #fff;
-  font-size: 17px;
-}
-
-.store-detail-preview__activity {
-  z-index: 1;
-  height: 28px;
-  display: flex;
-  align-items: flex-end;
-  gap: 5px;
-  margin-top: var(--sky-space-3);
-}
-
-.store-detail-preview__activity span {
-  width: 20%;
-  border-radius: var(--sky-radius-pill);
-  background: rgba(255, 255, 255, 0.42);
-}
-
-.store-detail-preview__activity span:nth-child(1) {
-  height: 42%;
-}
-.store-detail-preview__activity span:nth-child(2) {
-  height: 72%;
-}
-.store-detail-preview__activity span:nth-child(3) {
-  height: 55%;
-}
-.store-detail-preview__activity span:nth-child(4) {
-  height: 92%;
-}
-.store-detail-preview__activity span:nth-child(5) {
-  height: 68%;
-}
-
-.store-detail-preview__avatars {
-  z-index: 1;
-  display: flex;
-  margin: 42px 0 22px;
-}
-
-.store-detail-preview__avatars span {
-  width: 54px;
-  height: 54px;
-  display: grid;
-  place-items: center;
-  margin-right: -12px;
-  border: 3px solid rgba(255, 255, 255, 0.82);
-  border-radius: 50%;
-  background: rgba(17, 22, 38, 0.74);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.store-detail-preview__message {
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--sky-space-2);
-  margin-top: auto;
-  border-radius: var(--sky-radius-control);
-  padding: var(--sky-space-3);
-  background: rgba(255, 255, 255, 0.12);
-  font-size: 10px;
-}
-
-.store-detail-preview--community > img,
-.store-detail-preview--insights > img {
-  width: 42px;
-  height: 42px;
-  z-index: 1;
-  position: absolute;
-  right: var(--sky-space-4);
-  bottom: var(--sky-space-4);
-  border-radius: 12px;
-  object-fit: cover;
-  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.24);
-}
-
-.store-detail-preview--insights > strong {
-  margin-top: 36px;
-}
-
-.store-detail-preview__chart {
-  height: 145px;
-  z-index: 1;
-  display: flex;
-  align-items: flex-end;
-  gap: 7px;
-  margin-top: var(--sky-space-5);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 0 var(--sky-space-2);
-}
-
-.store-detail-preview__chart span {
-  width: 14px;
-  border-radius: 7px 7px 0 0;
-  background: linear-gradient(180deg, #fff, rgba(255, 255, 255, 0.24));
-}
-
-.store-detail-preview__insight {
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  margin-top: var(--sky-space-4);
-}
-
-.store-detail-preview__insight b {
-  font-size: 22px;
-}
-
-.store-detail-preview__insight span {
-  color: rgba(255, 255, 255, 0.68);
-  font-size: 10px;
 }
 
 @media (hover: hover) {

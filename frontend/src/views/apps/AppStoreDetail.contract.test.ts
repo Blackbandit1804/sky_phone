@@ -7,6 +7,10 @@ const source = readFileSync(
   fileURLToPath(new URL('./AppStoreDetail.vue', import.meta.url)),
   'utf8',
 )
+const previewSource = readFileSync(
+  fileURLToPath(new URL('./AppStorePreviewCard.vue', import.meta.url)),
+  'utf8',
+)
 
 describe('AppStoreDetail contract', () => {
   it('renders an Apple-style product page with metadata and direct action', () => {
@@ -29,24 +33,34 @@ describe('AppStoreDetail contract', () => {
       /\.store-detail__hero \.store-detail__action--icon\s*\{[^}]*width:\s*54px;[^}]*min-width:\s*54px;[^}]*min-height:\s*30px;[^}]*height:\s*30px;/s,
     )
     expect(source).not.toContain(':has(')
+    expect(previewSource).not.toContain('color-mix(')
     expect(source).toMatch(
       /\.store-detail\s*\{[^}]*padding:\s*var\(--sky-space-3\) 0 var\(--sky-space-6\)/s,
     )
   })
 
-  it('generates three app-specific preview panels with visible test data', () => {
+  it('renders five app-specific screenshot and information panels', () => {
     expect(source).toContain('class="store-detail__previews"')
-    expect(source).toContain('store-detail-preview--overview')
-    expect(source).toContain('store-detail-preview--community')
-    expect(source).toContain('store-detail-preview--insights')
-    expect(
-      source.match(/:src="app\.iconImage"/g)?.length,
-    ).toBeGreaterThanOrEqual(4)
-    expect(source).toContain('24')
-    expect(source).toContain('87%')
-    expect(source).toContain('+18%')
+    expect(source).toContain('<AppStorePreviewCard')
+    expect(source).toContain('v-for="screen in previewScreens"')
+    expect(source).toContain('getAppStorePreviewImage')
+    expect(source).toContain(':preview-image="previewImage"')
+    expect(previewSource).toContain('v-if="previewImage && screen < 3"')
+    expect(previewSource).toContain(':src="previewImage"')
+    expect(previewSource).toContain('store-detail-preview__screenshot')
+    expect(previewSource).not.toContain("visual.scene ===")
+    expect(source).toContain('getAppStorePreviewVisual')
+    expect(source).toContain('Apps.appStore.previews.${props.app.id}')
+    expect(previewSource).toContain(':src="iconImage"')
     expect(source).toMatch(
-      /\.store-detail-preview\s*\{[^}]*width:\s*224px[^}]*height:\s*354px/s,
+      /previewScreens\s*=\s*\[0, 1, 2, 3, 4\] as const/,
+    )
+    expect(previewSource).toContain('screen === 3')
+    expect(previewSource).toContain('screen === 4')
+    expect(previewSource).toContain('store-detail-preview__details')
+    expect(previewSource).toContain('store-detail-preview__about')
+    expect(previewSource).toMatch(
+      /\.store-detail-preview\s*\{[^}]*width:\s*224px;[^}]*height:\s*354px;/s,
     )
   })
 
