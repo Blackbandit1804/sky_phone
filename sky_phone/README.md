@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://www.sky-systems.net/shop/phone#live-demo">
-    <img alt="Try the interactive Sky Phone live demo" src="https://img.shields.io/badge/TRY_THE_LIVE_DEMO-OPEN_NOW-7c3aed?style=for-the-badge" height="52">
+    <img alt="Try the interactive Sky Phone live demo" src="https://img.shields.io/badge/TRY_THE_LIVE_DEMO-OPEN_NOW-7c3aed?style=for-the-badge" height="76">
   </a>
 </p>
 
@@ -557,19 +557,6 @@ Its native custom app surface includes client and server exports for app registr
 The resource provides the compatibility aliases `lb-phone`, `17mov_Phone`, `high-phone`, `qs-smartphone`, and `yseries`.
 
 That means servers can replace LB Phone without giving up supported custom apps, while developers can build directly against Sky Phone for deeper lifecycle, permission, and storage integration.
-
-## Updating Sky Phone
-
-Before updating:
-
-1. Back up the database.
-2. Back up `config/config.lua`, `config/media.lua`, and any custom media.
-3. Keep the three pepper values unchanged.
-4. Replace the resource files.
-5. Reapply customer-specific configuration carefully.
-6. Restart Sky Phone and review warnings and errors.
-
-Do not overwrite a production configuration without comparing it to the new version.
 
 ## Frontend development
 
