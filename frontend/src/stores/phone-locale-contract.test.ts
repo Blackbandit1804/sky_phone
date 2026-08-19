@@ -73,20 +73,20 @@ function tokenizeLua(source: string): LuaToken[] {
   return tokens
 }
 
-function collectLuaLocalePaths(source: string): Set<string> {
+function collectLuaLocaleValues(source: string): Map<string, string> {
   const tokens = tokenizeLua(source)
   let position =
     tokens.findIndex(
       (token, index) => token.kind === '=' && tokens[index + 1]?.kind === '{',
     ) + 1
-  const paths = new Set<string>()
+  const values = new Map<string, string>()
 
   function parseValue(path: string[]): void {
     if (tokens[position]?.kind === '{') {
       parseTable(path)
       return
     }
-    if (path.length) paths.add(path.join('.'))
+    if (path.length) values.set(path.join('.'), tokens[position]?.value ?? '')
     position += 1
   }
 
@@ -118,7 +118,11 @@ function collectLuaLocalePaths(source: string): Set<string> {
   }
 
   parseTable([])
-  return paths
+  return values
+}
+
+function collectPlaceholders(value: string): string[] {
+  return [...new Set(value.match(/\{[A-Za-z0-9_]+\}/g) ?? [])].sort()
 }
 
 function collectDefaultLocalePaths(source: string): Set<string> {
@@ -196,7 +200,9 @@ function collectFrontendFiles(directory: string): string[] {
 }
 
 describe('phone locale contract', () => {
-  const englishPaths = collectLuaLocalePaths(englishLocaleSource)
+  const englishValues = collectLuaLocaleValues(englishLocaleSource)
+  const germanValues = collectLuaLocaleValues(germanLocaleSource)
+  const englishPaths = new Set(englishValues.keys())
 
   it('keeps every bundled frontend fallback in en.lua', () => {
     const missing = [...collectDefaultLocalePaths(phoneStoreSource)].filter(
@@ -243,8 +249,78 @@ describe('phone locale contract', () => {
   })
 
   it('keeps German structurally aligned with English', () => {
-    const germanPaths = collectLuaLocalePaths(germanLocaleSource)
+    const germanPaths = new Set(germanValues.keys())
 
     expect([...germanPaths].sort()).toEqual([...englishPaths].sort())
+  })
+
+  it('keeps German interpolation placeholders aligned with English', () => {
+    const mismatches = [...englishValues].flatMap(([path, englishValue]) => {
+      const germanValue = germanValues.get(path)
+      return germanValue !== undefined &&
+        JSON.stringify(collectPlaceholders(germanValue)) !==
+          JSON.stringify(collectPlaceholders(englishValue))
+        ? [
+            `${path}: ${collectPlaceholders(englishValue).join(', ')} != ${collectPlaceholders(germanValue).join(', ')}`,
+          ]
+        : []
+    })
+
+    expect(mismatches).toEqual([])
+  })
+
+  it('keeps standard app names German and custom game names unchanged', () => {
+    const standardAppNames = {
+      health: 'Gesundheit',
+      messages: 'Nachrichten',
+      companies: 'Unternehmen',
+      phone: 'Telefon',
+      radio: 'Funk',
+      billing: 'Rechnungen',
+      house: 'Haus',
+      calculator: 'Rechner',
+      camera: 'Kamera',
+      calendar: 'Kalender',
+      clock: 'Uhr',
+      localPages: 'Lokale Seiten',
+      map: 'Karte',
+      weather: 'Wetter',
+      music: 'Musik',
+      notes: 'Notizen',
+      photos: 'Fotos',
+      settings: 'Einstellungen',
+    }
+
+    for (const [app, name] of Object.entries(standardAppNames)) {
+      expect(germanValues.get(`Nui.Apps.${app}.name`), app).toBe(name)
+    }
+
+    for (const app of [
+      'snake',
+      'memory',
+      'numberMerge',
+      'minesweeper',
+      'towerStack',
+      'skyFlappy',
+      'neonDrop',
+    ]) {
+      const path = `Nui.Apps.${app}.name`
+      expect(germanValues.get(path), app).toBe(englishValues.get(path))
+    }
+  })
+
+  it('keeps common German UI terms semantically correct', () => {
+    expect(germanValues.get('Nui.Apps.phone.cancelled')).toBe('Abgebrochen')
+    expect(germanValues.get('Nui.Apps.flare.interests')).toBe('Interessen')
+    expect(germanValues.get('Nui.Apps.picstagram.emptyFeed')).toBe(
+      'Dein Feed ist ruhig',
+    )
+    expect(germanValues.get('Nui.Apps.clock.lap')).toBe('Runde')
+    expect(germanValues.get('Nui.Apps.easyShare.incoming')).toBe(
+      'Eingehende Freigabe',
+    )
+    expect(germanValues.get('Nui.Apps.settings.phoneScale')).toBe(
+      'Telefongröße',
+    )
   })
 })

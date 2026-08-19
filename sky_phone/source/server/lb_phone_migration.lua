@@ -7,6 +7,14 @@ local source_name = "lb-phone"
 local marker_prefix = "lb-phone:"
 local running = false
 
+-- Increment a domain version whenever an idempotent repair must run for
+-- installations that already recorded the previous importer as complete.
+local domain_versions = {
+    picstagram = 2,
+    flipTok = 2,
+    feather = 2,
+}
+
 local source_prefix = migration_config.SourcePrefix or "phone_"
 if type(source_prefix) ~= "string" or not source_prefix:match("^[%w_]+$") then
     error("[sky_phone] LB Phone migration SourcePrefix must contain only letters, numbers, and underscores.")
@@ -159,10 +167,15 @@ local function insert_many(prefix, width, rows, suffix)
     return inserted
 end
 
+local function migration_name(domain)
+    local version = domain_versions[domain]
+    return marker_prefix .. domain .. (version and (":v" .. version) or "")
+end
+
 local function migration_done(domain)
     local rows = Bridge.Database.Query([[
         SELECT 1 FROM `sky_phone_migrations` WHERE `name` = ? LIMIT 1
-    ]], { marker_prefix .. domain })
+    ]], { migration_name(domain) })
     return rows[1] ~= nil
 end
 
@@ -170,7 +183,7 @@ local function record_migration(domain, stats)
     Bridge.Database.Query([[
         INSERT IGNORE INTO `sky_phone_migrations` (`name`, `source`, `stats`)
         VALUES (?, ?, ?)
-    ]], { marker_prefix .. domain, source_name, json.encode(stats or {}) })
+    ]], { migration_name(domain), source_name, json.encode(stats or {}) })
 end
 
 local function load_roster()
@@ -1321,6 +1334,206 @@ local function extract_media(value, maximum)
     return result
 end
 
+local function social_login_table_available(table_name)
+    return table_exists(table_name)
+        and table_has_column(table_name, "phone_number")
+        and table_has_column(table_name, "app")
+        and table_has_column(table_name, "username")
+        and table_has_column(table_name, "active")
+end
+
+local function prepare_social_profile_accounts(entries, options)
+    local profile_table = tostring(options.profile_table or "")
+    if not profile_table:match("^[%w_]+$") then
+        error("[sky_phone] Invalid social migration profile table.")
+    end
+
+    local preferred = {}
+    local logged_table = source_table("logged_in_accounts")
+    if social_login_table_available(logged_table) then
+        local app_placeholders = {}
+        local parameters = { source_name }
+        for index = 1, #options.apps do
+            app_placeholders[index] = "?"
+            parameters[#parameters + 1] = tostring(options.apps[index]):lower()
+        end
+        local logged = Bridge.Database.Query(([[
+            SELECT LOWER(login.`username`) AS `username`, owner.`account_id`
+            FROM `%s` login
+            JOIN `sky_phone_migration_owners` owner
+                ON owner.`source` = ? AND owner.`source_phone_number` = login.`phone_number`
+            WHERE login.`active` = 1 AND LOWER(login.`app`) IN (%s)
+            ORDER BY owner.`account_id`, login.`phone_number`, login.`username`
+        ]]):format(logged_table, table.concat(app_placeholders, ",")), parameters)
+        for index = 1, #logged do
+            local account_id = tonumber(logged[index].account_id)
+            if account_id then
+                preferred[account_id] = preferred[account_id]
+                    or tostring(logged[index].username or ""):lower()
+            end
+        end
+    end
+    for index = 1, #entries do
+        local owner_account_id = tonumber(entries[index].source.owner_account_id)
+        if owner_account_id then
+            preferred[owner_account_id] = preferred[owner_account_id]
+                or tostring(entries[index].source.username or ""):lower()
+        end
+    end
+
+    local cloud_rows = {}
+    for index = 1, #entries do
+        local entry = entries[index]
+        entry.email = synthetic_email(options.synthetic_namespace, entry.handle)
+        cloud_rows[#cloud_rows + 1] = {
+            entry.email,
+            deterministic_hex(options.account_namespace, entry.handle),
+        }
+    end
+    insert_many("INSERT IGNORE INTO `sky_phone_accounts` (`email`, `password`) VALUES", 2, cloud_rows)
+
+    local target_accounts = Bridge.Database.Query("SELECT `id`, `email` FROM `sky_phone_accounts`", {})
+    local account_by_email = {}
+    local email_by_account = {}
+    for index = 1, #target_accounts do
+        local account_id = tonumber(target_accounts[index].id)
+        local email = tostring(target_accounts[index].email or ""):lower()
+        account_by_email[email] = account_id
+        email_by_account[account_id] = email
+    end
+    for index = 1, #entries do
+        entries[index].synthetic_account_id = account_by_email[entries[index].email]
+    end
+
+    local target_profiles = Bridge.Database.Query(([[
+        SELECT profile.`id`, profile.`account_id`, profile.`handle`, account.`email` AS `account_email`
+        FROM `%s` profile
+        JOIN `sky_phone_accounts` account ON account.`id` = profile.`account_id`
+    ]]):format(profile_table), {})
+    local existing_by_handle = {}
+    local occupied_accounts = {}
+    for index = 1, #target_profiles do
+        local profile = target_profiles[index]
+        profile.account_id = tonumber(profile.account_id)
+        profile.account_email = tostring(profile.account_email or ""):lower()
+        existing_by_handle[tostring(profile.handle or ""):lower()] = profile
+        occupied_accounts[profile.account_id] = profile
+    end
+
+    local entry_by_handle = {}
+    local preferred_entry_by_owner = {}
+    for index = 1, #entries do
+        local entry = entries[index]
+        entry_by_handle[entry.handle] = entry
+        local owner_account_id = tonumber(entry.source.owner_account_id)
+        if owner_account_id
+            and preferred[owner_account_id] == tostring(entry.source.username or ""):lower()
+        then
+            preferred_entry_by_owner[owner_account_id] = entry
+        end
+    end
+
+    local function is_imported_profile(profile, entry)
+        if not profile or not entry then
+            return false
+        end
+        if entry.profile_id and tostring(profile.id) == tostring(entry.profile_id) then
+            return true
+        end
+        if profile.account_email == entry.email then
+            return true
+        end
+        return tonumber(profile.account_id) == tonumber(entry.source.owner_account_id)
+    end
+
+    local repaired = 0
+    local function move_profile(profile, entry, target_account_id)
+        local previous_account_id = tonumber(profile.account_id)
+        target_account_id = tonumber(target_account_id)
+        if not previous_account_id or not target_account_id or previous_account_id == target_account_id then
+            return true
+        end
+        if occupied_accounts[target_account_id] then
+            return false
+        end
+        local moved = affected_rows(Bridge.Database.Query(([[
+            UPDATE `%s` SET `account_id` = ? WHERE `id` = ? AND `account_id` = ?
+        ]]):format(profile_table), { target_account_id, profile.id, previous_account_id }))
+        if moved < 1 then
+            return false
+        end
+        Bridge.Database.Query([[
+            UPDATE `sky_phone_media` SET `account_id` = ?
+            WHERE `account_id` = ? AND `origin` = 'website_import' AND `source_id` LIKE ?
+        ]], { target_account_id, previous_account_id, options.media_pattern })
+        occupied_accounts[previous_account_id] = nil
+        occupied_accounts[target_account_id] = profile
+        profile.account_id = target_account_id
+        profile.account_email = email_by_account[target_account_id] or ""
+        repaired = repaired + 1
+        return true
+    end
+
+    -- If the active LB profile changed since a previous import, first move the
+    -- old imported profile back to its deterministic cloud account.
+    for owner_account_id, preferred_entry in pairs(preferred_entry_by_owner) do
+        local occupant = occupied_accounts[owner_account_id]
+        if occupant and tostring(occupant.handle or ""):lower() ~= preferred_entry.handle then
+            local occupant_entry = entry_by_handle[tostring(occupant.handle or ""):lower()]
+            if occupant_entry
+                and tonumber(occupant_entry.source.owner_account_id) == owner_account_id
+                and is_imported_profile(occupant, occupant_entry)
+            then
+                move_profile(occupant, occupant_entry, occupant_entry.synthetic_account_id)
+            end
+        end
+    end
+
+    local owner_assigned = {}
+    for owner_account_id, preferred_entry in pairs(preferred_entry_by_owner) do
+        local existing = existing_by_handle[preferred_entry.handle]
+        local occupant = occupied_accounts[owner_account_id]
+        if not occupant or occupant == existing then
+            if not existing
+                or tonumber(existing.account_id) == owner_account_id
+                or (is_imported_profile(existing, preferred_entry)
+                    and move_profile(existing, preferred_entry, owner_account_id))
+            then
+                owner_assigned[preferred_entry] = true
+            end
+        end
+    end
+
+    local accepted = {}
+    local skipped = 0
+    for index = 1, #entries do
+        local entry = entries[index]
+        local desired_account_id = owner_assigned[entry]
+            and tonumber(entry.source.owner_account_id)
+            or entry.synthetic_account_id
+        local existing = existing_by_handle[entry.handle]
+        if not desired_account_id then
+            skipped = skipped + 1
+        elseif existing then
+            if tonumber(existing.account_id) == desired_account_id
+                and is_imported_profile(existing, entry)
+            then
+                entry.account_id = desired_account_id
+                accepted[#accepted + 1] = entry
+            else
+                skipped = skipped + 1
+            end
+        elseif occupied_accounts[desired_account_id] then
+            skipped = skipped + 1
+        else
+            entry.account_id = desired_account_id
+            accepted[#accepted + 1] = entry
+            occupied_accounts[desired_account_id] = { pending = true, handle = entry.handle }
+        end
+    end
+    return accepted, skipped, repaired
+end
+
 local function run_picstagram(dry_run)
     local accounts_table = source_table("instagram_accounts")
     if not table_exists(accounts_table) then
@@ -1332,39 +1545,21 @@ local function run_picstagram(dry_run)
         FROM `%s` account
         JOIN `sky_phone_migration_owners` owner
             ON owner.`source` = ? AND owner.`source_phone_number` = account.`phone_number`
+        ORDER BY account.`date_joined`, account.`phone_number`, account.`username`
     ]]):format(accounts_table), { source_name })
-    local existing_profiles = Bridge.Database.Query(
-        "SELECT `id`, `handle`, `account_id` FROM `sky_phone_picstagram_profiles`", {}
-    )
-    local existing_by_handle = {}
-    for index = 1, #existing_profiles do
-        existing_by_handle[tostring(existing_profiles[index].handle):lower()] = existing_profiles[index]
-    end
 
     local entries = {}
-    local cloud_accounts = {}
     local skipped = 0
     for index = 1, #source_accounts do
         local row = source_accounts[index]
         local handle = normalize_picstagram_handle(row.username)
         if handle then
             local profile_id = deterministic_uuid("lb-phone-picstagram-profile", handle)
-            local existing = existing_by_handle[handle]
-            if not existing or existing.id == profile_id then
-                local email = synthetic_email("ig", handle)
-                entries[#entries + 1] = {
-                    source = row,
-                    handle = handle,
-                    profile_id = profile_id,
-                    email = email,
-                }
-                cloud_accounts[#cloud_accounts + 1] = {
-                    email,
-                    deterministic_hex("lb-phone-picstagram-account", handle),
-                }
-            else
-                skipped = skipped + 1
-            end
+            entries[#entries + 1] = {
+                source = row,
+                handle = handle,
+                profile_id = profile_id,
+            }
         else
             skipped = skipped + 1
         end
@@ -1381,17 +1576,19 @@ local function run_picstagram(dry_run)
         }
     end
 
-    insert_many("INSERT IGNORE INTO `sky_phone_accounts` (`email`, `password`) VALUES", 2, cloud_accounts)
-    local all_cloud_accounts = Bridge.Database.Query("SELECT `id`, `email` FROM `sky_phone_accounts`", {})
-    local account_by_email = {}
-    for index = 1, #all_cloud_accounts do
-        account_by_email[tostring(all_cloud_accounts[index].email):lower()] = tonumber(all_cloud_accounts[index].id)
-    end
+    local accepted, assignment_skipped, ownership_repaired = prepare_social_profile_accounts(entries, {
+        profile_table = "sky_phone_picstagram_profiles",
+        synthetic_namespace = "ig",
+        account_namespace = "lb-phone-picstagram-account",
+        media_pattern = "lb-ig-%",
+        apps = { "instagram", "instapic", "picstagram" },
+    })
+    entries = accepted
+    skipped = skipped + assignment_skipped
 
     local avatar_rows = {}
     for index = 1, #entries do
         local entry = entries[index]
-        entry.account_id = account_by_email[entry.email]
         local avatar = valid_media_url(entry.source.profile_image)
         if entry.account_id and avatar then
             entry.avatar_source = "lb-ig-avatar:" .. entry.profile_id
@@ -1430,7 +1627,7 @@ local function run_picstagram(dry_run)
                 (entry.source.verified == true or tonumber(entry.source.verified) == 1) and 1 or 0,
                 entry.source.migrated_at,
             }
-            profile_by_username[tostring(entry.source.username)] = entry
+            profile_by_username[tostring(entry.source.username):lower()] = entry
         end
     end
     insert_many([[
@@ -1454,7 +1651,7 @@ local function run_picstagram(dry_run)
 
     local session_candidates = {}
     local logged_table = source_table("logged_in_accounts")
-    if table_exists(logged_table) then
+    if social_login_table_available(logged_table) then
         local logged = Bridge.Database.Query(([[
             SELECT login.`phone_number`, login.`username`, owner.`device_imei`
             FROM `%s` login
@@ -1464,7 +1661,7 @@ local function run_picstagram(dry_run)
                 AND LOWER(login.`app`) IN ('instagram', 'instapic', 'picstagram')
         ]]):format(logged_table), { source_name })
         for index = 1, #logged do
-            local profile = profile_by_username[tostring(logged[index].username)]
+            local profile = profile_by_username[tostring(logged[index].username):lower()]
             if profile then
                 session_candidates[tostring(logged[index].device_imei)] = profile.profile_id
             end
@@ -1487,8 +1684,10 @@ local function run_picstagram(dry_run)
         session_rows[#session_rows + 1] = { imei, profile_id }
     end
     insert_many([[
-        INSERT IGNORE INTO `sky_phone_picstagram_sessions` (`device_imei`, `profile_id`) VALUES
-    ]], 2, session_rows)
+        INSERT INTO `sky_phone_picstagram_sessions` (`device_imei`, `profile_id`) VALUES
+    ]], 2, session_rows, [[
+        ON DUPLICATE KEY UPDATE `profile_id` = VALUES(`profile_id`), `updated_at` = CURRENT_TIMESTAMP
+    ]])
 
     local posts_table = source_table("instagram_posts")
     local post_entries = {}
@@ -1501,7 +1700,7 @@ local function run_picstagram(dry_run)
         ]]):format(posts_table), {})
         for index = 1, #posts do
             local row = posts[index]
-            local profile = profile_by_username[tostring(row.username)]
+            local profile = profile_by_username[tostring(row.username):lower()]
             local media = extract_media(row.media, Config.Picstagram.MaxPostMedia)
             if profile and #media > 0 then
                 local post_id = deterministic_uuid("lb-phone-picstagram-post", row.id)
@@ -1572,7 +1771,7 @@ local function run_picstagram(dry_run)
         ]]):format(comments_table), {})
         for index = 1, #rows do
             local post = post_entries[tostring(rows[index].post_id)]
-            local profile = profile_by_username[tostring(rows[index].username)]
+            local profile = profile_by_username[tostring(rows[index].username):lower()]
             if post and profile then
                 local comment_id = deterministic_uuid("lb-phone-picstagram-comment", rows[index].id)
                 comment_entries[tostring(rows[index].id)] = comment_id
@@ -1597,7 +1796,7 @@ local function run_picstagram(dry_run)
         local post_likes = {}
         local comment_likes = {}
         for index = 1, #likes do
-            local profile = profile_by_username[tostring(likes[index].username)]
+            local profile = profile_by_username[tostring(likes[index].username):lower()]
             if profile and (likes[index].is_comment == true or tonumber(likes[index].is_comment) == 1) then
                 local comment_id = comment_entries[tostring(likes[index].id)]
                 if comment_id then
@@ -1623,8 +1822,8 @@ local function run_picstagram(dry_run)
     if table_exists(follows_table) then
         local follows = Bridge.Database.Query(("SELECT * FROM `%s`"):format(follows_table), {})
         for index = 1, #follows do
-            local follower = profile_by_username[tostring(follows[index].follower)]
-            local following = profile_by_username[tostring(follows[index].followed)]
+            local follower = profile_by_username[tostring(follows[index].follower):lower()]
+            local following = profile_by_username[tostring(follows[index].followed):lower()]
             if follower and following and follower.profile_id ~= following.profile_id then
                 follow_rows[#follow_rows + 1] = {
                     follower.profile_id,
@@ -1644,8 +1843,8 @@ local function run_picstagram(dry_run)
             FROM `%s` request
         ]]):format(requests_table), {})
         for index = 1, #requests do
-            local requester = profile_by_username[tostring(requests[index].requester)]
-            local requestee = profile_by_username[tostring(requests[index].requestee)]
+            local requester = profile_by_username[tostring(requests[index].requester):lower()]
+            local requestee = profile_by_username[tostring(requests[index].requestee):lower()]
             if requester and requestee and requester.profile_id ~= requestee.profile_id then
                 follow_rows[#follow_rows + 1] = {
                     requester.profile_id, requestee.profile_id, "pending", requests[index].migrated_at,
@@ -1682,7 +1881,7 @@ local function run_picstagram(dry_run)
             FROM `%s` story
         ]]):format(stories_table), {})
         for index = 1, #stories do
-            local profile = profile_by_username[tostring(stories[index].username)]
+            local profile = profile_by_username[tostring(stories[index].username):lower()]
             local url = valid_media_url(stories[index].image)
             if profile and url then
                 local story_id = deterministic_uuid("lb-phone-picstagram-story", stories[index].id)
@@ -1733,7 +1932,7 @@ local function run_picstagram(dry_run)
         ]]):format(views_table), {})
         for index = 1, #views do
             local story = story_entries[tostring(views[index].story_id)]
-            local viewer = profile_by_username[tostring(views[index].viewer)]
+            local viewer = profile_by_username[tostring(views[index].viewer):lower()]
             if story and viewer then
                 view_rows[#view_rows + 1] = { story.id, viewer.profile_id, views[index].migrated_at }
             end
@@ -1753,6 +1952,7 @@ local function run_picstagram(dry_run)
         follows = #follow_rows,
         stories = count_rows(stories_table),
         story_views = #view_rows,
+        ownership_repaired = ownership_repaired,
         skipped = skipped,
         unsupported_messages = count_rows(source_table("instagram_messages")),
         unsupported_notifications = count_rows(source_table("instagram_notifications")),
@@ -2230,6 +2430,7 @@ local function run_flip_tok(dry_run)
         FROM `%s` account
         JOIN `sky_phone_migration_owners` owner
             ON owner.`source` = ? AND owner.`source_phone_number` = account.`phone_number`
+        ORDER BY account.`date_joined`, account.`phone_number`, account.`username`
     ]]):format(accounts_table), { source_name })
     local entries = {}
     local skipped = 0
@@ -2240,7 +2441,6 @@ local function run_flip_tok(dry_run)
             entries[#entries + 1] = {
                 source = row,
                 handle = handle,
-                email = synthetic_email("flip", handle),
             }
         else
             skipped = skipped + 1
@@ -2257,54 +2457,34 @@ local function run_flip_tok(dry_run)
         }
     end
 
-    local cloud_rows = {}
-    for index = 1, #entries do
-        cloud_rows[#cloud_rows + 1] = {
-            entries[index].email,
-            deterministic_hex("lb-phone-fliptok-account", entries[index].handle),
-        }
-    end
-    insert_many("INSERT IGNORE INTO `sky_phone_accounts` (`email`, `password`) VALUES", 2, cloud_rows)
-    local target_accounts = Bridge.Database.Query("SELECT `id`, `email` FROM `sky_phone_accounts`", {})
-    local account_by_email = {}
-    for index = 1, #target_accounts do
-        account_by_email[tostring(target_accounts[index].email):lower()] = tonumber(target_accounts[index].id)
-    end
-    local target_profiles = Bridge.Database.Query(
-        "SELECT `id`, `account_id`, `handle` FROM `sky_phone_fliptok_profiles`", {}
-    )
-    local existing_by_handle = {}
-    for index = 1, #target_profiles do
-        existing_by_handle[tostring(target_profiles[index].handle):lower()] = target_profiles[index]
-    end
+    local accepted, assignment_skipped, ownership_repaired = prepare_social_profile_accounts(entries, {
+        profile_table = "sky_phone_fliptok_profiles",
+        synthetic_namespace = "flip",
+        account_namespace = "lb-phone-fliptok-account",
+        media_pattern = "lb-flip-%",
+        apps = { "tiktok", "fliptok" },
+    })
+    skipped = skipped + assignment_skipped
 
-    local accepted = {}
     local avatar_rows = {}
-    for index = 1, #entries do
-        local entry = entries[index]
-        entry.account_id = account_by_email[entry.email]
-        local existing = existing_by_handle[entry.handle]
-        if entry.account_id and (not existing or tonumber(existing.account_id) == entry.account_id) then
-            accepted[#accepted + 1] = entry
-            local avatar = valid_media_url(entry.source.avatar)
-            if avatar then
-                entry.avatar_source = "lb-flip-avatar:" .. deterministic_uuid(
-                    "lb-phone-fliptok-avatar",
-                    entry.handle
-                )
-                avatar_rows[#avatar_rows + 1] = {
-                    entry.account_id,
-                    avatar,
-                    entry.avatar_source,
-                    "photo",
-                    "website_import",
-                    entry.avatar_source,
-                    entry.source.migrated_at,
-                    entry.source.migrated_at,
-                }
-            end
-        else
-            skipped = skipped + 1
+    for index = 1, #accepted do
+        local entry = accepted[index]
+        local avatar = valid_media_url(entry.source.avatar)
+        if avatar then
+            entry.avatar_source = "lb-flip-avatar:" .. deterministic_uuid(
+                "lb-phone-fliptok-avatar",
+                entry.handle
+            )
+            avatar_rows[#avatar_rows + 1] = {
+                entry.account_id,
+                avatar,
+                entry.avatar_source,
+                "photo",
+                "website_import",
+                entry.avatar_source,
+                entry.source.migrated_at,
+                entry.source.migrated_at,
+            }
         end
     end
     insert_many([[
@@ -2330,7 +2510,7 @@ local function run_flip_tok(dry_run)
         INSERT IGNORE INTO `sky_phone_fliptok_profiles`
             (`account_id`, `handle`, `display_name`, `bio`, `avatar_media_id`, `verified`, `created_at`) VALUES
     ]], 7, profile_rows)
-    target_profiles = Bridge.Database.Query(
+    local target_profiles = Bridge.Database.Query(
         "SELECT `id`, `account_id`, `handle` FROM `sky_phone_fliptok_profiles`", {}
     )
     local profile_by_handle = {}
@@ -2360,7 +2540,7 @@ local function run_flip_tok(dry_run)
 
     local session_candidates = {}
     local logged_table = source_table("logged_in_accounts")
-    if table_exists(logged_table) then
+    if social_login_table_available(logged_table) then
         local logged = Bridge.Database.Query(([[
             SELECT login.`username`, owner.`device_imei`
             FROM `%s` login
@@ -2394,8 +2574,10 @@ local function run_flip_tok(dry_run)
         end
     end
     insert_many([[
-        INSERT IGNORE INTO `sky_phone_fliptok_sessions` (`device_imei`, `profile_id`) VALUES
-    ]], 2, session_rows)
+        INSERT INTO `sky_phone_fliptok_sessions` (`device_imei`, `profile_id`) VALUES
+    ]], 2, session_rows, [[
+        ON DUPLICATE KEY UPDATE `profile_id` = VALUES(`profile_id`), `updated_at` = CURRENT_TIMESTAMP
+    ]])
 
     local videos_table = source_table("tiktok_videos")
     local video_entries = {}
@@ -2603,6 +2785,7 @@ local function run_flip_tok(dry_run)
         follows = #follows,
         reactions = #reactions,
         notifications = #notification_rows,
+        ownership_repaired = ownership_repaired,
         skipped = skipped,
         password_policy_mismatches = policy_passwords,
         unsupported_messages = count_rows(source_table("tiktok_messages")),
@@ -2621,10 +2804,9 @@ local function run_feather(dry_run)
         FROM `%s` account
         JOIN `sky_phone_migration_owners` owner
             ON owner.`source` = ? AND owner.`source_phone_number` = account.`phone_number`
-        ORDER BY account.`phone_number`, account.`date_joined`, account.`username`
+        ORDER BY account.`date_joined`, account.`phone_number`, account.`username`
     ]]):format(accounts_table), { source_name })
     local entries = {}
-    local entry_by_source_username = {}
     local skipped = 0
     for index = 1, #source_accounts do
         local row = source_accounts[index]
@@ -2632,7 +2814,6 @@ local function run_feather(dry_run)
         if handle then
             local entry = { source = row, handle = handle }
             entries[#entries + 1] = entry
-            entry_by_source_username[tostring(row.username)] = entry
         else
             skipped = skipped + 1
         end
@@ -2650,96 +2831,34 @@ local function run_feather(dry_run)
         }
     end
 
-    local preferred = {}
-    local logged_table = source_table("logged_in_accounts")
-    if table_exists(logged_table) then
-        local logged = Bridge.Database.Query(([[
-            SELECT login.`username`, owner.`account_id`
-            FROM `%s` login
-            JOIN `sky_phone_migration_owners` owner
-                ON owner.`source` = ? AND owner.`source_phone_number` = login.`phone_number`
-            WHERE login.`active` = 1 AND LOWER(login.`app`) IN ('twitter', 'feather')
-        ]]):format(logged_table), { source_name })
-        for index = 1, #logged do
-            local account_id = tonumber(logged[index].account_id)
-            if account_id then
-                preferred[account_id] = tostring(logged[index].username):lower()
-            end
-        end
-    end
-    for index = 1, #entries do
-        local owner_account_id = tonumber(entries[index].source.owner_account_id)
-        if owner_account_id then
-            preferred[owner_account_id] = preferred[owner_account_id]
-                or tostring(entries[index].source.username):lower()
-        end
-    end
+    local accepted, assignment_skipped, ownership_repaired = prepare_social_profile_accounts(entries, {
+        profile_table = "sky_phone_feather_profiles",
+        synthetic_namespace = "feather",
+        account_namespace = "lb-phone-feather-account",
+        media_pattern = "lb-feather-%",
+        apps = { "twitter", "feather" },
+    })
+    skipped = skipped + assignment_skipped
 
-    local target_profiles = Bridge.Database.Query(
-        "SELECT `id`, `account_id`, `handle` FROM `sky_phone_feather_profiles`", {}
-    )
-    local occupied_accounts = {}
-    local existing_by_handle = {}
-    for index = 1, #target_profiles do
-        occupied_accounts[tonumber(target_profiles[index].account_id)] = target_profiles[index]
-        existing_by_handle[tostring(target_profiles[index].handle):lower()] = target_profiles[index]
-    end
-    local cloud_rows = {}
-    for index = 1, #entries do
-        local entry = entries[index]
-        local owner_account_id = tonumber(entry.source.owner_account_id)
-        local existing = existing_by_handle[entry.handle]
-        local preferred_for_owner = owner_account_id
-            and preferred[owner_account_id] == tostring(entry.source.username):lower()
-        local may_use_owner = preferred_for_owner and (
-            not occupied_accounts[owner_account_id]
-            or (existing and tonumber(existing.account_id) == owner_account_id)
-        )
-        if may_use_owner then
-            entry.account_id = owner_account_id
-            occupied_accounts[owner_account_id] = occupied_accounts[owner_account_id] or true
-        else
-            entry.email = synthetic_email("feather", entry.handle)
-            cloud_rows[#cloud_rows + 1] = {
-                entry.email,
-                deterministic_hex("lb-phone-feather-account", entry.handle),
-            }
-        end
-    end
-    insert_many("INSERT IGNORE INTO `sky_phone_accounts` (`email`, `password`) VALUES", 2, cloud_rows)
-    local target_accounts = Bridge.Database.Query("SELECT `id`, `email` FROM `sky_phone_accounts`", {})
-    local account_by_email = {}
-    for index = 1, #target_accounts do
-        account_by_email[tostring(target_accounts[index].email):lower()] = tonumber(target_accounts[index].id)
-    end
-
-    local accepted = {}
     local avatar_rows = {}
-    for index = 1, #entries do
-        local entry = entries[index]
-        entry.account_id = entry.account_id or account_by_email[entry.email]
-        local existing = existing_by_handle[entry.handle]
-        if entry.account_id and (not existing or tonumber(existing.account_id) == entry.account_id) then
-            accepted[#accepted + 1] = entry
-            local avatar = valid_media_url(entry.source.profile_image)
-            if avatar then
-                entry.avatar_source = "lb-feather-avatar:" .. deterministic_uuid(
-                    "lb-phone-feather-avatar",
-                    entry.handle
-                )
-                avatar_rows[#avatar_rows + 1] = {
-                    entry.account_id,
-                    avatar,
-                    entry.avatar_source,
-                    "photo",
-                    "website_import",
-                    entry.avatar_source,
-                    entry.source.migrated_at,
-                    entry.source.migrated_at,
-                }
-            end
-        else
-            skipped = skipped + 1
+    for index = 1, #accepted do
+        local entry = accepted[index]
+        local avatar = valid_media_url(entry.source.profile_image)
+        if avatar then
+            entry.avatar_source = "lb-feather-avatar:" .. deterministic_uuid(
+                "lb-phone-feather-avatar",
+                entry.handle
+            )
+            avatar_rows[#avatar_rows + 1] = {
+                entry.account_id,
+                avatar,
+                entry.avatar_source,
+                "photo",
+                "website_import",
+                entry.avatar_source,
+                entry.source.migrated_at,
+                entry.source.migrated_at,
+            }
         end
     end
     insert_many([[
@@ -2766,7 +2885,7 @@ local function run_feather(dry_run)
         INSERT IGNORE INTO `sky_phone_feather_profiles`
             (`account_id`, `handle`, `display_name`, `bio`, `avatar_media_id`, `verified`, `created_at`) VALUES
     ]], 7, profile_rows)
-    target_profiles = Bridge.Database.Query(
+    local target_profiles = Bridge.Database.Query(
         "SELECT `id`, `account_id`, `handle` FROM `sky_phone_feather_profiles`", {}
     )
     local profile_by_handle = {}
@@ -2999,11 +3118,251 @@ local function run_feather(dry_run)
         likes = #reaction_rows,
         follows = #follow_rows,
         notifications = #notification_rows,
+        ownership_repaired = ownership_repaired,
         skipped = skipped,
         unsupported_private_profiles = private_profiles,
         unsupported_follow_requests = count_rows(source_table("twitter_follow_requests")),
         unsupported_messages = count_rows(source_table("twitter_messages")),
         unsupported_promotions = count_rows(source_table("twitter_promoted")),
+    }
+end
+
+local function run_flare(dry_run)
+    local accounts_table = source_table("tinder_accounts")
+    if not table_exists(accounts_table) then
+        return { source = 0, profiles = 0, profile_photos = 0, swipes = 0, matches = 0, skipped = 0 }
+    end
+
+    local source_accounts = Bridge.Database.Query(([[
+        SELECT account.*, owner.`account_id` AS `owner_account_id`,
+            TIMESTAMPDIFF(YEAR, account.`dob`, CURDATE()) AS `age`,
+            DATE_FORMAT(account.`last_seen`, '%%Y-%%m-%%d %%H:%%i:%%s') AS `migrated_at`
+        FROM `%s` account
+        JOIN `sky_phone_migration_owners` owner
+            ON owner.`source` = ? AND owner.`source_phone_number` = account.`phone_number`
+        ORDER BY account.`phone_number`
+    ]]):format(accounts_table), { source_name })
+
+    local entries = {}
+    local photo_count = 0
+    local skipped = 0
+    for index = 1, #source_accounts do
+        local row = source_accounts[index]
+        local account_id = tonumber(row.owner_account_id)
+        local name = clamp_text(row.name, 32):match("^%s*(.-)%s*$")
+        if #name < 2 then
+            name = "LB User"
+        end
+        local age = math.max(18, math.min(99, math.floor(tonumber(row.age) or 18)))
+        local interested_men = row.interested_men == true or tonumber(row.interested_men) == 1
+        local interested_women = row.interested_women == true or tonumber(row.interested_women) == 1
+        local interested_in = interested_men and not interested_women and "man"
+            or interested_women and not interested_men and "woman"
+            or "everyone"
+        if account_id then
+            local photos = extract_media(row.photos, 6)
+            local photo_entries = {}
+            for position = 1, #photos do
+                if photos[position].media_type == "photo" and photos[position].url:match("^https://") then
+                    photo_entries[#photo_entries + 1] = {
+                        url = photos[position].url,
+                        source_id = "lb-flare-photo:" .. deterministic_uuid(
+                            "lb-phone-flare-photo",
+                            tostring(row.phone_number) .. ":" .. tostring(position)
+                        ),
+                    }
+                end
+            end
+            photo_count = photo_count + #photo_entries
+            entries[#entries + 1] = {
+                source = row,
+                account_id = account_id,
+                name = name,
+                age = age,
+                bio = clamp_text(row.bio, 300),
+                gender = (row.is_male == true or tonumber(row.is_male) == 1) and "man" or "woman",
+                interested_in = interested_in,
+                discoverable = (row.active == true or tonumber(row.active) == 1) and 1 or 0,
+                photos = photo_entries,
+            }
+        else
+            skipped = skipped + 1
+        end
+    end
+
+    local swipes_table = source_table("tinder_swipes")
+    local source_swipes = {}
+    if table_exists(swipes_table) then
+        source_swipes = Bridge.Database.Query(([[
+            SELECT swipe.*, swiper_owner.`account_id` AS `swiper_account_id`,
+                target_owner.`account_id` AS `target_account_id`
+            FROM `%s` swipe
+            JOIN `sky_phone_migration_owners` swiper_owner
+                ON swiper_owner.`source` = ? AND swiper_owner.`source_phone_number` = swipe.`swiper`
+            JOIN `sky_phone_migration_owners` target_owner
+                ON target_owner.`source` = ? AND target_owner.`source_phone_number` = swipe.`swipee`
+        ]]):format(swipes_table), { source_name, source_name })
+    end
+    if dry_run then
+        return {
+            source = #source_accounts,
+            profiles = #entries,
+            profile_photos = photo_count,
+            swipes = #source_swipes,
+            skipped = skipped,
+        }
+    end
+
+    local existing_profiles = Bridge.Database.Query(
+        "SELECT `account_id` FROM `sky_phone_flare_profiles`", {}
+    )
+    local existing_profile_accounts = {}
+    for index = 1, #existing_profiles do
+        existing_profile_accounts[tonumber(existing_profiles[index].account_id)] = true
+    end
+    for index = 1, #entries do
+        entries[index].import_profile = not existing_profile_accounts[entries[index].account_id]
+    end
+
+    local media_rows = {}
+    for index = 1, #entries do
+        local entry = entries[index]
+        if entry.import_profile then
+            for position = 1, #entry.photos do
+                local photo = entry.photos[position]
+                media_rows[#media_rows + 1] = {
+                    entry.account_id,
+                    photo.url,
+                    photo.source_id,
+                    "photo",
+                    "website_import",
+                    photo.source_id,
+                    entry.source.migrated_at,
+                    entry.source.migrated_at,
+                }
+            end
+        end
+    end
+    insert_many([[
+        INSERT IGNORE INTO `sky_phone_media`
+            (`account_id`, `url`, `remote_id`, `media_type`, `origin`, `source_id`,
+                `verified_at`, `created_at`) VALUES
+    ]], 8, media_rows)
+
+    local profile_rows = {}
+    for index = 1, #entries do
+        local entry = entries[index]
+        if entry.import_profile then
+            profile_rows[#profile_rows + 1] = {
+                entry.account_id,
+                entry.name,
+                entry.age,
+                entry.bio,
+                entry.gender,
+                entry.interested_in,
+                18,
+                99,
+                0,
+                json.encode({}),
+                "longTerm",
+                entry.discoverable,
+                entry.source.migrated_at,
+                entry.source.migrated_at,
+            }
+        end
+    end
+    local inserted_profiles = insert_many([[
+        INSERT IGNORE INTO `sky_phone_flare_profiles`
+            (`account_id`, `name`, `age`, `bio`, `gender`, `interested_in`, `min_age`, `max_age`,
+                `avatar`, `interests`, `looking_for`, `discoverable`, `created_at`, `updated_at`) VALUES
+    ]], 14, profile_rows)
+
+    local target_profiles = Bridge.Database.Query(
+        "SELECT `id`, `account_id` FROM `sky_phone_flare_profiles`", {}
+    )
+    local profile_by_account = {}
+    for index = 1, #target_profiles do
+        profile_by_account[tonumber(target_profiles[index].account_id)] = tonumber(target_profiles[index].id)
+    end
+    local media_ids = load_media_ids("lb-flare-photo:%")
+    local photo_rows = {}
+    for index = 1, #entries do
+        local entry = entries[index]
+        local profile_id = profile_by_account[entry.account_id]
+        if profile_id and entry.import_profile then
+            for position = 1, #entry.photos do
+                local media_id = media_ids[entry.photos[position].source_id]
+                if media_id then
+                    photo_rows[#photo_rows + 1] = { profile_id, media_id, position }
+                end
+            end
+        end
+    end
+    insert_many([[
+        INSERT IGNORE INTO `sky_phone_flare_profile_photos`
+            (`profile_id`, `media_id`, `sort_order`) VALUES
+    ]], 3, photo_rows)
+
+    local swipe_rows = {}
+    local liked_pairs = {}
+    for index = 1, #source_swipes do
+        local row = source_swipes[index]
+        local swiper_account_id = tonumber(row.swiper_account_id)
+        local target_account_id = tonumber(row.target_account_id)
+        if swiper_account_id and target_account_id and swiper_account_id ~= target_account_id
+            and profile_by_account[swiper_account_id] and profile_by_account[target_account_id]
+        then
+            local liked = row.liked == true or tonumber(row.liked) == 1
+            swipe_rows[#swipe_rows + 1] = {
+                swiper_account_id,
+                target_account_id,
+                liked and "like" or "pass",
+            }
+            if liked then
+                liked_pairs[tostring(swiper_account_id) .. ":" .. tostring(target_account_id)] = true
+            end
+        else
+            skipped = skipped + 1
+        end
+    end
+    insert_many([[
+        INSERT IGNORE INTO `sky_phone_flare_swipes`
+            (`swiper_account_id`, `target_account_id`, `choice`) VALUES
+    ]], 3, swipe_rows)
+
+    local match_rows = {}
+    local matched_pairs = {}
+    for key in pairs(liked_pairs) do
+        local first, second = key:match("^(%d+):(%d+)$")
+        local first_id = tonumber(first)
+        local second_id = tonumber(second)
+        if first_id and second_id
+            and liked_pairs[tostring(second_id) .. ":" .. tostring(first_id)]
+        then
+            local account_a_id = math.min(first_id, second_id)
+            local account_b_id = math.max(first_id, second_id)
+            local pair_key = tostring(account_a_id) .. ":" .. tostring(account_b_id)
+            if not matched_pairs[pair_key] then
+                matched_pairs[pair_key] = true
+                match_rows[#match_rows + 1] = {
+                    deterministic_uuid("lb-phone-flare-match", pair_key),
+                    account_a_id,
+                    account_b_id,
+                }
+            end
+        end
+    end
+    insert_many([[
+        INSERT IGNORE INTO `sky_phone_flare_matches` (`id`, `account_a_id`, `account_b_id`) VALUES
+    ]], 3, match_rows)
+
+    return {
+        source = #source_accounts,
+        profiles = inserted_profiles,
+        profile_photos = #photo_rows,
+        swipes = #swipe_rows,
+        matches = #match_rows,
+        skipped = skipped,
     }
 end
 
@@ -3025,6 +3384,7 @@ local domain_order = {
     "darkChat",
     "flipTok",
     "feather",
+    "flare",
 }
 
 local domain_runners = {
@@ -3045,6 +3405,7 @@ local domain_runners = {
     darkChat = run_dark_chat,
     flipTok = run_flip_tok,
     feather = run_feather,
+    flare = run_flare,
 }
 
 local preview_tables = {
@@ -3089,6 +3450,7 @@ local preview_tables = {
         "twitter_follows",
         "twitter_notifications",
     },
+    flare = { "tinder_accounts", "tinder_swipes" },
 }
 
 local function preview_domain(domain)
@@ -3120,12 +3482,17 @@ local domain_labels = {
     darkChat = "DarkChat",
     flipTok = "FlipTok",
     feather = "Feather",
+    flare = "Flare",
 }
 
 local summary_metrics = {
     { "imported", "imported" },
     { "resolved", "matched" },
     { "profiles", "profiles" },
+    { "ownership_repaired", "ownership repairs" },
+    { "profile_photos", "profile photos" },
+    { "swipes", "swipes" },
+    { "matches", "matches" },
     { "sessions", "sessions" },
     { "posts", "posts" },
     { "post_media", "media" },
@@ -3449,6 +3816,56 @@ local function rollback_lb_phone()
             end
         end
         stats.picstagram = delete_values("sky_phone_picstagram_profiles", "id", picstagram_profiles)
+
+        local flare_match_ids = {}
+        local flare_swipe_rows = rollback_source_rows("tinder_swipes", { "swiper", "swipee", "liked" })
+        local liked_flare_pairs = {}
+        local removed_flare_swipes = 0
+        for index = 1, #flare_swipe_rows do
+            local swiper_owner = owner_by_number[tostring(flare_swipe_rows[index].swiper)]
+            local target_owner = owner_by_number[tostring(flare_swipe_rows[index].swipee)]
+            local swiper_account_id = swiper_owner and tonumber(swiper_owner.account_id)
+            local target_account_id = target_owner and tonumber(target_owner.account_id)
+            if swiper_account_id and target_account_id and swiper_account_id ~= target_account_id then
+                removed_flare_swipes = removed_flare_swipes + affected_rows(Bridge.Database.Query([[
+                    DELETE FROM `sky_phone_flare_swipes`
+                    WHERE `swiper_account_id` = ? AND `target_account_id` = ?
+                ]], { swiper_account_id, target_account_id }))
+                if flare_swipe_rows[index].liked == true or tonumber(flare_swipe_rows[index].liked) == 1 then
+                    liked_flare_pairs[tostring(swiper_account_id) .. ":" .. tostring(target_account_id)] = true
+                end
+            end
+        end
+        for key in pairs(liked_flare_pairs) do
+            local first, second = key:match("^(%d+):(%d+)$")
+            local first_id = tonumber(first)
+            local second_id = tonumber(second)
+            if first_id and second_id
+                and liked_flare_pairs[tostring(second_id) .. ":" .. tostring(first_id)]
+                and first_id < second_id
+            then
+                flare_match_ids[#flare_match_ids + 1] = deterministic_uuid(
+                    "lb-phone-flare-match",
+                    tostring(first_id) .. ":" .. tostring(second_id)
+                )
+            end
+        end
+        stats.flareMatches = delete_values("sky_phone_flare_matches", "id", flare_match_ids)
+        stats.flareSwipes = removed_flare_swipes
+
+        local flare_accounts = rollback_source_rows("tinder_accounts", { "phone_number", "last_seen" })
+        local removed_flare_profiles = 0
+        for index = 1, #flare_accounts do
+            local owner = owner_by_number[tostring(flare_accounts[index].phone_number)]
+            local account_id = owner and tonumber(owner.account_id)
+            if account_id and flare_accounts[index].last_seen then
+                removed_flare_profiles = removed_flare_profiles + affected_rows(Bridge.Database.Query([[
+                    DELETE FROM `sky_phone_flare_profiles`
+                    WHERE `account_id` = ? AND `created_at` = ? AND `updated_at` = ?
+                ]], { account_id, flare_accounts[index].last_seen, flare_accounts[index].last_seen }))
+            end
+        end
+        stats.flareProfiles = removed_flare_profiles
 
         local feather_post_ids = {}
         local tweets = rollback_source_rows("twitter_tweets", { "id" })

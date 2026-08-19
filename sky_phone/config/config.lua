@@ -1439,6 +1439,7 @@ if IsDuplicityVersion() then
             darkChat = true,
             flipTok = true,
             feather = true,
+            flare = true,
         },
     }
 end

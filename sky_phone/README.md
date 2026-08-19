@@ -414,7 +414,9 @@ The importer:
 - Can remove migration-created Sky Phone data with `remove`
 - Reports unsupported source records instead of forcing them into incompatible Sky Phone structures
 
-Supported domains include devices, settings, alarms, contacts, blocked numbers, calls, messages, photos, notes, wallet, voice memos, Picstagram, Mail, map markers, compatible DarkChat data, FlipTok, and Feather.
+For Picstagram, FlipTok, and Feather, the active LB Phone login is attached to the migrated player's Sky Cloud account. If LB has no active-login row, the oldest mapped profile is used. Additional social profiles remain separate, and a normal import automatically runs versioned ownership repairs for older Sky Phone migrations.
+
+Supported domains include devices, settings, alarms, contacts, blocked numbers, calls, messages, photos, notes, wallet, voice memos, Picstagram, Mail, map markers, compatible DarkChat data, FlipTok, Feather, and Flare (LB Tinder profiles, photos, swipes, and mutual matches).
 
 The migration command is server-console only.
 

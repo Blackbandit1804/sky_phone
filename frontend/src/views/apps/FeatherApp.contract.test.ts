@@ -142,6 +142,19 @@ describe('FeatherApp Sky UI contract', () => {
     expect(source).not.toContain('feather-feed-add')
   })
 
+  it('keeps profile suggestion content styles off the follow button', () => {
+    expect(source).toContain('class="feather-profile-suggestion__profile"')
+    expect(source).toMatch(
+      /\.feather-app\.feather-app--active \.feather-profile-suggestion__profile\s*\{[^}]*width:\s*100%/s,
+    )
+    expect(source).not.toContain(
+      '.feather-app.feather-app--active .feather-profile-suggestion > button',
+    )
+    expect(source).not.toContain(
+      '.dark.feather-app .feather-profile-suggestion > button',
+    )
+  })
+
   it('keeps owner actions in the navbar and removes the profile media tab', () => {
     const profileStart = source.indexOf('class="feather-profile"')
     const tabsStart = source.indexOf(
