@@ -175,4 +175,25 @@ describe('FeatherApp Sky UI contract', () => {
       /\.feather-app--active \.feather-profile__logout\s*\{[^}]*--sky-app-accent:\s*#fff/s,
     )
   })
+
+  it('keeps suggestion profile geometry off the follow button', () => {
+    expect(source).toContain('<SkyScrollRail')
+    expect(source).toContain('class="feather-profile-suggestions__rail"')
+    expect(source).toContain(':label="t(\'people\')"')
+    expect(source).toContain(
+      'class="feather-profile-suggestion__profile"',
+    )
+    expect(source).toMatch(
+      /\.feather-app\.feather-app--active \.feather-profile-suggestion__profile\s*\{[^}]*width:\s*100%/s,
+    )
+    expect(source).toMatch(
+      /\.feather-app\.feather-app--active[\s\S]*?\.feather-profile-suggestion[\s\S]*?> :deep\(\.sky-button\)\s*\{[^}]*width:\s*auto/s,
+    )
+    expect(source).not.toContain(
+      '.feather-profile-suggestion > button',
+    )
+    expect(source).toMatch(
+      /\.feather-profile-suggestions__rail::-webkit-scrollbar\s*\{[^}]*display:\s*block[^}]*height:\s*5px/s,
+    )
+  })
 })

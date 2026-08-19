@@ -47,6 +47,7 @@ import {
   SkyPillNavigation,
   SkyAppPage,
   SkyScrollArea,
+  SkyScrollRail,
   SkySpinner,
   SkySearchbar,
   SkySegmented,
@@ -1708,13 +1709,20 @@ onMounted(async () => {
           class="feather-profile-suggestions"
         >
           <h2>{{ t('people') }}</h2>
-          <div class="feather-profile-suggestions__rail">
+          <SkyScrollRail
+            class="feather-profile-suggestions__rail"
+            :label="t('people')"
+          >
             <article
               v-for="person in feather.suggestions"
               :key="person.id"
               class="feather-profile-suggestion"
             >
-              <button type="button" @click="openProfile(person.id)">
+              <button
+                type="button"
+                class="feather-profile-suggestion__profile"
+                @click="openProfile(person.id)"
+              >
                 <span class="feather-avatar feather-profile-suggestion__avatar">
                   <img
                     v-if="person.avatar_url"
@@ -1743,7 +1751,7 @@ onMounted(async () => {
                 {{ person.is_following ? t('following') : t('follow') }}
               </SkyButton>
             </article>
-          </div>
+          </SkyScrollRail>
         </section>
       </SkyScrollArea>
 
@@ -3490,7 +3498,7 @@ onMounted(async () => {
   height: 76px;
   background: linear-gradient(135deg, #123d64, #1d9bf0);
 }
-.dark.feather-app .feather-profile-suggestion > button {
+.dark.feather-app .feather-profile-suggestion__profile {
   display: flex;
   width: 100%;
   flex-direction: column;
@@ -4688,11 +4696,24 @@ onMounted(async () => {
   font-size: 16px;
 }
 .feather-app.feather-app--active .feather-profile-suggestions__rail {
-  display: flex;
   gap: 9px;
-  overflow-x: auto;
-  padding: 0 13px;
-  scrollbar-width: none;
+  padding: 0 13px 7px;
+  scrollbar-color: var(--feather-muted) transparent;
+  scrollbar-width: thin;
+}
+.feather-app.feather-app--active
+  .feather-profile-suggestions__rail::-webkit-scrollbar {
+  display: block;
+  height: 5px;
+}
+.feather-app.feather-app--active
+  .feather-profile-suggestions__rail::-webkit-scrollbar-track {
+  background: transparent;
+}
+.feather-app.feather-app--active
+  .feather-profile-suggestions__rail::-webkit-scrollbar-thumb {
+  border-radius: var(--sky-radius-pill);
+  background: rgba(113, 118, 123, 0.68);
 }
 .feather-app.feather-app--active .feather-profile-suggestion {
   position: relative;
@@ -4708,7 +4729,7 @@ onMounted(async () => {
 .feather-app--active.feather-app--light .feather-profile-suggestion {
   background: #fff;
 }
-.feather-app.feather-app--active .feather-profile-suggestion > button {
+.feather-app.feather-app--active .feather-profile-suggestion__profile {
   display: grid;
   width: 100%;
   grid-template-columns: 42px minmax(0, 1fr);
@@ -4759,6 +4780,7 @@ onMounted(async () => {
   top: 10px;
   right: 9px;
   bottom: auto;
+  width: auto;
   min-width: 56px;
   min-height: 27px;
   padding-inline: 8px;
