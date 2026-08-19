@@ -109,6 +109,31 @@ function verifyBrowserTestData(dataByEndpoint) {
     'camera captures',
     2,
   )
+  expectItems(
+    development.device.data.apps.payload.claimedApps,
+    'installed demo apps',
+    41,
+  )
+  assert.equal(
+    new Set(development.device.data.apps.payload.claimedApps).size,
+    41,
+    'browser demo apps were not uniquely installed',
+  )
+  assert.equal(
+    development.device.data.settings.payload.settings.wallpaper,
+    'custom',
+    'browser demo home wallpaper was not configured',
+  )
+  assert.equal(
+    development.device.data.settings.payload.settings.lockWallpaper,
+    'custom',
+    'browser demo Lock Screen wallpaper was not configured',
+  )
+  assert.match(
+    development.device.data.settings.payload.settings.wallpaperImageUrl,
+    /sky-phone-demo-gradient\.png$/,
+    'browser demo wallpaper image was not configured',
+  )
   expectItems(development.memos, 'memos', 3)
   expectItems(development.notes, 'notes', 4)
   assert(
