@@ -2906,6 +2906,50 @@ let calendarEvents = [
     title: 'Beach cruise',
   },
 ]
+const demoInstalledAppIds = [
+  'citywarn',
+  'crypto',
+  'health',
+  'weazel-news',
+  'companies',
+  'music',
+  'picstagram',
+  'feather',
+  'fliptok',
+  'flare',
+  'calendar',
+  'radio',
+  'local-pages',
+  'crewlink',
+  'phone',
+  'messages',
+  'darkchat',
+  'garage',
+  'house',
+  'map',
+  'skyride',
+  'banking',
+  'billing',
+  'mail',
+  'notes',
+  'memos',
+  'calculator',
+  'camera',
+  'clock',
+  'weather',
+  'photos',
+  'app-store',
+  'settings',
+  'snake',
+  'memory',
+  'number-merge',
+  'minesweeper',
+  'tower-stack',
+  'sky-flappy',
+  'citymarkt',
+  'neon-drop',
+]
+const demoWallpaperUrl = '/img/wallpapers/sky-phone-demo-gradient.png'
 const deviceData = {
   appAuth: {
     payload: {
@@ -2949,7 +2993,7 @@ const deviceData = {
   },
   apps: {
     payload: {
-      claimedApps: [],
+      claimedApps: [...demoInstalledAppIds],
     },
     revision: 2,
   },
@@ -3042,6 +3086,8 @@ const deviceData = {
         airplaneMode: false,
         appearanceMode: 'automatic',
         frame: 'black',
+        lockWallpaper: 'custom',
+        lockWallpaperImageUrl: demoWallpaperUrl,
         notificationDurationSeconds: 10,
         notificationSound: 'chime',
         notificationVolume: 70,
@@ -3049,7 +3095,11 @@ const deviceData = {
         ringtone: 'skyline',
         ringtoneVolume: 80,
         streamerMode: false,
-        wallpaper: 'midnight',
+        wallpaper: 'custom',
+        wallpaperHistory: [
+          { imageUrl: demoWallpaperUrl, wallpaper: 'custom' },
+        ],
+        wallpaperImageUrl: demoWallpaperUrl,
       },
       version: 1,
     },
@@ -9716,7 +9766,33 @@ app.post('/api/:endpoint', (request, response) => {
               },
             },
           }
-        : deviceData
+        : testScenario === ''
+          ? {
+              ...deviceData,
+              apps: {
+                ...deviceData.apps,
+                payload: {
+                  claimedApps: [...demoInstalledAppIds],
+                },
+              },
+              settings: {
+                ...deviceData.settings,
+                payload: {
+                  ...deviceData.settings.payload,
+                  settings: {
+                    ...deviceData.settings.payload.settings,
+                    lockWallpaper: 'custom',
+                    lockWallpaperImageUrl: demoWallpaperUrl,
+                    wallpaper: 'custom',
+                    wallpaperHistory: [
+                      { imageUrl: demoWallpaperUrl, wallpaper: 'custom' },
+                    ],
+                    wallpaperImageUrl: demoWallpaperUrl,
+                  },
+                },
+              },
+            }
+          : deviceData
     response.json({
       success: true,
       data: {

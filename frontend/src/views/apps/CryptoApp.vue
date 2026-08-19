@@ -25,7 +25,7 @@ import {
   WalletCards,
 } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import cryptoHeaderLogo from '@/assets/img/app-icons/crypto-header-logo.png'
+import cryptoHeaderLogo from '@/assets/img/app-icons/crypto-header-logo.webp'
 import CryptoLogo from '@/components/crypto/CryptoLogo.vue'
 import { useAccountStore } from '@/stores/account'
 import { useCryptoStore } from '@/stores/crypto'

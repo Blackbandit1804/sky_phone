@@ -84,4 +84,16 @@ describe('browser development preview contract', () => {
     )
     expect(mainCss).not.toContain('.phone-stage--dev')
   })
+
+  it('fills the dedicated browser embed without clipping the hardware controls', () => {
+    expect(source).toContain("developmentParameters.has('browserPreview')")
+    expect(source).toContain("'phone-stage--browser-preview': isBrowserPreview")
+    expect(source).toContain('return (availableScale * 0.94) / PHONE_BASE_SCALE')
+    expect(mainCss).toMatch(
+      /\.phone-stage--browser-preview\s*\{[^}]*place-items:\s*center;[^}]*padding:\s*0;/s,
+    )
+    expect(mainCss).toMatch(
+      /\.phone-stage--browser-preview \.phone-device\s*\{[^}]*filter:\s*none;/s,
+    )
+  })
 })

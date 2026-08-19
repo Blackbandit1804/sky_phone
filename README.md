@@ -114,25 +114,27 @@ Sky Phone is built to be the **free FiveM phone you can choose without accepting
 
 ### Required
 
-- MySQL or MariaDB
-- `oxmysql`
-- One supported framework:
-  - ESX Legacy (`es_extended`)
-  - Qbox (`qbx_core`)
-  - QBCore (`qb-core`)
-- One supported inventory path:
-  - `ox_inventory`
-  - `qb-inventory`
-  - `lj-inventory`
-  - `qs-inventory`
-  - `codem-inventory`
-  - `core_inventory`
-  - `mf-inventory`
-  - `smx-inventory`
-  - `hex_4_inventory`
-  - Native ESX inventory
+| Requirement | Supported options |
+| --- | --- |
+| **Database** | MySQL or MariaDB |
+| **Database bridge** | `oxmysql` |
+| **Framework** | ESX Legacy (`es_extended`), QBCore (`qb-core`), or Qbox (`qbx_core`) |
+| **Inventory** | Choose one supported adapter from the table below |
 
-`mf-inventory` and `smx-inventory` are supported with ESX. The native ESX and HEX adapters use count-based items and therefore require unique phones and physical SIM cards to be disabled.
+| Inventory | Metadata support | Unique Phones | Notes |
+| --- | --- | --- | --- |
+| `ox_inventory` | Yes | Yes | Full per-item phone and physical SIM metadata |
+| `qb-inventory` | Yes | Yes | Uses item `info` metadata |
+| `lj-inventory` | Yes | Yes | QBCore inventory with item `info` metadata |
+| `qs-inventory` | Yes | Yes | Full per-slot metadata |
+| `codem-inventory` | Yes | Yes | Full per-slot metadata |
+| `core_inventory` | Yes | Yes | Full per-slot metadata |
+| `mf-inventory` | Yes | Yes | Supported with ESX |
+| `smx-inventory` | Yes | Yes | Supported with ESX through the player metadata bridge |
+| `hex_4_inventory` | **No metadata support** | **No, Unique Phones are not possible** | ESX only; set `Config.Phone.Unique = false` and `Config.Sim.Enabled = false` |
+| Native ESX inventory | **No metadata support** | **No, Unique Phones are not possible** | Count-based items; set `Config.Phone.Unique = false` and `Config.Sim.Enabled = false` |
+
+`hex_4_inventory` and native ESX inventory cannot persist per-item metadata. Unique Phones and physical SIM cards are therefore unavailable with these adapters.
 
 ### Voice
 

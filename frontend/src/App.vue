@@ -268,8 +268,13 @@ const PHONE_BASE_SCALE = 0.69 * 1.2
 const PHONE_PORTRAIT_WIDTH = 390
 const PHONE_PORTRAIT_HEIGHT = 844
 const MIN_PRODUCTION_PHONE_ZOOM = 260 / PHONE_PORTRAIT_WIDTH
-const isDevelopment = import.meta.env.DEV
 const developmentParameters = new URLSearchParams(window.location.search)
+const isBrowserPreview =
+  developmentParameters.has('browserPreview') &&
+  developmentParameters.get('apiBase')?.startsWith('/') === true
+const isDevelopment =
+  import.meta.env.DEV ||
+  developmentParameters.get('apiBase')?.startsWith('/') === true
 const developmentLockScreenPreview =
   isDevelopment && developmentParameters.has('lockScreenPreview')
 
@@ -433,6 +438,14 @@ let simPickerClosePending = false
 
 function getViewportScale(): number {
   const heightScale = window.innerHeight / REFERENCE_VIEWPORT_HEIGHT
+  if (isBrowserPreview) {
+    const availableScale = Math.min(
+      window.innerWidth / PHONE_PORTRAIT_WIDTH,
+      window.innerHeight / PHONE_PORTRAIT_HEIGHT,
+    )
+
+    return (availableScale * 0.94) / PHONE_BASE_SCALE
+  }
   if (isDevelopment) return heightScale
 
   return Math.min(window.innerWidth / REFERENCE_VIEWPORT_WIDTH, heightScale)
@@ -1583,6 +1596,7 @@ onBeforeUnmount(() => {
       "
       class="phone-stage"
       :class="{
+        'phone-stage--browser-preview': isBrowserPreview,
         'phone-stage--landscape': phone.cameraLandscape,
         'phone-stage--peek': notifications.isPeeking,
       }"
