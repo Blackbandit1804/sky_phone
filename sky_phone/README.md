@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="../inventory_images/phone.png" alt="Sky Phone – free FiveM phone script" width="128">
+  <img src="../inventory_images/phone.png" alt="Sky Phone, the free FiveM phone script" width="128">
 </p>
 
-<h1 align="center">Sky Phone — Free FiveM Phone Script</h1>
+<h1 align="center">Sky Phone: Free FiveM Phone Script</h1>
 
 <p align="center">
   <strong>The complete, free FiveM phone for ESX, QBCore, and Qbox.</strong><br>
@@ -44,7 +44,7 @@ Instead of maintaining separate ESX phone, QBCore phone, or Qbox phone versions,
 
 **Coming from LB Phone?** Sky Phone is designed to replace it. A controlled migration workflow transfers supported player data, while compatibility adapters keep supported LB Phone custom apps available. You can preview the import, migrate when you are ready, retry safely, and roll back migration-created Sky Phone records.
 
-This is not a cut-down free alternative. Sky Phone includes the core experience server owners and players expect from a leading paid FiveM phone—plus full source access, no purchase price, no feature paywalls, and no forced ecosystem lock-in.
+This is not a cut-down free alternative. Sky Phone includes the core experience server owners and players expect from a leading paid FiveM phone, plus full source access, no purchase price, no feature paywalls, and no forced ecosystem lock-in.
 
 The production frontend is included, so a normal server installation does not require Node.js or pnpm.
 
