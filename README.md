@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="inventory_images/phone.png" alt="Sky Phone, the free FiveM phone script" width="128">
+  <img src=".github/assets/live-demo-button.png" alt="Sky Phone, the free FiveM phone script" width="128">
 </p>
 
 <h1 align="center">Sky Phone: Free FiveM Phone Script</h1>
@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://www.sky-systems.net/shop/phone#live-demo">
-    <img alt="Try the interactive Sky Phone live demo" src="readme-assets/live-demo-button.svg" width="780">
+    <img alt="Try the interactive Sky Phone live demo" src=".github/assets/live-demo-button.svg" width="780">
   </a>
 </p>
 
