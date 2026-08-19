@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/sky-phone-banner.png" alt="Sky Phone, the free FiveM phone script" width="128">
+  <img src=".github/assets/sky-phone-banner.png" alt="Sky Phone, the free FiveM phone script">
 </p>
 
 <h1 align="center">Sky Phone: Free FiveM Phone Script</h1>
