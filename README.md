@@ -10,12 +10,25 @@
 </p>
 
 <p align="center">
+  <a href="https://www.sky-systems.net/shop/phone#live-demo">
+    <img alt="Try the interactive Sky Phone live demo" src="https://img.shields.io/badge/TRY_THE_LIVE_DEMO-OPEN_NOW-7c3aed?style=for-the-badge" height="52">
+  </a>
+</p>
+
+<p align="center">
+  <strong>Explore the real phone directly in your browser.</strong><br>
+  No download, no FiveM server, and no installation required.
+</p>
+
+<p align="center">
   <img alt="Free and open source" src="https://img.shields.io/badge/price-free-22c55e?style=for-the-badge">
   <img alt="GPL 3.0 license" src="https://img.shields.io/badge/license-GPL--3.0-2563eb?style=for-the-badge">
   <img alt="FiveM frameworks: ESX, QBCore, Qbox" src="https://img.shields.io/badge/FiveM-ESX%20%7C%20QBCore%20%7C%20Qbox-f97316?style=for-the-badge">
 </p>
 
 <p align="center">
+  <a href="https://www.sky-systems.net/shop/phone#live-demo"><strong>Live demo</strong></a>
+  &nbsp;&bull;&nbsp;
   <a href="https://github.com/sky-systems/sky_phone"><strong>Download for free</strong></a>
   &nbsp;&bull;&nbsp;
   <a href="https://discord.gg/sky-systems"><strong>Discord support</strong></a>
@@ -26,8 +39,6 @@
 **Jump to:** [App ecosystem](#one-phone-a-complete-app-ecosystem) · [Compatibility](#compatibility-at-a-glance) · [Installation](#quick-installation) · [LB Phone migration](#lb-phone-migration) · [Custom apps](#external-custom-apps) · [Support](#support-and-community)
 
 Sky Phone is a **free and open-source FiveM phone script** built to give serious roleplay servers the depth, polish, and flexibility normally associated with paid marketplace phones. It combines a modern iPhone-inspired interface, persistent devices and SIM cards, social networks, media, business tools, services, games, and broad framework support in one complete resource.
-
-Instead of maintaining separate ESX phone, QBCore phone, or Qbox phone versions, Sky Phone supports all three frameworks through one standalone resource.
 
 **Coming from LB Phone?** Sky Phone is designed to replace it. A controlled migration workflow transfers supported player data, while compatibility adapters keep supported LB Phone custom apps available. You can preview the import, migrate when you are ready, retry safely, and roll back migration-created Sky Phone records.
 
