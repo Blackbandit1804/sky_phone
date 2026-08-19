@@ -3375,7 +3375,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: #000;
   color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  font-family: var(--sky-font-family);
 }
 .state,
 .light-empty,

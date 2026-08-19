@@ -525,8 +525,7 @@
   height: var(--sky-widget-label-height);
   overflow: hidden;
   color: var(--sky-widget-label-color, #fff);
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  font-family: var(--sky-font-family);
   font-size: 11.5px;
   font-weight: 500;
   letter-spacing: -0.15px;

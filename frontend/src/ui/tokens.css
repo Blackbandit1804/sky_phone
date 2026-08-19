@@ -1,3 +1,19 @@
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/InterVariable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/InterVariable-Italic.woff2') format('woff2');
+}
+
 :root {
   --sky-device-pixel-ratio: 1;
   --sky-hairline-scale: 1;
@@ -26,9 +42,7 @@
   --sky-font-title: 17px;
   --sky-font-medium-title: 24px;
   --sky-font-large-title: 34px;
-  --sky-font-family:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF UI Text',
-    'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --sky-font-family: 'Inter', Arial, sans-serif;
   --sky-transition-fast: 100ms;
   --sky-transition-normal: 200ms;
   --sky-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
