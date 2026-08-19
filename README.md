@@ -1,23 +1,103 @@
-# Sky Phone
+<p align="center">
+  <img src="inventory_images/phone.png" alt="Sky Phone – free FiveM phone script" width="128">
+</p>
 
-Sky Phone is a complete, standalone FiveM smartphone resource with a modern iPhone-inspired interface, persistent device data, physical or virtual SIM support, social apps, media, services, games, and framework integrations.
+<h1 align="center">Sky Phone — Free FiveM Phone Script</h1>
 
-The production frontend is included. Customers do not need Node.js or pnpm for a normal server installation.
+<p align="center">
+  <strong>The complete, free FiveM phone for ESX, QBCore, and Qbox.</strong><br>
+  A premium-grade smartphone experience with 41 built-in apps, LB Phone migration, and first-class custom app support.
+</p>
 
-## Highlights
+<p align="center">
+  <img alt="Free and open source" src="https://img.shields.io/badge/price-free-22c55e?style=for-the-badge">
+  <img alt="GPL 3.0 license" src="https://img.shields.io/badge/license-GPL--3.0-2563eb?style=for-the-badge">
+  <img alt="FiveM frameworks: ESX, QBCore, Qbox" src="https://img.shields.io/badge/FiveM-ESX%20%7C%20QBCore%20%7C%20Qbox-f97316?style=for-the-badge">
+</p>
 
-- Modern Sky UI with light and dark mode support
-- Unique physical phones or one persistent virtual phone per character
-- Registered, anonymous, physical, and automatic virtual SIM cards
-- Calls, Messages, Mail, DarkChat, Radio, EasyShare, and payphones
-- Picstagram, FlipTok, Feather, Flare, and CrewLink
-- Banking, Billing, Garage, Housing, Companies, CityMarkt, Local Pages, Maps, SkyRide, and Weazel News
-- Camera, Photos, Music, Calendar, Clock, Notes, Voice Memos, Weather, and Calculator
-- Built-in games and an App Store
-- English and German language support
-- Automatic database installation and upgrades
-- Command-only LB Phone database migration with preview and rollback
-- Compatibility adapters for popular frameworks, inventories, voice systems, housing resources, and external phone apps
+<p align="center">
+  <a href="https://github.com/sky-systems/sky_phone"><strong>Download for free</strong></a>
+  &nbsp;&bull;&nbsp;
+  <a href="https://discord.gg/sky-systems"><strong>Discord support</strong></a>
+</p>
+
+---
+
+**Jump to:** [App ecosystem](#one-phone-a-complete-app-ecosystem) · [Compatibility](#compatibility-at-a-glance) · [Installation](#quick-installation) · [LB Phone migration](#lb-phone-migration) · [Custom apps](#external-custom-apps) · [Support](#support-and-community)
+
+Sky Phone is a **free and open-source FiveM phone script** built to give serious roleplay servers the depth, polish, and flexibility normally associated with paid marketplace phones. It combines a modern iPhone-inspired interface, persistent devices and SIM cards, social networks, media, business tools, services, games, and broad framework support in one complete resource.
+
+Instead of maintaining separate ESX phone, QBCore phone, or Qbox phone versions, Sky Phone supports all three frameworks through one standalone resource.
+
+**Coming from LB Phone?** Sky Phone is designed to replace it. A controlled migration workflow transfers supported player data, while compatibility adapters keep supported LB Phone custom apps available. You can preview the import, migrate when you are ready, retry safely, and roll back migration-created Sky Phone records.
+
+This is not a cut-down free alternative. Sky Phone includes the core experience server owners and players expect from a leading paid FiveM phone—plus full source access, no purchase price, no feature paywalls, and no forced ecosystem lock-in.
+
+The production frontend is included, so a normal server installation does not require Node.js or pnpm.
+
+## Why Sky Phone stands out
+
+| What matters | What Sky Phone delivers |
+| --- | --- |
+| **Value** | A complete FiveM phone that is free to download, use, inspect, and customize under GPL-3.0. |
+| **Player experience** | A cohesive, responsive Sky UI with light and dark modes, persistent accounts, devices, SIM cards, media, social apps, services, and games. |
+| **Feature depth** | 41 built-in apps covering communication, social roleplay, business, navigation, media, utilities, and entertainment. |
+| **LB Phone replacement** | Command-only migration with dry runs, progress output, safe retries, and removal of migration-created records. |
+| **Custom apps** | Native custom app APIs plus compatibility adapters for LB Phone, 17Movement, High Phone, Quasar Smartphone, and YSeries app contracts. |
+| **Server flexibility** | ESX, QBCore, and Qbox support with adapters for popular inventories, voice systems, garages, and housing resources. |
+| **Ownership** | Readable source code, automatic database upgrades, customer-owned configuration, and no paid add-on packs required for the complete core experience. |
+| **Help when needed** | Installation and configuration help from the Sky-Systems community on the [official Discord](https://discord.gg/sky-systems). |
+
+Sky Phone is built to be the **free FiveM phone you can choose without accepting a downgrade**. Instead of paying first and discovering limitations later, server owners get the complete foundation, the source, migration tooling, and room to extend it from day one.
+
+## One phone, a complete app ecosystem
+
+| Category | Included apps and experiences |
+| --- | --- |
+| **Communication** | Phone, Messages, Mail, DarkChat, Radio, EasyShare, group messaging, company calls, voice messages, and world payphones |
+| **Social** | Picstagram, FlipTok, Feather, Flare, and CrewLink |
+| **City & business** | Banking, Billing, Companies, CityMarkt, Local Pages, Garage, Housing, Maps, SkyRide, Weazel News, CityWarn, Crypto, and Health |
+| **Media & productivity** | Camera, Photos, Music, Calendar, Clock, Notes, Voice Memos, Calculator, and Weather |
+| **Games** | Snake, Memory, Number Merge, Minesweeper, Tower Stack, Sky Flappy, and Neon Drop |
+| **Phone system** | App Store, Settings, lock screen, setup assistant, notifications, widgets, folders, passcodes, multiple wallpapers, and light/dark appearance |
+
+## Built for players, owners, and developers
+
+| For players | For server owners | For developers |
+| --- | --- | --- |
+| A polished phone that feels like one connected product | A free replacement for fragmented or expensive phone setups | Full source access and a documented-in-code integration surface |
+| Persistent phones, SIMs, accounts, settings, and content | Automatic schema installation and upgrades | Client and server exports for custom app lifecycle and permissions |
+| Social, business, media, utility, and game experiences | Framework, inventory, voice, garage, and housing bridges | Compatibility layers for established FiveM phone app ecosystems |
+| English and German localization | Controlled LB Phone migration with preview and rollback | Vue 3, TypeScript, Pinia, Vite, and reusable Sky UI components |
+
+## Compatibility at a glance
+
+| Layer | Supported options |
+| --- | --- |
+| **Frameworks** | ESX Legacy, QBCore, Qbox |
+| **Inventories** | ox_inventory, qb-inventory, lj-inventory, qs-inventory, codem-inventory, core_inventory, mf-inventory, smx-inventory, hex_4_inventory, and native ESX inventory |
+| **Calls** | PMA Voice, SaltyChat |
+| **Radio** | YACA, PMA Voice, SaltyChat |
+| **Housing** | ESX Property, qbx_properties |
+| **Garages** | Built-in/custom data and a broad set of popular garage providers configured through the bridge |
+| **Custom app contracts** | Sky Phone, LB Phone, 17Movement, High Phone, Quasar Smartphone, YSeries |
+| **Languages** | English, German |
+| **Database** | MySQL or MariaDB through oxmysql |
+
+## Feature highlights
+
+- Modern Sky UI with responsive interactions, light and dark appearance, widgets, folders, notifications, and a full setup flow
+- Unique physical handsets with IMEI metadata or one persistent virtual phone per character
+- Registered, anonymous, physical, and automatic virtual SIM card modes
+- Calls, group messages, reactions, media, contacts, location sharing, money sharing, voice messages, and payphones
+- Real account-backed social and service apps with persistent player content
+- Camera photos and videos, Gallery, Voice Memos, server music, YouTube playback, and EasyShare
+- Banking, invoices, garages, housing, companies, ride hailing, news, marketplace listings, maps, and weather
+- Seven built-in games plus an App Store for optional and custom apps
+- Automatic database installation and versioned upgrades
+- LB Phone migration with preview, progress reporting, safe retries, and rollback support
+- Custom app APIs and compatibility adapters for established phone ecosystems
+- English and German localization throughout the player-facing interface
 
 ## Requirements
 
@@ -29,7 +109,7 @@ The production frontend is included. Customers do not need Node.js or pnpm for a
   - ESX Legacy (`es_extended`)
   - Qbox (`qbx_core`)
   - QBCore (`qb-core`)
-- One supported inventory:
+- One supported inventory path:
   - `ox_inventory`
   - `qb-inventory`
   - `lj-inventory`
@@ -38,8 +118,10 @@ The production frontend is included. Customers do not need Node.js or pnpm for a
   - `core_inventory`
   - `mf-inventory`
   - `smx-inventory`
+  - `hex_4_inventory`
+  - Native ESX inventory
 
-`mf-inventory` and `smx-inventory` are supported with ESX.
+`mf-inventory` and `smx-inventory` are supported with ESX. The native ESX and HEX adapters use count-based items and therefore require unique phones and physical SIM cards to be disabled.
 
 ### Voice
 
@@ -414,7 +496,9 @@ The importer:
 - Can remove migration-created Sky Phone data with `remove`
 - Reports unsupported source records instead of forcing them into incompatible Sky Phone structures
 
-Supported domains include devices, settings, alarms, contacts, blocked numbers, calls, messages, photos, notes, wallet, voice memos, Picstagram, Mail, map markers, compatible DarkChat data, FlipTok, and Feather.
+For Picstagram, FlipTok, and Feather, the active LB Phone login is attached to the migrated player's Sky Cloud account. If LB Phone has no active-login row, the oldest mapped profile is used. Additional social profiles remain separate, and a normal import automatically runs versioned ownership repairs for older Sky Phone migrations.
+
+Supported domains include devices, settings, alarms, contacts, blocked numbers, calls, messages, photos, notes, wallet, voice memos, Picstagram, Mail, map markers, compatible DarkChat data, FlipTok, Feather, and Flare data from LB Tinder, including profiles, photos, swipes, and mutual matches.
 
 The migration command is server-console only.
 
@@ -447,7 +531,9 @@ Unlisted jobs can read news but cannot manage articles.
 
 ## External custom apps
 
-Sky Phone includes compatibility adapters for supported custom-app contracts from:
+Sky Phone is not limited to the apps that ship with it. Other resources can register installable custom apps, publish them through the App Store, exchange messages with their NUI, send notifications, and use server-controlled permissions and storage.
+
+Its native custom app surface includes client and server exports for app registration, lifecycle control, messaging, notifications, capability discovery, and policy management. Sky Phone also normalizes supported custom-app contracts from:
 
 - LB Phone
 - 17Movement
@@ -457,9 +543,7 @@ Sky Phone includes compatibility adapters for supported custom-app contracts fro
 
 The resource provides the compatibility aliases `lb-phone`, `17mov_Phone`, `high-phone`, `qs-smartphone`, and `yseries`.
 
-See [Custom App Integration](docs/custom-apps.md) for setup details and compatibility limits.
-The complete per-app list of public exports, observer events, internal related contracts, and the
-Custom App iframe protocol is available in [Exports and Events](docs/exports-events.md).
+That means servers can replace LB Phone without giving up supported custom apps, while developers can build directly against Sky Phone for deeper lifecycle, permission, and storage integration.
 
 ## Updating Sky Phone
 
@@ -545,6 +629,16 @@ Config.Bridge.Debug = true
 
 Reproduce the problem, collect the relevant server and client console lines, and disable debug mode again afterward.
 
-## Credits and notices
+## Support and community
+
+Sky Phone is free, but you are not left alone with it. For installation help, configuration questions, bug reports, integration discussions, and community support, join the official Sky-Systems Discord:
+
+**[Join the Sky-Systems Discord](https://discord.gg/sky-systems)**
+
+If Sky Phone helps your server, star the repository and share it with other FiveM developers. Feedback and focused pull requests are welcome.
+
+## License, credits, and notices
+
+Sky Phone is free and open-source software licensed under the [GNU General Public License v3.0](LICENSE).
 
 Third-party acknowledgements and license information are available in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
