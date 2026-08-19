@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://www.sky-systems.net/shop/phone#live-demo">
-    <img alt="Try the interactive Sky Phone live demo" src="https://img.shields.io/badge/TRY_THE_LIVE_DEMO-OPEN_NOW-7c3aed?style=for-the-badge" height="156">
+    <img alt="Try the interactive Sky Phone live demo" src="../readme-assets/live-demo-button.svg" width="780">
   </a>
 </p>
 
