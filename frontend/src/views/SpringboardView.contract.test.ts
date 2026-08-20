@@ -19,11 +19,31 @@ const mainCss = readFileSync(
   new URL('../assets/main.css', import.meta.url),
   'utf8',
 )
+const tokensCss = readFileSync(
+  new URL('../ui/tokens.css', import.meta.url),
+  'utf8',
+)
+const foundationCss = readFileSync(
+  new URL('../ui/foundation.css', import.meta.url),
+  'utf8',
+)
 const builtInWallpaperCss = mainCss.slice(
   mainCss.indexOf('.wallpaper--midnight'),
   mainCss.indexOf('.wallpaper--custom'),
 )
+
 describe('Springboard page swipe contract', () => {
+  it('keeps app and widget labels on the larger shared home typography', () => {
+    expect(tokensCss).toContain('--sky-home-label-font-size: 13px;')
+    expect(tokensCss).toContain('--sky-home-label-height: 16px;')
+    expect(mainCss).toMatch(
+      /\.app-icon-label\s*\{[\s\S]*?font-size:\s*var\(--sky-home-label-font-size\);/,
+    )
+    expect(foundationCss).toMatch(
+      /\.sky-widget-frame__label\s*\{[\s\S]*?font-size:\s*var\(--sky-home-label-font-size\);/,
+    )
+  })
+
   it('keeps the built-in wallpapers visually restrained', () => {
     expect(builtInWallpaperCss).not.toMatch(/(?:conic|repeating-\w+)-gradient/)
     expect(builtInWallpaperCss.match(/radial-gradient/g)).toHaveLength(12)
