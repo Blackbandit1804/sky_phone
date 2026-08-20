@@ -111,6 +111,18 @@
   color: var(--sky-text, #111827);
 }
 
+.sky-glass.sky-button--glass {
+  border-color: var(--sky-hairline, rgba(0, 0, 0, 0.2));
+  background: var(--sky-glass, rgba(255, 255, 255, 0.75));
+  color: var(--sky-text, #000000);
+  box-shadow: var(--sky-shadow-glass);
+}
+
+.sky-glass.sky-button--glass:active:not(:disabled) {
+  background: var(--sky-glass, rgba(255, 255, 255, 0.75));
+  filter: brightness(0.94);
+}
+
 .sky-button--danger {
   background: var(--sky-danger, #dc2626);
 }
@@ -1465,26 +1477,13 @@ label.sky-list-item__row {
 }
 
 .sky-searchbar__icon {
-  width: 14px;
-  height: 14px;
-  position: relative;
+  width: 18px;
+  height: 18px;
+  display: block;
   flex: none;
-  border: 1.6px solid var(--sky-muted, rgba(0, 0, 0, 0.55));
-  border-radius: 50%;
-  opacity: 0.8;
-}
-
-.sky-searchbar__icon::after {
-  width: 6px;
-  height: 1.6px;
-  position: absolute;
-  right: -5px;
-  bottom: -2px;
-  content: '';
-  border-radius: 2px;
-  background: var(--sky-muted, rgba(0, 0, 0, 0.55));
-  transform: rotate(45deg);
-  transform-origin: left center;
+  color: var(--sky-muted, rgba(0, 0, 0, 0.55));
+  fill: currentColor;
+  opacity: 0.72;
 }
 
 .sky-searchbar__input {
@@ -2746,6 +2745,9 @@ label.sky-list-item__row {
 
 .sky-fab--icon-only {
   width: var(--sky-touch-target, 44px);
+  height: var(--sky-touch-target, 44px);
+  flex: none;
+  align-self: center;
   padding: 0;
 }
 
@@ -2754,6 +2756,16 @@ label.sky-list-item__row {
   color: var(--sky-text, #000000);
 }
 
+.sky-glass.sky-fab--glass {
+  border: 1px solid var(--sky-hairline, rgba(0, 0, 0, 0.2));
+  background: var(--sky-glass, rgba(255, 255, 255, 0.75));
+  color: var(--sky-text, #000000);
+  box-shadow: var(--sky-shadow-glass);
+}
+
+.sky-fab--glass .sky-fab__accent-layer,
+.sky-fab--glass .sky-fab__dark-accent-layer,
+.sky-fab--glass .sky-fab__surface-layer,
 .sky-fab--neutral .sky-fab__accent-layer,
 .sky-fab--neutral .sky-fab__dark-accent-layer,
 .sky-fab--neutral .sky-fab__surface-layer {
@@ -2766,6 +2778,10 @@ label.sky-list-item__row {
 
 .sky-glass.sky-fab--neutral:active:not(:disabled) {
   background: var(--sky-glass-solid, rgba(247, 247, 248, 0.96));
+}
+
+.sky-glass.sky-fab--glass:active:not(:disabled) {
+  background: var(--sky-glass, rgba(255, 255, 255, 0.75));
 }
 
 .sky-fab--disabled {
@@ -2838,6 +2854,8 @@ label.sky-list-item__row {
 .sky-glass--interactive {
   min-width: var(--sky-touch-target, 44px);
   min-height: var(--sky-touch-target, 44px);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
   cursor: pointer;
 }
 

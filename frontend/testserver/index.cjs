@@ -22,6 +22,8 @@ const lifecycleEndpoints = new Set([
   'device:notification-open',
   'notification:focus',
   'sim:picker-close',
+  'ui:input-focus',
+  'ui:live-activity',
   'ui:opened',
   'ui:ready',
 ])
@@ -2205,12 +2207,12 @@ const attachmentAssets = {
   video: new Set(['city-loop', 'ocean-loop', 'sunset-loop']),
 }
 const gifMocks = [
-  ['ICOgUNjpvO0PC', 'Cat reaction'],
-  ['MDJ9IbxxvDUQM', 'Happy dog'],
-  ['l0HlPystfePnAI3G8', 'Celebrate'],
-  ['26ufdipQqU2lhNA4g', 'Wow'],
-  ['3o7abKhOpu0NwenH3O', 'Perfect'],
-  ['xT0xeJpnrWC4XWblEk', 'Party'],
+  ['JIX9t2j0ZTN9S', 'Cat reaction', 200, 200],
+  ['MDJ9IbxxvDUQM', 'Happy dog', 200, 112],
+  ['l0HlPystfePnAI3G8', 'Celebrate', 200, 200],
+  ['26ufdipQqU2lhNA4g', 'Wow', 200, 200],
+  ['3o7abKhOpu0NwenH3O', 'Perfect', 200, 112],
+  ['xT0xeJpnrWC4XWblEk', 'Party', 200, 132],
   ['111ebonMs90YLu', 'Thumbs up'],
   ['5GoVLqeAOo6PK', 'Excited'],
   ['TdfyKrN7HGTIY', 'Happy dance'],
@@ -4656,7 +4658,7 @@ app.post('/api/:endpoint', async (request, response, next) => {
   if (endpoint === 'memos:devCapture') {
     loggedBody.audioDataUrl = `<${String(request.body.audioDataUrl ?? '').length} characters>`
   }
-  console.log(`[NUI] ${endpoint}`, loggedBody)
+  console.log('[NUI]', endpoint, loggedBody)
   if (endpoint === 'music:bootstrap') {
     response.json({ success: true, data: musicBootstrap() })
     return
@@ -9647,13 +9649,13 @@ app.post('/api/:endpoint', (request, response) => {
     const pageSize = 6
     const results = gifMocks
       .slice(offset, offset + pageSize)
-      .map(([id, title]) => ({
-        height: 200,
+      .map(([id, title, width, height]) => ({
+        height: height ?? 200,
         id,
         previewUrl: `https://media.giphy.com/media/${id}/200w.gif`,
         title,
         url: `https://media.giphy.com/media/${id}/giphy.gif`,
-        width: 200,
+        width: width ?? 200,
       }))
     response.json({
       success: true,
@@ -10407,6 +10409,16 @@ app.post('/api/:endpoint', (request, response) => {
     mockPasscode = ''
     mockSecurity = { enabled: false, length: null, lockedUntil: 0 }
     for (const key of Object.keys(deviceData)) delete deviceData[key]
+    Object.assign(deviceData, {
+      apps: { payload: { claimedApps: [] }, revision: 0 },
+      settings: {
+        payload: {
+          settings: { setupCompleted: false, setupStep: 0 },
+          version: 1,
+        },
+        revision: 0,
+      },
+    })
     response.json({ success: true })
     return
   }
