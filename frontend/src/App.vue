@@ -56,6 +56,7 @@ import { useNotesStore } from '@/stores/notes'
 import { useMemosStore } from '@/stores/memos'
 import { useWeatherStore } from '@/stores/weather'
 import { useEasyShareStore } from '@/stores/easyshare'
+import { useRadioStore } from '@/stores/radio'
 import {
   useNotificationsStore,
   type PhoneNotification,
@@ -70,10 +71,15 @@ import type {
   CompanyUnreadCounts,
 } from '@/types/companies'
 import type { PhoneCall } from '@/types/phone'
+import type { DynamicIslandActivity } from '@/types/dynamicIsland'
 import type { EasyShareEvent } from '@/types/easyshare'
 import type { CryptoMarketChangedData } from '@/types/crypto'
 import type { CityWarnEventData } from '@/types/citywarn'
 import { nuiCall } from '@/utils/nui'
+import {
+  installPhoneAudioController,
+  setPhoneOutputVolume,
+} from '@/utils/phoneAudio'
 import { formatTimer } from '@/utils/clock'
 import { parsePhonePreferences } from '@/utils/preferences'
 import { getHairlinePixelStyle } from '@/utils/rendering'
@@ -82,6 +88,7 @@ import { isTrustedRootMessageSource } from '@/utils/windowMessages'
 import SpringboardView from '@/views/SpringboardView.vue'
 
 type AppMessage = {
+  openHome?: boolean
   type?: string
   data?:
     | CalendarReminderData
@@ -313,6 +320,7 @@ const notes = useNotesStore()
 const memos = useMemosStore()
 const weather = useWeatherStore()
 const easyShare = useEasyShareStore()
+const radio = useRadioStore()
 const notifications = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
@@ -335,8 +343,13 @@ const DARK_STATUS_BAR_APP_IDS = new Set([
   'minesweeper',
   'number-merge',
 ])
+const isDynamicIslandGalleryRoute = computed(
+  () => isDevelopment && route.name === 'development-dynamic-islands',
+)
 const isDevelopmentRoute = computed(
-  () => isDevelopment && route.name === 'development-sky-ui',
+  () =>
+    isDevelopment &&
+    (route.name === 'development-sky-ui' || isDynamicIslandGalleryRoute.value),
 )
 const appTransitionName = computed(() =>
   route.query.transition === 'app-switch' ? 'app-switch' : 'app-window',
@@ -356,9 +369,12 @@ const setupPreviewDismissed = ref(false)
 const setupDevelopmentSkipped = ref(false)
 const setupAppearanceSelected = ref(false)
 const pendingUnlockRoute = ref<string | null>(null)
+const openHomeRequested = ref(false)
 const unlockedServicesLoaded = ref(false)
 const controlCenterOpened = ref(false)
 const activitySuspended = ref(false)
+const dynamicIslandExpanded = ref(false)
+const dynamicIslandActivity = ref<DynamicIslandActivity | null>(null)
 const simPicker = ref<SimPickerPayload | null>(null)
 const setupRequired = computed(
   () =>
@@ -432,6 +448,12 @@ const phoneResolutionStyle = computed<CSSProperties>(() => ({
 }))
 const phoneStageStyle = computed<CSSProperties>(() => ({
   ...phoneResolutionStyle.value,
+  '--phone-live-activity-peek-height':
+    dynamicIslandActivity.value === 'music'
+      ? '190px'
+      : dynamicIslandActivity.value === 'recording'
+        ? '132px'
+        : '112px',
   visibility: activitySuspended.value ? 'hidden' : 'visible',
 }))
 const phoneDisplayStyle = computed<CSSProperties>(() => ({
@@ -449,6 +471,7 @@ let unlockTimer: number | undefined
 let passcodeLockTimer: number | undefined
 let hardwareVolumeHudTimer: number | undefined
 let unlockedServicesIdle: number | undefined
+let removePhoneAudioController: (() => void) | undefined
 let phoneClosePending = false
 let simPickerClosePending = false
 
@@ -758,6 +781,7 @@ function onMessage(event: MessageEvent<AppMessage>): void {
       })
     }
   } else if (event.data?.type === 'app:open') {
+    openHomeRequested.value = event.data.openHome === true
     hydratePhone(event.data.data as PhoneOpenPayload)
     void syncNavigationState().then(() => nuiCall('ui:opened'))
   } else if (event.data?.type === 'device:updated') {
@@ -1473,6 +1497,7 @@ function onFocusOut(event: FocusEvent): void {
 }
 
 onMounted(() => {
+  removePhoneAudioController = installPhoneAudioController()
   document.addEventListener('focusin', onFocusIn)
   document.addEventListener('focusout', onFocusOut)
   window.addEventListener('message', onMessage)
@@ -1588,6 +1613,23 @@ watch(
 )
 
 watch(
+  () => Boolean(dynamicIslandActivity.value || calls.activeCall),
+  (active) => {
+    void nuiCall('ui:live-activity', { active })
+  },
+  { immediate: true },
+)
+
+watch(
+  hardwareAlertVolume,
+  (volume) => {
+    setPhoneOutputVolume(volume / 100)
+    if (radio.data.connected) void radio.setVolume(volume)
+  },
+  { immediate: true },
+)
+
+watch(
   () => phone.isOpen,
   (isOpen) => {
     if (unlockTimer !== undefined) window.clearTimeout(unlockTimer)
@@ -1619,7 +1661,8 @@ watch(
     }
     isLocked.value = setupRequired.value
       ? false
-      : !isDevelopment || developmentLockScreenPreview
+      : developmentLockScreenPreview ||
+        (!isDevelopment && phone.security.enabled)
     passcodeRequired.value = isLocked.value && phone.security.enabled
     unlockedServicesLoaded.value = false
     controlCenterOpened.value = false
@@ -1637,8 +1680,18 @@ watch(
       startPasscodeLock(passcodeRetrySeconds.value)
     }
     phone.setLaunchOrigin(null)
-    if (isLocked.value || setupRequired.value) void router.replace('/')
-    else loadUnlockedPhoneData()
+    if (setupRequired.value) {
+      void router.replace('/')
+    } else if (openHomeRequested.value) {
+      openHomeRequested.value = false
+      if (isLocked.value) pendingUnlockRoute.value = '/'
+      else {
+        void router.replace('/')
+        loadUnlockedPhoneData()
+      }
+    } else if (!isLocked.value) {
+      loadUnlockedPhoneData()
+    }
   },
 )
 
@@ -1650,6 +1703,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  removePhoneAudioController?.()
   updateTextInputFocus(false)
   cancelUnlockedPhoneDataLoad()
   weather.stop()
@@ -1688,12 +1742,15 @@ onBeforeUnmount(() => {
         phone.isOpen ||
         notifications.current ||
         calls.activeCall ||
+        dynamicIslandActivity ||
         notifications.devicePreviews.length
       "
       class="phone-stage"
       :class="{
         'phone-stage--browser-preview': isBrowserPreview,
         'phone-stage--landscape': phone.cameraLandscape,
+        'phone-stage--live-activity':
+          !phone.isOpen && Boolean(dynamicIslandActivity || calls.activeCall),
         'phone-stage--peek': notifications.isPeeking,
       }"
       :style="phoneStageStyle"
@@ -1713,7 +1770,12 @@ onBeforeUnmount(() => {
           @open="openNotificationPreview"
         />
         <div
-          v-if="phone.isOpen || notifications.current || calls.activeCall"
+          v-if="
+            phone.isOpen ||
+            notifications.current ||
+            calls.activeCall ||
+            dynamicIslandActivity
+          "
           class="phone-resolution-wrapper phone-resolution-wrapper--primary"
         >
           <div class="phone-resolution-canvas phone-resolution-canvas--primary">
@@ -1721,6 +1783,7 @@ onBeforeUnmount(() => {
               class="phone-device"
               :class="{
                 'phone-app--light': !displayedDarkMode,
+                'phone-device--island-expanded': dynamicIslandExpanded,
                 [`phone-app--${phone.preferences.settings.graphicsMode}`]: true,
               }"
               :aria-label="phone.t('Common.phone')"
@@ -1832,7 +1895,6 @@ onBeforeUnmount(() => {
                     @control-center="toggleControlCenter"
                     @lock="lockPhone"
                   />
-                  <PhoneDynamicIsland v-if="!setupRequired" />
                   <SpringboardView
                     v-if="!isDevelopmentRoute && !setupRequired"
                     @edit-mode-change="springboardEditing = $event"
@@ -1917,6 +1979,11 @@ onBeforeUnmount(() => {
                 alt=""
                 aria-hidden="true"
                 draggable="false"
+              />
+              <PhoneDynamicIsland
+                v-if="!setupRequired && !isDynamicIslandGalleryRoute"
+                @expanded-change="dynamicIslandExpanded = $event"
+                @live-activity-change="dynamicIslandActivity = $event"
               />
             </section>
           </div>

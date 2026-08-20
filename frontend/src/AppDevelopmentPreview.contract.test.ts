@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('./App.vue', import.meta.url), 'utf8')
+const source = readFileSync(new URL('./App.vue', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const mainCss = readFileSync(
   new URL('./assets/main.css', import.meta.url),
   'utf8',
@@ -22,15 +22,32 @@ describe('browser development preview contract', () => {
 
   it('starts unlocked while preserving an explicit lock screen preview', () => {
     expect(source).toContain("developmentParameters.has('lockScreenPreview')")
-    expect(source).toContain(': !isDevelopment || developmentLockScreenPreview')
+    expect(source).toContain(
+      'developmentLockScreenPreview ||\n        (!isDevelopment && phone.security.enabled)',
+    )
     expect(source).toContain("developmentParameters.has('setupPreview')")
   })
 
-  it('loads authenticated app data without replacing direct app routes', () => {
-    expect(source).toContain(
+  it('restores the active route after the lock screen', () => {
+    expect(source).toMatch(
+      /if \(setupRequired\.value\) \{[\s\S]*?router\.replace\('\/'\)/,
+    )
+    expect(source).toMatch(
+      /else if \(!isLocked\.value\) \{\s*loadUnlockedPhoneData\(\)/,
+    )
+    expect(source).not.toContain(
       "if (isLocked.value || setupRequired.value) void router.replace('/')",
     )
-    expect(source).toContain('else loadUnlockedPhoneData()')
+  })
+
+  it('opens Space-triggered live activities on Home or the enabled lock screen', () => {
+    expect(source).toContain(
+      'openHomeRequested.value = event.data.openHome === true',
+    )
+    expect(source).toContain(
+      "if (isLocked.value) pendingUnlockRoute.value = '/'",
+    )
+    expect(source).toContain("void router.replace('/')")
   })
 
   it('requires the passcode again after a full device lock', () => {
@@ -100,7 +117,9 @@ describe('browser development preview contract', () => {
     expect(source).toContain("developmentParameters.has('browserPreview')")
     expect(source).toContain('import.meta.env.DEV ||')
     expect(source).toContain("'phone-stage--browser-preview': isBrowserPreview")
-    expect(source).toContain('return (availableScale * 0.94) / PHONE_BASE_SCALE')
+    expect(source).toContain(
+      'return (availableScale * 0.94) / PHONE_BASE_SCALE',
+    )
     expect(mainCss).toMatch(
       /\.phone-stage--browser-preview\s*\{[^}]*place-items:\s*center;[^}]*padding:\s*0;/s,
     )

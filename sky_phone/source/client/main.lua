@@ -6,6 +6,8 @@ local open_without_focus = false
 local device_payload = nil
 local equipped_phone_number = nil
 local nui_generation = 0
+local live_activity_active = false
+local open_home_requested = false
 
 local function get_equipped_phone_number()
     if not device_payload or not device_payload.device.sim then
@@ -75,7 +77,9 @@ local function send_open_message()
     SendNUIMessage({
         type = "app:open",
         data = payload,
+        openHome = open_home_requested,
     })
+    open_home_requested = false
 end
 
 local function open_phone()
@@ -169,6 +173,25 @@ RegisterCommand("sky_phone_toggle", function()
     Bridge.Callbacks.Trigger("sky_phone:device:open-request", {})
 end, false)
 
+RegisterCommand("sky_phone_live_activity_open", function()
+    if not live_activity_active or is_open or open_requested then
+        return
+    end
+
+    open_home_requested = true
+    local result = Bridge.Callbacks.Trigger("sky_phone:device:open-request", {})
+    if not result or not result.success then
+        open_home_requested = false
+    end
+end, false)
+
+RegisterKeyMapping(
+    "sky_phone_live_activity_open",
+    locale.Controls.OpenPhone,
+    "keyboard",
+    "SPACE"
+)
+
 if Config.Phone.Keybind then
     if type(Config.Phone.Keybind) ~= "string" or Config.Phone.Keybind == "" then
         error("[sky_phone] Config.Phone.Keybind must be a non-empty keyboard key name or false.")
@@ -255,6 +278,15 @@ RegisterNUICallback("ui:input-focus", function(data, cb)
     cb({ success = true })
 end)
 
+RegisterNUICallback("ui:live-activity", function(data, cb)
+    if type(data) ~= "table" or type(data.active) ~= "boolean" then
+        cb({ success = false, error = "invalid_request" })
+        return
+    end
+    live_activity_active = data.active
+    cb({ success = true })
+end)
+
 RegisterNUICallback("close", function(data, cb)
     if type(data) ~= "table" then
         cb({ success = false, error = "invalid_request" })
@@ -302,6 +334,8 @@ RegisterNetEvent("sky_phone:device:invalidated", function()
     close_phone(false)
     device_payload = nil
     update_equipped_phone_number(nil)
+    live_activity_active = false
+    open_home_requested = false
 end)
 
 RegisterNetEvent("sky_phone:device:error", function(error_code)
