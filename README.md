@@ -138,10 +138,10 @@ Sky Phone is built to be the **free FiveM phone you can choose without accepting
 | `smx-inventory` (`smx`) | Yes | Yes | ESX only; one metadata record per configured item name through the player metadata bridge |
 | `lj-inventory` (`lj`) | Yes | Yes | QBCore inventory with item `info` metadata |
 | `qb-inventory` (`qb`) | Yes | Yes | Uses item `info` metadata |
-| `hex_4_inventory` (`hex`) | **No metadata support** | **No, Unique Phones are not possible** | ESX only; set `Config.Phone.Unique = false` and `Config.Sim.Enabled = false` |
-| Native ESX inventory (`esx`) | **No metadata support** | **No, Unique Phones are not possible** | Count-based items; set `Config.Phone.Unique = false` and `Config.Sim.Enabled = false` |
+| `hex_4_inventory` (`hex`) | **No metadata support** | **No, Unique Phones are not possible** | ESX only; Sky Phone automatically disables unique phones and physical SIM cards |
+| Native ESX inventory (`esx`) | **No metadata support** | **No, Unique Phones are not possible** | Count-based items; Sky Phone automatically disables unique phones and physical SIM cards |
 
-`hex_4_inventory` and native ESX inventory cannot persist per-item metadata. Unique Phones and physical SIM cards are therefore unavailable with these adapters.
+`hex_4_inventory` and native ESX inventory cannot persist per-item metadata. Sky Phone therefore forces `Config.Phone.Unique` and `Config.Sim.Enabled` to `false` at runtime whenever either adapter is active.
 
 `Config.Bridge.Inventory = "auto"` detects framework-compatible adapters in the table order. This deliberately matches the Sky inventory priority so a dedicated inventory is selected before a compatibility resource it may run beside. You may configure either the short value shown in parentheses or the exact resource name.
 
@@ -216,6 +216,7 @@ The files contain clearly separated sections for:
 | Section | Purpose |
 | --- | --- |
 | `Config.Bridge` | Framework, inventory, language, callback timeout, and debug mode |
+| `Config.CommandPermissions` | Fixed groups for the admin panel, test data, verification commands, and social moderation |
 | `Config.Phone` | Phone item, movement, unique-device mode, and development command |
 | `Config.Sim` | Physical or virtual SIM behavior and number formatting |
 | `Config.Calls` / `Config.Radio` | Voice providers, call behavior, radio limits, and permissions |
@@ -241,20 +242,30 @@ Config.PhoneConfigurator = {
 }
 ```
 
-When enabled, `config.lua` and the server-only `media.lua` are first-run defaults. Sky Phone creates
-the `sky_phone_configurator` table automatically, loads its saved values before framework and phone
+When enabled, the generated `source/shared/config_default.lua` is the shipped first-run baseline.
+The frontend build recreates this file from `config.lua` and the server-only `media.lua`; do not edit
+the generated snapshot directly. Sky Phone creates the `sky_phone_configurator` table automatically,
+loads its saved values before framework and phone
 modules initialize, and exposes the editor through `/phonepanel`. Nothing autosaves: stage changes
 in the Phone Configurator tool and press the green check. Saving verifies both SQL payloads and then
 applies the new server, client, media, app, item, command, provider, animation, and UI values through
 Sky Phone's internal runtime refresh. It does not execute a resource restart command.
 
-Every `Config.*` value from `config.lua`, including server-only sections, and every value from
-`Config.Media` is discovered automatically. The bootstrap switch above intentionally remains
-file-owned because it decides whether SQL configuration is loaded. Lists, nested objects, vectors,
+Every configurable `Config.*` value from `config.lua`, including server-only sections, and every
+value from `Config.Media` is discovered automatically. The bootstrap switch and
+`Config.CommandPermissions` intentionally remain file-owned: the switch decides whether SQL
+configuration is loaded, while permissions must remain authoritative outside the panel. The fixed
+permission table is never displayed or overwritten by the Phone Configurator, and its stable keys do
+not change when their commands are renamed in the panel. Lists, nested objects, vectors,
 and numeric-keyed Lua tables use structured editors instead of raw JSON. Shipped schema rows stay
 editable but cannot be renamed, converted, or removed. Every list and table still accepts any number
 of additional rows; administrator-added rows remain removable. Company job keys are intentionally
 fully removable because `Config.Companies.Definitions` is a freely managed job collection.
+
+ESX and QBCore use the groups listed in `Config.CommandPermissions`. Qbox checks the configured ACE
+objects first and then its framework groups. The standard Qbox `permissions.cfg` grants the `admin`
+ACE to `group.admin`, so an identifier assigned to `group.admin` can open `/phonepanel` with the
+shipped `phonepanel` permission list. Restart `sky_phone` after changing fixed permissions.
 
 Media API keys and server peppers are never returned in plaintext to the NUI. Existing secrets are
 shown only as configured and are replaced only when an administrator enters a new value.
@@ -365,7 +376,7 @@ Do not configure an LB Phone client event or client export. Sky Phone registers 
 
 The server registers `Config.Phone.Item` as usable for every supported inventory adapter: `ak47`, `codem`, `core`, `jaksam`, `jpr`, `lj`, `mf`, `one`, `origen`, `ox`, `ps`, `qb`, `qs`, `smx`, `tgiann`, `hex`, and `esx`. Resource startup fails visibly if the selected adapter or its resource is unavailable.
 
-The `hex` and `esx` adapters use ESX's count-based item API. They require both `Config.Phone.Unique = false` and `Config.Sim.Enabled = false` because this API cannot persist per-item phone or physical SIM metadata. `auto` selects `hex` when `hex_4_inventory` is started and otherwise falls back to `esx` on an ESX server when no metadata-capable inventory is detected.
+The `hex` and `esx` adapters use ESX's count-based item API, which cannot persist per-item phone or physical SIM metadata. Sky Phone automatically forces `Config.Phone.Unique = false` and `Config.Sim.Enabled = false` while either adapter is active. `auto` selects `hex` when `hex_4_inventory` is started and otherwise falls back to `esx` on an ESX server when no metadata-capable inventory is detected.
 
 ### QBCore-style item tables
 
