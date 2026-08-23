@@ -5,6 +5,9 @@ local event_handlers = {}
 local nui_callbacks = {}
 local nui_focus = nil
 local nui_keep_input = nil
+local pressed_controls = {}
+local disabled_pressed_controls = {}
+local triggered_events = {}
 
 Config = {
     Phone = {
@@ -34,7 +37,19 @@ function SetNuiFocusKeepInput(keep_input)
     nui_keep_input = keep_input
 end
 
-function TriggerEvent() end
+function TriggerEvent(name, data)
+    triggered_events[#triggered_events + 1] = { name = name, data = data }
+end
+
+function IsControlPressed(group, control)
+    assert(group == 0, "HoldToLook must read the primary input group")
+    return pressed_controls[control] == true
+end
+
+function IsDisabledControlPressed(group, control)
+    assert(group == 0, "HoldToLook must read disabled controls from the primary input group")
+    return disabled_pressed_controls[control] == true
+end
 
 function DisableControlAction(group, control, disabled)
     assert(group == 0 and disabled, "phone controls must be disabled in the primary input group")
@@ -55,6 +70,25 @@ function DisablePlayerFiring(player, disabled)
 end
 
 dofile("sky_phone/source/client/focus.lua")
+
+assert(not SkyPhoneFocus.IsHoldToLookPressed(), "HoldToLook must be idle until its configured control is held")
+pressed_controls[19] = true
+assert(SkyPhoneFocus.IsHoldToLookPressed(), "HoldToLook must read its configured active control")
+pressed_controls[19] = false
+Config.Phone.HoldToLook.Control = 38
+event_handlers["sky_phone:configurator:updated"]()
+disabled_pressed_controls[38] = true
+assert(
+    SkyPhoneFocus.IsHoldToLookPressed(),
+    "HoldToLook must read its configured control while NUI focus has disabled GTA input"
+)
+disabled_pressed_controls[38] = false
+Config.Phone.HoldToLook.Enabled = false
+event_handlers["sky_phone:configurator:updated"]()
+assert(not SkyPhoneFocus.IsHoldToLookPressed(), "disabled HoldToLook must reject every control state")
+Config.Phone.HoldToLook.Enabled = true
+Config.Phone.HoldToLook.Control = 19
+event_handlers["sky_phone:configurator:updated"]()
 
 local function resolve(overrides)
     local state = {
@@ -233,6 +267,9 @@ disabled_controls = {}
 firing_disabled = false
 SkyPhoneFocus.ApplyGameInputControls(false)
 assert(not disabled_controls[1] and not disabled_controls[2], "camera passthrough must preserve camera look")
+for _, control in ipairs({ 30, 31, 32, 33, 34, 35 }) do
+    assert(not disabled_controls[control], ("camera passthrough must preserve movement control %d"):format(control))
+end
 assert(firing_disabled, "player attacks must remain disabled during camera passthrough")
 
 local movable_notification = resolve({ allow_movement = true, notification_focus = true })
@@ -264,10 +301,27 @@ local focused_camera = resolve({
 assert(
     focused_camera.cursor
         and focused_camera.focused
-        and not focused_camera.keep_input
+        and focused_camera.keep_input
         and not focused_camera.game_input,
-    "focused camera must override movement configuration until Space enables passthrough"
+    "focused camera must forward readable input while blocking game actions until passthrough is held"
 )
+
+event_handlers["sky_phone:client:setCameraFocus"]({ active = true, nuiFocused = true })
+local focused_camera_event = triggered_events[#triggered_events]
+assert(
+    nui_focus.focused and nui_focus.cursor and nui_keep_input
+        and focused_camera_event.name == "sky_phone:client:cameraFocusApplied"
+        and not focused_camera_event.data.gameInput,
+    "focused camera must keep controls readable without reporting movement passthrough"
+)
+event_handlers["sky_phone:client:setCameraFocus"]({ active = true, nuiFocused = false })
+local passthrough_camera_event = triggered_events[#triggered_events]
+assert(
+    nui_focus.focused and not nui_focus.cursor and nui_keep_input
+        and passthrough_camera_event.data.gameInput,
+    "camera passthrough must apply keyboard focus without a cursor and keep GTA input enabled"
+)
+event_handlers["sky_phone:client:setCameraFocus"]({ active = false, nuiFocused = true })
 
 local camera_interrupted_by_call = resolve({
     call_focus = true,

@@ -58,6 +58,16 @@ AddEventHandler("sky_phone:configurator:updated", function()
     SkyPhoneFocus.Reapply()
 end)
 
+function SkyPhoneFocus.IsHoldToLookPressed()
+    if not hold_to_look_enabled then
+        return false
+    end
+    if IsControlPressed(0, hold_to_look_control) then
+        return true
+    end
+    return IsDisabledControlPressed(0, hold_to_look_control)
+end
+
 function SkyPhoneFocus.ApplyFocusedControls()
     for _, group in ipairs(focused_control_groups) do
         DisableAllControlActions(group)
@@ -95,6 +105,10 @@ function SkyPhoneFocus.Resolve(state)
     end
     if state.camera_active and not state.camera_nui_focused then
         return { block_game = false, block_look = false, cursor = false, focused = true, game_input = true, keep_input = true }
+    end
+    if state.camera_active then
+        -- Forward controls so disabled inputs remain readable while the NUI cursor owns focus.
+        return { block_game = true, block_look = true, cursor = true, focused = true, game_input = false, keep_input = true }
     end
     local game_input = state.is_open
         and allows_game_input(state)
@@ -137,7 +151,7 @@ function SkyPhoneFocus.Reapply()
         active = state.camera_active,
         cursor = focus.cursor,
         focused = focus.focused,
-        gameInput = focus.keep_input,
+        gameInput = focus.game_input,
     })
 end
 
@@ -234,10 +248,9 @@ end
 CreateThread(function()
     while true do
         if game_input or block_game then
-            local look_passthrough = hold_to_look_enabled
-                and game_input
+            local look_passthrough = game_input
                 and not state.cursor_disabled
-                and IsControlPressed(0, hold_to_look_control)
+                and SkyPhoneFocus.IsHoldToLookPressed()
             if look_passthrough ~= state.look_passthrough then
                 state.look_passthrough = look_passthrough
                 SkyPhoneFocus.Reapply()
