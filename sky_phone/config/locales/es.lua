@@ -695,6 +695,7 @@ Locales["es"] = {
                     gif_provider_rate_limited = "GIPHY está ocupado. Inténtalo de nuevo en un momento.", gif_provider_failed = "La búsqueda de GIFs está temporalmente inaccesible.",
                     self_message = "No puedes enviar mensajes a tu propio número.", recipient_not_found = "Ese número no está disponible.", blocked = "Este contacto ha bloqueado las llamadas y los mensajes de esta SIM.",
                     messaging_unavailable = "Este contacto de empresa no acepta mensajes.",
+                    service_line_text_only = "Las líneas de servicio de empresa solo aceptan mensajes de texto por ahora.",
                     no_sim = "Este teléfono no tiene tarjeta SIM.", rate_limited = "Demasiados mensajes, inténtalo de nuevo en un minuto.",
                     request_failed = "Los mensajes están temporalmente inaccesibles.", default = "El mensaje no se pudo enviar.",
                 },

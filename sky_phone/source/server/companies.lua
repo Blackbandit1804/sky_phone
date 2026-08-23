@@ -337,11 +337,6 @@ local function validate_configuration(configuration)
                 tostring(line.Routing)
             )
         end
-        if line.CanMessage then
-            return nil, ("[sky_phone] Company '%s' enables messaging without a virtual service-line message router."):format(
-                company_id
-            )
-        end
         line.Number = number
         validated_definitions[company_id] = definition
         validated_definition_ids[#validated_definition_ids + 1] = company_id
@@ -1193,7 +1188,7 @@ end
 
 local function request_row(request_id)
     local rows = Bridge.Database.Query([[
-        SELECT r.`id`, r.`company_id`, r.`service_id`, r.`customer_sim_id`, r.`subject`, r.`description`,
+        SELECT r.`id`, r.`company_id`, r.`service_id`, r.`channel`, r.`customer_sim_id`, r.`subject`, r.`description`,
             r.`status`, r.`assigned_identifier`, r.`customer_unread`,
             r.`company_activity_revision`, r.`revision`,
             UNIX_TIMESTAMP(r.`created_at`) AS `created_at_unix`,
@@ -1895,6 +1890,175 @@ local function notification_payload(kind, area, row)
     }
 end
 
+function SkyPhoneCompanies.RouteServiceLineMessage(source, data)
+    if not Config.Companies.Enabled or type(data) ~= "table"
+        or data.messageType ~= "text" or not valid_uuid(data.id)
+    then
+        return { success = false, error = "invalid_request" }
+    end
+    local device, device_error = current_device(source, false)
+    if not device then
+        return device_error
+    end
+    local service_line = SkyPhoneCompanies.GetServiceLine(data.phoneNumber)
+    if not service_line or not service_line.canMessage then
+        return { success = false, error = "messaging_unavailable" }
+    end
+    local body = valid_text(
+        data.body,
+        math.min(Config.Messages.BodyMaxLength, Config.Companies.MessageMaxLength),
+        false
+    )
+    if not body then
+        return { success = false, error = "invalid_message" }
+    end
+
+    local request_id = uuid()
+    local created_event_id = uuid()
+    local status_event_id = uuid()
+    local mutation_token = uuid()
+    local statements = {
+        {
+            query = "UPDATE `sky_phone_sims` SET `updated_at` = `updated_at` WHERE `id` = ?",
+            params = { device.sim_id },
+        },
+        {
+            query = [[
+                INSERT INTO `sky_phone_company_requests`
+                    (`id`, `company_id`, `channel`, `customer_sim_id`, `subject`, `description`,
+                        `company_activity_revision`)
+                SELECT ?, profile.`company_id`, 'service_line', sim.`id`, sim.`phone_number`, ?, 0
+                FROM `sky_phone_sims` sim
+                INNER JOIN `sky_phone_company_profiles` profile ON profile.`company_id` = ?
+                WHERE sim.`id` = ? AND NOT EXISTS (
+                    SELECT 1 FROM `sky_phone_company_requests` existing
+                    WHERE existing.`company_id` = profile.`company_id`
+                        AND existing.`customer_sim_id` = sim.`id`
+                        AND existing.`channel` = 'service_line'
+                        AND existing.`status` NOT IN ('completed', 'cancelled')
+                )
+            ]],
+            params = {
+                request_id,
+                body,
+                service_line.companyId,
+                device.sim_id,
+            },
+        },
+        {
+            query = [[
+                INSERT INTO `sky_phone_company_request_events`
+                    (`id`, `request_id`, `event_type`, `actor_type`, `to_status`, `detail`)
+                SELECT ?, `id`, 'created', 'customer', 'new', 'service_line'
+                FROM `sky_phone_company_requests` WHERE `id` = ?
+            ]],
+            params = { created_event_id, request_id },
+        },
+        {
+            query = [[
+                INSERT INTO `sky_phone_company_request_events`
+                    (`id`, `request_id`, `event_type`, `actor_type`, `from_status`, `to_status`, `detail`)
+                SELECT ?, `id`, 'status', 'customer', 'waiting_customer', 'in_progress', 'service_line_message'
+                FROM `sky_phone_company_requests`
+                WHERE `company_id` = ? AND `customer_sim_id` = ?
+                    AND `channel` = 'service_line' AND `status` = 'waiting_customer'
+                ORDER BY `updated_at` DESC, `id` DESC LIMIT 1
+            ]],
+            params = { status_event_id, service_line.companyId, device.sim_id },
+        },
+        {
+            query = [[
+                UPDATE `sky_phone_company_requests`
+                SET `status` = IF(`status` = 'waiting_customer', 'in_progress', `status`),
+                    `company_activity_revision` = `company_activity_revision` + 1,
+                    `revision` = `revision` + 1, `mutation_token` = ?
+                WHERE `company_id` = ? AND `customer_sim_id` = ?
+                    AND `channel` = 'service_line'
+                    AND `status` NOT IN ('completed', 'cancelled')
+                ORDER BY `updated_at` DESC, `id` DESC LIMIT 1
+            ]],
+            params = { mutation_token, service_line.companyId, device.sim_id },
+        },
+        {
+            query = [[
+                INSERT INTO `sky_phone_company_request_messages`
+                    (`id`, `request_id`, `sender_type`, `sender_sim_id`, `body`)
+                SELECT ?, `id`, 'customer', `customer_sim_id`, ?
+                FROM `sky_phone_company_requests`
+                WHERE `mutation_token` = ? LIMIT 1
+            ]],
+            params = { data.id, body, mutation_token },
+        },
+        {
+            query = [[
+                INSERT INTO `sky_phone_sms_messages`
+                    (`id`, `sender_sim_id`, `recipient_sim_id`, `sender_number`, `recipient_number`,
+                        `message_type`, `body`)
+                SELECT ?, sim.`id`, NULL, sim.`phone_number`, ?, 'text', ?
+                FROM `sky_phone_sims` sim
+                INNER JOIN `sky_phone_company_request_messages` message ON message.`id` = ?
+                WHERE sim.`id` = ?
+            ]],
+            params = {
+                data.id,
+                service_line.number,
+                body,
+                data.id,
+                device.sim_id,
+            },
+        },
+    }
+    if not Bridge.Database.Transaction(statements) then
+        return { success = false, error = "request_failed" }
+    end
+
+    local routed = Bridge.Database.Query([[
+        SELECT request.`id` AS `request_id`, created.`id` AS `created_event_id`
+        FROM `sky_phone_sms_messages` sms
+        INNER JOIN `sky_phone_company_request_messages` message ON message.`id` = sms.`id`
+        INNER JOIN `sky_phone_company_requests` request ON request.`id` = message.`request_id`
+        LEFT JOIN `sky_phone_company_request_events` created
+            ON created.`id` = ? AND created.`request_id` = request.`id`
+        WHERE sms.`id` = ? LIMIT 1
+    ]], { created_event_id, data.id })
+    if not routed[1] then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] Service-line message %s committed without a complete route.",
+            tostring(data.id),
+            { always = true }
+        )
+        return { success = false, error = "request_failed" }
+    end
+    local row = request_row(routed[1].request_id)
+    if not row then
+        return { success = false, error = "request_failed" }
+    end
+
+    emit_request_change(row, true, true, source)
+    if routed[1].created_event_id then
+        notify_company(row.company_id, "sky_phone:companies:notification", notification_payload(
+            "newRequest",
+            "work",
+            row
+        ), source)
+    elseif row.assigned_identifier then
+        notify_identifier(
+            row.assigned_identifier,
+            row.company_id,
+            "sky_phone:companies:notification",
+            notification_payload("newMessage", "work", row)
+        )
+    end
+    return {
+        success = true,
+        data = {
+            messageId = data.id,
+            requestId = row.id,
+        },
+    }
+end
+
 Bridge.Callbacks.Register("sky_phone:companies:create-request", function(source, data)
     local allowed, rate_error = allow_mutation(source, "create_request", "CreateRequest")
     if not allowed then
@@ -2160,6 +2324,11 @@ Bridge.Callbacks.Register("sky_phone:companies:send-message", function(source, d
     then
         return { success = false, error = "invalid_status" }
     end
+    local service_line = access.row.channel == "service_line"
+        and SkyPhoneCompanies.GetServiceLineForCompany(access.row.company_id) or nil
+    if access.row.channel == "service_line" and (not service_line or not service_line.canMessage) then
+        return { success = false, error = "messaging_unavailable" }
+    end
     local message_id = uuid()
     local mutation_token = uuid()
     local new_status = access.audience == "customer" and access.row.status == "waiting_customer"
@@ -2199,6 +2368,37 @@ Bridge.Callbacks.Register("sky_phone:companies:send-message", function(source, d
             params = { message_id, access.member.identifier, body, request_id, revision + 1, mutation_token },
         }
     end
+    if service_line then
+        if access.audience == "customer" then
+            statements[#statements + 1] = {
+                query = [[
+                    INSERT INTO `sky_phone_sms_messages`
+                        (`id`, `sender_sim_id`, `recipient_sim_id`, `sender_number`, `recipient_number`,
+                            `message_type`, `body`)
+                    SELECT message.`id`, request.`customer_sim_id`, NULL, sim.`phone_number`, ?, 'text', message.`body`
+                    FROM `sky_phone_company_request_messages` message
+                    INNER JOIN `sky_phone_company_requests` request ON request.`id` = message.`request_id`
+                    INNER JOIN `sky_phone_sims` sim ON sim.`id` = request.`customer_sim_id`
+                    WHERE message.`id` = ? AND message.`sender_type` = 'customer'
+                ]],
+                params = { service_line.number, message_id },
+            }
+        else
+            statements[#statements + 1] = {
+                query = [[
+                    INSERT INTO `sky_phone_sms_messages`
+                        (`id`, `sender_sim_id`, `recipient_sim_id`, `sender_number`, `recipient_number`,
+                            `message_type`, `body`)
+                    SELECT message.`id`, NULL, request.`customer_sim_id`, ?, sim.`phone_number`, 'text', message.`body`
+                    FROM `sky_phone_company_request_messages` message
+                    INNER JOIN `sky_phone_company_requests` request ON request.`id` = message.`request_id`
+                    INNER JOIN `sky_phone_sims` sim ON sim.`id` = request.`customer_sim_id`
+                    WHERE message.`id` = ? AND message.`sender_type` = 'company'
+                ]],
+                params = { service_line.number, message_id },
+            }
+        end
+    end
     if new_status ~= access.row.status then
         statements[#statements + 1] = {
             query = [[
@@ -2213,16 +2413,32 @@ Bridge.Callbacks.Register("sky_phone:companies:send-message", function(source, d
     if not Bridge.Database.Transaction(statements) then
         return { success = false, error = "request_failed" }
     end
-    local inserted = Bridge.Database.Query(
-        "SELECT `id` FROM `sky_phone_company_request_messages` WHERE `id` = ? LIMIT 1",
-        { message_id }
-    )
+    local inserted = Bridge.Database.Query([[
+        SELECT message.`id`, sms.`id` AS `sms_id`
+        FROM `sky_phone_company_request_messages` message
+        LEFT JOIN `sky_phone_sms_messages` sms ON sms.`id` = message.`id`
+        WHERE message.`id` = ? LIMIT 1
+    ]], { message_id })
     if not inserted[1] then
         return { success = false, error = "revision_conflict" }
+    end
+    if service_line and not inserted[1].sms_id then
+        Bridge.Debug(
+            "error",
+            "[sky_phone] Company request message %s committed without its service-line SMS.",
+            tostring(message_id),
+            { always = true }
+        )
+        return { success = false, error = "request_failed" }
     end
     local row = request_row(request_id)
     emit_request_change(row, true, true, source)
     if access.audience == "customer" then
+        if service_line then
+            TriggerClientEvent("sky_phone:messages:changed", source, {
+                phoneNumber = service_line.number,
+            })
+        end
         local notification = notification_payload("newMessage", "work", row)
         if row.assigned_identifier then
             notify_identifier(
@@ -2232,6 +2448,12 @@ Bridge.Callbacks.Register("sky_phone:companies:send-message", function(source, d
                 notification
             )
         end
+    elseif service_line then
+        notify_sim(row.customer_sim_id, "sky_phone:messages:new", {
+            phoneNumber = service_line.number,
+            sender = service_line.name,
+            voice = false,
+        })
     else
         notify_sim(row.customer_sim_id, "sky_phone:companies:notification", notification_payload(
             "newMessage",

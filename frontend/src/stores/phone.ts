@@ -2712,6 +2712,8 @@ const defaultLocales: LocaleTree = {
         recipient_not_found: 'That number is unavailable.',
         blocked: 'This contact has blocked calls and messages from your SIM.',
         messaging_unavailable: 'This company contact does not accept messages.',
+        service_line_text_only:
+          'Company service lines currently accept text messages only.',
         no_sim: 'This phone has no SIM card.',
         rate_limited: 'Too many messages. Try again in a minute.',
         request_failed: 'Messages are temporarily unavailable.',

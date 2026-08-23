@@ -1190,7 +1190,7 @@ if IsDuplicityVersion() then
                     Number = "911",
                     AutoContact = true,
                     CanCall = true,
-                    CanMessage = false,
+                    CanMessage = true,
                     Routing = "round_robin",
                     MinimumGrade = 0,
                 },

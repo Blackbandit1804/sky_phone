@@ -2710,6 +2710,7 @@ local schema = {
             { name = "id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "company_id", type = "VARCHAR(64) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "service_id", type = "VARCHAR(64) NULL", characterSet = "ascii", collation = "ascii_bin" },
+            { name = "channel", type = "ENUM('app','service_line') NOT NULL DEFAULT 'app'" },
             { name = "customer_sim_id", type = "CHAR(36) NOT NULL", characterSet = "ascii", collation = "ascii_bin" },
             { name = "subject", type = "VARCHAR(120) NOT NULL" },
             { name = "description", type = "VARCHAR(2000) NOT NULL" },
@@ -2729,6 +2730,7 @@ local schema = {
             { name = "idx_sky_phone_company_requests_customer", columns = "(`customer_sim_id`, `updated_at`, `id`)" },
             { name = "idx_sky_phone_company_requests_queue", columns = "(`company_id`, `status`, `updated_at`, `id`)" },
             { name = "idx_sky_phone_company_requests_assignee", columns = "(`company_id`, `assigned_identifier`, `status`)" },
+            { name = "idx_sky_phone_company_requests_service_line", columns = "(`company_id`, `customer_sim_id`, `channel`, `status`, `updated_at`, `id`)" },
         },
         foreignKeys = {
             { column = "company_id", references = "`sky_phone_company_profiles` (`company_id`) ON DELETE CASCADE" },

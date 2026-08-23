@@ -695,6 +695,7 @@ Locales["de"] = {
                     gif_provider_rate_limited = "GIPHY ist ausgelastet. Versuch es gleich erneut.", gif_provider_failed = "GIF-Suche ist vorübergehend nicht verfügbar.",
                     self_message = "Du kannst deine eigene Nummer nicht melden.", recipient_not_found = "Diese Nummer ist nicht verfügbar.", blocked = "Dieser Kontakt hat Anrufe und Nachrichten von deinem SIM blockiert.",
                     messaging_unavailable = "Dieser Firmenkontakt akzeptiert keine Nachrichten.",
+                    service_line_text_only = "Firmen-Serviceleitungen akzeptieren derzeit nur Textnachrichten.",
                     no_sim = "Dieses Handy hat keine SIM-Karte.", rate_limited = "Zu viele Nachrichten. Versuch es in einer Minute erneut.",
                     request_failed = "Nachrichten sind vorübergehend nicht verfügbar.", default = "Die Nachricht konnte nicht gesendet werden.",
                 },

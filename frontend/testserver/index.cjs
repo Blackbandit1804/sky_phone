@@ -1978,7 +1978,7 @@ const contacts = [
   },
   {
     canCall: true,
-    canMessage: false,
+    canMessage: true,
     companyId: 'police',
     avatar_url: 'https://picsum.photos/seed/companies-police-logo/180/180',
     id: 'company:police',
@@ -4187,7 +4187,7 @@ const companyProfiles = [
     availability: 'available',
     availabilityUpdatedAt: isoTime(-12 * 60 * 1000),
     canCall: true,
-    canMessage: false,
+    canMessage: true,
     categoryId: 'public_services',
     categoryName: 'Public Services',
     coverUrl: 'https://picsum.photos/seed/companies-police-cover/900/360',

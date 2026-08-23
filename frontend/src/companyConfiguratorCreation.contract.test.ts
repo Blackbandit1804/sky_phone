@@ -107,10 +107,10 @@ describe('company configurator creation contract', () => {
     expect(blankRegistration).toBeLessThan(policeRegistration)
   })
 
-  it('repairs persisted service-line messaging before Companies starts', () => {
+  it('enables persisted police service-line messaging before Companies starts', () => {
     const migration = configuratorServer.slice(
       configuratorServer.indexOf(
-        'local function migrate_unsupported_company_message_defaults()',
+        'local function migrate_police_service_line_messaging()',
       ),
       configuratorServer.indexOf('\n\ndefault_config = {}'),
     )
@@ -118,19 +118,22 @@ describe('company configurator creation contract', () => {
       'Bridge.Database.AfterMigration("sky_phone", migrate_police_request_defaults)',
     )
     const messageRegistration = configuratorServer.indexOf(
-      'Bridge.Database.AfterMigration("sky_phone", migrate_unsupported_company_message_defaults)',
+      'Bridge.Database.AfterMigration("sky_phone", migrate_police_service_line_messaging)',
     )
 
     expect(migration).toContain(
-      'sky-phone:configurator:unsupported-company-message-defaults:v1',
+      'sky-phone:configurator:service-line-messaging:v2',
     )
-    expect(migration).toContain('line.CanMessage == true')
-    expect(migration).toContain('line.CanMessage = false')
+    expect(migration).toContain('line.CanMessage ~= true')
+    expect(migration).toContain('line.CanMessage = true')
     expect(migration).toContain('Bridge.Database.Transaction(statements)')
     expect(migration).toContain('SET `config_payload` = ?')
     expect(migration).toContain('`revision` = `revision` + 1')
     expect(migration).toContain('apply_stored_row(read_stored_row())')
     expect(migration).toContain('apply_runtime_configuration()')
     expect(messageRegistration).toBeGreaterThan(policeRegistration)
+    expect(companiesServer).not.toContain(
+      'enables messaging without a virtual service-line message router',
+    )
   })
 })
